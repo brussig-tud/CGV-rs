@@ -1,5 +1,5 @@
-# Configuration
-cargo.lock
+# Cargo configuration cache
+Cargo.lock
 
 # Build artifacts
 /target
