@@ -1,0 +1,9 @@
+# Configuration
+cargo.lock
+
+# Build artifacts
+/target
+/pkg
+
+# IDE files
+/.idea
