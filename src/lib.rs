@@ -62,7 +62,7 @@ impl ApplicationHandler for App {
 				.and_then(|win| win.document())
 				.and_then(|doc| {
 					let canvas = Element::from(window.canvas()?);
-					canvas.set_attribute("style", "width:auto !important, height:auto !important").unwrap();
+					canvas.set_attribute("style", "width:100% !important; height:100% !important").unwrap();
 					doc.body()?.append_child(&canvas).ok()?;
 					Some(())
 				})
