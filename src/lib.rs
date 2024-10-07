@@ -11,6 +11,16 @@
 
 //////
 //
+// Module definitions
+//
+
+/// The module encapsulating all low-level state of an application.
+pub mod state;
+
+
+
+//////
+//
 // Imports
 //
 
@@ -42,11 +52,12 @@ use winit::{
 //
 
 #[derive(Default)]
-pub struct App {
-	window: Option<Window>
+pub struct App<'a> {
+	window: Option<Window>,
+	state: Option<state::State<'a>>
 }
 
-impl ApplicationHandler for App {
+impl<'a> ApplicationHandler for App<'a> {
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		tracing::info!("Resumed");
 		let windowAttribs = Window::default_attributes();
@@ -72,6 +83,9 @@ impl ApplicationHandler for App {
 			// the size manually when on web.
 			//let _ = window.request_inner_size(PhysicalSize::new(450, 400));
 		}
+		let fut = async {
+			self.state = Some(state::State::new(&window).await);
+		}.poll();
 
 		self.window = Some(window);
 	}
