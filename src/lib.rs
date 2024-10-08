@@ -14,6 +14,9 @@
 // Module definitions
 //
 
+/// The module containing utilities used throughout (i.e. not specific to any other module).
+pub mod util;
+
 /// The module encapsulating all low-level state of an application.
 pub mod state;
 
@@ -52,18 +55,19 @@ use winit::{
 //
 
 #[derive(Default)]
-pub struct App<'a> {
+pub struct App {
 	window: Option<Window>,
-	state: Option<state::State<'a>>
+	state: Option<state::State>
 }
 
-impl<'a> ApplicationHandler for App<'a> {
+impl ApplicationHandler for App {
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		tracing::info!("Resumed");
 		let windowAttribs = Window::default_attributes();
 		let window = event_loop
 			.create_window(windowAttribs)
 			.expect("Couldn't create window.");
+		self.window = Some(window);
 
 		#[cfg(target_arch = "wasm32")] {
 			use web_sys::Element;
@@ -83,11 +87,9 @@ impl<'a> ApplicationHandler for App<'a> {
 			// the size manually when on web.
 			//let _ = window.request_inner_size(PhysicalSize::new(450, 400));
 		}
-		let fut = async {
-			self.state = Some(state::State::new(&window).await);
-		}.poll();
 
-		self.window = Some(window);
+		let mut wnd = util::statify(self.window.as_mut().unwrap());
+		self.state = Some(pollster::block_on(state::State::new(wnd)));
 	}
 
 	fn window_event(

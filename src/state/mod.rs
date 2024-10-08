@@ -24,18 +24,18 @@ use wgpu;
 // Classes
 //
 
-pub struct State<'a> {
-	surface: wgpu::Surface<'a>,
+pub struct State {
+	surface: wgpu::Surface<'static>,
 	device: wgpu::Device,
 	queue: wgpu::Queue,
 	config: wgpu::SurfaceConfiguration,
 	size: winit::dpi::PhysicalSize<u32>,
-	window: &'a Window,
+	window: &'static Window,
 }
 
-impl<'a> State<'a> {
+impl State {
 	// Creating some of the wgpu types requires async code
-	pub async fn new (window: &'a Window) -> State<'a>
+	pub async fn new (window: &'static Window) -> State
 	{
 		let size = window.inner_size();
 
