@@ -28,7 +28,7 @@ pub mod state;
 //
 
 // Standard library
-/* nothing here yet */
+use std::sync::Arc;
 
 // WASM Bindgen
 #[cfg(target_arch = "wasm32")]
@@ -54,20 +54,31 @@ use winit::{
 // Classes
 //
 
-#[derive(Default)]
-pub struct App {
-	window: Option<Window>,
-	state: Option<state::State>
+enum UserEvent {
+	StateReady(state::State)
 }
 
-impl ApplicationHandler for App {
+pub struct App {
+	state: Option<state::State>,
+	event_loop_proxy: EventLoopProxy<UserEvent>
+}
+
+impl App {
+	pub fn new(event_loop: &EventLoop<UserEvent>) -> Self {
+		Self {
+			state: None,
+			event_loop_proxy: event_loop.create_proxy(),
+		}
+	}
+}
+
+impl ApplicationHandler<UserEvent> for App {
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		tracing::info!("Resumed");
 		let windowAttribs = Window::default_attributes();
 		let window = event_loop
 			.create_window(windowAttribs)
 			.expect("Couldn't create window.");
-		self.window = Some(window);
 
 		#[cfg(target_arch = "wasm32")] {
 			use web_sys::Element;
@@ -88,8 +99,20 @@ impl ApplicationHandler for App {
 			//let _ = window.request_inner_size(PhysicalSize::new(450, 400));
 		}
 
-		let mut wnd = util::statify(self.window.as_mut().unwrap());
-		self.state = Some(pollster::block_on(state::State::new(wnd)));
+		#[cfg(target_arch = "wasm32")] {
+			let state_future = state::State::new(window);
+			let event_loop_proxy = self.event_loop_proxy.clone();
+			let future = async move {
+				let state = state_future.await;
+				assert!(event_loop_proxy
+					.send_event(UserEvent::StateReady(state))
+					.is_ok());
+			};
+			wasm_bindgen_futures::spawn_local(future);
+		}
+		#[cfg(not(target_arch = "wasm32"))] {
+			self.state = Some(pollster::block_on(state::State::new(window)));
+		}
 	}
 
 	fn window_event(
@@ -98,12 +121,6 @@ impl ApplicationHandler for App {
 		window_id: WindowId,
 		event: WindowEvent,
 	) {
-		let Some(ref window) = self.window else {
-			return;
-		};
-		if window_id != window.id() {
-			return;
-		}
 		match event {
 			WindowEvent::CloseRequested
 			| WindowEvent::KeyboardInput {
@@ -139,92 +156,6 @@ pub fn wasm_start() {
 	run().unwrap();
 }
 
-/*pub fn run() -> Result<()>
-{
-	////
-	// Init
-
-	// Logging
-	cfg_if::cfg_if! {
-		if #[cfg(target_arch = "wasm32")] {
-			std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-			console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
-		} else {
-			env_logger::Builder::from_env(
-				env_logger::Env::default().default_filter_or("info")
-			).init();
-		}
-	}
-
-	// Events
-	let eventLoop = EventLoop::new()?;
-	eventLoop.set_control_flow(ControlFlow::Wait);
-
-	// Main window
-	let window = WindowBuilder::new().build(&eventLoop)?;
-
-	// WASM: Create canvas for Winit
-	#[cfg(target_arch = "wasm32")]
-	{
-		// Winit prevents sizing with CSS, so we have to set
-		// the size manually when on web.
-		use winit::dpi::PhysicalSize;
-		let _ = window.request_inner_size(PhysicalSize::new(450, 400));
-
-		use winit::platform::web::WindowExtWebSys;
-		web_sys::window()
-			.and_then(|win| win.document())
-			.and_then(|doc| {
-				let dst = doc.get_element_by_id("wasm-example")?;
-				let canvas = web_sys::Element::from(window.canvas()?);
-				dst.append_child(&canvas).ok()?;
-				Some(())
-			})
-			.expect("Couldn't append canvas to document body.");
-	}
-
-
-
-	////
-	// Main event loop
-
-	// Dispatch
-	eventLoop.run(move |event, controlFlow| match event
-	{
-		Event::WindowEvent {
-			ref event,
-			window_id,
-		} if window_id == window.id() => match event {
-			WindowEvent::CloseRequested => {
-				log!(Level::Info, "Request to close main window {:?} received.", window_id);
-				controlFlow.exit()
-			},
-			WindowEvent::KeyboardInput {
-				event:
-				KeyEvent {
-					state: ElementState::Pressed,
-					physical_key: PhysicalKey::Code(KeyCode::Escape),
-					..
-				},
-				..
-			} => {
-				log!(Level::Info, "Escape key pressed – exiting.");
-				controlFlow.exit()
-			},
-			_ =>
-				log!(Level::Info, "Not handling event: {:?}", event)
-		},
-		_ =>
-			log!(Level::Info, "Not handling event: {:?}", event)
-	})?;
-
-
-	////
-	// Shutdown
-
-	// Done! Exit successfully.
-	Ok(())
-}*/
 pub fn run() -> Result<()>
 {
 	let env_filter = EnvFilter::builder()
@@ -247,8 +178,8 @@ pub fn run() -> Result<()>
 		subscriber.with(fmt_layer).init();
 	}
 
-	let event_loop = EventLoop::new()?;
-	let mut app = App::default();
+	let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
+	let mut app = App::new(&event_loop);
 
 	event_loop.run_app(&mut app)?;
 	Ok(())

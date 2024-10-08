@@ -5,7 +5,11 @@
 //
 
 // Standard library
-/* nothing here yet */
+use std::sync::Arc;
+
+// WASM Bindgen
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 // Anyhow
 use anyhow::Result;
@@ -30,12 +34,12 @@ pub struct State {
 	queue: wgpu::Queue,
 	config: wgpu::SurfaceConfiguration,
 	size: winit::dpi::PhysicalSize<u32>,
-	window: &'static Window,
+	window: Arc<Window>,
 }
 
 impl State {
 	// Creating some of the wgpu types requires async code
-	pub async fn new (window: &'static Window) -> State
+	pub async fn new (window: Window) -> State
 	{
 		let size = window.inner_size();
 
@@ -49,7 +53,8 @@ impl State {
 			..Default::default()
 		});
 
-		let surface = instance.create_surface(window).unwrap();
+		let window = Arc::new(window);
+		let surface = instance.create_surface(window.clone()).unwrap();
 
 		let adapter = instance.request_adapter(
 			&wgpu::RequestAdapterOptions {
