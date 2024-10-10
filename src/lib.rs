@@ -28,7 +28,7 @@ pub mod state;
 //
 
 // Standard library
-use std::sync::Arc;
+/* nothing here yet */
 
 // WASM Bindgen
 #[cfg(target_arch = "wasm32")]
@@ -38,7 +38,7 @@ use wasm_bindgen::prelude::*;
 use anyhow::Result;
 
 // Tracing
-use tracing::Level;
+use tracing;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // Winit
@@ -54,7 +54,7 @@ use winit::{
 // Classes
 //
 
-enum UserEvent {
+pub enum UserEvent {
 	StateReady(state::State)
 }
 
@@ -64,7 +64,7 @@ pub struct App {
 }
 
 impl App {
-	pub fn new(event_loop: &EventLoop<UserEvent>) -> Self {
+	pub fn new (event_loop: &EventLoop<UserEvent>) -> Self {
 		Self {
 			state: None,
 			event_loop_proxy: event_loop.create_proxy(),
@@ -79,6 +79,7 @@ impl ApplicationHandler<UserEvent> for App {
 		let window = event_loop
 			.create_window(windowAttribs)
 			.expect("Couldn't create window.");
+		window.request_redraw();
 
 		#[cfg(target_arch = "wasm32")] {
 			use web_sys::Element;
@@ -111,32 +112,79 @@ impl ApplicationHandler<UserEvent> for App {
 			wasm_bindgen_futures::spawn_local(future);
 		}
 		#[cfg(not(target_arch = "wasm32"))] {
-			self.state = Some(pollster::block_on(state::State::new(window)));
+			let state = pollster::block_on(state::State::new(window));
+			assert!(self
+				.event_loop_proxy
+				.send_event(UserEvent::StateReady(state))
+				.is_ok());
 		}
 	}
 
+	fn user_event (&mut self, _: &ActiveEventLoop, event: UserEvent) {
+		let UserEvent::StateReady(state) = event;
+		self.state = Some(state);
+	}
+
 	fn window_event(
-		&mut self,
-		event_loop: &ActiveEventLoop,
-		window_id: WindowId,
-		event: WindowEvent,
-	) {
-		match event {
-			WindowEvent::CloseRequested
-			| WindowEvent::KeyboardInput {
-				event:
-				KeyEvent {
+		&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent
+	){
+		match event
+		{
+			// Main window resize
+			WindowEvent::Resized(physical_size) => {
+				if let Some(state) = self.state.as_mut() {
+					state.resize(physical_size);
+				}
+			}
+
+			// Application close
+			WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
+				event: KeyEvent {
 					state: ElementState::Pressed,
 					physical_key: PhysicalKey::Code(KeyCode::Escape),
 					..
-				},
-				..
+				}, ..
 			} => {
 				tracing::info!("Exited!");
 				event_loop.exit()
 			}
+
+			// Main window redraw
+			WindowEvent::RedrawRequested
+			=> {
+				if let Some(state) = self.state.as_mut() {
+					if !state.surface_configured {
+						tracing::info!("Surface not yet configured - skipping redraw!");
+						return;
+					}
+					state.update();
+					match state.render() {
+						Ok(()) => {}
+						// Reconfigure the surface if it's lost or outdated
+						Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+							state.resize(state.size);
+						}
+						// The system is out of memory, we should probably quit
+						Err(wgpu::SurfaceError::OutOfMemory) => {
+							tracing::error!("OutOfMemory");
+							event_loop.exit();
+						}
+
+						// This happens when the frame takes too long to present
+						Err(wgpu::SurfaceError::Timeout) => {
+							tracing::warn!("Surface timeout");
+						}
+					}
+				}
+			}
 			_ => {}
 		}
+	}
+
+	fn about_to_wait (&mut self, _: &ActiveEventLoop) {
+		if let Some(ref state) = self.state {
+			state.window.request_redraw();
+		};
 	}
 }
 
@@ -149,9 +197,6 @@ impl ApplicationHandler<UserEvent> for App {
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub fn wasm_start() {
-	// For sanity-checking whether the module started properly in the browser
-	tracing::info!("WASM started!");
-
 	// Make sure we panic (to JavaScript console) in case run fails
 	run().unwrap();
 }
@@ -159,7 +204,7 @@ pub fn wasm_start() {
 pub fn run() -> Result<()>
 {
 	let env_filter = EnvFilter::builder()
-		.with_default_directive(Level::INFO.into())
+		.with_default_directive(tracing::Level::INFO.into())
 		.from_env_lossy()
 		.add_directive("wgpu_core::device::resource=warn".parse()?);
 	let subscriber = tracing_subscriber::registry().with(env_filter);
@@ -177,10 +222,12 @@ pub fn run() -> Result<()>
 		let fmt_layer = tracing_subscriber::fmt::Layer::default();
 		subscriber.with(fmt_layer).init();
 	}
+	tracing::info!("Starting OnTubeVis-rs.");
 
-	let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
-	let mut app = App::new(&event_loop);
+	let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
+	eventLoop.set_control_flow(ControlFlow::Wait);
+	let mut app = App::new(&eventLoop);
 
-	event_loop.run_app(&mut app)?;
+	eventLoop.run_app(&mut app)?;
 	Ok(())
 }

@@ -7,12 +7,12 @@ edition = "2021"
 cfg-if = "1"
 anyhow = "1.0.89"
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-winit = {version="0.30.5", features=["rwh_05"]}
+tracing-subscriber = {version = "0.3.18", features = ["env-filter"]}
 wgpu = "22.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pollster = "0.3"
+winit = {version="0.30.5", default-features=false, features=["x11", "rwh_06"]}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
@@ -20,7 +20,8 @@ tracing-wasm = "0.2.1"
 wgpu = {version="22.1", features=["webgl"]}
 wasm-bindgen = "0.2.93"
 wasm-bindgen-futures = "0.4.43"
-web-sys = { version="0.3.70", features=["Document", "Element", "Window"]}
+web-sys = {version="0.3.70", features=["Document", "Element", "Window"]}
+winit = {version="0.30.5"}
 
 [lib]
 crate-type = ["cdylib", "rlib"]
