@@ -60,7 +60,8 @@ pub enum UserEvent {
 
 pub struct App {
 	state: Option<state::State>,
-	event_loop_proxy: EventLoopProxy<UserEvent>
+	event_loop_proxy: EventLoopProxy<UserEvent>,
+	redrawOnceOnWait: bool
 }
 
 impl App {
@@ -68,6 +69,7 @@ impl App {
 		Self {
 			state: None,
 			event_loop_proxy: event_loop.create_proxy(),
+			redrawOnceOnWait: false
 		}
 	}
 }
@@ -143,6 +145,9 @@ impl ApplicationHandler<UserEvent> for App
 				if let Some(state) = self.state.as_mut() {
 					state.resize(physical_size);
 				}
+				#[cfg(not(target_arch="wasm32"))]{
+					self.redrawOnceOnWait = true
+				}
 			}
 
 			// Application close
@@ -162,9 +167,10 @@ impl ApplicationHandler<UserEvent> for App
 			=> {
 				if let Some(state) = self.state.as_mut() {
 					if !state.surfaceConfigured {
-						tracing::info!("Surface not yet configured - skipping redraw!");
+						tracing::debug!("Surface not yet configured - skipping redraw!");
 						return;
 					}
+					tracing::debug!("Redrawing");
 					state.update();
 					match state.render() {
 						Ok(()) => {}
@@ -191,7 +197,11 @@ impl ApplicationHandler<UserEvent> for App
 
 	fn about_to_wait (&mut self, _: &ActiveEventLoop) {
 		if let Some(ref state) = self.state {
-			state.window.request_redraw();
+			if self.redrawOnceOnWait {
+				self.redrawOnceOnWait = false;
+				tracing::debug!("Scheduling additional redraw");
+				state.window.request_redraw();
+			}
 		};
 	}
 }
@@ -211,8 +221,14 @@ pub fn wasm_start() {
 
 pub fn run() -> Result<()>
 {
-	let env_filter = EnvFilter::builder()
-		.with_default_directive(tracing::Level::INFO.into())
+	let mut envFilterBuilder = EnvFilter::builder();
+	#[cfg(debug_assertions)] {
+		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::DEBUG.into());
+	}
+	#[cfg(not(debug_assertions))] {
+		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::INFO.into());
+	}
+	let env_filter = envFilterBuilder
 		.from_env_lossy()
 		.add_directive("wgpu_core::device::resource=warn".parse()?);
 	let subscriber = tracing_subscriber::registry().with(env_filter);
