@@ -72,14 +72,21 @@ impl App {
 	}
 }
 
-impl ApplicationHandler<UserEvent> for App {
-	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-		tracing::info!("Resumed");
+impl ApplicationHandler<UserEvent> for App
+{
+	fn resumed (&mut self, event_loop: &ActiveEventLoop)
+	{
+		if self.state.is_none() {
+			tracing::info!("Main loop created.")
+		}
+		else {
+			tracing::info!("Main loop resumed.");
+		}
+
 		let windowAttribs = Window::default_attributes();
 		let window = event_loop
 			.create_window(windowAttribs)
 			.expect("Couldn't create window.");
-		window.request_redraw();
 
 		#[cfg(target_arch = "wasm32")] {
 			use web_sys::Element;
@@ -121,6 +128,7 @@ impl ApplicationHandler<UserEvent> for App {
 	}
 
 	fn user_event (&mut self, _: &ActiveEventLoop, event: UserEvent) {
+		tracing::info!("Application state ready.");
 		let UserEvent::StateReady(state) = event;
 		self.state = Some(state);
 	}
@@ -145,7 +153,7 @@ impl ApplicationHandler<UserEvent> for App {
 					..
 				}, ..
 			} => {
-				tracing::info!("Exited!");
+				tracing::info!("Exiting...");
 				event_loop.exit()
 			}
 
@@ -153,7 +161,7 @@ impl ApplicationHandler<UserEvent> for App {
 			WindowEvent::RedrawRequested
 			=> {
 				if let Some(state) = self.state.as_mut() {
-					if !state.surface_configured {
+					if !state.surfaceConfigured {
 						tracing::info!("Surface not yet configured - skipping redraw!");
 						return;
 					}
@@ -222,7 +230,7 @@ pub fn run() -> Result<()>
 		let fmt_layer = tracing_subscriber::fmt::Layer::default();
 		subscriber.with(fmt_layer).init();
 	}
-	tracing::info!("Starting OnTubeVis-rs.");
+	tracing::info!("Starting...");
 
 	let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
 	eventLoop.set_control_flow(ControlFlow::Wait);

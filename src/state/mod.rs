@@ -32,7 +32,7 @@ pub struct State {
 	config: wgpu::SurfaceConfiguration,
 	pub size: winit::dpi::PhysicalSize<u32>,
 	pub window: Arc<Window>,
-	pub surface_configured: bool
+	pub surfaceConfigured: bool
 }
 
 impl State {
@@ -97,13 +97,13 @@ impl State {
 			desired_maximum_frame_latency: 1,
 		};
 
-		let surface_configured;
+		let surfaceConfigured;
 		#[cfg(not(target_arch = "wasm32"))] {
 			surface.configure(&device, &config);
-			surface_configured = true;
+			surfaceConfigured = true;
 		}
 		#[cfg(target_arch = "wasm32")] {
-			surface_configured = false;
+			surfaceConfigured = false;
 		}
 
 		Self {
@@ -113,7 +113,7 @@ impl State {
 			queue,
 			config,
 			size,
-			surface_configured
+			surfaceConfigured
 		}
 	}
 
@@ -128,7 +128,7 @@ impl State {
 			self.config.width = new_size.width;
 			self.config.height = new_size.height;
 			self.surface.configure(&self.device, &self.config);
-			self.surface_configured = true;
+			self.surfaceConfigured = true;
 		}
 	}
 
@@ -136,9 +136,7 @@ impl State {
 		false
 	}
 
-	pub fn update(&mut self) {
-		// remove `todo!()`
-	}
+	pub fn update(&mut self) {}
 
 	pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
 	{
