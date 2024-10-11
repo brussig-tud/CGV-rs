@@ -23,6 +23,9 @@ pub mod util;
 /// The module encapsulating all low-level state of an application.
 pub mod state;
 
+/// Make sure we can access glm functionality as such
+extern crate nalgebra_glm as glm;
+
 
 
 //////

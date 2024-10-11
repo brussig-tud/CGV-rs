@@ -16,6 +16,10 @@ use winit::{window::Window, event::WindowEvent, dpi};
 
 // WGPU
 use wgpu;
+use wgpu::util::DeviceExt;
+
+// GLM
+use glm;
 
 // Local imports
 use crate::util;
@@ -24,8 +28,54 @@ use crate::util;
 
 //////
 //
+// Statics
+//
+
+const NODES: &[HermiteNode] = &[
+	HermiteNode
+		{ pos: glm::Vec4::new(-0.0868241, 0.4924039, 0., 1.), color: glm::Vec4::new(1., 0., 0., 1.) },
+	HermiteNode
+		{ pos: glm::Vec4::new(-0.4951349, 0.0695865, 0., 1.), color: glm::Vec4::new(0., 1., 0., 1.) },
+	HermiteNode
+		{ pos: glm::Vec4::new(-0.2191855,-0.4493971, 0., 1.), color: glm::Vec4::new(0., 0., 1., 1.) },
+	HermiteNode
+		{ pos: glm::Vec4::new( 0.3596699,-0.3473291, 0., 1.), color: glm::Vec4::new(0., 1., 1., 1.) },
+	HermiteNode
+		{ pos: glm::Vec4::new( 0.4414737, 0.2347359, 0., 1.), color: glm::Vec4::new(1., 1., 0., 1.) }
+];
+
+const INDICES: &[u32] = &[/* tri 1 */0, 1, 4,  /* tri 2 */1, 2, 4,  /* tri 3 */2, 3, 4];
+
+
+
+//////
+//
 // Classes
 //
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+struct HermiteNode
+{
+	pos: glm::Vec4,
+	/*tan: glm::Vec4,
+	radius: glm::Vec2,*/
+	color: glm::Vec4
+}
+
+impl HermiteNode
+{
+	const GPU_ATTRIBS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4];
+
+	fn layoutDesc () -> wgpu::VertexBufferLayout<'static>	{
+		wgpu::VertexBufferLayout {
+			array_stride: size_of::<Self>() as wgpu::BufferAddress,
+			step_mode: wgpu::VertexStepMode::Vertex,
+			attributes: &Self::GPU_ATTRIBS,
+		}
+	}
+}
+
 
 #[derive(Debug)]
 pub struct State
@@ -40,7 +90,9 @@ pub struct State
 	pub size: dpi::PhysicalSize<u32>,
 	pub window: Arc<Window>,
 
-	render_pipeline: wgpu::RenderPipeline,
+	renderPipeline: wgpu::RenderPipeline,
+	vertexBuffer: wgpu::Buffer,
+	indexBuffer: wgpu::Buffer
 }
 
 impl State {
@@ -125,13 +177,13 @@ impl State {
 				push_constant_ranges: &[],
 			});
 
-		let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		let renderPipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Render Pipeline"),
 			layout: Some(&render_pipeline_layout),
 			vertex: wgpu::VertexState {
 				module: &shader,
 				entry_point: None, // 1. -- our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
-				buffers: &[], // 2.
+				buffers: &[HermiteNode::layoutDesc()], // 2.
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState { // 3.
@@ -166,6 +218,21 @@ impl State {
 			cache: None, // 6.
 		});
 
+		let vertexBuffer = device.create_buffer_init(
+			&wgpu::util::BufferInitDescriptor {
+				label: Some("HermiteNodes"),
+				contents: util::slicify(NODES),
+				usage: wgpu::BufferUsages::VERTEX,
+			}
+		);
+		let indexBuffer = device.create_buffer_init(
+			&wgpu::util::BufferInitDescriptor {
+				label: Some("HermiteIndices"),
+				contents: util::slicify(INDICES),
+				usage: wgpu::BufferUsages::INDEX,
+			}
+		);
+
 		Self {
 			surface,
 			device,
@@ -174,7 +241,9 @@ impl State {
 			surfaceConfigured,
 			size,
 			window,
-			render_pipeline
+			renderPipeline,
+			vertexBuffer,
+			indexBuffer
 		}
 	}
 
@@ -226,8 +295,10 @@ impl State {
 				occlusion_query_set: None,
 				timestamp_writes: None,
 			});
-			render_pass.set_pipeline(&self.render_pipeline); // 2.
-			render_pass.draw(0..3, 0..1); // 3.
+			render_pass.set_pipeline(&self.renderPipeline);
+			render_pass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
+			render_pass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
+			render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
 		}
 
 		// submit will accept anything that implements IntoIter
