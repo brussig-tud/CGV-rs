@@ -233,6 +233,16 @@ impl State {
 			}
 		);
 
+		////
+		// Load resources
+
+		let diffuse_bytes = util::sourceBytes!("/res/tex/cgvCube.png");
+		let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+		let diffuse_rgba = diffuse_image.to_rgba8();
+
+		use image::GenericImageView;
+		let dimensions = diffuse_image.dimensions();
+
 		Self {
 			surface,
 			device,
