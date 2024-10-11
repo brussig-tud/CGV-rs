@@ -161,7 +161,7 @@ impl ApplicationHandler<UserEvent> for App
 					state.resize(physical_size);
 				}
 				#[cfg(not(target_arch="wasm32"))] {
-					self.redrawOnceOnWait = true
+					self.redrawOnceOnWait = true;
 				}
 			}
 

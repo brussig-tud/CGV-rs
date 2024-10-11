@@ -1,4 +1,13 @@
 
+/// Reads a UTF-8 encoded file into a static string slice at compile time, with the path always being relative to the
+/// Crate root directory.
+macro_rules! sourceFile {
+	($file:expr) => {
+		include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
+	};
+}
+pub(crate) use sourceFile;
+
 /// Decorates the given reference with a `'static` lifetime.
 ///
 /// # Arguments
