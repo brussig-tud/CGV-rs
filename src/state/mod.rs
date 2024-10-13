@@ -32,19 +32,29 @@ use crate::util;
 //
 
 const NODES: &[HermiteNode] = &[
-	HermiteNode
-		{ pos: glm::Vec4::new(-0.0868241, 0.4924039, 0., 1.), color: glm::Vec4::new(1., 0., 0., 1.) },
-	HermiteNode
-		{ pos: glm::Vec4::new(-0.4951349, 0.0695865, 0., 1.), color: glm::Vec4::new(0., 1., 0., 1.) },
-	HermiteNode
-		{ pos: glm::Vec4::new(-0.2191855,-0.4493971, 0., 1.), color: glm::Vec4::new(0., 0., 1., 1.) },
-	HermiteNode
-		{ pos: glm::Vec4::new( 0.3596699,-0.3473291, 0., 1.), color: glm::Vec4::new(0., 1., 1., 1.) },
-	HermiteNode
-		{ pos: glm::Vec4::new( 0.4414737, 0.2347359, 0., 1.), color: glm::Vec4::new(1., 1., 0., 1.) }
+	HermiteNode {
+		pos: glm::Vec4::new(-1., -1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(0., 1.)
+	},
+	HermiteNode {
+		pos: glm::Vec4::new(1., -1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(1., 1.)
+	},
+	HermiteNode {
+		pos: glm::Vec4::new(-1., 1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(0., 0.)
+	},
+	HermiteNode {
+		pos: glm::Vec4::new(1., 1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(1., 0.)
+	},
 ];
 
-const INDICES: &[u32] = &[/* tri 1 */0, 1, 4,  /* tri 2 */1, 2, 4,  /* tri 3 */2, 3, 4];
+const INDICES: &[u32] = &[/* tri 1 */0, 1, 3,  /* tri 2 */3, 0, 2];
 
 
 
@@ -58,14 +68,16 @@ const INDICES: &[u32] = &[/* tri 1 */0, 1, 4,  /* tri 2 */1, 2, 4,  /* tri 3 */2
 struct HermiteNode
 {
 	pos: glm::Vec4,
-	/*tan: glm::Vec4,
-	radius: glm::Vec2,*/
-	color: glm::Vec4
+	//tan: glm::Vec4,
+	color: glm::Vec4,
+	//radius: glm::Vec2,
+	texcoord: glm::Vec2
 }
 
 impl HermiteNode
 {
-	const GPU_ATTRIBS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4];
+	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
+		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
 
 	fn layoutDesc () -> wgpu::VertexBufferLayout<'static>	{
 		wgpu::VertexBufferLayout {
@@ -90,9 +102,11 @@ pub struct State
 	pub size: dpi::PhysicalSize<u32>,
 	pub window: Arc<Window>,
 
-	renderPipeline: wgpu::RenderPipeline,
+	pipeline: wgpu::RenderPipeline,
 	vertexBuffer: wgpu::Buffer,
-	indexBuffer: wgpu::Buffer
+	indexBuffer: wgpu::Buffer,
+
+	texBindGroup: wgpu::BindGroup
 }
 
 impl State {
@@ -170,16 +184,147 @@ impl State {
 			label: Some("Shader"),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
 		});
-		let render_pipeline_layout =
+
+		let vertexBuffer = device.create_buffer_init(
+			&wgpu::util::BufferInitDescriptor {
+				label: Some("HermiteNodes"),
+				contents: util::slicify(NODES),
+				usage: wgpu::BufferUsages::VERTEX,
+			}
+		);
+		let indexBuffer = device.create_buffer_init(
+			&wgpu::util::BufferInitDescriptor {
+				label: Some("HermiteIndices"),
+				contents: util::slicify(INDICES),
+				usage: wgpu::BufferUsages::INDEX,
+			}
+		);
+
+
+		////
+		// Load resources
+
+		let diffuseBytes = util::sourceBytes!("/res/tex/cgvCube.png");
+		let diffuseImage = image::load_from_memory(diffuseBytes).unwrap();
+		let diffuseRgba = diffuseImage.to_rgba8();
+		let texDims = {
+			use image::GenericImageView;
+			let dims = diffuseImage.dimensions();
+			wgpu::Extent3d {width: dims.0, height: dims.1, depth_or_array_layers: 1}
+		};
+		let tex = device.create_texture(
+			&wgpu::TextureDescriptor {
+				// All textures are stored as 3D, we represent our 2D texture
+				// by setting depth to 1.
+				size: texDims,
+				mip_level_count: 1, // We'll talk about this a little later
+				sample_count: 1,
+				dimension: wgpu::TextureDimension::D2,
+				// Most images are stored using sRGB, so we need to reflect that here.
+				format: wgpu::TextureFormat::Rgba8Unorm,
+				// TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
+				// COPY_DST means that we want to copy data to this texture
+				usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+				label: Some("TestTexture"),
+				// This is the same as with the SurfaceConfig. It
+				// specifies what texture formats can be used to
+				// create TextureViews for this texture. The base
+				// texture format (Rgba8Unorm in this case) is
+				// always supported. Note that using a different
+				// texture format is not supported on the WebGL2
+				// backend.
+				view_formats: &[],
+			}
+		);
+		queue.write_texture(
+			// Tells wgpu where to copy the pixel data
+			wgpu::ImageCopyTexture {
+				texture: &tex,
+				mip_level: 0,
+				origin: wgpu::Origin3d::ZERO,
+				aspect: wgpu::TextureAspect::All,
+			},
+			// The actual pixel data
+			&diffuseRgba,
+			// The layout of the texture
+			wgpu::ImageDataLayout {
+				offset: 0,
+				bytes_per_row: Some(4*texDims.width),
+				rows_per_image: Some(texDims.height),
+			},
+			texDims,
+		);
+		queue.submit([]); // make sure the texture transfer starts immediately
+
+		// We don't need to configure the texture view much, so let's
+		// let wgpu define it.
+		let texView = tex.create_view(&wgpu::TextureViewDescriptor::default());
+		let texSampler = device.create_sampler(&wgpu::SamplerDescriptor {
+			address_mode_u: wgpu::AddressMode::ClampToEdge,
+			address_mode_v: wgpu::AddressMode::ClampToEdge,
+			address_mode_w: wgpu::AddressMode::ClampToEdge,
+			mag_filter: wgpu::FilterMode::Linear,
+			min_filter: wgpu::FilterMode::Linear,
+			mipmap_filter: wgpu::FilterMode::Linear,
+			..Default::default()
+		});
+
+		let bindGroupLayout = device.create_bind_group_layout(
+			&wgpu::BindGroupLayoutDescriptor {
+				entries: &[
+					wgpu::BindGroupLayoutEntry {
+						binding: 0,
+						visibility: wgpu::ShaderStages::FRAGMENT,
+						ty: wgpu::BindingType::Texture {
+							multisampled: false,
+							view_dimension: wgpu::TextureViewDimension::D2,
+							sample_type: wgpu::TextureSampleType::Float { filterable: true },
+						},
+						count: None,
+					},
+					wgpu::BindGroupLayoutEntry {
+						binding: 1,
+						visibility: wgpu::ShaderStages::FRAGMENT,
+						// This should match the filterable field of the
+						// corresponding Texture entry above.
+						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+						count: None,
+					},
+				],
+				label: Some("texture_bind_group_layout"),
+			}
+		);
+		let texBindGroup = device.create_bind_group(
+			&wgpu::BindGroupDescriptor {
+				layout: &bindGroupLayout,
+				entries: &[
+					wgpu::BindGroupEntry {
+						binding: 0,
+						resource: wgpu::BindingResource::TextureView(&texView),
+					},
+					wgpu::BindGroupEntry {
+						binding: 1,
+						resource: wgpu::BindingResource::Sampler(&texSampler),
+					}
+				],
+				label: Some("diffuse_bind_group"),
+			}
+		);
+
+
+		////
+		// Create pipeline
+
+		let pipelineLayout =
 			device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
-				bind_group_layouts: &[],
+				bind_group_layouts: &[&bindGroupLayout],
 				push_constant_ranges: &[],
 			});
 
-		let renderPipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Render Pipeline"),
-			layout: Some(&render_pipeline_layout),
+			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
 				module: &shader,
 				entry_point: None, // 1. -- our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
@@ -197,7 +342,7 @@ impl State {
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			}),
 			primitive: wgpu::PrimitiveState {
-				topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+				topology: wgpu::PrimitiveTopology::TriangleStrip, // 1.
 				strip_index_format: None,
 				front_face: wgpu::FrontFace::Ccw, // 2.
 				cull_mode: Some(wgpu::Face::Back),
@@ -218,31 +363,6 @@ impl State {
 			cache: None, // 6.
 		});
 
-		let vertexBuffer = device.create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("HermiteNodes"),
-				contents: util::slicify(NODES),
-				usage: wgpu::BufferUsages::VERTEX,
-			}
-		);
-		let indexBuffer = device.create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("HermiteIndices"),
-				contents: util::slicify(INDICES),
-				usage: wgpu::BufferUsages::INDEX,
-			}
-		);
-
-		////
-		// Load resources
-
-		let diffuse_bytes = util::sourceBytes!("/res/tex/cgvCube.png");
-		let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-		let diffuse_rgba = diffuse_image.to_rgba8();
-
-		use image::GenericImageView;
-		let dimensions = diffuse_image.dimensions();
-
 		Self {
 			surface,
 			device,
@@ -251,9 +371,10 @@ impl State {
 			surfaceConfigured,
 			size,
 			window,
-			renderPipeline,
+			pipeline,
 			vertexBuffer,
-			indexBuffer
+			indexBuffer,
+			texBindGroup
 		}
 	}
 
@@ -286,7 +407,7 @@ impl State {
 			label: Some("Render Encoder"),
 		});
 		/* create render pass */ {
-			let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+			let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 				label: Some("Render Pass"),
 				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 					view: &view,
@@ -305,10 +426,11 @@ impl State {
 				occlusion_query_set: None,
 				timestamp_writes: None,
 			});
-			render_pass.set_pipeline(&self.renderPipeline);
-			render_pass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
-			render_pass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-			render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+			renderPass.set_pipeline(&self.pipeline);
+			renderPass.set_bind_group(0, Some(&self.texBindGroup), &[]); // NEW!
+			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
+			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
+			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
 		}
 
 		// submit will accept anything that implements IntoIter
