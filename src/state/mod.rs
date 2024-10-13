@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 // Anyhow
 use anyhow::Result;
-use tracing::info;
 
 // Winit
 use winit::{window::Window, event::WindowEvent, dpi};
@@ -22,7 +21,7 @@ use wgpu::util::DeviceExt;
 use glm;
 
 // Local imports
-use crate::util;
+use crate::{hal, util};
 
 
 
@@ -111,7 +110,7 @@ pub struct State
 
 impl State {
 	// Creating some of the wgpu types requires async code
-	pub async fn new (window: Window) -> State
+	pub async fn new (window: Window) -> Result<State>
 	{
 		let size = window.inner_size();
 
@@ -130,7 +129,7 @@ impl State {
 
 		let adapter = instance.request_adapter(
 			&wgpu::RequestAdapterOptions {
-				power_preference: wgpu::PowerPreference::default(),
+				power_preference: wgpu::PowerPreference::HighPerformance,
 				compatible_surface: Some(&surface),
 				force_fallback_adapter: false,
 			},
@@ -204,71 +203,9 @@ impl State {
 		////
 		// Load resources
 
-		let diffuseBytes = util::sourceBytes!("/res/tex/cgvCube.png");
-		let diffuseImage = image::load_from_memory(diffuseBytes).unwrap();
-		let diffuseRgba = diffuseImage.to_rgba8();
-		let texDims = {
-			use image::GenericImageView;
-			let dims = diffuseImage.dimensions();
-			wgpu::Extent3d {width: dims.0, height: dims.1, depth_or_array_layers: 1}
-		};
-		let tex = device.create_texture(
-			&wgpu::TextureDescriptor {
-				// All textures are stored as 3D, we represent our 2D texture
-				// by setting depth to 1.
-				size: texDims,
-				mip_level_count: 1, // We'll talk about this a little later
-				sample_count: 1,
-				dimension: wgpu::TextureDimension::D2,
-				// Most images are stored using sRGB, so we need to reflect that here.
-				format: wgpu::TextureFormat::Rgba8Unorm,
-				// TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-				// COPY_DST means that we want to copy data to this texture
-				usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-				label: Some("TestTexture"),
-				// This is the same as with the SurfaceConfig. It
-				// specifies what texture formats can be used to
-				// create TextureViews for this texture. The base
-				// texture format (Rgba8Unorm in this case) is
-				// always supported. Note that using a different
-				// texture format is not supported on the WebGL2
-				// backend.
-				view_formats: &[],
-			}
-		);
-		queue.write_texture(
-			// Tells wgpu where to copy the pixel data
-			wgpu::ImageCopyTexture {
-				texture: &tex,
-				mip_level: 0,
-				origin: wgpu::Origin3d::ZERO,
-				aspect: wgpu::TextureAspect::All,
-			},
-			// The actual pixel data
-			&diffuseRgba,
-			// The layout of the texture
-			wgpu::ImageDataLayout {
-				offset: 0,
-				bytes_per_row: Some(4*texDims.width),
-				rows_per_image: Some(texDims.height),
-			},
-			texDims,
-		);
-		queue.submit([]); // make sure the texture transfer starts immediately
-
-		// We don't need to configure the texture view much, so let's
-		// let wgpu define it.
-		let texView = tex.create_view(&wgpu::TextureViewDescriptor::default());
-		let texSampler = device.create_sampler(&wgpu::SamplerDescriptor {
-			address_mode_u: wgpu::AddressMode::ClampToEdge,
-			address_mode_v: wgpu::AddressMode::ClampToEdge,
-			address_mode_w: wgpu::AddressMode::ClampToEdge,
-			mag_filter: wgpu::FilterMode::Linear,
-			min_filter: wgpu::FilterMode::Linear,
-			mipmap_filter: wgpu::FilterMode::Linear,
-			..Default::default()
-		});
-
+		let tex = hal::Texture::fromBlob(
+			&device, &queue, util::sourceBytes!("/res/tex/cgvCube.png"), "TestTexture"
+		)?;
 		let bindGroupLayout = device.create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
 				entries: &[
@@ -291,7 +228,7 @@ impl State {
 						count: None,
 					},
 				],
-				label: Some("texture_bind_group_layout"),
+				label: Some("TestBindGroupLayout"),
 			}
 		);
 		let texBindGroup = device.create_bind_group(
@@ -300,14 +237,14 @@ impl State {
 				entries: &[
 					wgpu::BindGroupEntry {
 						binding: 0,
-						resource: wgpu::BindingResource::TextureView(&texView),
+						resource: wgpu::BindingResource::TextureView(&tex.view),
 					},
 					wgpu::BindGroupEntry {
 						binding: 1,
-						resource: wgpu::BindingResource::Sampler(&texSampler),
+						resource: wgpu::BindingResource::Sampler(&tex.sampler),
 					}
 				],
-				label: Some("diffuse_bind_group"),
+				label: Some("TestBindGroup"),
 			}
 		);
 
@@ -363,7 +300,7 @@ impl State {
 			cache: None, // 6.
 		});
 
-		Self {
+		Ok(Self {
 			surface,
 			device,
 			queue,
@@ -375,7 +312,7 @@ impl State {
 			vertexBuffer,
 			indexBuffer,
 			texBindGroup
-		}
+		})
 	}
 
 	pub fn window (&self) -> &Window {
@@ -383,7 +320,7 @@ impl State {
 	}
 
 	pub fn resize (&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-		info!("Resizing to {:?}", new_size);
+		tracing::info!("Resizing to {:?}", new_size);
 		if new_size.width > 0 && new_size.height > 0 {
 			self.size = new_size;
 			self.config.width = new_size.width;

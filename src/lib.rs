@@ -17,6 +17,9 @@
 // Module definitions
 //
 
+/// The parent module of all GPU abstractions.
+pub mod hal;
+
 /// The module containing utilities used throughout (i.e. not specific to any other module).
 pub mod util;
 
@@ -61,7 +64,7 @@ use winit::{
 //
 
 pub enum UserEvent {
-	StateReady(state::State)
+	StateReady(Result<state::State>)
 }
 
 pub struct App {
@@ -138,12 +141,18 @@ impl ApplicationHandler<UserEvent> for App
 	}
 
 	/// The user event hook - for now, only used to commit a new (asynchronously initialized) application state.
-	fn user_event (&mut self, _: &ActiveEventLoop, event: UserEvent)
+	fn user_event (&mut self, eventLoop: &ActiveEventLoop, event: UserEvent)
 	{
 		// Apply newly initialized state
-		tracing::info!("Application state ready.");
 		let UserEvent::StateReady(state) = event;
-		self.state = Some(state);
+		if let Ok(state) = state {
+			tracing::info!("Application state ready.");
+			self.state = Some(state);
+		}
+		else {
+			tracing::error!("Unable to create application state: {:?}", state);
+			eventLoop.exit();
+		}
 
 		// WASM, for some reason, needs a resize event for the main surface to become fully
 		// configured. Since we need to hook up the size of the canvas hosting the surface to the
@@ -154,7 +163,7 @@ impl ApplicationHandler<UserEvent> for App
 		).unwrap();
 	}
 
-	fn window_event (&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent)
+	fn window_event (&mut self, eventLoop: &ActiveEventLoop, _: WindowId, event: WindowEvent)
 	{
 		match event
 		{
@@ -177,7 +186,7 @@ impl ApplicationHandler<UserEvent> for App
 				}, ..
 			} => {
 				tracing::info!("Exiting...");
-				event_loop.exit()
+				eventLoop.exit();
 			}
 
 			// Main window redraw
@@ -199,7 +208,7 @@ impl ApplicationHandler<UserEvent> for App
 						// The system is out of memory, we should probably quit
 						Err(wgpu::SurfaceError::OutOfMemory) => {
 							tracing::error!("OutOfMemory");
-							event_loop.exit();
+							eventLoop.exit();
 						}
 
 						// This happens when the frame takes too long to present
