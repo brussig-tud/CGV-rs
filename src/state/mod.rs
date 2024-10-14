@@ -7,21 +7,19 @@
 // Standard library
 use std::sync::Arc;
 
-// Anyhow
+// Anyhow library
 use anyhow::Result;
 
-// Winit
+// Winit library
 use winit::{window::Window, event::WindowEvent, dpi};
 
-// WGPU
+// WGPU AP
 use wgpu;
 use wgpu::util::DeviceExt;
 
-// GLM
-use glm;
-
 // Local imports
-use crate::{hal, util};
+use crate::{hal, view, util};
+use view::Camera;
 
 
 
@@ -87,6 +85,17 @@ impl HermiteNode
 	}
 }
 
+/// The CPU-side representation of the UniformBuffer used for storing the viewing information
+#[repr(C)]
+#[derive(Default, Debug, Copy, Clone)]
+struct UniformViewing
+{
+	/// The modelview transformation matrix.
+	modelview: glm::Mat4,
+
+	/// The projection matrix.
+	projection: glm::Mat4,
+}
 
 #[derive(Debug)]
 pub struct State
@@ -104,8 +113,13 @@ pub struct State
 	pipeline: wgpu::RenderPipeline,
 	vertexBuffer: wgpu::Buffer,
 	indexBuffer: wgpu::Buffer,
+	viewingUniformBuffer: wgpu::Buffer,
 
-	texBindGroup: wgpu::BindGroup
+	texBindGroup: wgpu::BindGroup,
+	viewingUniformsBindGroup: wgpu::BindGroup,
+
+	camera: view::OrbitCamera,
+	uniform_viewing: UniformViewing
 }
 
 impl State {
@@ -199,6 +213,39 @@ impl State {
 			}
 		);
 
+		let viewingUniformBuffer = device.create_buffer_init(
+			&wgpu::util::BufferInitDescriptor {
+				label: Some("ViewingUniforms"),
+				contents: util::slicify(&UniformViewing::default()),
+				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+			}
+		);
+		let viewingUniformsBindGroupLayout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+			entries: &[
+				wgpu::BindGroupLayoutEntry {
+					binding: 0,
+					visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+					ty: wgpu::BindingType::Buffer {
+						ty: wgpu::BufferBindingType::Uniform,
+						has_dynamic_offset: false,
+						min_binding_size: None,
+					},
+					count: None,
+				}
+			],
+			label: Some("ViewingUniformsBindGroupLayout"),
+		});
+		let viewingUniformsBindGroup = device.create_bind_group(&wgpu::BindGroupDescriptor {
+			layout: &viewingUniformsBindGroupLayout,
+			entries: &[
+				wgpu::BindGroupEntry {
+					binding: 0,
+					resource: viewingUniformBuffer.as_entire_binding(),
+				}
+			],
+			label: Some("ViewingUniformsBindGroup"),
+		});
+
 
 		////
 		// Load resources
@@ -206,7 +253,7 @@ impl State {
 		let tex = hal::Texture::fromBlob(
 			&device, &queue, util::sourceBytes!("/res/tex/cgvCube.png"), "TestTexture"
 		)?;
-		let bindGroupLayout = device.create_bind_group_layout(
+		let texBindGroupLayout = device.create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
 				entries: &[
 					wgpu::BindGroupLayoutEntry {
@@ -233,7 +280,7 @@ impl State {
 		);
 		let texBindGroup = device.create_bind_group(
 			&wgpu::BindGroupDescriptor {
-				layout: &bindGroupLayout,
+				layout: &texBindGroupLayout,
 				entries: &[
 					wgpu::BindGroupEntry {
 						binding: 0,
@@ -255,7 +302,7 @@ impl State {
 		let pipelineLayout =
 			device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
-				bind_group_layouts: &[&bindGroupLayout],
+				bind_group_layouts: &[&viewingUniformsBindGroupLayout, &texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
 
@@ -264,13 +311,13 @@ impl State {
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
 				module: &shader,
-				entry_point: None, // 1. -- our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
+				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
 				buffers: &[HermiteNode::layoutDesc()], // 2.
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState { // 3.
 				module: &shader,
-				entry_point: None, // 1. -- our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
+				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
 				targets: &[Some(wgpu::ColorTargetState { // 4.
 					format: config.format,
 					blend: Some(wgpu::BlendState::REPLACE),
@@ -300,6 +347,14 @@ impl State {
 			cache: None, // 6.
 		});
 
+
+		////
+		// Misc
+
+		// Setup camera
+		let mut camera = view::OrbitCamera::new();
+		camera.resize(&glm::vec2(config.width as f32, config.height as f32));
+
 		Ok(Self {
 			surface,
 			device,
@@ -311,7 +366,11 @@ impl State {
 			pipeline,
 			vertexBuffer,
 			indexBuffer,
-			texBindGroup
+			viewingUniformBuffer,
+			texBindGroup,
+			viewingUniformsBindGroup,
+			camera,
+			uniform_viewing: Default::default()
 		})
 	}
 
@@ -319,22 +378,33 @@ impl State {
 		&self.window
 	}
 
-	pub fn resize (&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-		tracing::info!("Resizing to {:?}", new_size);
-		if new_size.width > 0 && new_size.height > 0 {
-			self.size = new_size;
-			self.config.width = new_size.width;
-			self.config.height = new_size.height;
+	pub fn resize (&mut self, newSize: winit::dpi::PhysicalSize<u32>)
+	{
+		tracing::info!("Resizing to {:?}", newSize);
+		if newSize.width > 0 && newSize.height > 0
+		{
+			self.size = newSize;
+			self.config.width = newSize.width;
+			self.config.height = newSize.height;
 			self.surface.configure(&self.device, &self.config);
 			self.surfaceConfigured = true;
+			self.camera.resize(&glm::Vec2::new(newSize.width as f32, newSize.height as f32));
 		}
 	}
 
 	pub fn input (&mut self, event: &WindowEvent) -> bool {
-		false
+		self.camera.input(event)
 	}
 
-	pub fn update (&mut self) {}
+	pub fn update (&mut self)
+	{
+		// Viewing
+		self.camera.update();
+		self.uniform_viewing.projection = *self.camera.projection();
+		self.uniform_viewing.modelview = *self.camera.view();
+		self.queue.write_buffer(&self.viewingUniformBuffer, 0, util::slicify(&self.uniform_viewing));
+		self.queue.submit([]);
+	}
 
 	pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
 	{
@@ -364,7 +434,8 @@ impl State {
 				timestamp_writes: None,
 			});
 			renderPass.set_pipeline(&self.pipeline);
-			renderPass.set_bind_group(0, Some(&self.texBindGroup), &[]); // NEW!
+			renderPass.set_bind_group(0, Some(&self.viewingUniformsBindGroup), &[]);
+			renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
 			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
 			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);

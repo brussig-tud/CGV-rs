@@ -4,10 +4,10 @@
 // Imports
 //
 
-// Anyhow
+// Anyhow library
 use anyhow::Result;
 
-// WGPU
+// WGPU API
 use wgpu;
 
 // Image library

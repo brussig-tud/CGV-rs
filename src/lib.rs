@@ -8,7 +8,10 @@
 #![allow(non_snake_case)]
 
 // Eff this "feature" as well.
-#[allow(unused_must_use)]
+/*#![allow(unused_must_use)]*/
+
+// And this one...
+#![allow(unused_macros)]
 
 
 
@@ -19,6 +22,9 @@
 
 /// The parent module of all GPU abstractions.
 pub mod hal;
+
+/// The module containing all viewing functionality
+pub mod view;
 
 /// The module containing utilities used throughout (i.e. not specific to any other module).
 pub mod util;
@@ -43,14 +49,14 @@ extern crate nalgebra_glm as glm;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-// Anyhow
+// Anyhow library
 use anyhow::Result;
 
-// Tracing
+// Tracing library
 use tracing;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-// Winit
+// Winit library
 use winit::{
 	application::ApplicationHandler,
 	event::*, event_loop::*, keyboard::*, window::*
@@ -60,13 +66,25 @@ use winit::{
 
 ///////
 //
-// Classes
+// Enums
 //
 
+/// The type used for our user-defined event.
 pub enum UserEvent {
 	StateReady(Result<state::State>)
 }
 
+
+
+///////
+//
+// Classes
+//
+
+////
+// App
+
+/// The central application class.
 pub struct App {
 	state: Option<state::State>,
 	eventLoopProxy: EventLoopProxy<UserEvent>,
@@ -77,15 +95,20 @@ pub struct App {
 }
 
 impl App {
-	pub fn new (event_loop: &EventLoop<UserEvent>) -> Self {
+	pub fn new (eventLoop: &EventLoop<UserEvent>) -> Self {
 		Self {
 			state: None,
-			eventLoopProxy: event_loop.create_proxy(),
+			eventLoopProxy: eventLoop.create_proxy(),
 			redrawOnceOnWait: false,
 
 			#[cfg(target_arch = "wasm32")]
 			canvas: None
 		}
+	}
+
+	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
+		tracing::info!("Exiting...");
+		eventLoop.exit();
 	}
 }
 
@@ -140,37 +163,42 @@ impl ApplicationHandler<UserEvent> for App
 		}
 	}
 
-	/// The user event hook - for now, only used to commit a new (asynchronously initialized) application state.
+	/// The user event hook. For now, only used to commit a new (asynchronously initialized) application state.
 	fn user_event (&mut self, eventLoop: &ActiveEventLoop, event: UserEvent)
 	{
 		// Apply newly initialized state
 		let UserEvent::StateReady(state) = event;
-		if let Ok(state) = state {
-			tracing::info!("Application state ready.");
-			self.state = Some(state);
-		}
-		else {
-			tracing::error!("Unable to create application state: {:?}", state);
-			eventLoop.exit();
-		}
+		match state
+		{
+			Ok(state) => {
+				tracing::info!("Application state ready.");
+				self.state = Some(state);
 
-		// WASM, for some reason, needs a resize event for the main surface to become fully
-		// configured. Since we need to hook up the size of the canvas hosting the surface to the
-		// browser window anyway, this is a good opportunity for dispatching that initial resize.
-		#[cfg(target_arch = "wasm32")]
-		self.canvas.as_ref().unwrap().set_attribute(
-			"style", "width:100% !important; height:100% !important"
-		).unwrap();
+				// WASM, for some reason, needs a resize event for the main surface to become fully
+				// configured. Since we need to hook up the size of the canvas hosting the surface to the
+				// browser window anyway, this is a good opportunity for dispatching that initial resize.
+				#[cfg(target_arch = "wasm32")]
+				self.canvas.as_ref().unwrap().set_attribute(
+					"style", "width:100% !important; height:100% !important"
+				).unwrap();
+
+			}
+			Err(error) => {
+				tracing::error!("Unable to create application state: {:?}", error);
+				eventLoop.exit();
+			}
+		}
 	}
 
 	fn window_event (&mut self, eventLoop: &ActiveEventLoop, _: WindowId, event: WindowEvent)
 	{
-		match event
+		match &event
 		{
 			// Main window resize
-			WindowEvent::Resized(physical_size) => {
+			WindowEvent::Resized(physical_size)
+			=> {
 				if let Some(state) = self.state.as_mut() {
-					state.resize(physical_size);
+					state.resize(*physical_size);
 				}
 				#[cfg(not(target_arch="wasm32"))] {
 					self.redrawOnceOnWait = true;
@@ -178,16 +206,7 @@ impl ApplicationHandler<UserEvent> for App
 			}
 
 			// Application close
-			WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
-				event: KeyEvent {
-					state: ElementState::Pressed,
-					physical_key: PhysicalKey::Code(KeyCode::Escape),
-					..
-				}, ..
-			} => {
-				tracing::info!("Exiting...");
-				eventLoop.exit();
-			}
+			WindowEvent::CloseRequested  => self.exit(eventLoop),
 
 			// Main window redraw
 			WindowEvent::RedrawRequested
@@ -217,7 +236,35 @@ impl ApplicationHandler<UserEvent> for App
 						}
 					}
 				}
+			},
+
+			// User interaction
+			  WindowEvent::KeyboardInput{..} | WindowEvent::MouseInput{..} | WindowEvent::CursorMoved{..}
+			| WindowEvent::MouseWheel{..} | WindowEvent::ModifiersChanged{..}
+			=> {
+				// GUI gets first dibs
+				/* nothing here yet */
+
+				// Camera is next
+				if let Some(state) = self.state.as_mut() {
+					if state.input(&event) {
+						state.window.request_redraw();
+						return
+					}
+				}
+
+				// Exit on ESC
+				if let WindowEvent::KeyboardInput {
+					event: KeyEvent {
+						state: ElementState::Pressed,
+						physical_key: PhysicalKey::Code(KeyCode::Escape), ..
+					}, ..
+				} = event {
+					self.exit(eventLoop)
+				}
 			}
+
+			// We'll ignore this
 			_ => {}
 		}
 	}
@@ -241,23 +288,24 @@ impl ApplicationHandler<UserEvent> for App
 // Functions
 //
 
+/// The entry point from the browser for WASM builds.
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub fn wasm_start() {
 	// Make sure we panic (to JavaScript console) in case run fails
 	run().unwrap();
 }
 
+/// The main function for handling control flow, including initialization, window creation and the main event loop.
 pub fn run() -> Result<()>
 {
+	// Set up logging
 	let mut envFilterBuilder = EnvFilter::builder();
 	#[cfg(debug_assertions)] {
 		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::DEBUG.into());
 	}
-
 	#[cfg(not(debug_assertions))] {
 		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::INFO.into());
 	}
-
 	let env_filter = envFilterBuilder
 		.from_env_lossy()
 		.add_directive("wgpu_core::device::resource=warn".parse()?);
@@ -277,10 +325,12 @@ pub fn run() -> Result<()>
 
 	tracing::info!("Starting...");
 
+	// Launch main event loop. Most initialization is event-driven and will happen in there.
 	let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
 	eventLoop.set_control_flow(ControlFlow::Wait);
 	let mut app = App::new(&eventLoop);
-
 	eventLoop.run_app(&mut app)?;
+
+	// Done!
 	Ok(())
 }

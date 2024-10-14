@@ -1,11 +1,22 @@
 
 ////
-// Interface
+// Interface - uniforms
+
+struct Viewing {
+	modelview: mat4x4<f32>,
+	projection: mat4x4<f32>
+}
+@group(0) @binding(0)
+var<uniform> viewing: Viewing;
+
+
+////
+// Interface - streams
 
 struct VertexInput {
-    @location(0) pos: vec4f,
-    @location(1) color: vec4f,
-    @location(2) texcoord: vec2f
+	@location(0) pos: vec4f,
+	@location(1) color: vec4f,
+	@location(2) texcoord: vec2f
 };
 
 struct VertexOutput {
@@ -22,7 +33,7 @@ struct VertexOutput {
 fn vs_main (vert: VertexInput) -> VertexOutput
 {
 	var out: VertexOutput;
-	out.pos_clip = vert.pos;
+	out.pos_clip = viewing.projection * viewing.modelview * vert.pos;
 	out.color = vert.color;
 	out.texcoord = vert.texcoord;
 	return out;
@@ -32,13 +43,14 @@ fn vs_main (vert: VertexInput) -> VertexOutput
 ////
 // Fragment shader
 
-@group(0) @binding(0)
+@group(1) @binding(0)
 var tex: texture_2d<f32>;
-@group(0) @binding(1)
+
+@group(1) @binding(1)
 var smpler: sampler;
 
 @fragment
 fn fs_main (in: VertexOutput) -> @location(0) vec4f {
-    var texColor = textureSample(tex, smpler, in.texcoord);
+	var texColor = textureSample(tex, smpler, in.texcoord);
 	return vec4f(mix(in.color.rgb, texColor.rgb, texColor.a), 1);
 }
