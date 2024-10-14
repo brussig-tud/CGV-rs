@@ -145,46 +145,50 @@ impl Camera for OrbitCamera
 			=> {
 				let delta = self.processMouseMove(position);
 				let dist = self.target - self.eye;
+
+				// Orbital motion
 				if self.dragLMB {
 					let fore = dist.normalize();
 					if self.roll {
-						self.up = glm::rotate_vec3(&self.up, math::deg2rad!(0.5*delta.y), &fore);
+						self.up = glm::rotate_vec3(
+							&self.up, math::deg2rad!(delta.y*1./3.), &fore
+						);
 					}
 					else {
-						let right = glm::normalize(&glm::cross(&fore, &self.up));
-						/* rotate horizontally */ {
-							let newRight = glm::rotate_vec3(&right, math::deg2rad!(delta.x), &self.up);
-							let newFore = glm::cross(&self.up, &newRight);
-							self.eye = self.target - dist.norm()*newFore;
-						}
-						/* rotate vertically */ {
-							let dist = self.target - self.eye;
-							let fore = dist.normalize();
-							let right = glm::normalize(&glm::cross(&fore, &self.up));
-							let newUp = glm::rotate_vec3(&self.up, math::deg2rad!(-delta.y), &right);
-							let newFore = glm::cross(&newUp, &right);
-							self.up = newUp;
-							self.eye = self.target - dist.norm()*newFore;
-						}
+						let mut right = glm::normalize(&glm::cross(&fore, &self.up));
+						right = glm::rotate_vec3(
+							&right, math::deg2rad!(delta.x*0.5), &self.up
+						);
+						self.eye = self.target - dist.norm()*glm::cross(&self.up, &right);
+						self.up = glm::rotate_vec3(
+							&self.up, math::deg2rad!(delta.y*-0.5), &right
+						);
+						self.eye =    self.target
+						           - (self.target-self.eye).norm()*glm::cross(&self.up, &right);
 					}
-					true
+					return true;
 				}
-				else if self.dragMMB {
-					let fore = dist.norm()*delta.y*0.0625 * dist.normalize();
+
+				// Forward/backward motion
+				if self.dragMMB {
+					let fore = dist.norm()*delta.y*0.015625 * dist.normalize();
 					self.target += fore;
 					self.eye += fore;
-					true
+					return true;
 				}
-				else if self.dragRMB {
-					let speed = dist.norm() * delta*0.03125;
+
+				// Panning motion
+				if self.dragRMB {
+					let speed = dist.norm() * delta*0.0078125;
 					let right = glm::normalize(&glm::cross(&dist, &self.up));
 					let diff = speed.x*right + speed.y*self.up;
 					self.target += diff;
 					self.eye += diff;
-					true
+					return true;
 				}
-				else
-					{false} // we didn't consume the event
+
+				// We didn't consume the event
+				false
 			},
 
 			WindowEvent::MouseWheel {delta, ..}
