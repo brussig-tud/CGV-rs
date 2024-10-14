@@ -26,7 +26,7 @@ use ontubevis_rs::*;
 
 // Application entry point
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(main))]
-pub fn main() -> Result<()>{
+pub fn main() -> Result<()> {
 	// Just hand off control flow
 	run()
 }

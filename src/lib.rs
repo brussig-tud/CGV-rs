@@ -74,6 +74,22 @@ pub enum UserEvent {
 	StateReady(Result<state::State>)
 }
 
+/// Enumeration of possible event handling outcomes.
+pub enum EventOutcome
+{
+	/// The event was handled and should be closed. The wrapped `bool` indicates whether a redraw
+	/// needs to happen as a result of the processing that was done.
+	HandledExclusively(bool),
+
+	/// The event was handled but should not be closed (i.e. subsequent handlers will also receive
+	/// it). The wrapped `bool` indicates whether a redraw needs to happen as a result of the
+	/// processing that was done.
+	HandledDontClose(bool),
+
+	/// The event was not handled.
+	NotHandled
+}
+
 
 
 ///////
@@ -82,10 +98,35 @@ pub enum UserEvent {
 //
 
 ////
-// App
+// Application
 
-/// The central application class.
-pub struct App {
+/// An application that can be [run](Player::run) by a [`Player`].
+pub trait Application
+{
+	/// Called when there is user input that can be processed.
+	///
+	/// # Arguments
+	///
+	/// * `event` – The input event that the application should inspect and possibly act upon.
+	///
+	/// # Returns
+	///
+	/// The outcome of the [event processing](EventOutcome).
+	fn input (&mut self, event: &WindowEvent) -> EventOutcome;
+
+	/// Called when the [player](Player) wants to prepare a new frame for rendering.
+	fn update (&mut self);
+
+	/// Called when the [player](Player) needs the application to render its contents.
+	fn render (&mut self) -> anyhow::Result<()>;
+}
+
+
+////
+// Player
+
+/// The central application host class.
+pub struct Player {
 	state: Option<state::State>,
 	eventLoopProxy: EventLoopProxy<UserEvent>,
 	redrawOnceOnWait: bool,
@@ -94,7 +135,7 @@ pub struct App {
 	canvas: Option<web_sys::Element>
 }
 
-impl App {
+impl Player {
 	pub fn new (eventLoop: &EventLoop<UserEvent>) -> Self {
 		Self {
 			state: None,
@@ -106,13 +147,17 @@ impl App {
 		}
 	}
 
+	pub fn run (&self, application: &dyn Application) -> anyhow::Result<()> {
+		Ok(())
+	}
+
 	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
 		tracing::info!("Exiting...");
 		eventLoop.exit();
 	}
 }
 
-impl ApplicationHandler<UserEvent> for App
+impl ApplicationHandler<UserEvent> for Player
 {
 	fn resumed (&mut self, event_loop: &ActiveEventLoop)
 	{
@@ -291,7 +336,7 @@ impl ApplicationHandler<UserEvent> for App
 /// The entry point from the browser for WASM builds.
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub fn wasm_start() {
-	// Make sure we panic (to JavaScript console) in case run fails
+	// Make sure we panic (to the JavaScript console) in case run fails
 	run().unwrap();
 }
 
@@ -328,7 +373,7 @@ pub fn run() -> Result<()>
 	// Launch main event loop. Most initialization is event-driven and will happen in there.
 	let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
 	eventLoop.set_control_flow(ControlFlow::Wait);
-	let mut app = App::new(&eventLoop);
+	let mut app = Player::new(&eventLoop);
 	eventLoop.run_app(&mut app)?;
 
 	// Done!
