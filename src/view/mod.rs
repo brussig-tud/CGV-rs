@@ -73,6 +73,6 @@ pub trait Camera
 	///
 	/// # Returns
 	///
-	/// `true` if the event was consumed, `false` otherwise.
-	fn input (&mut self, event: &WindowEvent) -> bool;
+	/// The outcome of the event processing.
+	fn input (&mut self, event: &WindowEvent) -> crate::EventOutcome;
 }

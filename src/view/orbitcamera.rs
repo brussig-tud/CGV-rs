@@ -12,9 +12,12 @@ use winit::dpi;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 
 // Local imports
-use crate::view::*;
-use crate::util;
-use crate::util::math;
+use crate::*;
+use {view::*, util::math};
+use EventOutcome::*;
+
+
+
 //////
 //
 // Statics
@@ -122,22 +125,31 @@ impl Camera for OrbitCamera
 		self.view = glm::look_at(&self.eye, &self.target, &self.up);
 	}
 
-	fn input (&mut self, event: &WindowEvent) -> bool
+	fn input (&mut self, event: &WindowEvent) -> EventOutcome
 	{
 		match event
 		{
 			WindowEvent::ModifiersChanged(modifiers) => {
 				self.roll = modifiers.state().shift_key();
-				false // we did taste the event, but not fully consume it - let others also have a bite
+				HandledDontClose(/* redraw */true)
 			},
 
 			WindowEvent::MouseInput {state, button, ..}
 			=> {
 				match *button {
-					MouseButton::Left => { self.dragLMB = *state == ElementState::Pressed; true },
-					MouseButton::Middle => { self.dragMMB = *state == ElementState::Pressed; true },
-					MouseButton::Right => { self.dragRMB = *state == ElementState::Pressed; true },
-					_ => false // we didn't consume the event
+					MouseButton::Left => {
+						self.dragLMB = *state == ElementState::Pressed;
+						HandledExclusively(/* redraw */true)
+					},
+					MouseButton::Middle => {
+						self.dragMMB = *state == ElementState::Pressed;
+						HandledExclusively(/* redraw */true)
+					},
+					MouseButton::Right => {
+						self.dragRMB = *state == ElementState::Pressed;
+						HandledExclusively(/* redraw */true)
+					},
+					_ => NotHandled // we didn't consume the event
 				}
 			},
 
@@ -166,7 +178,7 @@ impl Camera for OrbitCamera
 						self.eye =    self.target
 						           - (self.target-self.eye).norm()*glm::cross(&self.up, &right);
 					}
-					return true;
+					return HandledExclusively(/* redraw */true);
 				}
 
 				// Forward/backward motion
@@ -174,7 +186,7 @@ impl Camera for OrbitCamera
 					let fore = dist.norm()*delta.y*0.015625 * dist.normalize();
 					self.target += fore;
 					self.eye += fore;
-					return true;
+					return HandledExclusively(/* redraw */true);
 				}
 
 				// Panning motion
@@ -184,11 +196,11 @@ impl Camera for OrbitCamera
 					let diff = speed.x*right + speed.y*self.up;
 					self.target += diff;
 					self.eye += diff;
-					return true;
+					return HandledExclusively(/* redraw */true);
 				}
 
 				// We didn't consume the event
-				false
+				NotHandled
 			},
 
 			WindowEvent::MouseWheel {delta, ..}
@@ -198,17 +210,17 @@ impl Camera for OrbitCamera
 				{
 					MouseScrollDelta::LineDelta(_, y) => {
 						self.eye = self.target + toEye*(1.+y*-0.125);
-						true
+						HandledExclusively(/* redraw */true)
 					},
 					MouseScrollDelta::PixelDelta(delta) => {
 						self.eye = self.target + toEye*(1.+(delta.y as f32)*(-1./1024.));
-						true
+						HandledExclusively(/* redraw */true)
 					}
 				}
 			},
 
 			// We didn't consume the event
-			_ => false
+			_ => NotHandled
 		}
 	}
 }

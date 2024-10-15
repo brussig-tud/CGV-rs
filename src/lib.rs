@@ -46,21 +46,71 @@ extern crate nalgebra_glm as glm;
 /* nothing here yet */
 
 // WASM Bindgen
-#[cfg(target_arch = "wasm32")]
+#[cfg(target_arch="wasm32")]
 use wasm_bindgen::prelude::*;
+
+// Ctor library
+#[cfg(not(target_arch="wasm32"))]
+use ctor;
 
 // Anyhow library
 use anyhow::Result;
 
 // Tracing library
 use tracing;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{
+	/*layer::Layered, */layer::SubscriberExt, util::SubscriberInitExt, EnvFilter/*, Registry*/
+};
 
 // Winit library
 use winit::{
 	application::ApplicationHandler,
 	event::*, event_loop::*, keyboard::*, window::*
 };
+
+
+
+//////
+//
+// Vault
+//
+
+// Populate the vault
+#[cfg(not(target_arch = "wasm32"))]
+#[ctor::ctor]
+fn initTracingProxy () {
+	initTracing()
+}
+
+fn initTracing () {
+	// Set up logging
+	let mut envFilterBuilder = EnvFilter::builder();
+	#[cfg(debug_assertions)] {
+		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::DEBUG.into());
+	}
+	#[cfg(not(debug_assertions))] {
+		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::INFO.into());
+	}
+	let envFilter = envFilterBuilder
+		.from_env_lossy()
+		.add_directive("wgpu_core::device::resource=warn".parse().expect(
+			"Failed to set up logging/tracing facilities!"
+		));
+
+	let subscriber = tracing_subscriber::registry().with(envFilter);
+	#[cfg(target_arch = "wasm32")] {
+		use tracing_wasm::{WASMLayer, WASMLayerConfig};
+
+		console_error_panic_hook::set_once();
+		let wasm_layer = WASMLayer::new(WASMLayerConfig::default());
+
+		subscriber.with(wasm_layer).init();
+	}
+	#[cfg(not(target_arch = "wasm32"))] {
+		let fmt_layer = tracing_subscriber::fmt::Layer::default();
+		subscriber.with(fmt_layer).init();
+	}
+}
 
 
 
@@ -291,10 +341,19 @@ impl ApplicationHandler<UserEvent> for Player
 				/* nothing here yet */
 
 				// Camera is next
-				if let Some(state) = self.state.as_mut() {
-					if state.input(&event) {
-						state.window.request_redraw();
-						return
+				if let Some(state) = self.state.as_mut()
+				{
+					match state.input(&event)
+					{
+						EventOutcome::HandledExclusively(redraw) => {
+							if redraw
+								{state.window.request_redraw()}
+							return;
+						}
+						EventOutcome::HandledDontClose(redraw)
+						=> if redraw {state.window.request_redraw()}
+
+						EventOutcome::NotHandled => {}
 					}
 				}
 
@@ -334,40 +393,20 @@ impl ApplicationHandler<UserEvent> for Player
 //
 
 /// The entry point from the browser for WASM builds.
+#[cfg(target_arch="wasm32")]
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
-pub fn wasm_start() {
-	// Make sure we panic (to the JavaScript console) in case run fails
+pub fn wasm_start()
+{
+	// Make sure the JavaScript console is setup for receiving log messages first thing
+	initTracing();
+
+	// Delegate
 	run().unwrap();
 }
 
 /// The main function for handling control flow, including initialization, window creation and the main event loop.
 pub fn run() -> Result<()>
 {
-	// Set up logging
-	let mut envFilterBuilder = EnvFilter::builder();
-	#[cfg(debug_assertions)] {
-		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::DEBUG.into());
-	}
-	#[cfg(not(debug_assertions))] {
-		envFilterBuilder = envFilterBuilder.with_default_directive(tracing::Level::INFO.into());
-	}
-	let env_filter = envFilterBuilder
-		.from_env_lossy()
-		.add_directive("wgpu_core::device::resource=warn".parse()?);
-	let subscriber = tracing_subscriber::registry().with(env_filter);
-	#[cfg(target_arch = "wasm32")] {
-		use tracing_wasm::{WASMLayer, WASMLayerConfig};
-
-		console_error_panic_hook::set_once();
-		let wasm_layer = WASMLayer::new(WASMLayerConfig::default());
-
-		subscriber.with(wasm_layer).init();
-	}
-	#[cfg(not(target_arch = "wasm32"))] {
-		let fmt_layer = tracing_subscriber::fmt::Layer::default();
-		subscriber.with(fmt_layer).init();
-	}
-
 	tracing::info!("Starting...");
 
 	// Launch main event loop. Most initialization is event-driven and will happen in there.

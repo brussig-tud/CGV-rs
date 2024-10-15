@@ -18,7 +18,7 @@ use wgpu;
 use wgpu::util::DeviceExt;
 
 // Local imports
-use crate::{hal, view, util};
+use crate::*;
 use view::Camera;
 
 
@@ -392,7 +392,7 @@ impl State {
 		}
 	}
 
-	pub fn input (&mut self, event: &WindowEvent) -> bool {
+	pub fn input (&mut self, event: &WindowEvent) -> EventOutcome {
 		self.camera.input(event)
 	}
 
