@@ -39,6 +39,7 @@ macro_rules! sourceFile {
 		include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
 	};
 }
+#[allow(unused_imports)]
 pub(crate) use sourceFile;
 
 /// Reads a file verbatim into a static `u8` slice, treating the file as a blob.
@@ -55,6 +56,7 @@ macro_rules! sourceBytes {
 		include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
 	};
 }
+#[allow(unused_imports)]
 pub(crate) use sourceBytes;
 
 
@@ -88,7 +90,7 @@ pub fn slicify<T: ?Sized> (data: &T) -> &'static [u8] {
 /// A `'static` reference to the data that the input reference pointed to.
 #[inline(always)]
 pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
-	unsafe { &(*(reference as *const T)) }
+	unsafe { &*(reference as *const T) }
 }
 
 /// Returns a mutable reference to the given object behind the given immutable reference.
