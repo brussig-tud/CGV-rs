@@ -33,7 +33,7 @@ pub struct Context
 	pub device: wgpu::Device,
 	pub queue: wgpu::Queue,
 
-	config: wgpu::SurfaceConfiguration,
+	pub config: wgpu::SurfaceConfiguration,
 	pub surfaceConfigured: bool,
 
 	pub size: dpi::PhysicalSize<u32>,

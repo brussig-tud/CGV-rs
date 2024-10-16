@@ -40,10 +40,15 @@ pub struct ViewingUniforms
 ////
 // RenderState
 
-pub struct RenderState {
+pub struct RenderState
+{
 	pub viewing: ViewingUniforms,
 	pub viewingUniformBuffer: wgpu::Buffer,
+	pub viewingUniformsBindGroupLayout: wgpu::BindGroupLayout,
 	pub viewingUniformsBindGroup: wgpu::BindGroup,
+
+	pub mainSurfaceColorAttachment: Option<wgpu::RenderPassColorAttachment<'static>>,
+	pub mainSurfaceColorView: Option<wgpu::TextureView>
 }
 
 impl RenderState
@@ -89,10 +94,51 @@ impl RenderState
 
 		// Done!
 		Self {
-			// viewing
+			// Uniforms
+			// - viewing
 			viewingUniformBuffer,
+			viewingUniformsBindGroupLayout,
 			viewingUniformsBindGroup,
-			viewing: Default::default()
+			viewing: Default::default(),
+
+			// Main surface attachments
+			mainSurfaceColorAttachment: None,
+			mainSurfaceColorView: None
 		}
+	}
+}
+
+
+////
+// RenderStatePrivateInterface
+
+pub(crate) trait RenderStatePrivateInterface {
+	fn updateSurfaceAttachments (&mut self, context: &Context) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError>;
+}
+
+impl RenderStatePrivateInterface for RenderState {
+	fn updateSurfaceAttachments (&mut self, context: &Context) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError>
+	{
+		// Obtain the current surface texture and view
+		let output = context.surface.get_current_texture()?;
+		self.mainSurfaceColorView = Some(
+			output.texture.create_view(&wgpu::TextureViewDescriptor::default())
+		);
+
+		// Update the color attachment
+		self.mainSurfaceColorAttachment = Some(wgpu::RenderPassColorAttachment {
+			view: util::statify(self).mainSurfaceColorView.as_ref().unwrap(),
+			resolve_target: None,
+			ops: wgpu::Operations {
+				load: wgpu::LoadOp::Clear(wgpu::Color {
+					r: 0.3,
+					g: 0.5,
+					b: 0.7,
+					a: 1.,
+				}),
+				store: wgpu::StoreOp::Store,
+			},
+		});
+		Ok(output)
 	}
 }

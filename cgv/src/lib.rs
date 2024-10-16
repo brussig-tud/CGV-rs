@@ -44,7 +44,8 @@ pub use anyhow::Result as Result;
 pub use wgpu;
 
 /// Re-export important components at root-level
-pub use context::Context;
+pub use context::Context as Context;
+pub use renderstate::RenderState as RenderState;
 
 
 
@@ -74,8 +75,7 @@ use winit::{
 };
 
 // Local imports
-use crate::view::*;
-use crate::renderstate::RenderState;
+use crate::{view::*, renderstate::*};
 
 
 
@@ -162,7 +162,7 @@ pub enum EventOutcome
 // ApplicationFactory
 
 pub trait ApplicationFactory {
-	fn create(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Result<Box<dyn Application>>;
+	fn create(&self, context: &Context, renderState: &RenderState) -> Result<Box<dyn Application>>;
 }
 
 
@@ -225,16 +225,9 @@ pub struct Player
 
 	camera: view::OrbitCamera
 }
-
 unsafe impl Send for Player {}
 unsafe impl Sync for Player {}
 
-
-/*impl AsMut<Player> for Player {
-	fn as_mut(&mut self) -> &mut Player {
-		self
-	}
-}*/
 impl Player
 {
 	pub fn new () -> Result<Self>
@@ -293,9 +286,62 @@ impl Player
 		}
 
 		// Create application
-		eventLoopProxy.send_event(UserEvent::NewApplication(Box::new(applicationFactory)));
+		if let Err(_) = eventLoopProxy.send_event(
+			UserEvent::NewApplication(Box::new(applicationFactory))
+		){
+			return Err(anyhow::anyhow!("Creating the client application failed – event loop lost!"));
+		}
 
-		mainThread.join();
+		// Joint the main thread
+		if let Err(panic) = mainThread.join()
+		{
+			// Try to convert the panic value in a few ways we know how to interpret
+			// - a string slice
+			if let Some(&panicMsg) = panic.downcast_ref::<&str>() {
+				return Err(anyhow::anyhow!(panicMsg));
+			}
+			// - a formatted string
+			if let Some(panicMsg) = panic.downcast_ref::<String>() {
+				return Err(anyhow::anyhow!(panicMsg.clone()));
+			}
+
+			// We give up, just say that some error occured
+			return Err(anyhow::anyhow!("Main thread panicked!"));
+		}
+		Ok(())
+	}
+
+	fn context (&mut self) -> &mut Context {
+		self.context.as_mut().unwrap()
+	}
+
+	// Performs the actual redrawing logic
+	fn redraw (&mut self) -> Result<()>
+	{
+		// Obtain context
+		let context = self.context.as_ref().unwrap();
+
+		// Update the camera
+		self.camera.update();
+
+		/* Update mananged render state */ {
+			// Obtain render state reference
+			let rs = self.renderState.as_mut().unwrap();
+
+			// Uniforms
+			// - viewing
+			rs.viewing.projection = *self.camera.projection();
+			rs.viewing.modelview = *self.camera.view();
+			context.queue.write_buffer(&rs.viewingUniformBuffer, 0, util::slicify(&rs.viewing));
+
+			// Commit to GPU
+			context.queue.submit([]);
+		};
+
+		if let Some(application) = self.application.as_mut() {
+			application.render(&context.device, &context.queue)?;
+		}
+
 		Ok(())
 	}
 
@@ -371,9 +417,9 @@ impl ApplicationHandler<UserEvent> for Player
 					self.context = Some(context);
 					let context = self.context.as_ref().unwrap();
 
-					// WASM, for some reason, needs a resize event for the main surface to become fully
-					// configured. Since we need to hook up the size of the canvas hosting the surface to the
-					// browser window anyway, this is a good opportunity for dispatching that initial resize.
+					// WASM, for some reason, needs a resize event for the main surface to become fully configured.
+					// Since we need to hook up the size of the canvas hosting the surface to the browser window anyway,
+					// this is a good opportunity for dispatching that initial resize.
 					#[cfg(target_arch = "wasm32")]
 					self.canvas.as_ref().unwrap().set_attribute(
 						"style", "width:100% !important; height:100% !important"
@@ -390,7 +436,7 @@ impl ApplicationHandler<UserEvent> for Player
 			UserEvent::NewApplication(factory)
 			=> {
 				let context = self.context.as_ref().unwrap();
-				match factory.create(&context.device, &context.queue) {
+				match factory.create(&context, self.renderState.as_mut().unwrap()) {
 					Ok(newApplication) => self.application = Some(newApplication),
 					Err(error) => tracing::error!("Unable to create application: {:?}", error)
 				}
@@ -422,66 +468,46 @@ impl ApplicationHandler<UserEvent> for Player
 			// Main window redraw
 			WindowEvent::RedrawRequested
 			=> {
-				if let Some(context) = self.context.as_mut() {
-					if !context.surfaceConfigured {
+				if self.context.is_some()
+				{
+					if !self.context().surfaceConfigured {
 						tracing::debug!("Surface not yet configured - skipping redraw!");
 						return;
 					}
 					tracing::debug!("Redrawing");
 
-					// Update camera
-					self.camera.update();
-
-					/* Update mananged render state */ {
-						// Obtain render state reference
-						let rs = self.renderState.as_mut().unwrap();
-
-						// Uniforms
-						// - viewing
-						rs.viewing.projection = *self.camera.projection();
-						rs.viewing.modelview = *self.camera.view();
-						context.queue.write_buffer(&rs.viewingUniformBuffer, 0, util::slicify(&rs.viewing));
-
-						// Commit to GPU
-						context.queue.submit([]);
-					}
-
-					if let Some(application) = self.application.as_mut()
+					// Update main surface attachments to draw on them
+					match self.renderState.as_mut().unwrap().updateSurfaceAttachments(self.context.as_ref().unwrap())
 					{
-						if let Err(error) = application.render(&context.device, &context.queue)
-							{ tracing::error!("Application rendering error: {:?}", error) }
-
-						let presentResult = {
-							let output = context.surface.get_current_texture();
-							if let Err(error) = output {
-								Err(error)
-							}
-							else {
-								let view = output.unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default());
-								let mut encoder = context.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-									label: Some("Render Encoder"),
-								});
-								Ok(())
-							}
-						};
-						match presentResult
-						{
-							Ok(()) => {}
-							// Reconfigure the surface if it's lost or outdated
-							Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated)
-							=> { context.resize(context.size) }
-
-							// The system is out of memory, we should probably quit
-							Err(wgpu::SurfaceError::OutOfMemory) => {
-								tracing::error!("OutOfMemory");
-								eventLoop.exit();
+						// All fine, we can draw
+						Ok(surface)
+						=> {
+							// We have a surface, perform actual redrawing
+							if let Err(error) = self.redraw() {
+								tracing::error!("Error while redrawing: {:?}", error);
 							}
 
-							// This happens when the frame takes too long to present
-							Err(wgpu::SurfaceError::Timeout) =>
-							{ tracing::warn!("Surface timeout") }
+							// Swap buffers
+							surface.present();
 						}
-					}
+
+						// Reconfigure the surface if it's lost or outdated
+						Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated)
+						=> {
+							let context = self.context();
+							context.resize(context.size)
+						}
+
+						// The system is out of memory, we should probably quit
+						Err(wgpu::SurfaceError::OutOfMemory) => {
+							tracing::error!("OutOfMemory");
+							eventLoop.exit();
+						}
+
+						// This happens when the frame takes too long to present
+						Err(wgpu::SurfaceError::Timeout) =>
+							{ tracing::warn!("Surface timeout") }
+					};
 				}
 			},
 

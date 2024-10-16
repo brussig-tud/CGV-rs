@@ -18,10 +18,11 @@
 use std::sync::Arc;
 
 // CGV re-imports
-use cgv::{tracing, wgpu, glm, Result};
+use cgv::{tracing, wgpu, wgpu::util::DeviceExt, glm, Result, Application};
 
 // CGV Framework
 use cgv;
+use cgv::util;
 
 
 
@@ -97,158 +98,42 @@ impl HermiteNode
 // Classes
 //
 
-
 ////
-// SampleApplication
+// SampleApplicationFactory
 
-#[derive(Debug)]
-pub struct SampleApplication {
-	/*pipeline: wgpu::RenderPipeline,
-	vertexBuffer: wgpu::Buffer,
-	indexBuffer: wgpu::Buffer,
-	texBindGroup: wgpu::BindGroup*/
-	var: u32
-}
-
-impl SampleApplication {
-	pub fn new (device: &wgpu::Device, queue: &wgpu::Queue) -> Result<Self> {
-		Ok(Self {var: 0})
-	}
-}
-
-impl cgv::Application for SampleApplication
+struct SampleApplicatonFactory {}
+impl cgv::ApplicationFactory for SampleApplicatonFactory
 {
-	// Creating some of the wgpu types requires async code
-	async fn new (window: Window) -> Result<State>
+	fn create(&self, context: &cgv::Context, renderState: &cgv::RenderState)
+		-> Result<Box<dyn Application>>
 	{
-		let size = window.inner_size();
-
-		// The instance is a handle to our GPU
-		// Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-		let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-			#[cfg(not(target_arch="wasm32"))]
-			backends: wgpu::Backends::PRIMARY,
-			#[cfg(target_arch="wasm32")]
-			backends: wgpu::Backends::BROWSER_WEBGPU,
-			..Default::default()
-		});
-
-		let window = Arc::new(window);
-		let surface = instance.create_surface(window.clone()).unwrap();
-
-		let adapter = instance.request_adapter(
-			&wgpu::RequestAdapterOptions {
-				power_preference: wgpu::PowerPreference::HighPerformance,
-				compatible_surface: Some(&surface),
-				force_fallback_adapter: false,
-			},
-		).await.unwrap();
-
-		let (device, queue) = adapter.request_device(
-			&wgpu::DeviceDescriptor {
-				required_features: wgpu::Features::empty(),
-				// WebGL doesn't support all of wgpu's features, so if
-				// we're building for the web, we'll have to disable some.
-				required_limits: if cfg!(target_arch = "wasm32") {
-					wgpu::Limits::default()
-				} else {
-					wgpu::Limits::default()
-				},
-				label: None,
-				memory_hints: Default::default(),
-			},
-			None, // Trace path
-		).await.unwrap();
-
-		let surface_caps = surface.get_capabilities(&adapter);
-		// Shader code in this tutorial assumes an sRGB surface texture. Using a different
-		// one will result in all the colors coming out darker. If you want to support non
-		// sRGB surfaces, you'll need to account for that when drawing to the frame.
-		let surface_format = surface_caps.formats.iter()
-			.find(|f| !f.is_srgb())
-			.copied()
-			.unwrap_or(surface_caps.formats[0]);
-		let config = wgpu::SurfaceConfiguration {
-			usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-			format: surface_format,
-			width: size.width,
-			height: size.height,
-			present_mode: surface_caps.present_modes[0],
-			alpha_mode: surface_caps.alpha_modes[0],
-			view_formats: vec![],
-			desired_maximum_frame_latency: 1,
-		};
-
-		let surfaceConfigured;
-		#[cfg(not(target_arch = "wasm32"))] {
-			surface.configure(&device, &config);
-			surfaceConfigured = true;
-		}
-		#[cfg(target_arch = "wasm32")] {
-			surfaceConfigured = false;
-		}
-
-		let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+		let shader = context.device.create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: Some("Shader"),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
 		});
 
-		let vertexBuffer = device.create_buffer_init(
+		let vertexBuffer = context.device.create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
 				label: Some("HermiteNodes"),
 				contents: util::slicify(NODES),
 				usage: wgpu::BufferUsages::VERTEX,
 			}
 		);
-		let indexBuffer = device.create_buffer_init(
+		let indexBuffer = context.device.create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
 				label: Some("HermiteIndices"),
 				contents: util::slicify(INDICES),
 				usage: wgpu::BufferUsages::INDEX,
 			}
 		);
-
-		let viewingUniformBuffer = device.create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("ViewingUniforms"),
-				contents: util::slicify(&UniformViewing::default()),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			}
-		);
-		let viewingUniformsBindGroupLayout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-			entries: &[
-				wgpu::BindGroupLayoutEntry {
-					binding: 0,
-					visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-					ty: wgpu::BindingType::Buffer {
-						ty: wgpu::BufferBindingType::Uniform,
-						has_dynamic_offset: false,
-						min_binding_size: None,
-					},
-					count: None,
-				}
-			],
-			label: Some("ViewingUniformsBindGroupLayout"),
-		});
-		let viewingUniformsBindGroup = device.create_bind_group(&wgpu::BindGroupDescriptor {
-			layout: &viewingUniformsBindGroupLayout,
-			entries: &[
-				wgpu::BindGroupEntry {
-					binding: 0,
-					resource: viewingUniformBuffer.as_entire_binding(),
-				}
-			],
-			label: Some("ViewingUniformsBindGroup"),
-		});
-
-
 		////
 		// Load resources
 
-		let tex = hal::Texture::fromBlob(
-			&device, &queue, util::sourceBytes!("/res/tex/cgvCube.png"), "TestTexture"
+		let tex = cgv::hal::Texture::fromBlob(
+			&context.device, &context.queue, util::sourceBytes!("/res/tex/cgvCube.png"),
+			"TestTexture"
 		)?;
-		let texBindGroupLayout = device.create_bind_group_layout(
+		let texBindGroupLayout = context.device.create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
 				entries: &[
 					wgpu::BindGroupLayoutEntry {
@@ -273,7 +158,7 @@ impl cgv::Application for SampleApplication
 				label: Some("TestBindGroupLayout"),
 			}
 		);
-		let texBindGroup = device.create_bind_group(
+		let texBindGroup = context.device.create_bind_group(
 			&wgpu::BindGroupDescriptor {
 				layout: &texBindGroupLayout,
 				entries: &[
@@ -295,13 +180,16 @@ impl cgv::Application for SampleApplication
 		// Create pipeline
 
 		let pipelineLayout =
-			device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+			context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
-				bind_group_layouts: &[&viewingUniformsBindGroupLayout, &texBindGroupLayout],
+				bind_group_layouts: &[
+					&renderState.viewingUniformsBindGroupLayout,
+					&texBindGroupLayout
+				],
 				push_constant_ranges: &[],
 			});
 
-		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		let pipeline = context.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Render Pipeline"),
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
@@ -314,7 +202,7 @@ impl cgv::Application for SampleApplication
 				module: &shader,
 				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
 				targets: &[Some(wgpu::ColorTargetState { // 4.
-					format: config.format,
+					format: context.config.format,
 					blend: Some(wgpu::BlendState::REPLACE),
 					write_mask: wgpu::ColorWrites::ALL,
 				})],
@@ -342,66 +230,30 @@ impl cgv::Application for SampleApplication
 			cache: None, // 6.
 		});
 
-
-		////
-		// Misc
-
-		// Setup camera
-		let mut camera = view::OrbitCamera::new();
-		camera.resize(&glm::vec2(config.width as f32, config.height as f32));
-
-		Ok(Self {
-			surface,
-			device,
-			queue,
-			config,
-			surfaceConfigured,
-			size,
-			window,
+		Ok(Box::new(SampleApplication {
 			pipeline,
 			vertexBuffer,
 			indexBuffer,
-			viewingUniformBuffer,
-			texBindGroup,
-			viewingUniformsBindGroup,
-			camera,
-			uniform_viewing: Default::default()
-		})
+			texBindGroup
+		}))
 	}
+}
 
-	pub fn window (&self) -> &Window {
-		&self.window
-	}
 
-	pub fn resize (&mut self, newSize: winit::dpi::PhysicalSize<u32>)
-	{
-		tracing::info!("Resizing to {:?}", newSize);
-		if newSize.width > 0 && newSize.height > 0
-		{
-			self.size = newSize;
-			self.config.width = newSize.width;
-			self.config.height = newSize.height;
-			self.surface.configure(&self.device, &self.config);
-			self.surfaceConfigured = true;
-			self.camera.resize(&glm::Vec2::new(newSize.width as f32, newSize.height as f32));
-		}
-	}
+////
+// SampleApplicaton
 
-	pub fn input (&mut self, event: &WindowEvent) -> EventOutcome {
-		self.camera.input(event)
-	}
+#[derive(Debug)]
+pub struct SampleApplication {
+	pipeline: wgpu::RenderPipeline,
+	vertexBuffer: wgpu::Buffer,
+	indexBuffer: wgpu::Buffer,
+	texBindGroup: wgpu::BindGroup
+}
 
-	pub fn update (&mut self)
-	{
-		// Viewing
-		self.camera.update();
-		self.uniform_viewing.projection = *self.camera.projection();
-		self.uniform_viewing.modelview = *self.camera.view();
-		self.queue.write_buffer(&self.viewingUniformBuffer, 0, util::slicify(&self.uniform_viewing));
-		self.queue.submit([]);
-	}
-
-	pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
+impl cgv::Application for SampleApplication
+{
+	/*pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
 	{
 		let output = self.surface.get_current_texture()?;
 		let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -434,12 +286,5 @@ impl cgv::Application for SampleApplication
 		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
 		renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
-	}
-
-		// submit will accept anything that implements IntoIter
-		self.queue.submit(std::iter::once(encoder.finish()));
-		output.present();
-
-		Ok(())
-	}
+	}*/
 }
