@@ -56,7 +56,7 @@ pub use renderstate::RenderState as RenderState;
 //
 
 // Standard library
-use std::{thread, sync::*};
+/* Nothing here yet */
 
 // WASM Bindgen
 #[cfg(target_arch="wasm32")]
@@ -132,8 +132,7 @@ fn initTracing ()
 
 // The type used for our user-defined event.
 enum UserEvent {
-	ContextReady(Result<Context>),
-	NewApplication(Box<dyn ApplicationFactory>)
+	ContextReady(Result<Context>)
 }
 
 /// Enumeration of possible event handling outcomes.
@@ -219,7 +218,7 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,
 
-	initDoneNotifier: Option<mpsc::Sender<()>>,
+	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
 	renderState: Option<renderstate::RenderState>,
@@ -233,6 +232,11 @@ impl Player
 {
 	pub fn new () -> Result<Self>
 	{
+		// In case of WASM, make sure the JavaScript console is set up for receiving log messages first thing (for non-
+		// WASM targets, tracing/logging is already being set up at module loading time)
+		#[cfg(target_arch="wasm32")]
+		initTracing();
+
 		// Log that we have begun the startup process
 		tracing::info!("Starting...");
 
@@ -251,7 +255,7 @@ impl Player
 			context: None,
 			redrawOnceOnWait: false,
 
-			initDoneNotifier: None,
+			applicationFactory: None,
 			application: None,
 
 			renderState: None,
@@ -260,55 +264,16 @@ impl Player
 		})
 	}
 
-	pub fn run<F: ApplicationFactory + 'static> (mut self, applicationFactory: F) -> Result<()>
+	pub fn run<F: ApplicationFactory + 'static> (self, applicationFactory: F) -> Result<()>
 	{
-		// Obtain the proxy through which to send the new application to the player
-		let eventLoopProxy = self.eventLoopProxy.clone();
+		// Set the application factory
+		let player = util::mutify(&self);
+		player.applicationFactory = Some(Box::new(applicationFactory));
 
-		let (initDoneNotifier, initDoneRX) = mpsc::channel();
-		self.initDoneNotifier = Some(initDoneNotifier);
+		// Run the event loop
+		player.eventLoop.take().unwrap().run_app(util::mutify(player))?;
 
-		let sharedSelf = Arc::new(self);
-		let mainThread = thread::spawn(move || {
-			// Make sure we have a strong reference locally in this thread
-			let sharedSelf = sharedSelf.clone();
-
-			// The player will run now, ownership of the event loop will henceforth be inside this function.
-			let player = util::mutify(sharedSelf.as_ref());
-			let el = player.eventLoop.take().unwrap();
-
-			// Run the event loop
-			el.run_app(util::mutify(player))
-		});
-
-		/* Wait for basic initialization to complete before creating the application */ {
-			let initDone = initDoneRX.recv();
-			initDone?;
-		}
-
-		// Create application
-		if let Err(_) = eventLoopProxy.send_event(
-			UserEvent::NewApplication(Box::new(applicationFactory))
-		){
-			return Err(anyhow::anyhow!("Creating the client application failed – event loop lost!"));
-		}
-
-		// Joint the main thread
-		if let Err(panic) = mainThread.join()
-		{
-			// Try to convert the panic value in a few ways we know how to interpret
-			// - a string slice
-			if let Some(&panicMsg) = panic.downcast_ref::<&str>() {
-				return Err(anyhow::anyhow!(panicMsg));
-			}
-			// - a formatted string
-			if let Some(panicMsg) = panic.downcast_ref::<String>() {
-				return Err(anyhow::anyhow!(panicMsg.clone()));
-			}
-
-			// We give up, just say that some error occured
-			return Err(anyhow::anyhow!("Main thread panicked!"));
-		}
+		// Done!
 		Ok(())
 	}
 
@@ -325,7 +290,7 @@ impl Player
 		// Update the camera
 		self.camera.update();
 
-		/* Update mananged render state */ {
+		/* Update managed render state */ {
 			// Obtain render state reference
 			let rs = self.renderState.as_mut().unwrap();
 
@@ -437,23 +402,21 @@ impl ApplicationHandler<UserEvent> for Player
 					// Create render state
 					self.renderState = Some(RenderState::new(context));
 
-					// Notify of successful base initialization
-					if let Err(error) = self.initDoneNotifier.as_ref().unwrap().send(()) {
-						tracing::error!("Could not notify main thread of completed initialization: {:?}", error);
-						self.exit(eventLoop);
+					// Create the application
+					let appCreationResult = self.applicationFactory.take().unwrap().create(
+						context, self.renderState.as_ref().unwrap()
+					);
+					match appCreationResult {
+						Ok(application) => self.application = Some(application),
+						Err(error) => {
+							tracing::error!("Failed to create application: {:?}", error);
+							self.exit(eventLoop);
+						}
 					}
 				}
 				Err(error) => {
-					tracing::error!("Initialization failure: {:?}", error);
+					tracing::error!("Graphics context initialization failure: {:?}", error);
 					self.exit(eventLoop);
-				}
-			}
-			UserEvent::NewApplication(factory)
-			=> {
-				let context = self.context.as_ref().unwrap();
-				match factory.create(&context, self.renderState.as_mut().unwrap()) {
-					Ok(newApplication) => self.application = Some(newApplication),
-					Err(error) => tracing::error!("Unable to create application: {:?}", error)
 				}
 			}
 		}
@@ -594,23 +557,4 @@ impl ApplicationHandler<UserEvent> for Player
 			}
 		};
 	}
-}
-
-
-
-//////
-//
-// Functions
-//
-
-/// The entry point from the browser for WASM builds.
-#[cfg(target_arch="wasm32")]
-#[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
-pub fn wasm_start()
-{
-	// Make sure the JavaScript console is set up for receiving log messages first thing
-	initTracing();
-
-	// Delegate
-	run().unwrap();
 }

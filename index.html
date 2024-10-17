@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="apple-mobile-web-app-title" content="OnTubeVis" />
+	<title>OnTubeVis-rs Web</title>
+	<link rel="icon" type="image/png" href="./pkg/res/favicon-48x48.png" sizes="48x48" />
+	<link rel="icon" type="image/svg+xml" href="./pkg/res/favicon.svg" />
+	<link rel="shortcut icon" href="./pkg/res/favicon.ico" />
+	<link rel="apple-touch-icon" sizes="180x180" href="./pkg/res/apple-touch-icon.png" />
+	<link rel="manifest" href="./pkg/res/site.webmanifest" />
+</head>
+<body style="margin: 0px;">
+	<script type="module">
+		import init from './pkg/cgv-sample.js'
+		init().catch((error) => {
+			if (!error.message.startsWith("Using exceptions for control flow, don't mind me. This isn't actually an error!")) {
+				throw error;
+			}
+		});
+	</script>
+</body>
+</html>
