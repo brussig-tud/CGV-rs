@@ -384,12 +384,12 @@ impl ApplicationHandler<UserEvent> for Player
 		}
 
 		#[cfg(target_arch = "wasm32")] {
-			let state_future = state::State::new(window);
+			let state_future = Context::new(window);
 			let eventLoopProxy = self.eventLoopProxy.clone();
 			let future = async move {
 				let state = state_future.await;
 				assert!(eventLoopProxy
-					.send_event(UserEvent::StateReady(state))
+					.send_event(UserEvent::ContextReady(state))
 					.is_ok());
 			};
 			wasm_bindgen_futures::spawn_local(future);
@@ -427,9 +427,12 @@ impl ApplicationHandler<UserEvent> for Player
 					).unwrap();
 
 					// On non-WASM on the other hand, the surface is correctly configured for the initial size so we
-					// need to inform the camera separately
-					#[cfg(not(target_arch="wasm32"))]
-					self.camera.resize(&glm::vec2(context.size.width as f32, context.size.height as f32));
+					// need to inform the camera separately. However, we do need to schedule a single redraw for some
+					// reason...
+					#[cfg(not(target_arch="wasm32"))] {
+						self.camera.resize(&glm::vec2(context.size.width as f32, context.size.height as f32));
+						self.redrawOnceOnWait = true;
+					}
 
 					// Create render state
 					self.renderState = Some(RenderState::new(context));
