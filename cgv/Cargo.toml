@@ -1,5 +1,6 @@
 [package]
 name = "cgv"
+version.workspace = true
 edition = "2021"
 
 [lib]

@@ -1,9 +1,16 @@
 [package]
 name = "cgv-sample"
+version.workspace = true
 edition = "2021"
+
+[package.metadata]
+nice-name = "CGV-rs Example"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 cgv = {path="../cgv"}
+
+[build-dependencies]
+cargo_metadata = "0.18.1"

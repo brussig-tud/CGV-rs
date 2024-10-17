@@ -58,10 +58,6 @@ pub use renderstate::RenderState as RenderState;
 // Standard library
 /* Nothing here yet */
 
-// WASM Bindgen
-#[cfg(target_arch="wasm32")]
-use wasm_bindgen::prelude::*;
-
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
 use ctor;
