@@ -34,13 +34,14 @@ pub mod math;
 /// # Returns
 ///
 /// A `'static` string slice containing the verbatim characters of the sourced file.
+#[macro_export]
 macro_rules! sourceFile {
 	($file:expr) => {
 		include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
 	};
 }
 #[allow(unused_imports)]
-pub(crate) use sourceFile;
+pub use sourceFile;
 
 /// Reads a file verbatim into a static `u8` slice, treating the file as a blob.
 ///
@@ -51,13 +52,14 @@ pub(crate) use sourceFile;
 /// # Returns
 ///
 /// A `'static` slice of `u8` containing the bytes of the sourced file.
+#[macro_export]
 macro_rules! sourceBytes {
 	($file:expr) => {
 		include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
 	};
 }
 #[allow(unused_imports)]
-pub(crate) use sourceBytes;
+pub use sourceBytes;
 
 
 

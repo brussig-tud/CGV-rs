@@ -36,11 +36,12 @@ pub mod view;
 pub mod util;
 
 /// Make sure we can access glm functionality as such
-extern crate nalgebra_glm as glm;
+pub extern crate nalgebra_glm as glm;
 
 /// Re-export important 3rd party libraries/library components
 pub use tracing;
 pub use anyhow::Result as Result;
+pub use winit::event;
 pub use wgpu;
 
 /// Re-export important components at root-level
@@ -199,7 +200,7 @@ pub trait Application
 	///
 	/// * `device` – The active device for rendering.
 	/// * `queue` – A queue from the active device for submitting commands.
-	fn render (&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> anyhow::Result<()>;
+	fn render (&mut self, context: &Context, renderState: &RenderState) -> anyhow::Result<()>;
 }
 
 
@@ -339,7 +340,7 @@ impl Player
 		};
 
 		if let Some(application) = self.application.as_mut() {
-			application.render(&context.device, &context.queue)?;
+			application.render(&context, &self.renderState.as_ref().unwrap())?;
 		}
 
 		Ok(())
@@ -420,17 +421,28 @@ impl ApplicationHandler<UserEvent> for Player
 					// WASM, for some reason, needs a resize event for the main surface to become fully configured.
 					// Since we need to hook up the size of the canvas hosting the surface to the browser window anyway,
 					// this is a good opportunity for dispatching that initial resize.
-					#[cfg(target_arch = "wasm32")]
+					#[cfg(target_arch="wasm32")]
 					self.canvas.as_ref().unwrap().set_attribute(
 						"style", "width:100% !important; height:100% !important"
 					).unwrap();
 
+					// On non-WASM on the other hand, the surface is correctly configured for the initial size so we
+					// need to inform the camera separately
+					#[cfg(not(target_arch="wasm32"))]
+					self.camera.resize(&glm::vec2(context.size.width as f32, context.size.height as f32));
+
 					// Create render state
-					self.renderState = Some(RenderState::new(context))
+					self.renderState = Some(RenderState::new(context));
+
+					// Notify of successful base initialization
+					if let Err(error) = self.initDoneNotifier.as_ref().unwrap().send(()) {
+						tracing::error!("Could not notify main thread of completed initialization: {:?}", error);
+						self.exit(eventLoop);
+					}
 				}
 				Err(error) => {
 					tracing::error!("Initialization failure: {:?}", error);
-					eventLoop.exit();
+					self.exit(eventLoop);
 				}
 			}
 			UserEvent::NewApplication(factory)
@@ -452,7 +464,9 @@ impl ApplicationHandler<UserEvent> for Player
 			WindowEvent::Resized(newPhysicalSize)
 			=> {
 				if let Some(context) = self.context.as_mut() {
+					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
 					context.resize(*newPhysicalSize);
+					self.camera.resize(&newSize);
 					self.application.as_mut().unwrap().onResize(
 						&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
 					);
@@ -477,6 +491,7 @@ impl ApplicationHandler<UserEvent> for Player
 					tracing::debug!("Redrawing");
 
 					// Update main surface attachments to draw on them
+					if self.application.is_none() { return }
 					match self.renderState.as_mut().unwrap().updateSurfaceAttachments(self.context.as_ref().unwrap())
 					{
 						// All fine, we can draw

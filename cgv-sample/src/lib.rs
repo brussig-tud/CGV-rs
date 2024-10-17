@@ -15,13 +15,14 @@
 //
 
 // Standard library
-use std::sync::Arc;
+/* Nothing here yet */
 
 // CGV re-imports
-use cgv::{tracing, wgpu, wgpu::util::DeviceExt, glm, Result, Application};
+use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result, Application, EventOutcome, Context, RenderState};
 
 // CGV Framework
 use cgv;
+use cgv::glm::Vec2;
 use cgv::util;
 
 
@@ -101,12 +102,16 @@ impl HermiteNode
 ////
 // SampleApplicationFactory
 
-struct SampleApplicatonFactory {}
-impl cgv::ApplicationFactory for SampleApplicatonFactory
+struct SampleApplicationFactory {}
+
+impl cgv::ApplicationFactory for SampleApplicationFactory
 {
 	fn create(&self, context: &cgv::Context, renderState: &cgv::RenderState)
 		-> Result<Box<dyn Application>>
 	{
+		////
+		// Load example shader
+
 		let shader = context.device.create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: Some("Shader"),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
@@ -126,6 +131,8 @@ impl cgv::ApplicationFactory for SampleApplicatonFactory
 				usage: wgpu::BufferUsages::INDEX,
 			}
 		);
+
+
 		////
 		// Load resources
 
@@ -253,38 +260,61 @@ pub struct SampleApplication {
 
 impl cgv::Application for SampleApplication
 {
-	/*pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
+	fn onInput(&mut self, _: &event::WindowEvent) -> EventOutcome { EventOutcome::NotHandled }
+
+	fn onResize(&mut self, _: &Vec2) {}
+
+	fn update(&mut self) {}
+
+	fn render(&mut self, context: &Context, renderState: &RenderState) -> Result<()>
 	{
-		let output = self.surface.get_current_texture()?;
-		let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-		let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-			label: Some("Render Encoder"),
-		});
+		// Get a command encoder
+		let mut encoder = context.device.create_command_encoder(
+			&wgpu::CommandEncoderDescriptor{label: Some("SampleCommandEncoder")}
+		);
+
 		/* create render pass */ {
-		let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-			label: Some("Render Pass"),
-			color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-				view: &view,
-				resolve_target: None,
-				ops: wgpu::Operations {
-					load: wgpu::LoadOp::Clear(wgpu::Color {
-						r: 0.3,
-						g: 0.5,
-						b: 0.7,
-						a: 1.,
-					}),
-					store: wgpu::StoreOp::Store,
-				},
-			})],
-			depth_stencil_attachment: None,
-			occlusion_query_set: None,
-			timestamp_writes: None,
-		});
-		renderPass.set_pipeline(&self.pipeline);
-		renderPass.set_bind_group(0, Some(&self.viewingUniformsBindGroup), &[]);
-		renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
-		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
-		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-		renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
-	}*/
+			let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+				label: Some("SampleRenderPass"),
+				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+					view: renderState.mainSurfaceColorView.as_ref().unwrap(),
+					resolve_target: None,
+					ops: wgpu::Operations {
+						load: wgpu::LoadOp::Clear(wgpu::Color {
+							r: 0.3,
+							g: 0.5,
+							b: 0.7,
+							a: 1.,
+						}),
+						store: wgpu::StoreOp::Store,
+					},
+				})],
+				depth_stencil_attachment: None,
+				occlusion_query_set: None,
+				timestamp_writes: None,
+			});
+			renderPass.set_pipeline(&self.pipeline);
+			renderPass.set_bind_group(0, Some(&renderState.viewingUniformsBindGroup), &[]);
+			renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
+			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
+			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
+			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+		}
+
+		// Submit
+		context.queue.submit([encoder.finish()]);
+
+		// Done!
+		Ok(())
+	}
+}
+
+// Application entry point
+pub fn run() -> cgv::Result<()>
+{
+	// Create a player
+	let player = cgv::Player::new()?;
+
+	// Hand off control flow, passing in a factory for our SampleApplication
+	player.run(SampleApplicationFactory{})
 }
