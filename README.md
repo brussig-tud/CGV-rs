@@ -14,7 +14,7 @@ This creates the (ignored by git) folder `pkg` inside the repository root. To ru
 ```bash
 miniserve ./pkg --index index.html -p 8080
 ```
-to be able to run in a browser from `localhost:8080`. You can also upload the folder `pkg` to any static page webserver to deploy the example to the web.
+to be able to run in a browser from `localhost:8080`. You can also upload the contents of the `pkg` folder to any static page webserver to deploy the example to the web.
 
 If you don't have it already, you can install *miniserve* from source into your local user *Cargo* package repository via
 ```bash
