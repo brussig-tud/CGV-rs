@@ -2,8 +2,8 @@
 Cargo.lock
 
 # Build artifacts
-/target
-/pkg
+target
+pkg
 
 # IDE files
 /.idea

@@ -20,6 +20,9 @@
 // Module definitions
 //
 
+/// Separate module exposing all kinds of information and CGV-specific functionality for use by dependent build scripts.
+pub mod build;
+
 // The module encapsulating all low-level graphics state.
 mod context;
 

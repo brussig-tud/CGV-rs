@@ -83,7 +83,7 @@ impl HermiteNode
 	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
 		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
 
-	fn layoutDesc () -> wgpu::VertexBufferLayout<'static>	{
+	fn layoutDesc () -> wgpu::VertexBufferLayout<'static> {
 		wgpu::VertexBufferLayout {
 			array_stride: size_of::<Self>() as wgpu::BufferAddress,
 			step_mode: wgpu::VertexStepMode::Vertex,

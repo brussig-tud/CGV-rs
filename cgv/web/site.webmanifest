@@ -1,6 +1,6 @@
 {
-  "name": "OnTubeVis",
-  "short_name": "OTVis",
+  "name": "@NICE_NAME@",
+  "short_name": "@SHORT_NICE_NAME@",
   "icons": [
     {
       "src": "/res/web-app-manifest-192x192.png",

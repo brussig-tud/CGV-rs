@@ -17,6 +17,9 @@
 /// Submodule providing assorted math utilities.
 pub mod math;
 
+/// Submodule providing operations on file system paths.
+pub mod path;
+
 
 
 //////

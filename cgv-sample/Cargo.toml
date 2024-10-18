@@ -5,12 +5,12 @@ edition = "2021"
 
 [package.metadata]
 nice-name = "CGV-rs Example"
-
-[lib]
-crate-type = ["cdylib", "rlib"]
+short-nice-name = "CGV-rs"     # if not specified, will just be the same as `nice-name`
+#web-favicon-srcdir = "CGV-rs" # relative to the crate's manifest file (i.e. this Cargo.toml). We don't ship our own
+                               # though, so we don't actually define it, this is just here for documentation purposes.
 
 [dependencies]
 cgv = {path="../cgv"}
 
 [build-dependencies]
-cargo_metadata = "0.18.1"
+cgv = {path="../cgv"}
