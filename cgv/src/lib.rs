@@ -220,7 +220,7 @@ pub struct Player
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
-	renderState: Option<renderstate::RenderState>,
+	renderState: Option<renderstate::RenderState<'static>>,
 
 	camera: view::OrbitCamera
 }
@@ -263,14 +263,13 @@ impl Player
 		})
 	}
 
-	pub fn run<F: ApplicationFactory + 'static> (self, applicationFactory: F) -> Result<()>
+	pub fn run<F: ApplicationFactory + 'static> (mut self, applicationFactory: F) -> Result<()>
 	{
 		// Set the application factory
-		let player = util::mutify(&self);
-		player.applicationFactory = Some(Box::new(applicationFactory));
+		self.applicationFactory = Some(Box::new(applicationFactory));
 
 		// Run the event loop
-		player.eventLoop.take().unwrap().run_app(util::mutify(player))?;
+		self.eventLoop.take().unwrap().run_app(&mut self)?;
 
 		// Done!
 		Ok(())
@@ -380,7 +379,7 @@ impl ApplicationHandler<UserEvent> for Player
 					// Commit context
 					tracing::info!("Graphics context ready.");
 					self.context = Some(context);
-					let context = self.context.as_ref().unwrap();
+					let context = util::statify(self).context.as_ref().unwrap();
 
 					// WASM, for some reason, needs a resize event for the main surface to become fully configured.
 					// Since we need to hook up the size of the canvas hosting the surface to the browser window anyway,
@@ -431,6 +430,7 @@ impl ApplicationHandler<UserEvent> for Player
 				if let Some(context) = self.context.as_mut() {
 					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
 					context.resize(*newPhysicalSize);
+					self.renderState.as_mut().unwrap().updateSize(context);
 					self.camera.resize(&newSize);
 					self.application.as_mut().unwrap().onResize(
 						&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
@@ -457,7 +457,8 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Update main surface attachments to draw on them
 					if self.application.is_none() { return }
-					match self.renderState.as_mut().unwrap().updateSurfaceAttachments(self.context.as_ref().unwrap())
+					let player = util::mutify(self);
+					match player.renderState.as_mut().unwrap().updateSurfaceAttachments(player.context.as_ref().unwrap())
 					{
 						// All fine, we can draw
 						Ok(surface)

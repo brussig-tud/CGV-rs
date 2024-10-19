@@ -163,7 +163,7 @@ impl Camera for OrbitCamera
 					let fore = dist.normalize();
 					if self.roll {
 						self.up = glm::rotate_vec3(
-							&self.up, math::deg2rad!(delta.y*1./3.), &fore
+							&self.up, math::deg2rad!(delta.y*-1./3.), &fore
 						);
 					}
 					else {
@@ -183,7 +183,7 @@ impl Camera for OrbitCamera
 
 				// Forward/backward motion
 				if self.dragMMB {
-					let fore = dist.norm()*delta.y*0.015625 * dist.normalize();
+					let fore = dist.norm()*delta.y*0.0078125 * dist.normalize();
 					self.target += fore;
 					self.eye += fore;
 					return HandledExclusively(/* redraw */true);
@@ -191,7 +191,7 @@ impl Camera for OrbitCamera
 
 				// Panning motion
 				if self.dragRMB {
-					let speed = dist.norm() * delta*0.0078125;
+					let speed = dist.norm() * delta*0.00390625;
 					let right = glm::normalize(&glm::cross(&dist, &self.up));
 					let diff = speed.x*right + speed.y*self.up;
 					self.target += diff;
