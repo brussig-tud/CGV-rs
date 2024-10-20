@@ -227,7 +227,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				// Requires Features::CONSERVATIVE_RASTERIZATION
 				conservative: false,
 			},
-			depth_stencil: renderState.depthStencilState.clone(),
+			depth_stencil: Some(renderState.defaultDepthStencilState.clone()),
 			multisample: wgpu::MultisampleState {
 				count: 1, // 2.
 				mask: !0, // 3.
@@ -280,27 +280,8 @@ impl cgv::Application for SampleApplication
 		/* create render pass */ {
 		let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 			label: Some("SampleRenderPass"),
-			color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-				view: renderState.mainSurfaceColorView.as_ref().unwrap(),
-				resolve_target: None,
-				ops: wgpu::Operations {
-					load: wgpu::LoadOp::Clear(wgpu::Color {
-						r: 0.3,
-						g: 0.5,
-						b: 0.7,
-						a: 1.,
-					}),
-					store: wgpu::StoreOp::Store,
-				},
-			})],
-			depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-				view: &renderState.mainSurfaceDepthStencilTex.as_ref().unwrap().view,
-				depth_ops: Some(wgpu::Operations {
-					load: wgpu::LoadOp::Clear(1.0),
-					store: wgpu::StoreOp::Store,
-				}),
-				stencil_ops: None,
-			}),
+			color_attachments: &[renderState.mainSurfaceColorAttachment.clone()],
+			depth_stencil_attachment: renderState.mainSurfaceDepthStencilAttachment.clone(),
 			occlusion_query_set: None,
 			timestamp_writes: None,
 		});

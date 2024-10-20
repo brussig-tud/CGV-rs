@@ -7,40 +7,59 @@
 // Anyhow library
 use anyhow::Result;
 
+// Winit library
+use winit::dpi;
+
 // WGPU API
 use wgpu;
 
 // Image library
 use image::GenericImageView;
-use winit::dpi::PhysicalSize;
+
+
+
 //////
 //
 // Enums
 //
 
 /// High-level enum encompassing all pure depth formats.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum DepthFormat
 {
 	/// 16-bits integer.
-	D16,
+	D16 = 2,
 
 	/// 24-bits integer.
-	D24,
+	D24 = 3,
 
 	/// 32-bits floating point.
-	D32
+	#[default]
+	D32 = 4
+}
+impl From<DepthFormat> for u64 {
+	fn from(format: DepthFormat) -> Self { format.into() }
+}
+impl From<&DepthFormat> for u64 {
+	fn from(format: &DepthFormat) -> Self { (*format).into() }
 }
 
 /// High-level enum encompassing all pure depth formats.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum DepthStencilFormat
 {
 	/// 24-bits integer depth + 8-bits stencil.
-	D24S8,
+	#[default]
+	D24S8 = 4,
 
 	/// 32-bits floating point depth + 8-bits stencil (requires feature support).
-	D32S8
+	D32S8 = 5
+}
+impl From<DepthStencilFormat> for u64 {
+	fn from(format: DepthStencilFormat) -> Self { format.into() }
+}
+impl From<&DepthStencilFormat> for u64 {
+	fn from(format: &DepthStencilFormat) -> Self { (*format).into() }
 }
 
 
@@ -64,6 +83,9 @@ pub struct Texture<'a> {
 
 	/// The sampler for the texture. TODO: Remove from texture object and establish a sampler library.
 	pub sampler: wgpu::Sampler,
+
+	// Cached size (wihtout mipmap levels) in bytes.
+	size: u64
 }
 
 impl<'a> Texture<'a>
@@ -138,7 +160,12 @@ impl<'a> Texture<'a>
 		});
 
 		// Done!
-		Ok(Self {view: texture.create_view(&wgpu::TextureViewDescriptor::default()), texture, descriptor, sampler})
+		Ok(Self {
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
+			     * descriptor.size.depth_or_array_layers) as u64,
+			texture, descriptor, sampler,
+		})
 
 	}
 
@@ -161,12 +188,12 @@ impl<'a> Texture<'a>
 				DepthFormat::D24 => wgpu::TextureFormat::Depth24Plus,
 				DepthFormat::D32 => wgpu::TextureFormat::Depth32Float
 			},
-			usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+			usage:  wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING
+			      | wgpu::TextureUsages::COPY_SRC,
 			view_formats: &[],
 		};
 		let texture = device.create_texture(&descriptor);
 
-		let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 		let sampler = device.create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -182,7 +209,12 @@ impl<'a> Texture<'a>
 			}
 		);
 
-		Self { texture, descriptor, view, sampler }
+		Self {
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
+				* descriptor.size.depth_or_array_layers) as u64,
+			texture, descriptor, sampler
+		}
 	}
 
 	pub fn createDepthStencilTexture(
@@ -208,7 +240,6 @@ impl<'a> Texture<'a>
 		};
 		let texture = device.create_texture(&descriptor);
 
-		let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 		let sampler = device.create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -224,31 +255,59 @@ impl<'a> Texture<'a>
 			}
 		);
 
-		Self { texture, descriptor, view, sampler }
+		Self {
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
+				* descriptor.size.depth_or_array_layers) as u64,
+			texture, descriptor, sampler
+		}
 	}
 
-	pub fn size(&self) -> glm::UVec3 {
+	/// The size of the uncompressed texture (excluding mipmap levels) in bytes.
+	pub fn size (&self) -> u64 { self.size }
+
+	pub fn dims (&self) -> glm::UVec3 {
 		let size = &self.descriptor.size;
 		glm::vec3(size.width, size.height, size.depth_or_array_layers)
 	}
 
-	pub fn size2WH(&self) -> glm::UVec2 {
+	pub fn dims2WH (&self) -> glm::UVec2 {
 		let size = &self.descriptor.size;
 		glm::vec2(size.width, size.height)
 	}
 
-	pub fn size2WD(&self) -> glm::UVec2 {
+	pub fn dims2WD (&self) -> glm::UVec2 {
 		let size = &self.descriptor.size;
 		glm::vec2(size.width, size.depth_or_array_layers)
 	}
 
-	pub fn size2HD(&self) -> glm::UVec2 {
+	pub fn dims2HD (&self) -> glm::UVec2 {
 		let size = &self.descriptor.size;
 		glm::vec2(size.height, size.depth_or_array_layers)
 	}
 
-	pub fn physicalSizeWH(&self) -> PhysicalSize<u32> {
+	pub fn physicalSizeWH (&self) -> dpi::PhysicalSize<u32> {
 		let size = &self.descriptor.size;
-		PhysicalSize::new(size.width, size.height)
+		dpi::PhysicalSize::new(size.width, size.height)
+	}
+}
+
+
+
+//////
+//
+// Functions
+//
+
+fn numBytesFromFormat (format: wgpu::TextureFormat) -> u64
+{
+	match format {
+		wgpu::TextureFormat::Depth16Unorm => 2,
+
+		  wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb
+		| wgpu::TextureFormat::Depth24PlusStencil8 | wgpu::TextureFormat::Depth32Float
+		=> 4,
+
+		_ => panic!("Unsupported texture format: {:?}", format)
 	}
 }

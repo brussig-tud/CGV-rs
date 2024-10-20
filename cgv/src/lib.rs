@@ -220,7 +220,7 @@ pub struct Player
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
-	renderState: Option<renderstate::RenderState<'static>>,
+	renderState: Option<renderstate::RenderState>,
 
 	camera: view::OrbitCamera
 }
@@ -297,6 +297,9 @@ impl Player
 			rs.viewing.projection = *self.camera.projection();
 			rs.viewing.modelview = *self.camera.view();
 			context.queue.write_buffer(&rs.viewingUniformBuffer, 0, util::slicify(&rs.viewing));
+
+			// Clear color and depth attachments
+
 
 			// Commit to GPU
 			context.queue.submit([]);
@@ -379,7 +382,7 @@ impl ApplicationHandler<UserEvent> for Player
 					// Commit context
 					tracing::info!("Graphics context ready.");
 					self.context = Some(context);
-					let context = util::statify(self).context.as_ref().unwrap();
+					let context = self.context.as_ref().unwrap();
 
 					// WASM, for some reason, needs a resize event for the main surface to become fully configured.
 					// Since we need to hook up the size of the canvas hosting the surface to the browser window anyway,
@@ -399,6 +402,7 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Create render state
 					self.renderState = Some(RenderState::new(context));
+					self.renderState.as_mut().unwrap().resetDepthStencilAttachment();
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(
@@ -427,10 +431,10 @@ impl ApplicationHandler<UserEvent> for Player
 			// Main window resize
 			WindowEvent::Resized(newPhysicalSize)
 			=> {
-				if let Some(context) = self.context.as_mut() {
+				if self.context.is_some() {
 					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
-					context.resize(*newPhysicalSize);
-					self.renderState.as_mut().unwrap().updateSize(context);
+					self.context.as_mut().unwrap().resize(*newPhysicalSize);
+					util::mutify(self).renderState.as_mut().unwrap().updateSize(self.context.as_mut().unwrap());
 					self.camera.resize(&newSize);
 					self.application.as_mut().unwrap().onResize(
 						&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
@@ -456,10 +460,9 @@ impl ApplicationHandler<UserEvent> for Player
 					tracing::debug!("Redrawing");
 
 					// Update main surface attachments to draw on them
-					if self.application.is_none() { return }
-					let player = util::mutify(self);
-					match player.renderState.as_mut().unwrap().updateSurfaceAttachments(player.context.as_ref().unwrap())
-					{
+					match self.renderState.as_mut().unwrap().updateSurfaceColorAttachment(
+						self.context.as_ref().unwrap()
+					){
 						// All fine, we can draw
 						Ok(surface)
 						=> {
