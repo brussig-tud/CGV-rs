@@ -227,7 +227,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				// Requires Features::CONSERVATIVE_RASTERIZATION
 				conservative: false,
 			},
-			depth_stencil: Some(renderState.defaultDepthStencilState.clone()),
+			depth_stencil: renderState.getMainSurfaceDepthStencilState(),
 			multisample: wgpu::MultisampleState {
 				count: 1, // 2.
 				mask: !0, // 3.
@@ -281,7 +281,7 @@ impl cgv::Application for SampleApplication
 		let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 			label: Some("SampleRenderPass"),
 			color_attachments: &[renderState.mainSurfaceColorAttachment.clone()],
-			depth_stencil_attachment: renderState.mainSurfaceDepthStencilAttachment.clone(),
+			depth_stencil_attachment: renderState.getMainSurfaceDepthStencilAttachment(),
 			occlusion_query_set: None,
 			timestamp_writes: None,
 		});

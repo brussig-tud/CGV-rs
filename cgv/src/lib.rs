@@ -402,7 +402,6 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Create render state
 					self.renderState = Some(RenderState::new(context));
-					self.renderState.as_mut().unwrap().resetDepthStencilAttachment();
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(

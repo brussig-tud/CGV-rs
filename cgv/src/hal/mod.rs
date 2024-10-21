@@ -170,16 +170,12 @@ impl<'a> Texture<'a>
 	}
 
 	pub fn createDepthTexture(
-		device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, format: DepthFormat, label: Option<&'a str>
+		device: &wgpu::Device, dims: &glm::UVec2, format: DepthFormat, label: Option<&'a str>
 	) -> Self
 	{
-		let size = wgpu::Extent3d {
-			width: config.width.max(1), height: config.height.max(1),
-			depth_or_array_layers: 1,
-		};
 		let descriptor = wgpu::TextureDescriptor {
 			label,
-			size,
+			size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
 			mip_level_count: 1,
 			sample_count: 1,
 			dimension: wgpu::TextureDimension::D2,
@@ -218,16 +214,12 @@ impl<'a> Texture<'a>
 	}
 
 	pub fn createDepthStencilTexture(
-		device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, format: DepthStencilFormat, label: Option<&'a str>
+		device: &wgpu::Device, dims: &glm::UVec2, format: DepthStencilFormat, label: Option<&'a str>
 	) -> Self
 	{
-		let size = wgpu::Extent3d {
-			width: config.width.max(1), height: config.height.max(1),
-			depth_or_array_layers: 1,
-		};
 		let descriptor = wgpu::TextureDescriptor {
 			label,
-			size,
+			size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
 			mip_level_count: 1,
 			sample_count: 1,
 			dimension: wgpu::TextureDimension::D2,
