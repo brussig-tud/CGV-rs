@@ -84,6 +84,9 @@ pub struct Texture<'a> {
 	/// The sampler for the texture. TODO: Remove from texture object and establish a sampler library.
 	pub sampler: wgpu::Sampler,
 
+	/// The buffer object for readback operations in case the texture usage allows for that
+	pub readbackBuffer: Option<wgpu::Buffer>,
+
 	// Cached size (wihtout mipmap levels) in bytes.
 	size: u64
 }
@@ -164,7 +167,8 @@ impl<'a> Texture<'a>
 			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
 			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
 			     * descriptor.size.depth_or_array_layers) as u64,
-			texture, descriptor, sampler,
+			readbackBuffer: None,
+			texture, descriptor, sampler
 		})
 
 	}
@@ -205,11 +209,21 @@ impl<'a> Texture<'a>
 			}
 		);
 
+		let size =   numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
+		                 * descriptor.size.depth_or_array_layers) as u64;
+		let labelString: String;
+		let label = if let Some(label) = label {
+			labelString = format!("{label}_readbackBuffer");
+			Some(labelString.as_str())
+		} else { None };
 		Self {
 			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
-				* descriptor.size.depth_or_array_layers) as u64,
-			texture, descriptor, sampler
+			readbackBuffer: Some(device.create_buffer(&wgpu::BufferDescriptor {
+				label, size,
+				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+				mapped_at_creation: false
+			})),
+			texture, descriptor, sampler, size
 		}
 	}
 
@@ -247,11 +261,21 @@ impl<'a> Texture<'a>
 			}
 		);
 
+		let size =   numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
+		                 * descriptor.size.depth_or_array_layers) as u64;
+		let labelString: String;
+		let label = if let Some(label) = label {
+			labelString = format!("{label}_readbackBuffer");
+			Some(labelString.as_str())
+		} else { None };
 		Self {
 			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
-				* descriptor.size.depth_or_array_layers) as u64,
-			texture, descriptor, sampler
+			readbackBuffer: Some(device.create_buffer(&wgpu::BufferDescriptor {
+				label, size,
+				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+				mapped_at_creation: false
+			})),
+			texture, descriptor, sampler, size
 		}
 	}
 
@@ -291,12 +315,13 @@ impl<'a> Texture<'a>
 // Functions
 //
 
-fn numBytesFromFormat (format: wgpu::TextureFormat) -> u64
+pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> u64
 {
 	match format {
 		wgpu::TextureFormat::Depth16Unorm => 2,
 
 		  wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb
+		| wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
 		| wgpu::TextureFormat::Depth24PlusStencil8 | wgpu::TextureFormat::Depth32Float
 		=> 4,
 

@@ -280,7 +280,7 @@ impl cgv::Application for SampleApplication
 		/* create render pass */ {
 		let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 			label: Some("SampleRenderPass"),
-			color_attachments: &[renderState.mainSurfaceColorAttachment.clone()],
+			color_attachments: &[renderState.getMainSurfaceColorAttachment()],
 			depth_stencil_attachment: renderState.getMainSurfaceDepthStencilAttachment(),
 			occlusion_query_set: None,
 			timestamp_writes: None,

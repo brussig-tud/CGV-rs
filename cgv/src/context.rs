@@ -26,7 +26,6 @@ use crate::*;
 // Classes
 //
 
-#[derive(Debug)]
 pub struct Context
 {
 	pub surface: wgpu::Surface<'static>,
@@ -35,6 +34,8 @@ pub struct Context
 
 	pub config: wgpu::SurfaceConfiguration,
 	pub surfaceConfigured: bool,
+
+	pub(crate) surfaceTexture: Option<wgpu::SurfaceTexture>,
 
 	pub size: dpi::PhysicalSize<u32>,
 	pub window: Arc<Window>
@@ -118,6 +119,7 @@ impl Context {
 			queue,
 			config,
 			surfaceConfigured,
+			surfaceTexture: None,
 			size,
 			window
 		})
@@ -180,5 +182,33 @@ impl Context {
 		output.present();*/
 
 		Ok(())
+	}
+}
+
+
+////
+// ContextPrivateInterface
+
+pub(crate) trait ContextPrivateInterface {
+	fn newFrame (&mut self) -> Result<(), wgpu::SurfaceError>;
+
+	fn endFrame (&mut self) -> wgpu::SurfaceTexture;
+}
+
+impl ContextPrivateInterface for Context {
+	fn newFrame (&mut self) -> Result<(), wgpu::SurfaceError>
+	{
+		// Make sure we have a static instance to self to perform operations on
+		let this = util::mutify(self);
+
+		// Obtain the current surface texture
+		this.surfaceTexture = Some(this.surface.get_current_texture()?);
+
+		// Done!
+		Ok(())
+	}
+
+	fn endFrame (&mut self) -> wgpu::SurfaceTexture {
+		self.surfaceTexture.take().unwrap()
 	}
 }

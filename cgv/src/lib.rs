@@ -75,7 +75,7 @@ use winit::{
 };
 
 // Local imports
-use crate::{view::*, renderstate::*};
+use crate::{view::*, context::*, renderstate::*};
 
 
 
@@ -459,19 +459,23 @@ impl ApplicationHandler<UserEvent> for Player
 					tracing::debug!("Redrawing");
 
 					// Update main surface attachments to draw on them
-					match self.renderState.as_mut().unwrap().updateSurfaceColorAttachment(
-						self.context.as_ref().unwrap()
-					){
+					match self.context.as_mut().unwrap().newFrame()
+					{
 						// All fine, we can draw
-						Ok(surface)
-						=> {
+						Ok(()) => {
+							// Update main color attachment for new frame
+							self.renderState.as_mut().unwrap().updateSurfaceColorAttachment(
+								self.context.as_ref().unwrap()
+							);
+
 							// We have a surface, perform actual redrawing
 							if let Err(error) = self.redraw() {
 								tracing::error!("Error while redrawing: {:?}", error);
 							}
 
 							// Swap buffers
-							surface.present();
+							let x = self.context.as_mut().unwrap().endFrame();
+							x.present();
 						}
 
 						// Reconfigure the surface if it's lost or outdated

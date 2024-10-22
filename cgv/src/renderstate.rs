@@ -32,6 +32,11 @@ pub enum DepthStencilFormat {
 	Disabled,
 }
 
+pub enum ColorAttachmentSource<'a> {
+	Surface,
+	Texture(&'a hal::Texture<'a>)
+}
+
 
 
 //////
@@ -56,13 +61,22 @@ pub struct ViewingUniforms
 
 
 ////
+// ColorAttachment
+
+pub struct ColorAttachment {
+	view: wgpu::TextureView,
+	readbackBuffer: Option<wgpu::Buffer>
+}
+
+
+////
 // DepthStencilAttachment
 
 /// Encapsulates inter-referencing state for depth stencil attachments.
 pub struct DepthStencilAttachment<'a> {
-	pub texture: hal::Texture<'a>,
-	pub readbackBuffer: wgpu::Buffer,
-	pub defaultState: wgpu::DepthStencilState
+	texture: hal::Texture<'a>,
+	readbackBuffer: wgpu::Buffer,
+	defaultState: wgpu::DepthStencilState
 }
 
 
@@ -76,11 +90,12 @@ pub struct RenderState
 	pub viewingUniformsBindGroupLayout: wgpu::BindGroupLayout,
 	pub viewingUniformsBindGroup: wgpu::BindGroup,
 
-	pub mainSurfaceColorAttachment: Option<wgpu::RenderPassColorAttachment<'static>>,
-	pub mainSurfaceColorView: Option<wgpu::TextureView>,
+	clearColor: wgpu::Color,
+	colorAttachmentSource: ColorAttachmentSource<'static>,
+	colorAttachment: Option<ColorAttachment>,
 
-	mainSurfaceDepthStencilFormat: DepthStencilFormat,
-	pub mainSurfaceDepthStencilAttachment: Option<DepthStencilAttachment<'static>>
+	depthStencilFormat: DepthStencilFormat,
+	pub depthStencilAttachment: Option<DepthStencilAttachment<'static>>
 }
 
 impl RenderState
@@ -138,27 +153,27 @@ impl RenderState
 			viewingUniformsBindGroupLayout,
 			viewingUniformsBindGroup,
 
-			mainSurfaceDepthStencilFormat: DepthStencilFormat::Depth(D32),
+			clearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
+			colorAttachmentSource: ColorAttachmentSource::Surface,
+			colorAttachment: None,
 
-			mainSurfaceColorAttachment: None,
-			mainSurfaceColorView: None,
-
-			mainSurfaceDepthStencilAttachment: None
+			depthStencilFormat: DepthStencilFormat::Depth(D32),
+			depthStencilAttachment: None
 		};
 
 
 		////
 		// Initialize inter-referencing fields
 
-		result.recreateMainDepthStencilObjects(context);
+		result.recreateMainSurfaceDepthStencilAttachment(context);
 		result
 	}
 
-	fn recreateMainDepthStencilObjects (&mut self, context: &Context)
+	fn recreateMainSurfaceDepthStencilAttachment (&mut self, context: &Context)
 	{
 		// Early-out: no depth/stencil attachment
-		if let DepthStencilFormat::Disabled = self.mainSurfaceDepthStencilFormat {
-			self.mainSurfaceDepthStencilAttachment = None;
+		if let DepthStencilFormat::Disabled = self.depthStencilFormat {
+			self.depthStencilAttachment = None;
 			return;
 		}
 
@@ -168,7 +183,7 @@ impl RenderState
 		// Recreate according to selected main depth/stencil mode
 		// - initialize fields that are reference targets
 		let dims: glm::UVec2 = glm::vec2(context.config.width.max(1), context.config.height.max(1));
-		let texture = match &this.mainSurfaceDepthStencilFormat {
+		let texture = match &this.depthStencilFormat {
 			DepthStencilFormat::Depth(format) => hal::Texture::createDepthTexture(
 				&context.device, &dims, *format, Some("MainSurfaceDepthStencilTex")
 			),
@@ -178,7 +193,7 @@ impl RenderState
 			_ => { /* should be impossible */panic!("!!!INTERNAL LOGIC ERROR!!!") }
 		};
 		// - create the attachment struct with trivially initializable fields constructed in-place
-		self.mainSurfaceDepthStencilAttachment = Some(DepthStencilAttachment {
+		self.depthStencilAttachment = Some(DepthStencilAttachment {
 			readbackBuffer: context.device.create_buffer(&wgpu::BufferDescriptor {
 				label: Some("MainSurfaceDepthStencilReadbackBuffer"),
 				size: texture.size(),
@@ -195,9 +210,29 @@ impl RenderState
 		});
 	}
 
-	pub fn getMainSurfaceDepthStencilAttachment(&self) -> Option<wgpu::RenderPassDepthStencilAttachment>
+	pub fn getMainSurfaceColorAttachment (&self) -> Option<wgpu::RenderPassColorAttachment>
 	{
-		if let Some(dsa) = &self.mainSurfaceDepthStencilAttachment {
+		if let Some(ca) = &self.colorAttachment {
+			Some(wgpu::RenderPassColorAttachment {
+				view: &ca.view,
+				resolve_target: None,
+				ops: wgpu::Operations {
+					load: /*match self.clearColor {
+						Some(color) => wgpu::LoadOp::Clear(color),
+						None => wgpu::LoadOp::Load
+					}*/wgpu::LoadOp::Clear(self.clearColor),
+					store: wgpu::StoreOp::Store,
+				},
+			})
+		}
+		else {
+			None
+		}
+	}
+
+	pub fn getMainSurfaceDepthStencilAttachment (&self) -> Option<wgpu::RenderPassDepthStencilAttachment>
+	{
+		if let Some(dsa) = &self.depthStencilAttachment {
 			Some(wgpu::RenderPassDepthStencilAttachment {
 				view: &dsa.texture.view,
 				depth_ops: Some(wgpu::Operations {
@@ -214,7 +249,7 @@ impl RenderState
 
 	pub fn getMainSurfaceDepthStencilState (&self) -> Option<wgpu::DepthStencilState>
 	{
-		if let Some(dsa) = &self.mainSurfaceDepthStencilAttachment {
+		if let Some(dsa) = &self.depthStencilAttachment {
 			Some(dsa.defaultState.clone())
 		}
 		else {
@@ -224,10 +259,10 @@ impl RenderState
 
 	pub(crate) fn updateSize (&mut self, context: &Context)
 	{
-		if context.size == self.mainSurfaceDepthStencilAttachment.as_ref().unwrap().texture.physicalSizeWH() {
+		if context.size == self.depthStencilAttachment.as_ref().unwrap().texture.physicalSizeWH() {
 			return;
 		}
-		self.recreateMainDepthStencilObjects(context);
+		self.recreateMainSurfaceDepthStencilAttachment(context);
 	}
 }
 
@@ -236,37 +271,38 @@ impl RenderState
 // RenderStatePrivateInterface
 
 pub(crate) trait RenderStatePrivateInterface {
-	fn updateSurfaceColorAttachment (&mut self, context: &Context)
-		-> Result<wgpu::SurfaceTexture, wgpu::SurfaceError>;
+	fn updateSurfaceColorAttachment (&mut self, context: &Context);
 }
 
 impl<'a> RenderStatePrivateInterface for RenderState {
 	fn updateSurfaceColorAttachment (&mut self, context: &Context)
-		-> Result<wgpu::SurfaceTexture, wgpu::SurfaceError>
 	{
 		// Make sure we have a static instance to self to perform operations on
 		let this = util::mutify(self);
 
-		// Obtain the current surface texture and view
-		let output = context.surface.get_current_texture()?;
-		this.mainSurfaceColorView = Some(
-			output.texture.create_view(&wgpu::TextureViewDescriptor::default())
-		);
-
-		// Update the color attachment
-		this.mainSurfaceColorAttachment = Some(wgpu::RenderPassColorAttachment {
-			view: this.mainSurfaceColorView.as_ref().unwrap(),
-			resolve_target: None,
-			ops: wgpu::Operations {
-				load: wgpu::LoadOp::Clear(wgpu::Color {
-					r: 0.3,
-					g: 0.5,
-					b: 0.7,
-					a: 1.,
-				})/*wgpu::LoadOp::Load*/,
-				store: wgpu::StoreOp::Store,
-			},
-		});
-		Ok(output)
+		// Update view and attachment
+		match this.colorAttachmentSource
+		{
+			ColorAttachmentSource::Surface => {
+				let surfaceTexture = context.surfaceTexture.as_ref().unwrap();
+				let size = {
+					let dims = surfaceTexture.texture.size();
+					  hal::numBytesFromFormat(surfaceTexture.texture.format())
+					* dims.width as u64 * dims.height as u64 * dims.depth_or_array_layers as u64
+				};
+				this.colorAttachment = Some(ColorAttachment{
+					view: surfaceTexture.texture.create_view(&wgpu::TextureViewDescriptor::default()),
+					readbackBuffer: Some(context.device.create_buffer(&wgpu::BufferDescriptor {
+						label: Some("ColorAttachmentReadbackBuffer"),
+						size, usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+						mapped_at_creation: false
+					}))
+				});
+			}
+			ColorAttachmentSource::Texture(texture) => this.colorAttachment = Some(ColorAttachment{
+				view: texture.texture.create_view(&wgpu::TextureViewDescriptor::default()),
+				readbackBuffer: None
+			})
+		}
 	}
 }
