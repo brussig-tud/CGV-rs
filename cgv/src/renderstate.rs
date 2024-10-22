@@ -190,7 +190,7 @@ impl RenderState
 			DepthStencilFormat::DepthStencil(format) => hal::Texture::createDepthStencilTexture(
 				&context.device, &dims, *format, Some("MainSurfaceDepthStencilTex")
 			),
-			_ => { /* should be impossible */panic!("!!!INTERNAL LOGIC ERROR!!!") }
+			_ => unreachable!()
 		};
 		// - create the attachment struct with trivially initializable fields constructed in-place
 		self.depthStencilAttachment = Some(DepthStencilAttachment {

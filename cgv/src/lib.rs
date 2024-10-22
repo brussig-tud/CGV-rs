@@ -59,7 +59,7 @@ pub use renderstate::RenderState as RenderState;
 //
 
 // Standard library
-/* Nothing here yet */
+use std::any::Any;
 
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
@@ -150,6 +150,20 @@ pub enum EventOutcome
 	NotHandled
 }
 
+/// Enumerates the kinds of global render passes
+pub enum GlobalRenderPass
+{
+	/// A simple, straight-to-the-main-surface global pass.
+	Simple,
+
+	/// A stereo pass - the encapsulated value indicates the eye being rendered. This is typical 0..1 for simple
+	/// stereo like anaglyph or virtual reality, but can also go arbitrarily high, e.g. for holography.
+	Stereo(u32),
+
+	/// A custom pass, with a custom value.
+	Custom(Box<dyn Any>)
+}
+
 
 
 ///////
@@ -198,7 +212,9 @@ pub trait Application
 	///
 	/// * `device` – The active device for rendering.
 	/// * `queue` – A queue from the active device for submitting commands.
-	fn render (&mut self, context: &Context, renderState: &RenderState) -> anyhow::Result<()>;
+	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
+	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalRenderPass)
+		-> anyhow::Result<()>;
 }
 
 
@@ -306,7 +322,7 @@ impl Player
 		};
 
 		if let Some(application) = self.application.as_mut() {
-			application.render(&context, &self.renderState.as_ref().unwrap())?;
+			application.render(&context, &self.renderState.as_ref().unwrap(), &GlobalRenderPass::Simple)?;
 		}
 
 		Ok(())

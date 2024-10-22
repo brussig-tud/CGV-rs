@@ -18,7 +18,7 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result};
+use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result, GlobalRenderPass};
 
 // CGV Framework
 use cgv;
@@ -270,7 +270,8 @@ impl cgv::Application for SampleApplication
 
 	fn update(&mut self) {}
 
-	fn render(&mut self, context: &cgv::Context, renderState: &cgv::RenderState) -> Result<()>
+	fn render(&mut self, context: &cgv::Context, renderState: &cgv::RenderState, _: &GlobalRenderPass)
+		-> Result<()>
 	{
 		// Get a command encoder
 		let mut encoder = context.device.create_command_encoder(

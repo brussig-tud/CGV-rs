@@ -38,22 +38,24 @@ pub enum FoV {
 	Orthographic(f32)
 }
 
+
+
 //////
 //
 // Traits
 //
 
-/// A camera that can take input and compute projection and view matrices from that.
+/// A camera that can take input and start full scene render passes with its desired projection and view matrices.
 pub trait Camera
 {
-	/// Borrow a reference of the current projection matrix.
+	/// Borrow a reference to the current projection matrix.
 	fn projection (&self) -> &glm::Mat4;
 
-	/// Borrow a reference of the current view matrix.
+	/// Borrow a reference to the current view matrix.
 	fn view (&self) -> &glm::Mat4;
 
 	/// Report a viewport change to the camera. The framework guarantees that any active camera will get this method
-	/// called at least once before it needs to report any matrices.
+	/// called at least once before it gets asked to declare any render passes.
 	///
 	/// # Arguments
 	///

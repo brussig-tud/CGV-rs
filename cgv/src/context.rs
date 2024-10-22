@@ -141,48 +141,6 @@ impl Context {
 			self.surfaceConfigured = true;
 		}
 	}
-
-	pub fn render(&mut self) -> Result<(), wgpu::SurfaceError>
-	{
-		/*let output = self.surface.get_current_texture()?;
-		let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-		let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-			label: Some("Render Encoder"),
-		});
-		/* create render pass */ {
-			let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-				label: Some("Render Pass"),
-				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-					view: &view,
-					resolve_target: None,
-					ops: wgpu::Operations {
-						load: wgpu::LoadOp::Clear(wgpu::Color {
-							r: 0.3,
-							g: 0.5,
-							b: 0.7,
-							a: 1.,
-						}),
-						store: wgpu::StoreOp::Store,
-					},
-				})],
-				depth_stencil_attachment: None,
-				occlusion_query_set: None,
-				timestamp_writes: None,
-			});
-			renderPass.set_pipeline(&self.pipeline);
-			renderPass.set_bind_group(0, Some(&self.viewingUniformsBindGroup), &[]);
-			renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
-			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
-			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
-		}
-
-		// submit will accept anything that implements IntoIter
-		self.queue.submit(std::iter::once(encoder.finish()));
-		output.present();*/
-
-		Ok(())
-	}
 }
 
 
@@ -195,14 +153,12 @@ pub(crate) trait ContextPrivateInterface {
 	fn endFrame (&mut self) -> wgpu::SurfaceTexture;
 }
 
-impl ContextPrivateInterface for Context {
+impl ContextPrivateInterface for Context
+{
 	fn newFrame (&mut self) -> Result<(), wgpu::SurfaceError>
 	{
-		// Make sure we have a static instance to self to perform operations on
-		let this = util::mutify(self);
-
 		// Obtain the current surface texture
-		this.surfaceTexture = Some(this.surface.get_current_texture()?);
+		self.surfaceTexture = Some(self.surface.get_current_texture()?);
 
 		// Done!
 		Ok(())
