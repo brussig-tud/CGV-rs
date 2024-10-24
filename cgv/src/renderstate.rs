@@ -9,7 +9,6 @@ use std::default::Default;
 
 // WGPU API
 use wgpu;
-use wgpu::util::DeviceExt;
 
 // GLM library
 use glm;
@@ -50,10 +49,10 @@ pub enum ColorAttachmentSource<'a> {
 // The CPU-side representation of the UniformBuffer used for storing the viewing information.
 #[repr(C)]
 #[derive(Default, Debug, Copy, Clone)]
-pub struct ViewingUniforms
+pub struct ViewingStruct
 {
 	/// The modelview transformation matrix.
-	pub modelview: glm::Mat4,
+	pub view: glm::Mat4,
 
 	/// The projection matrix.
 	pub projection: glm::Mat4
@@ -85,10 +84,7 @@ pub struct DepthStencilAttachment<'a> {
 
 pub struct RenderState
 {
-	pub viewing: ViewingUniforms,
-	pub viewingUniformBuffer: wgpu::Buffer,
-	pub viewingUniformsBindGroupLayout: wgpu::BindGroupLayout,
-	pub viewingUniformsBindGroup: wgpu::BindGroup,
+	pub viewingUniforms: hal::UniformGroup<ViewingStruct>,
 
 	clearColor: wgpu::Color,
 	colorAttachmentSource: ColorAttachmentSource<'static>,
@@ -106,41 +102,9 @@ impl RenderState
 		// Prepare non-inter-referencing fields
 
 		// Uniforms and associated buffers and bind groups
-		// - viewing
-		let viewingUniformBuffer = context.device.create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("ViewingUniforms"),
-				contents: util::slicify(&ViewingUniforms::default()),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			}
+		let viewingUniforms = hal::UniformGroup::create(
+			context, wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT, Some("CGV__ViewingUniforms")
 		);
-		let viewingUniformsBindGroupLayout = context.device.create_bind_group_layout(
-			&wgpu::BindGroupLayoutDescriptor {
-				entries: &[
-					wgpu::BindGroupLayoutEntry {
-						binding: 0,
-						visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Buffer {
-							ty: wgpu::BufferBindingType::Uniform,
-							has_dynamic_offset: false,
-							min_binding_size: None,
-						},
-						count: None,
-					}
-				],
-				label: Some("ViewingUniformsBindGroupLayout"),
-			}
-		);
-		let viewingUniformsBindGroup = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-			layout: &viewingUniformsBindGroupLayout,
-			entries: &[
-				wgpu::BindGroupEntry {
-					binding: 0,
-					resource: viewingUniformBuffer.as_entire_binding(),
-				}
-			],
-			label: Some("ViewingUniformsBindGroup"),
-		});
 
 
 		////
@@ -148,10 +112,7 @@ impl RenderState
 
 		// Henceforth, we mutate this result object for the remaining initialization
 		let mut result = Self {
-			viewing: Default::default(),
-			viewingUniformBuffer,
-			viewingUniformsBindGroupLayout,
-			viewingUniformsBindGroup,
+			viewingUniforms,
 
 			clearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
 			colorAttachmentSource: ColorAttachmentSource::Surface,

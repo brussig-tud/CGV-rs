@@ -190,7 +190,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
 				bind_group_layouts: &[
-					&renderState.viewingUniformsBindGroupLayout,
+					&renderState.viewingUniforms.bindGroupLayout,
 					&texBindGroupLayout
 				],
 				push_constant_ranges: &[],
@@ -258,10 +258,6 @@ pub struct SampleApplication {
 	texBindGroup: wgpu::BindGroup
 }
 
-impl SampleApplication {
-
-}
-
 impl cgv::Application for SampleApplication
 {
 	fn onInput(&mut self, _: &event::WindowEvent) -> cgv::EventOutcome { cgv::EventOutcome::NotHandled }
@@ -279,20 +275,20 @@ impl cgv::Application for SampleApplication
 		);
 
 		/* create render pass */ {
-		let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-			label: Some("SampleRenderPass"),
-			color_attachments: &[renderState.getMainSurfaceColorAttachment()],
-			depth_stencil_attachment: renderState.getMainSurfaceDepthStencilAttachment(),
-			occlusion_query_set: None,
-			timestamp_writes: None,
-		});
-		renderPass.set_pipeline(&self.pipeline);
-		renderPass.set_bind_group(0, Some(&renderState.viewingUniformsBindGroup), &[]);
-		renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
-		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
-		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-		renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
-	}
+			let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+				label: Some("SampleRenderPass"),
+				color_attachments: &[renderState.getMainSurfaceColorAttachment()],
+				depth_stencil_attachment: renderState.getMainSurfaceDepthStencilAttachment(),
+				occlusion_query_set: None,
+				timestamp_writes: None,
+			});
+			renderPass.set_pipeline(&self.pipeline);
+			renderPass.set_bind_group(0, Some(&renderState.viewingUniforms.bindGroup), &[]);
+			renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
+			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
+			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
+			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+		}
 
 		// Submit
 		context.queue.submit([encoder.finish()]);

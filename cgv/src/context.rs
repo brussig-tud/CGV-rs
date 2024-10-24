@@ -13,7 +13,7 @@ use anyhow::Result;
 // Winit library
 use winit::{window::Window, dpi};
 
-// WGPU AP
+// WGPU API
 use wgpu;
 
 // Local imports

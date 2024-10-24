@@ -20,6 +20,17 @@ use image::GenericImageView;
 
 //////
 //
+// Module definitions
+//
+
+/// Submodule providing the UniformGroup facilities
+mod uniformgroup;
+pub use uniformgroup::UniformGroup; // re-export
+
+
+
+//////
+//
 // Enums
 //
 

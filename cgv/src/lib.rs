@@ -25,9 +25,11 @@ pub mod build;
 
 // The module encapsulating all low-level graphics state.
 mod context;
+pub use context::Context; // re-export
 
 // The module encapsulating rendering-related higher-level managed render state (common uniform buffers etc.)
 mod renderstate;
+pub use renderstate::RenderState; // re-export
 
 /// The parent module of all GPU abstractions.
 pub mod hal;
@@ -46,10 +48,6 @@ pub use tracing;
 pub use anyhow::Result as Result;
 pub use winit::event;
 pub use wgpu;
-
-/// Re-export important components at root-level
-pub use context::Context as Context;
-pub use renderstate::RenderState as RenderState;
 
 
 
@@ -310,12 +308,9 @@ impl Player
 
 			// Uniforms
 			// - viewing
-			rs.viewing.projection = *self.camera.projection();
-			rs.viewing.modelview = *self.camera.view();
-			context.queue.write_buffer(&rs.viewingUniformBuffer, 0, util::slicify(&rs.viewing));
-
-			// Clear color and depth attachments
-
+			rs.viewingUniforms.data.projection = *self.camera.projection();
+			rs.viewingUniforms.data.view = *self.camera.view();
+			rs.viewingUniforms.upload(context, true);
 
 			// Commit to GPU
 			context.queue.submit([]);
