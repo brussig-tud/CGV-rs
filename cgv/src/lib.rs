@@ -323,6 +323,10 @@ impl Player
 		Ok(())
 	}
 
+	pub fn withContext<Closure: FnOnce(&Context)> (&self, block: Closure) {
+		block(self.context.as_ref().unwrap());
+	}
+
 	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
 		tracing::info!("Exiting...");
 		eventLoop.exit();
@@ -411,8 +415,27 @@ impl ApplicationHandler<UserEvent> for Player
 						self.redrawOnceOnWait = true;
 					}
 
-					// Create render state
-					self.renderState = Some(RenderState::new(context));
+					/* Create base render state */ {
+						let descriptor = wgpu::TextureDescriptor {
+							label: None,
+							size: wgpu::Extent3d {width: 1, height: 1, depth_or_array_layers: 1},
+							mip_level_count: 1,
+							sample_count: 1,
+							dimension: wgpu::TextureDimension::D2,
+							format: wgpu::TextureFormat::Rgba8Unorm,
+							usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+							view_formats: &[],
+						};
+						self.renderState = Some(RenderState::new(
+							context,
+							ColorAttachment::Surface(util::statify(
+								&context.device.create_texture(&descriptor).create_view(
+									&wgpu::TextureViewDescriptor::default()
+								)
+							)),
+							Some(hal::DepthStencilFormat::D32)
+						));
+					}
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(
@@ -456,7 +479,7 @@ impl ApplicationHandler<UserEvent> for Player
 			}
 
 			// Application close
-			WindowEvent::CloseRequested  => self.exit(eventLoop),
+			WindowEvent::CloseRequested => self.exit(eventLoop),
 
 			// Main window redraw
 			WindowEvent::RedrawRequested
@@ -475,7 +498,7 @@ impl ApplicationHandler<UserEvent> for Player
 						// All fine, we can draw
 						Ok(()) => {
 							// Update main color attachment for new frame
-							self.renderState.as_mut().unwrap().updateSurfaceColorAttachment(
+							self.renderState.as_mut().unwrap().updateMainSurfaceColorAttachment(
 								self.context.as_ref().unwrap()
 							);
 
@@ -506,6 +529,24 @@ impl ApplicationHandler<UserEvent> for Player
 						Err(wgpu::SurfaceError::Timeout) =>
 							{ tracing::warn!("Surface timeout") }
 					};
+
+					/////////////////////
+					//- TESTING ////////////////////////////////////////////////////////
+
+					self.withContext(|context| {
+						let da =
+							self.renderState.as_ref().unwrap().depthStencilAttachment.as_ref().unwrap();
+						let mut enc = context.device.create_command_encoder(
+							&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
+						);
+						enc.copy_texture_to_buffer(
+							*da.texture.readbackView_tex.as_ref().unwrap(),
+							*da.texture.readbackView_buf.as_ref().unwrap(), da.texture.descriptor.size
+						);
+					});
+
+					//- [END] TESTING //////////////////////////////////////////////////
+					/////////////////////
 				}
 			},
 

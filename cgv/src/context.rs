@@ -36,6 +36,7 @@ pub struct Context
 	pub surfaceConfigured: bool,
 
 	pub(crate) surfaceTexture: Option<wgpu::SurfaceTexture>,
+	pub(crate) surfaceView: Option<wgpu::TextureView>,
 
 	pub size: dpi::PhysicalSize<u32>,
 	pub window: Arc<Window>
@@ -120,6 +121,7 @@ impl Context {
 			config,
 			surfaceConfigured,
 			surfaceTexture: None,
+			surfaceView: None,
 			size,
 			window
 		})
@@ -159,12 +161,16 @@ impl ContextPrivateInterface for Context
 	{
 		// Obtain the current surface texture
 		self.surfaceTexture = Some(self.surface.get_current_texture()?);
+		self.surfaceView = Some(
+			self.surfaceTexture.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default())
+		);
 
 		// Done!
 		Ok(())
 	}
 
 	fn endFrame (&mut self) -> wgpu::SurfaceTexture {
+		self.surfaceView.take();
 		self.surfaceTexture.take().unwrap()
 	}
 }

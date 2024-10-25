@@ -16,6 +16,9 @@ use wgpu;
 // Image library
 use image::GenericImageView;
 
+// Local imports
+use crate::*;
+
 
 
 //////
@@ -34,42 +37,38 @@ pub use uniformgroup::UniformGroup; // re-export
 // Enums
 //
 
-/// High-level enum encompassing all pure depth formats.
-#[derive(Clone, Copy, Default)]
-pub enum DepthFormat
-{
-	/// 16-bits integer.
-	D16 = 2,
-
-	/// 24-bits integer.
-	D24 = 3,
-
-	/// 32-bits floating point.
-	#[default]
-	D32 = 4
-}
-impl From<DepthFormat> for u64 {
-	fn from(format: DepthFormat) -> Self { format.into() }
-}
-impl From<&DepthFormat> for u64 {
-	fn from(format: &DepthFormat) -> Self { (*format).into() }
-}
-
-/// High-level enum encompassing all pure depth formats.
+/// High-level enum encompassing all supported formats for depth/stencil buffers.
 #[derive(Clone, Copy, Default)]
 pub enum DepthStencilFormat
 {
-	/// 24-bits integer depth + 8-bits stencil.
+	/// 16-bits integer.
+	D16,
+
+	/// 24-bits integer.
+	D24,
+
+	/// 32-bits floating point.
 	#[default]
-	D24S8 = 4,
+	D32,
+
+	/// 24-bits integer depth + 8-bits stencil.
+	D24S8,
 
 	/// 32-bits floating point depth + 8-bits stencil (requires feature support).
-	D32S8 = 5
+	D32S8
 }
-impl From<DepthStencilFormat> for u64 {
-	fn from(format: DepthStencilFormat) -> Self { format.into() }
+impl From<DepthStencilFormat> for wgpu::TextureFormat {
+	fn from(format: DepthStencilFormat) -> Self {
+		match format {
+			DepthStencilFormat::D16 => wgpu::TextureFormat::Depth16Unorm,
+			DepthStencilFormat::D24 => wgpu::TextureFormat::Depth24Plus,
+			DepthStencilFormat::D32 => wgpu::TextureFormat::Depth32Float,
+			DepthStencilFormat::D24S8 => wgpu::TextureFormat::Depth24PlusStencil8,
+			DepthStencilFormat::D32S8 => wgpu::TextureFormat::Depth32FloatStencil8
+		}
+	}
 }
-impl From<&DepthStencilFormat> for u64 {
+impl From<&DepthStencilFormat> for wgpu::TextureFormat {
 	fn from(format: &DepthStencilFormat) -> Self { (*format).into() }
 }
 
@@ -92,11 +91,17 @@ pub struct Texture<'a> {
 	/// The texture view for interfacing with the texture object.
 	pub view: wgpu::TextureView,
 
-	/// The sampler for the texture. TODO: Remove from texture object and establish a sampler library.
+	/// The sampler for the texture. TODO: Remove from texture object and make context have a sampler library instead
 	pub sampler: wgpu::Sampler,
 
 	/// The buffer object for readback operations in case the texture usage allows for that
-	pub readbackBuffer: Option<wgpu::Buffer>,
+	readbackBuffer: Option<wgpu::Buffer>,
+
+	/// The ImageCopyTexture-compatible view on the texture in case readback is enabled
+	pub readbackView_tex: Option<wgpu::ImageCopyTexture<'static>>,
+
+	/// The ImageCopyTexture-compatible view on the texture in case readback is enabled
+	pub readbackView_buf: Option<wgpu::ImageCopyBuffer<'static>>,
 
 	// Cached size (wihtout mipmap levels) in bytes.
 	size: u64
@@ -104,30 +109,34 @@ pub struct Texture<'a> {
 
 impl<'a> Texture<'a>
 {
-
 	/// Create the texture from the given blob, uploading using the given queue on the given device.
 	///
 	/// # Arguments
 	///
-	/// * `device` – The *WGPU* device to create the texture on.
-	/// * `queue` – The queue on the given device to use for uploading.
+	/// * `context` – The *CGV-rs* context under which to create the texture.
 	/// * `blob` – The memory slice containing the raw bytes making up the image.
-	/// * `label` – The string to internally label the GPU-side texture object with.
-	pub fn fromBlob (device: &wgpu::Device, queue: &wgpu::Queue, blob: &[u8], label: &'a str) -> Result<Self> {
+	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
+	///    required usages for creating a texture from host-data.
+	/// * `label` – An optional name to internally label the GPU-side texture object with.
+	pub fn fromBlob (
+		context: &Context, blob: &[u8], specialUsageFlags: Option<wgpu::TextureUsages>, label: Option<&'a str>
+	) -> Result<Self> {
 		let img = image::load_from_memory(blob)?;
-		Self::fromImage(device, queue, &img, Some(label))
+		Self::fromImage(context, &img, specialUsageFlags, label)
 	}
 
 	/// Create the texture from the given image, uploading using the given queue on the given device.
 	///
 	/// # Arguments
 	///
-	/// * `device` – The *WGPU* device to create the texture on.
-	/// * `queue` – The queue on the given device to use for uploading.
+	/// * `context` – The *CGV-rs* context under which to create the texture.
 	/// * `image` – The image the texture should contain.
+	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
+	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::COPY_DST`]).
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn fromImage (
-		device: &wgpu::Device, queue: &wgpu::Queue, image: &image::DynamicImage, label: Option<&'a str>
+		context: &Context, image: &image::DynamicImage, specialUsageFlags: Option<wgpu::TextureUsages>,
+		label: Option<&'a str>
 	) -> Result<Self>
 	{
 		// Create texture object
@@ -139,13 +148,17 @@ impl<'a> Texture<'a>
 			label, size, mip_level_count: 1, sample_count: 1,
 			dimension: wgpu::TextureDimension::D2,
 			format: wgpu::TextureFormat::Rgba8Unorm,
-			usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+			usage: if let Some(usages) = specialUsageFlags {
+				wgpu::TextureUsages::COPY_DST | usages
+			} else {
+				wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
+			},
 			view_formats: &[],
 		};
-		let texture = device.create_texture(&descriptor);
+		let texture = context.device.create_texture(&descriptor);
 
 		// Upload to GPU
-		queue.write_texture(
+		context.queue.write_texture(
 			wgpu::ImageCopyTexture {
 				aspect: wgpu::TextureAspect::All,
 				texture: &texture,
@@ -160,10 +173,10 @@ impl<'a> Texture<'a>
 			},
 			size,
 		);
-		queue.submit([]); // make sure the texture transfer starts immediately
+		context.queue.submit([]); // make sure the texture transfer starts immediately
 
-		// Create interface
-		let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+		// Create sampler
+		let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::ClampToEdge,
 			address_mode_v: wgpu::AddressMode::ClampToEdge,
 			address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -173,73 +186,53 @@ impl<'a> Texture<'a>
 			..Default::default()
 		});
 
+		let size =   numBytesFromFormat(descriptor.format)
+		                * (descriptor.size.width*descriptor.size.height*descriptor.size.depth_or_array_layers) as u64;
+		let readbackBuffer = match specialUsageFlags {
+			Some(wgpu::TextureUsages::COPY_SRC) => Some(context.device.create_buffer(&wgpu::BufferDescriptor {
+				label, size,
+				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+				mapped_at_creation: false
+			})),
+			_ => None
+		};
+		let readbackView_tex = match &readbackBuffer {
+			Some(_) => Some(wgpu::ImageCopyTexture {
+				texture: &texture,
+				mip_level: 0,
+				origin: Default::default(),
+				aspect: wgpu::TextureAspect::DepthOnly,
+			}),
+			_ => None
+		};
+		let readbackView_buf = match &readbackBuffer {
+			Some(buffer) => Some(wgpu::ImageCopyBuffer {
+				buffer: &buffer,
+				layout: Default::default(),
+			}),
+			_ => None
+		};
+
 		// Done!
 		Ok(Self {
 			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			size:  numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
-			     * descriptor.size.depth_or_array_layers) as u64,
-			readbackBuffer: None,
-			texture, descriptor, sampler
+			texture, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler,
 		})
-
 	}
 
-	pub fn createDepthTexture(
-		device: &wgpu::Device, dims: &glm::UVec2, format: DepthFormat, label: Option<&'a str>
-	) -> Self
-	{
-		let descriptor = wgpu::TextureDescriptor {
-			label,
-			size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
-			mip_level_count: 1,
-			sample_count: 1,
-			dimension: wgpu::TextureDimension::D2,
-			format: match format {
-				DepthFormat::D16 => wgpu::TextureFormat::Depth16Unorm,
-				DepthFormat::D24 => wgpu::TextureFormat::Depth24Plus,
-				DepthFormat::D32 => wgpu::TextureFormat::Depth32Float
-			},
-			usage:  wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING
-			      | wgpu::TextureUsages::COPY_SRC,
-			view_formats: &[],
-		};
-		let texture = device.create_texture(&descriptor);
-
-		let sampler = device.create_sampler(
-			&wgpu::SamplerDescriptor { // 4.
-				address_mode_u: wgpu::AddressMode::ClampToEdge,
-				address_mode_v: wgpu::AddressMode::ClampToEdge,
-				address_mode_w: wgpu::AddressMode::ClampToEdge,
-				mag_filter: wgpu::FilterMode::Linear,
-				min_filter: wgpu::FilterMode::Linear,
-				mipmap_filter: wgpu::FilterMode::Nearest,
-				compare: Some(wgpu::CompareFunction::LessEqual), // 5.
-				lod_min_clamp: 0.0,
-				lod_max_clamp: 100.0,
-				..Default::default()
-			}
-		);
-
-		let size =   numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
-		                 * descriptor.size.depth_or_array_layers) as u64;
-		let labelString: String;
-		let label = if let Some(label) = label {
-			labelString = format!("{label}_readbackBuffer");
-			Some(labelString.as_str())
-		} else { None };
-		Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			readbackBuffer: Some(device.create_buffer(&wgpu::BufferDescriptor {
-				label, size,
-				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-				mapped_at_creation: false
-			})),
-			texture, descriptor, sampler, size
-		}
-	}
-
+	/// Create an uninitialized texture suitable for use as a depth/stencil attachment.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The *CGV-rs* context under which to create the texture.
+	/// * `dims` – The desired dimensions in terms of width and height.
+	/// * `format` – The desired depth/stencil format of the texture.
+	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
+	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::RENDER_ATTACHMENT`]).
+	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn createDepthStencilTexture(
-		device: &wgpu::Device, dims: &glm::UVec2, format: DepthStencilFormat, label: Option<&'a str>
+		context: &Context, dims: &glm::UVec2, format: DepthStencilFormat,
+		specialUsageFlags: Option<wgpu::TextureUsages>, label: Option<&'a str>
 	) -> Self
 	{
 		let descriptor = wgpu::TextureDescriptor {
@@ -248,22 +241,23 @@ impl<'a> Texture<'a>
 			mip_level_count: 1,
 			sample_count: 1,
 			dimension: wgpu::TextureDimension::D2,
-			format: match format {
-				DepthStencilFormat::D24S8 => wgpu::TextureFormat::Depth24PlusStencil8,
-				DepthStencilFormat::D32S8 => wgpu::TextureFormat::Depth32FloatStencil8
+			format: format.into(),
+			usage: if let Some(usages) = specialUsageFlags {
+				wgpu::TextureUsages::RENDER_ATTACHMENT | usages
+			} else {
+				wgpu::TextureUsages::RENDER_ATTACHMENT
 			},
-			usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
 			view_formats: &[],
 		};
-		let texture = device.create_texture(&descriptor);
+		let texture = context.device.create_texture(&descriptor);
 
-		let sampler = device.create_sampler(
+		let sampler = context.device.create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
 				address_mode_v: wgpu::AddressMode::ClampToEdge,
 				address_mode_w: wgpu::AddressMode::ClampToEdge,
-				mag_filter: wgpu::FilterMode::Linear,
-				min_filter: wgpu::FilterMode::Linear,
+				mag_filter: wgpu::FilterMode::Nearest,
+				min_filter: wgpu::FilterMode::Nearest,
 				mipmap_filter: wgpu::FilterMode::Nearest,
 				compare: Some(wgpu::CompareFunction::LessEqual), // 5.
 				lod_min_clamp: 0.0,
@@ -272,21 +266,37 @@ impl<'a> Texture<'a>
 			}
 		);
 
-		let size =   numBytesFromFormat(descriptor.format)*(descriptor.size.width*descriptor.size.height
-		                 * descriptor.size.depth_or_array_layers) as u64;
-		let labelString: String;
-		let label = if let Some(label) = label {
-			labelString = format!("{label}_readbackBuffer");
-			Some(labelString.as_str())
-		} else { None };
-		Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			readbackBuffer: Some(device.create_buffer(&wgpu::BufferDescriptor {
+		let size =   numBytesFromFormat(descriptor.format)
+			* (descriptor.size.width*descriptor.size.height*descriptor.size.depth_or_array_layers) as u64;
+		let readbackBuffer = match specialUsageFlags {
+			Some(wgpu::TextureUsages::COPY_SRC) => Some(context.device.create_buffer(&wgpu::BufferDescriptor {
 				label, size,
 				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 				mapped_at_creation: false
 			})),
-			texture, descriptor, sampler, size
+			_ => None
+		};
+		let readbackView_tex = match &readbackBuffer {
+			Some(_) => Some(wgpu::ImageCopyTexture {
+				texture: &texture,
+				mip_level: 0,
+				origin: Default::default(),
+				aspect: wgpu::TextureAspect::DepthOnly,
+			}),
+			_ => None
+		};
+		let readbackView_buf = match &readbackBuffer {
+			Some(buffer) => Some(wgpu::ImageCopyBuffer {
+				buffer: &buffer,
+				layout: Default::default(),
+			}),
+			_ => None
+		};
+
+		// Done!
+		Self {
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+			texture, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
 		}
 	}
 

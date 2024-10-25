@@ -15,7 +15,6 @@ use glm;
 
 // Local imports
 use crate::*;
-use hal::DepthFormat::*;
 
 
 
@@ -24,15 +23,8 @@ use hal::DepthFormat::*;
 // Enums
 //
 
-#[allow(dead_code)]
-pub enum DepthStencilFormat {
-	Depth(hal::DepthFormat),
-	DepthStencil(hal::DepthStencilFormat),
-	Disabled,
-}
-
-pub enum ColorAttachmentSource<'a> {
-	Surface,
+pub enum ColorAttachment<'a> {
+	Surface(&'a wgpu::TextureView),
 	Texture(&'a hal::Texture<'a>)
 }
 
@@ -60,21 +52,11 @@ pub struct ViewingStruct
 
 
 ////
-// ColorAttachment
-
-pub struct ColorAttachment {
-	view: wgpu::TextureView,
-	readbackBuffer: Option<wgpu::Buffer>
-}
-
-
-////
 // DepthStencilAttachment
 
 /// Encapsulates inter-referencing state for depth stencil attachments.
 pub struct DepthStencilAttachment<'a> {
-	texture: hal::Texture<'a>,
-	readbackBuffer: wgpu::Buffer,
+	pub(crate) texture: hal::Texture<'a>,
 	defaultState: wgpu::DepthStencilState
 }
 
@@ -87,16 +69,18 @@ pub struct RenderState
 	pub viewingUniforms: hal::UniformGroup<ViewingStruct>,
 
 	clearColor: wgpu::Color,
-	colorAttachmentSource: ColorAttachmentSource<'static>,
-	colorAttachment: Option<ColorAttachment>,
+	colorAttachment: ColorAttachment<'static>,
 
-	depthStencilFormat: DepthStencilFormat,
+	depthStencilFormat: Option<hal::DepthStencilFormat>,
 	pub depthStencilAttachment: Option<DepthStencilAttachment<'static>>
 }
 
 impl RenderState
 {
-	pub fn new(context: &Context) -> Self
+	pub fn new(
+		context: &Context, colorAttachment: ColorAttachment<'static>,
+		depthStencilFormat: Option<hal::DepthStencilFormat>
+	) -> Self
 	{
 		////
 		// Prepare non-inter-referencing fields
@@ -115,10 +99,9 @@ impl RenderState
 			viewingUniforms,
 
 			clearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
-			colorAttachmentSource: ColorAttachmentSource::Surface,
-			colorAttachment: None,
+			colorAttachment,
 
-			depthStencilFormat: DepthStencilFormat::Depth(D32),
+			depthStencilFormat,
 			depthStencilAttachment: None
 		};
 
@@ -133,62 +116,46 @@ impl RenderState
 	fn recreateMainSurfaceDepthStencilAttachment (&mut self, context: &Context)
 	{
 		// Early-out: no depth/stencil attachment
-		if let DepthStencilFormat::Disabled = self.depthStencilFormat {
-			self.depthStencilAttachment = None;
-			return;
+		if let Some(format) = self.depthStencilFormat
+		{
+			// Recreate according to selected main depth/stencil mode
+			// - initialize fields that are reference targets
+			let dims: glm::UVec2 = glm::vec2(context.config.width.max(1), context.config.height.max(1));
+			let texture = hal::Texture::createDepthStencilTexture(
+				context, &dims, format, Some(wgpu::TextureUsages::COPY_SRC), Some("MainSurfaceDepthStencilTex")
+			);
+			// - create the attachment struct with trivially initializable fields constructed in-place
+			self.depthStencilAttachment = Some(DepthStencilAttachment {
+				defaultState: wgpu::DepthStencilState {
+					format: texture.texture.format(),
+					depth_write_enabled: true,
+					depth_compare: wgpu::CompareFunction::Less, // 1.
+					stencil: wgpu::StencilState::default(), // 2.
+					bias: wgpu::DepthBiasState::default(),
+				}, texture
+			});
 		}
-
-		// Make sure we have a static instance to self to perform operations on
-		let this = util::mutify(self);
-
-		// Recreate according to selected main depth/stencil mode
-		// - initialize fields that are reference targets
-		let dims: glm::UVec2 = glm::vec2(context.config.width.max(1), context.config.height.max(1));
-		let texture = match &this.depthStencilFormat {
-			DepthStencilFormat::Depth(format) => hal::Texture::createDepthTexture(
-				&context.device, &dims, *format, Some("MainSurfaceDepthStencilTex")
-			),
-			DepthStencilFormat::DepthStencil(format) => hal::Texture::createDepthStencilTexture(
-				&context.device, &dims, *format, Some("MainSurfaceDepthStencilTex")
-			),
-			_ => unreachable!()
-		};
-		// - create the attachment struct with trivially initializable fields constructed in-place
-		self.depthStencilAttachment = Some(DepthStencilAttachment {
-			readbackBuffer: context.device.create_buffer(&wgpu::BufferDescriptor {
-				label: Some("MainSurfaceDepthStencilReadbackBuffer"),
-				size: texture.size(),
-				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-				mapped_at_creation: false
-			}),
-			defaultState: wgpu::DepthStencilState {
-				format: texture.texture.format(),
-				depth_write_enabled: true,
-				depth_compare: wgpu::CompareFunction::Less, // 1.
-				stencil: wgpu::StencilState::default(), // 2.
-				bias: wgpu::DepthBiasState::default(),
-			}, texture
-		});
+		else {
+			self.depthStencilAttachment = None;
+		}
 	}
 
 	pub fn getMainSurfaceColorAttachment (&self) -> Option<wgpu::RenderPassColorAttachment>
 	{
-		if let Some(ca) = &self.colorAttachment {
-			Some(wgpu::RenderPassColorAttachment {
-				view: &ca.view,
-				resolve_target: None,
-				ops: wgpu::Operations {
-					load: /*match self.clearColor {
-						Some(color) => wgpu::LoadOp::Clear(color),
-						None => wgpu::LoadOp::Load
-					}*/wgpu::LoadOp::Clear(self.clearColor),
-					store: wgpu::StoreOp::Store,
-				},
-			})
-		}
-		else {
-			None
-		}
+		Some(wgpu::RenderPassColorAttachment {
+			view: match self.colorAttachment {
+				ColorAttachment::Surface(view) => view,
+				ColorAttachment::Texture(tex) => &tex.view
+			},
+			resolve_target: None,
+			ops: wgpu::Operations {
+				load: /*match self.clearColor {
+					Some(color) => wgpu::LoadOp::Clear(color),
+					None => wgpu::LoadOp::Load
+				}*/wgpu::LoadOp::Clear(self.clearColor),
+				store: wgpu::StoreOp::Store,
+			},
+		})
 	}
 
 	pub fn getMainSurfaceDepthStencilAttachment (&self) -> Option<wgpu::RenderPassDepthStencilAttachment>
@@ -232,38 +199,18 @@ impl RenderState
 // RenderStatePrivateInterface
 
 pub(crate) trait RenderStatePrivateInterface {
-	fn updateSurfaceColorAttachment (&mut self, context: &Context);
+	fn updateMainSurfaceColorAttachment (&mut self, context: &Context);
 }
 
-impl<'a> RenderStatePrivateInterface for RenderState {
-	fn updateSurfaceColorAttachment (&mut self, context: &Context)
+impl RenderStatePrivateInterface for RenderState {
+	fn updateMainSurfaceColorAttachment (&mut self, context: &Context)
 	{
-		// Make sure we have a static instance to self to perform operations on
-		let this = util::mutify(self);
-
 		// Update view and attachment
-		match this.colorAttachmentSource
+		match self.colorAttachment
 		{
-			ColorAttachmentSource::Surface => {
-				let surfaceTexture = context.surfaceTexture.as_ref().unwrap();
-				let size = {
-					let dims = surfaceTexture.texture.size();
-					  hal::numBytesFromFormat(surfaceTexture.texture.format())
-					* dims.width as u64 * dims.height as u64 * dims.depth_or_array_layers as u64
-				};
-				this.colorAttachment = Some(ColorAttachment{
-					view: surfaceTexture.texture.create_view(&wgpu::TextureViewDescriptor::default()),
-					readbackBuffer: Some(context.device.create_buffer(&wgpu::BufferDescriptor {
-						label: Some("ColorAttachmentReadbackBuffer"),
-						size, usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-						mapped_at_creation: false
-					}))
-				});
-			}
-			ColorAttachmentSource::Texture(texture) => this.colorAttachment = Some(ColorAttachment{
-				view: texture.texture.create_view(&wgpu::TextureViewDescriptor::default()),
-				readbackBuffer: None
-			})
+			ColorAttachment::Surface(_) =>
+				self.colorAttachment = ColorAttachment::Surface(util::statify(context).surfaceView.as_ref().unwrap()),
+			ColorAttachment::Texture(_) => {/* nothing to do */}
 		}
 	}
 }

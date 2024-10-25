@@ -53,9 +53,30 @@ const NODES: &[HermiteNode] = &[
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 0.)
 	},
+
+	HermiteNode {
+		pos: glm::Vec4::new(-1., -1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(1., 1.)
+	},
+	HermiteNode {
+		pos: glm::Vec4::new(1., -1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(0., 1.)
+	},
+	HermiteNode {
+		pos: glm::Vec4::new(-1., 1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(1., 0.)
+	},
+	HermiteNode {
+		pos: glm::Vec4::new(1., 1., 0., 1.),
+		color: glm::Vec4::new(1., 1., 1., 1.),
+		texcoord: glm::Vec2::new(0., 0.)
+	}
 ];
 
-const INDICES: &[u32] = &[/* tri 1 */0, 1, 3,  /* tri 2 */3, 0, 2];
+const INDICES: &[u32] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5, 4, 7, 6];
 
 
 
@@ -137,8 +158,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// Load resources
 
 		let tex = cgv::hal::Texture::fromBlob(
-			&context.device, &context.queue, util::sourceBytes!("/res/tex/cgvCube.png"),
-			"TestTexture"
+			context, util::sourceBytes!("/res/tex/cgvCube.png"), None, Some("TestTexture")
 		)?;
 		let texBindGroupLayout = context.device.create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
