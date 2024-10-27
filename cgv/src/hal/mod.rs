@@ -18,6 +18,7 @@ use image::GenericImageView;
 
 // Local imports
 use crate::*;
+use crate::util::math::alignToFactor;
 
 
 
@@ -79,11 +80,17 @@ impl From<&DepthStencilFormat> for wgpu::TextureFormat {
 // Classes
 //
 
+/// Encapsulates the logical and real GPU-side physical size (including padding for alignment) of a texture
+pub struct TextureSize {
+	pub logical: u64,
+	pub actual: u64
+}
+
 /// Represents a texture object, its data and interface to that data.
 #[allow(unused)]
 pub struct Texture<'a> {
 	/// The device texture object.
-	pub texture: wgpu::Texture,
+	pub texture: Box<wgpu::Texture>,
 
 	/// The descriptor used to create the [texture object](texture).
 	pub descriptor: wgpu::TextureDescriptor<'a>,
@@ -95,7 +102,7 @@ pub struct Texture<'a> {
 	pub sampler: wgpu::Sampler,
 
 	/// The buffer object for readback operations in case the texture usage allows for that
-	readbackBuffer: Option<wgpu::Buffer>,
+	readbackBuffer: Option<Box<wgpu::Buffer>>,
 
 	/// The ImageCopyTexture-compatible view on the texture in case readback is enabled
 	pub readbackView_tex: Option<wgpu::ImageCopyTexture<'static>>,
@@ -104,7 +111,7 @@ pub struct Texture<'a> {
 	pub readbackView_buf: Option<wgpu::ImageCopyBuffer<'static>>,
 
 	// Cached size (wihtout mipmap levels) in bytes.
-	size: u64
+	size: TextureSize
 }
 
 impl<'a> Texture<'a>
@@ -155,7 +162,7 @@ impl<'a> Texture<'a>
 			},
 			view_formats: &[],
 		};
-		let texture = context.device.create_texture(&descriptor);
+		let texture = Box::new(context.device.create_texture(&descriptor));
 
 		// Upload to GPU
 		context.queue.write_texture(
@@ -186,19 +193,27 @@ impl<'a> Texture<'a>
 			..Default::default()
 		});
 
-		let size =   numBytesFromFormat(descriptor.format)
-		                * (descriptor.size.width*descriptor.size.height*descriptor.size.depth_or_array_layers) as u64;
-		let readbackBuffer = match specialUsageFlags {
-			Some(wgpu::TextureUsages::COPY_SRC) => Some(context.device.create_buffer(&wgpu::BufferDescriptor {
-				label, size,
-				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-				mapped_at_creation: false
-			})),
+		let size = {
+			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as u64;
+			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as u64;
+			TextureSize {
+				logical: logicalBytesPerRow * heightTimesDepth,
+				actual: alignToFactor(logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64) * heightTimesDepth
+			}
+		};
+		let readbackBuffer = match &specialUsageFlags {
+			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
+				&wgpu::BufferDescriptor {
+					label, size: size.actual,
+					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+					mapped_at_creation: false
+				}
+			))),
 			_ => None
 		};
 		let readbackView_tex = match &readbackBuffer {
 			Some(_) => Some(wgpu::ImageCopyTexture {
-				texture: &texture,
+				texture: util::statify(texture.as_ref()),
 				mip_level: 0,
 				origin: Default::default(),
 				aspect: wgpu::TextureAspect::DepthOnly,
@@ -207,16 +222,22 @@ impl<'a> Texture<'a>
 		};
 		let readbackView_buf = match &readbackBuffer {
 			Some(buffer) => Some(wgpu::ImageCopyBuffer {
-				buffer: &buffer,
-				layout: Default::default(),
+				buffer: util::statify(buffer.as_ref()),
+				layout: wgpu::ImageDataLayout {
+					bytes_per_row: Some(util::math::alignToFactor(
+						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
+						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
+					)),
+					..Default::default()
+				}
 			}),
 			_ => None
 		};
 
 		// Done!
 		Ok(Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			texture, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler,
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), texture,
+			size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler,
 		})
 	}
 
@@ -249,7 +270,7 @@ impl<'a> Texture<'a>
 			},
 			view_formats: &[],
 		};
-		let texture = context.device.create_texture(&descriptor);
+		let texture = Box::new(context.device.create_texture(&descriptor));
 
 		let sampler = context.device.create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
@@ -266,19 +287,27 @@ impl<'a> Texture<'a>
 			}
 		);
 
-		let size =   numBytesFromFormat(descriptor.format)
-			* (descriptor.size.width*descriptor.size.height*descriptor.size.depth_or_array_layers) as u64;
+		let size = {
+			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as u64;
+			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as u64;
+			TextureSize {
+				logical: logicalBytesPerRow * heightTimesDepth,
+				actual: alignToFactor(logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64) * heightTimesDepth
+			}
+		};
 		let readbackBuffer = match specialUsageFlags {
-			Some(wgpu::TextureUsages::COPY_SRC) => Some(context.device.create_buffer(&wgpu::BufferDescriptor {
-				label, size,
-				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-				mapped_at_creation: false
-			})),
+			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
+				&wgpu::BufferDescriptor {
+					label, size: size.actual,
+					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+					mapped_at_creation: false
+				}
+			))),
 			_ => None
 		};
 		let readbackView_tex = match &readbackBuffer {
 			Some(_) => Some(wgpu::ImageCopyTexture {
-				texture: &texture,
+				texture: util::statify(texture.as_ref()),
 				mip_level: 0,
 				origin: Default::default(),
 				aspect: wgpu::TextureAspect::DepthOnly,
@@ -287,21 +316,27 @@ impl<'a> Texture<'a>
 		};
 		let readbackView_buf = match &readbackBuffer {
 			Some(buffer) => Some(wgpu::ImageCopyBuffer {
-				buffer: &buffer,
-				layout: Default::default(),
+				buffer: util::statify(buffer.as_ref()),
+				layout: wgpu::ImageDataLayout {
+					bytes_per_row: Some(alignToFactor(
+						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
+						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
+					)),
+					..Default::default()
+				}
 			}),
 			_ => None
 		};
 
 		// Done!
 		Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
-			texture, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), texture,
+			size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
 		}
 	}
 
-	/// The size of the uncompressed texture (excluding mipmap levels) in bytes.
-	pub fn size (&self) -> u64 { self.size }
+	/// The logical size of the uncompressed texture (excluding mipmap levels) in bytes.
+	pub fn size (&self) -> u64 { self.size.logical }
 
 	pub fn dims (&self) -> glm::UVec3 {
 		let size = &self.descriptor.size;
