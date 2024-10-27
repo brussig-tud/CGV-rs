@@ -323,8 +323,16 @@ impl Player
 		Ok(())
 	}
 
-	pub fn withContext<Closure: FnOnce(&Context)> (&self, block: Closure) {
-		block(self.context.as_ref().unwrap());
+	pub fn withContext<Closure: FnOnce(&Context)> (&self, codeBlock: Closure) {
+		codeBlock(self.context.as_ref().unwrap());
+	}
+
+	pub fn withRenderState<Closure: FnOnce(&RenderState)> (&self, codeBlock: Closure) {
+		codeBlock(self.renderState.as_ref().unwrap());
+	}
+
+	pub fn withContextAndRenderState<Closure: FnOnce(&Context, &RenderState)> (&self, codeBlock: Closure) {
+		codeBlock(self.context.as_ref().unwrap(), self.renderState.as_ref().unwrap());
 	}
 
 	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
