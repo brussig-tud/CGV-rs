@@ -92,7 +92,7 @@ impl OrbitCamera
 	}
 }
 
-impl Camera for OrbitCamera
+impl CameraInteractor for OrbitCamera
 {
 	fn projection (&self) -> &glm::Mat4 {
 		&self.proj
@@ -125,7 +125,7 @@ impl Camera for OrbitCamera
 		self.view = glm::look_at(&self.eye, &self.target, &self.up);
 	}
 
-	fn input (&mut self, event: &WindowEvent) -> EventOutcome
+	fn input (&mut self, event: &WindowEvent, _: &'static Player) -> EventOutcome
 	{
 		match event
 		{

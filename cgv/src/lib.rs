@@ -73,10 +73,8 @@ use winit::{
 };
 
 // Local imports
-use crate::{view::*, context::*, renderstate::*};
-
-
-
+use crate::{context::*, renderstate::*};
+use crate::hal::RenderTarget;
 //////
 //
 // Vault
@@ -148,18 +146,33 @@ pub enum EventOutcome
 	NotHandled
 }
 
-/// Enumerates the kinds of global render passes
-pub enum GlobalRenderPass
+/// Holds information about the eye(s) in a stereo render pass.
+pub struct StereoEye {
+	/// The index of the eye currently being rendered.
+	pub current: u32,
+
+	/// The maximum eye index in the current stereo render.
+	pub max: u32
+}
+
+/// Enumerates the kinds of global render passes over the scene.
+pub enum GlobalPass
 {
-	/// A simple, straight-to-the-main-surface global pass.
+	/// A simple, straight-to-the-target global pass.
 	Simple,
 
-	/// A stereo pass - the encapsulated value indicates the eye being rendered. This is typical 0..1 for simple
-	/// stereo like anaglyph or virtual reality, but can also go arbitrarily high, e.g. for holography.
-	Stereo(u32),
+	/// A stereo pass - the encapsulated value indicates which eye exactly is being rendered currently.
+	Stereo(StereoEye),
 
 	/// A custom pass, with a custom value.
 	Custom(Box<dyn Any>)
+}
+
+pub struct GlobalPassDeclaration<'a>
+{
+	pub pass: GlobalPass,
+	pub renderTarget: Option<&'a RenderTarget>,
+	pub completionCallback: Box<dyn FnOnce(&'static Context, &GlobalPass)>
 }
 
 
@@ -211,7 +224,7 @@ pub trait Application
 	/// * `device` – The active device for rendering.
 	/// * `queue` – A queue from the active device for submitting commands.
 	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
-	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalRenderPass)
+	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass)
 		-> anyhow::Result<()>;
 }
 
@@ -236,7 +249,8 @@ pub struct Player
 
 	renderState: Option<renderstate::RenderState>,
 
-	camera: view::OrbitCamera
+	camera: Option<Box<dyn view::Camera>>,
+	cameraInteractor: Box<dyn view::CameraInteractor>
 }
 unsafe impl Send for Player {}
 unsafe impl Sync for Player {}
@@ -273,7 +287,8 @@ impl Player
 
 			renderState: None,
 
-			camera: view::OrbitCamera::new()
+			camera: None,
+			cameraInteractor: Box::new(view::OrbitCamera::new())
 		})
 	}
 
@@ -300,7 +315,7 @@ impl Player
 		let context = self.context.as_ref().unwrap();
 
 		// Update the camera
-		self.camera.update();
+		self.cameraInteractor.update();
 
 		/* Update managed render state */ {
 			// Obtain render state reference
@@ -308,8 +323,8 @@ impl Player
 
 			// Uniforms
 			// - viewing
-			rs.viewingUniforms.data.projection = *self.camera.projection();
-			rs.viewingUniforms.data.view = *self.camera.view();
+			rs.viewingUniforms.data.projection = *self.cameraInteractor.projection();
+			rs.viewingUniforms.data.view = *self.cameraInteractor.view();
 			rs.viewingUniforms.upload(context, true);
 
 			// Commit to GPU
@@ -317,22 +332,29 @@ impl Player
 		};
 
 		if let Some(application) = self.application.as_mut() {
-			application.render(&context, &self.renderState.as_ref().unwrap(), &GlobalRenderPass::Simple)?;
+			application.render(&context, &self.renderState.as_ref().unwrap(), &GlobalPass::Simple)?;
 		}
 
 		Ok(())
 	}
 
-	pub fn withContext<Closure: FnOnce(&Context)> (&self, codeBlock: Closure) {
-		codeBlock(self.context.as_ref().unwrap());
+	pub fn withContext<Closure: FnOnce(&'static mut Player, &'static mut Context)> (&mut self, codeBlock: Closure) {
+		let this = util::mutify(self);
+		codeBlock(util::mutify(self), this.context.as_mut().unwrap());
 	}
 
-	pub fn withRenderState<Closure: FnOnce(&RenderState)> (&self, codeBlock: Closure) {
-		codeBlock(self.renderState.as_ref().unwrap());
+	pub fn withRenderState<Closure: FnOnce(&'static mut Player, &'static mut RenderState)> (
+		&mut self, codeBlock: Closure
+	){
+		let this = util::mutify(self);
+		codeBlock(util::mutify(self), this.renderState.as_mut().unwrap());
 	}
 
-	pub fn withContextAndRenderState<Closure: FnOnce(&Context, &RenderState)> (&self, codeBlock: Closure) {
-		codeBlock(self.context.as_ref().unwrap(), self.renderState.as_ref().unwrap());
+	pub fn withContextAndRenderState<Closure: FnOnce(&'static mut Player, &'static mut Context, &'static mut RenderState)> (
+		&mut self, codeBlock: Closure
+	){
+		let this = util::mutify(self);
+		codeBlock(util::mutify(self), this.context.as_mut().unwrap(), this.renderState.as_mut().unwrap());
 	}
 
 	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
@@ -416,10 +438,10 @@ impl ApplicationHandler<UserEvent> for Player
 					).unwrap();
 
 					// On non-WASM on the other hand, the surface is correctly configured for the initial size so we
-					// need to inform the camera separately. However, we do need to schedule a single redraw for some
-					// reason...
+					// need to inform the camera separately. However, we do need to schedule a single redraw to not get
+					// garbage on the screen as the surface is displayed for the first time for some reason...
 					#[cfg(not(target_arch="wasm32"))] {
-						self.camera.resize(&glm::vec2(context.size.width as f32, context.size.height as f32));
+						self.cameraInteractor.resize(&glm::vec2(context.size.width as f32, context.size.height as f32));
 						self.redrawOnceOnWait = true;
 					}
 
@@ -444,6 +466,9 @@ impl ApplicationHandler<UserEvent> for Player
 							Some(hal::DepthStencilFormat::D32)
 						));
 					}
+
+					// Initialize camera
+					self.camera = Some(Box::new(view::MonoCamera::new(context, None, Some("MainCamera"))));
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(
@@ -474,12 +499,17 @@ impl ApplicationHandler<UserEvent> for Player
 			=> {
 				if self.context.is_some() {
 					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
-					self.context.as_mut().unwrap().resize(*newPhysicalSize);
-					util::mutify(self).renderState.as_mut().unwrap().updateSize(self.context.as_mut().unwrap());
-					self.camera.resize(&newSize);
-					self.application.as_mut().unwrap().onResize(
-						&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
-					);
+					self.withContextAndRenderState(|this, context, renderState| {
+						context.resize(*newPhysicalSize);
+						renderState.updateSize(this.context.as_mut().unwrap());
+						this.camera.as_mut().unwrap().resize(
+							context, &glm::vec2(newSize.x as u32, newSize.y as u32)
+						);
+						this.cameraInteractor.resize(&newSize);
+						this.application.as_mut().unwrap().onResize(
+							&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
+						);
+					});
 				}
 				#[cfg(not(target_arch="wasm32"))] {
 					self.redrawOnceOnWait = true;
@@ -541,9 +571,8 @@ impl ApplicationHandler<UserEvent> for Player
 					/////////////////////
 					//- TESTING ////////////////////////////////////////////////////////
 
-					self.withContext(|context| {
-						let da =
-							self.renderState.as_ref().unwrap().depthStencilAttachment.as_ref().unwrap();
+					self.withContextAndRenderState(|_, context, renderState| {
+						let da = renderState.depthStencilAttachment.as_ref().unwrap();
 						let mut enc = context.device.create_command_encoder(
 							&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
 						);
@@ -551,6 +580,31 @@ impl ApplicationHandler<UserEvent> for Player
 							*da.texture.readbackView_tex.as_ref().unwrap(),
 							*da.texture.readbackView_buf.as_ref().unwrap(), da.texture.descriptor.size
 						);
+						context.queue.submit(Some(enc.finish()));
+						{
+							tracing::debug!("Mapping...");
+							let buf = da.texture.readbackBuffer.as_ref().unwrap().as_ref();
+							buf.slice(0..da.texture.size.actual).map_async(
+								wgpu::MapMode::Read, |result| {
+									if result.is_ok() {
+										let bufView = buf.slice(..).get_mapped_range_mut();
+										/*let floats: &mut [f32] = view.iter().as_slice();
+										floats.fill(42.0);
+										drop(view);
+										capturable.unmap();*/
+										tracing::debug!("Mapped!!!");
+									}
+									else {
+										tracing::debug!("Mapping Failure!!!");
+									}
+								}
+							);
+							tracing::debug!("Polling...");
+							context.device.poll(wgpu::Maintain::Wait);
+							context.queue.submit([]);
+							buf.unmap();
+							tracing::debug!("Unmapped!!!");
+						}
 					});
 
 					//- [END] TESTING //////////////////////////////////////////////////
@@ -562,13 +616,14 @@ impl ApplicationHandler<UserEvent> for Player
 			  WindowEvent::KeyboardInput{..} | WindowEvent::MouseInput{..} | WindowEvent::CursorMoved{..}
 			| WindowEvent::MouseWheel{..} | WindowEvent::ModifiersChanged{..}
 			=> {
+				let player = util::statify(self);
 				if let Some(context) = self.context.as_mut()
 				{
 					// GUI gets first dibs
 					/* nothing here yet */
 
 					// Camera is next
-					match self.camera.input(&event)
+					match self.cameraInteractor.input(&event, player)
 					{
 						EventOutcome::HandledExclusively(redraw) => {
 							if redraw { context.window.request_redraw() }

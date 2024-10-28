@@ -25,7 +25,7 @@ use crate::*;
 
 pub enum ColorAttachment<'a> {
 	Surface(&'a wgpu::TextureView),
-	Texture(&'a hal::Texture<'a>)
+	Texture(&'a hal::Texture)
 }
 
 
@@ -55,8 +55,8 @@ pub struct ViewingStruct
 // DepthStencilAttachment
 
 /// Encapsulates inter-referencing state for depth stencil attachments.
-pub struct DepthStencilAttachment<'a> {
-	pub(crate) texture: hal::Texture<'a>,
+pub struct DepthStencilAttachment {
+	pub(crate) texture: hal::Texture,
 	defaultState: wgpu::DepthStencilState
 }
 
@@ -72,7 +72,7 @@ pub struct RenderState
 	colorAttachment: ColorAttachment<'static>,
 
 	depthStencilFormat: Option<hal::DepthStencilFormat>,
-	pub depthStencilAttachment: Option<DepthStencilAttachment<'static>>
+	pub depthStencilAttachment: Option<DepthStencilAttachment>
 }
 
 impl RenderState
