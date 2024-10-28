@@ -37,7 +37,8 @@ pub struct MonoCamera {
 
 impl MonoCamera
 {
-	pub fn new (context: &Context, allocateOwnedRenderTarget: Option<glm::UVec2>, name: Option<&str>) -> Self
+	pub fn new (context: &Context, allocateOwnedRenderTarget: Option<glm::UVec2>, name: Option<&str>)
+		-> Box<Self>
 	{
 		// Determine name
 		let name: String = if let Some(name) = name { name } else { "UnnamedMonoCamera" }.into();
@@ -52,19 +53,31 @@ impl MonoCamera
 			None
 		};
 
-		Self {
+		let mut result = Box::new(Self {
 			name,
-			globalPasses: vec![GlobalPassDeclaration {
+			globalPasses: vec![],
+			renderTarget
+		});
+		/* setup global passes */ {
+			let selfRef = util::mutify(result.as_mut());
+			result.globalPasses.push(GlobalPassDeclaration {
 				pass: GlobalPass::Simple,
-				renderTarget: if renderTarget.is_some() {
-					Some(util::statify(renderTarget.as_ref().unwrap().as_ref()))
+				renderTarget: if result.renderTarget.is_some() {
+					Some(util::statify(result.renderTarget.as_ref().unwrap().as_ref()))
 				} else {
 					None
 				},
-				completionCallback: Box::new(|_, _| {}),
-			}],
-			renderTarget
+				completionCallback: Some(Box::new(|context, pass| {
+					selfRef.globalPassDone(context, pass);
+				})),
+			});
 		}
+
+		result
+	}
+
+	fn globalPassDone (&mut self, _: &Context, pass: &GlobalPass) {
+		tracing::debug!("Camera[{:?}]: Global pass done: {:?}", self.name.as_str(), pass);
 	}
 }
 

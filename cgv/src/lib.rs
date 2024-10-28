@@ -147,6 +147,7 @@ pub enum EventOutcome
 }
 
 /// Holds information about the eye(s) in a stereo render pass.
+#[derive(Debug)]
 pub struct StereoEye {
 	/// The index of the eye currently being rendered.
 	pub current: u32,
@@ -156,6 +157,7 @@ pub struct StereoEye {
 }
 
 /// Enumerates the kinds of global render passes over the scene.
+#[derive(Debug)]
 pub enum GlobalPass
 {
 	/// A simple, straight-to-the-target global pass.
@@ -172,7 +174,7 @@ pub struct GlobalPassDeclaration<'a>
 {
 	pub pass: GlobalPass,
 	pub renderTarget: Option<&'a RenderTarget>,
-	pub completionCallback: Box<dyn FnOnce(&'static Context, &GlobalPass)>
+	pub completionCallback: Option<Box<dyn FnMut(&'static Context, &GlobalPass)>>
 }
 
 
@@ -312,24 +314,34 @@ impl Player
 	fn redraw (&mut self) -> Result<()>
 	{
 		// Obtain context
-		let context = self.context.as_ref().unwrap();
+		let context = util::statify(self.context.as_ref().unwrap());
 
 		// Update the camera
 		self.cameraInteractor.update();
 
-		/* Update managed render state */ {
-			// Obtain render state reference
-			let rs = self.renderState.as_mut().unwrap();
+		// Determine the global passes we need to make
+		let passes = self.camera.as_ref().unwrap().declareGlobalPasses();
+		for pass in passes
+		{
+			/* Update managed render state */ {
+				// Obtain render state reference
+				let rs = self.renderState.as_mut().unwrap();
 
-			// Uniforms
-			// - viewing
-			rs.viewingUniforms.data.projection = *self.cameraInteractor.projection();
-			rs.viewingUniforms.data.view = *self.cameraInteractor.view();
-			rs.viewingUniforms.upload(context, true);
+				// Uniforms
+				// - viewing
+				rs.viewingUniforms.data.projection = *self.cameraInteractor.projection();
+				rs.viewingUniforms.data.view = *self.cameraInteractor.view();
+				rs.viewingUniforms.upload(context, true);
 
-			// Commit to GPU
-			context.queue.submit([]);
-		};
+				// Commit to GPU
+				context.queue.submit([]);
+			};
+
+			// Finish the pass
+			if let Some(callback) = util::mutify(&pass.completionCallback) {
+				callback(context, &pass.pass);
+			}
+		}
 
 		if let Some(application) = self.application.as_mut() {
 			application.render(&context, &self.renderState.as_ref().unwrap(), &GlobalPass::Simple)?;
@@ -468,7 +480,7 @@ impl ApplicationHandler<UserEvent> for Player
 					}
 
 					// Initialize camera
-					self.camera = Some(Box::new(view::MonoCamera::new(context, None, Some("MainCamera"))));
+					self.camera = Some(view::MonoCamera::new(context, None, Some("MainCamera")));
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(
@@ -540,7 +552,7 @@ impl ApplicationHandler<UserEvent> for Player
 								self.context.as_ref().unwrap()
 							);
 
-							// We have a surface, perform actual redrawing
+							// Perform actual redrawing
 							if let Err(error) = self.redraw() {
 								tracing::error!("Error while redrawing: {:?}", error);
 							}
