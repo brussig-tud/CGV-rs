@@ -357,19 +357,17 @@ impl Player
 		{
 			// Get actual pass information
 			let pass = &passes[passNr];
+			let renderState = util::mutify(pass.renderState);
+
+			// Update surface
+			util::mutify(pass.renderState).beginGlobalPass(context);
 
 			/* Update managed render state */ {
-				// Obtain render state reference
-				let rs = util::mutify(pass.renderState);
-
-				// Update surface
-				rs.updateMainSurfaceColorAttachment(context);
-
 				// Uniforms
 				// - viewing
-				rs.viewingUniforms.data.projection = *self.cameraInteractor.projection();
-				rs.viewingUniforms.data.view = *self.cameraInteractor.view();
-				rs.viewingUniforms.upload(context, true);
+				renderState.viewingUniforms.data.projection = *self.cameraInteractor.projection();
+				renderState.viewingUniforms.data.view = *self.cameraInteractor.view();
+				renderState.viewingUniforms.upload(context, true);
 
 				// Commit to GPU
 				context.queue.submit([]);
@@ -380,6 +378,7 @@ impl Player
 			}
 
 			// Finish the pass
+			renderState.endGlobalPass();
 			if let Some(callback) = util::mutify(&pass.completionCallback) {
 				callback(context, passNr as u32);
 			}
@@ -650,11 +649,15 @@ impl ApplicationHandler<UserEvent> for Player
 					match self.cameraInteractor.input(&event, player)
 					{
 						EventOutcome::HandledExclusively(redraw) => {
-							if redraw { context.window.request_redraw() }
+							if redraw {
+								context.window.request_redraw();
+							}
 							return;
 						}
 						EventOutcome::HandledDontClose(redraw)
-						=> if redraw { context.window.request_redraw() }
+						=> if redraw {
+							context.window.request_redraw()
+						}
 
 						EventOutcome::NotHandled => {}
 					}

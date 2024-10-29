@@ -32,10 +32,10 @@ pub enum ColorAttachment<'a>
 	/// The color attachment is a renderable texture.
 	Texture(&'a hal::Texture),
 
-	/// The color attachment is a specific image in the swapchain associated with a surface. This is typically not used
+	/// The color attachment is a specific image in the swapchain associated with a surface. This should not be used
 	/// directly, rather the *CGV-rs* [`Player`] will substitute any instances of [`ColorAttachment::Surface`] with this
-	/// as soon as a swapchain image becomes available automatically. It can be used however to render to external
-	/// surfaces not managed by the [`Player`], e.g. for special virtual reality hardware.
+	/// as soon as a swapchain image becomes available automatically. Using this when initializing a [`RenderState`] is
+	/// illegal and will panic the render loop at the beginning of a [`GlobalPass`].
 	SurfaceView(&'a wgpu::TextureView)
 }
 
@@ -133,13 +133,13 @@ impl RenderState
 		if let Some(format) = self.depthStencilFormat
 		{
 			// Recreate according to selected main depth/stencil mode
-			// - initialize fields that are reference targets
+			// - initialize fields that are used by other initializations
 			let dims: glm::UVec2 = match self.colorAttachment
 			{
-				ColorAttachment::Surface
+				ColorAttachment::Surface/* | ColorAttachment::SurfaceView(_)*/
 				=> glm::vec2(context.config.width.max(1), context.config.height.max(1)),
 
-				ColorAttachment::Texture(texture) => texture.dims().xy(),
+				ColorAttachment::Texture(texture) => texture.dims2WH(),
 
 				_ => unreachable!("Invalid color attachment enum: {:?}", colorAttachmentEnumStr(&self.colorAttachment))
 			};
@@ -184,6 +184,7 @@ impl RenderState
 	pub fn getMainSurfaceDepthStencilAttachment (&self) -> Option<wgpu::RenderPassDepthStencilAttachment>
 	{
 		if let Some(dsa) = &self.depthStencilAttachment {
+			tracing::debug!("Attaching depth/stencil buffer with dims={:?}", dsa.texture.dims());
 			Some(wgpu::RenderPassDepthStencilAttachment {
 				view: &dsa.texture.view,
 				depth_ops: Some(wgpu::Operations {
@@ -208,9 +209,9 @@ impl RenderState
 		}
 	}
 
-	pub(crate) fn updateSize (&mut self, context: &Context)
+	pub(crate) fn updateSize (&mut self, context: &Context, viewportDims: &glm::UVec2)
 	{
-		if context.size == self.depthStencilAttachment.as_ref().unwrap().texture.physicalSizeWH() {
+		if viewportDims == &self.depthStencilAttachment.as_ref().unwrap().texture.dims2WH() {
 			return;
 		}
 		self.recreateMainSurfaceDepthStencilAttachment(context);
@@ -222,19 +223,34 @@ impl RenderState
 // RenderStatePrivateInterface
 
 pub(crate) trait RenderStatePrivateInterface {
-	fn updateMainSurfaceColorAttachment (&mut self, context: &Context);
+	fn beginGlobalPass (&mut self, context: &Context);
+	fn endGlobalPass (&mut self);
 }
 
 impl RenderStatePrivateInterface for RenderState {
-	fn updateMainSurfaceColorAttachment (&mut self, context: &Context)
+	fn beginGlobalPass (&mut self, context: &Context)
 	{
-		// Update view and attachment
-		match self.colorAttachment
-		{
+		// Validate color attachment state and update for current swapchain image if attached to surface
+		match self.colorAttachment {
 			ColorAttachment::Surface => self.colorAttachment = ColorAttachment::SurfaceView(
 				util::statify(context).surfaceView.as_ref().unwrap()
 			),
-			_ => {/* nothing to do */}
+			ColorAttachment::Texture(_) => {},
+			ColorAttachment::SurfaceView(_) => unreachable!(
+				"Invalid color attachment kind for starting a global Pass: {:?}", colorAttachmentEnumStr(&self.colorAttachment)
+			)
+		}
+	}
+
+	fn endGlobalPass (&mut self)
+	{
+		// Validate color attachment state
+		match self.colorAttachment {
+			ColorAttachment::SurfaceView(_) => self.colorAttachment = ColorAttachment::Surface,
+			ColorAttachment::Texture(_) => {/* no action needed */},
+			ColorAttachment::Surface => unreachable!(
+				"Invalid color attachment kind for starting a global Pass: {:?}", colorAttachmentEnumStr(&self.colorAttachment)
+			)
 		}
 	}
 }

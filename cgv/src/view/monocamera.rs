@@ -93,12 +93,14 @@ impl MonoCamera
 
 impl Camera for MonoCamera
 {
-	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2) {
+	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2)
+	{
 		if self.renderTarget.is_some() {
 			self.renderTarget = Some(Box::new(hal::RenderTarget::new(
 				context, viewportDims, wgpu::TextureFormat::Bgra8Unorm, hal::DepthStencilFormat::D32, self.name.as_str()
 			)))
 		}
+		self.renderState.updateSize(context, viewportDims)
 	}
 
 	fn update (&mut self, interactor: &dyn CameraInteractor)
