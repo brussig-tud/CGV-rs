@@ -56,14 +56,27 @@ pub enum FoV {
 pub trait Camera
 {
 	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
-	/// called at least once before it gets asked to declare any render passes. For manually managed cameras which are
-	/// *inactive* as far as the [`Player`] is concerned, resizing is the responsibility of the [`Application`].
+	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
+	/// cameras which are *inactive* as far as the [`Player`] is concerned, resizing is the responsibility of the
+	/// [`Application`].
 	///
 	/// # Arguments
 	///
 	/// * `context` – The graphics context.
 	/// * `viewportDims` – The dimensions of the viewport the camera should produce images for.
 	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2);
+
+	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
+	/// transformation matrices for the current camera interactor state or anything else it might need to [declare the
+	/// global passes over the scene](declareGlobalPasses) it needs. The framework guarantees that the *active* camera
+	/// will get this method whenever the *active* [`CameraInteractor`] changes something before being asked to declare
+	/// any render passes for the current frame. For manually managed cameras which are *inactive* as far as the
+	/// [`Player`] is concerned, updating is the responsibility of the [`Application`].
+	///
+	/// # Arguments
+	///
+	/// * `interactor` – The camera interactor providing base intrinsic and extrinsic parameters to the camera.
+	fn update (&mut self, interactor: &dyn CameraInteractor);
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
 	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];
@@ -89,7 +102,12 @@ pub trait CameraInteractor
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. compute
 	/// transformation matrices from higher-level parameters etc. This is guaranteed to be called at least once before
 	/// any active camera is supposed to report any matrices.
-	fn update (&mut self);
+	///
+	/// # Returns
+	///
+	/// `true` if any update to the extrinsic or intrinsic camera parameters occured, `false` otherwise. This
+	/// information is used to optimize managed bind group updates.
+	fn update (&mut self) -> bool;
 
 	/// Report a window event to the camera.
 	///

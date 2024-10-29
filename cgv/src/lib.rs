@@ -74,7 +74,9 @@ use winit::{
 
 // Local imports
 use crate::{context::*, renderstate::*};
-use crate::hal::RenderTarget;
+
+
+
 //////
 //
 // Vault
@@ -122,7 +124,7 @@ fn initTracing ()
 
 ///////
 //
-// Enums
+// Enums and structs
 //
 
 // The type used for our user-defined event.
@@ -173,8 +175,34 @@ pub enum GlobalPass
 pub struct GlobalPassDeclaration<'a>
 {
 	pub pass: GlobalPass,
-	pub renderTarget: Option<&'a RenderTarget>,
-	pub completionCallback: Option<Box<dyn FnMut(&'static Context, &GlobalPass)>>
+	pub renderState: &'a mut RenderState,
+	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
+}
+
+/// Collects all bind group layouts availabel for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
+/// setup of the *CGV-rs* [`Player`].
+pub struct ManagedBindGroupLayouts {
+	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
+	pub viewing: wgpu::BindGroupLayout
+}
+
+/// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, in case they want to
+/// interface with the managed [render pipeline](wgpu::RenderPipeline) setup.
+pub struct RenderSetup {
+	/// The bind groups provided for interfacing with centrally managed uniforms.
+	pub bindGroupLayouts: ManagedBindGroupLayouts
+}
+impl RenderSetup
+{
+	pub(crate) fn new (context: &Context) -> Self {
+		Self {
+			bindGroupLayouts: ManagedBindGroupLayouts {
+				viewing: renderstate::ViewingUniformGroup::createBindGroupLayout(
+					context, wgpu::ShaderStages::VERTEX_FRAGMENT, Some("CGV__ViewingBindGroupLayout")
+				)
+			}
+		}
+	}
 }
 
 
@@ -188,7 +216,7 @@ pub struct GlobalPassDeclaration<'a>
 // ApplicationFactory
 
 pub trait ApplicationFactory {
-	fn create(&self, context: &Context, renderState: &RenderState) -> Result<Box<dyn Application>>;
+	fn create(&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
 }
 
 
@@ -249,7 +277,8 @@ pub struct Player
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
-	renderState: Option<renderstate::RenderState>,
+	//renderState: Option<renderstate::RenderState>,
+	renderSetup: Option<RenderSetup>,
 
 	camera: Option<Box<dyn view::Camera>>,
 	cameraInteractor: Box<dyn view::CameraInteractor>
@@ -287,7 +316,8 @@ impl Player
 			applicationFactory: None,
 			application: None,
 
-			renderState: None,
+			//renderState: None,
+			renderSetup: None,
 
 			camera: None,
 			cameraInteractor: Box::new(view::OrbitCamera::new())
@@ -316,16 +346,24 @@ impl Player
 		// Obtain context
 		let context = util::statify(self.context.as_ref().unwrap());
 
-		// Update the camera
-		self.cameraInteractor.update();
+		// Update the active camera
+		if self.cameraInteractor.update() {
+			self.camera.as_mut().unwrap().update(self.cameraInteractor.as_ref());
+		}
 
 		// Determine the global passes we need to make
 		let passes = self.camera.as_ref().unwrap().declareGlobalPasses();
-		for pass in passes
+		for passNr in 0..passes.len()
 		{
+			// Get actual pass information
+			let pass = &passes[passNr];
+
 			/* Update managed render state */ {
 				// Obtain render state reference
-				let rs = self.renderState.as_mut().unwrap();
+				let rs = util::mutify(pass.renderState);
+
+				// Update surface
+				rs.updateMainSurfaceColorAttachment(context);
 
 				// Uniforms
 				// - viewing
@@ -337,14 +375,14 @@ impl Player
 				context.queue.submit([]);
 			};
 
+			if let Some(application) = self.application.as_mut() {
+				application.render(&context, pass.renderState, &pass.pass)?;
+			}
+
 			// Finish the pass
 			if let Some(callback) = util::mutify(&pass.completionCallback) {
-				callback(context, &pass.pass);
+				callback(context, passNr as u32);
 			}
-		}
-
-		if let Some(application) = self.application.as_mut() {
-			application.render(&context, &self.renderState.as_ref().unwrap(), &GlobalPass::Simple)?;
 		}
 
 		Ok(())
@@ -353,20 +391,6 @@ impl Player
 	pub fn withContext<Closure: FnOnce(&'static mut Player, &'static mut Context)> (&mut self, codeBlock: Closure) {
 		let this = util::mutify(self);
 		codeBlock(util::mutify(self), this.context.as_mut().unwrap());
-	}
-
-	pub fn withRenderState<Closure: FnOnce(&'static mut Player, &'static mut RenderState)> (
-		&mut self, codeBlock: Closure
-	){
-		let this = util::mutify(self);
-		codeBlock(util::mutify(self), this.renderState.as_mut().unwrap());
-	}
-
-	pub fn withContextAndRenderState<Closure: FnOnce(&'static mut Player, &'static mut Context, &'static mut RenderState)> (
-		&mut self, codeBlock: Closure
-	){
-		let this = util::mutify(self);
-		codeBlock(util::mutify(self), this.context.as_mut().unwrap(), this.renderState.as_mut().unwrap());
 	}
 
 	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
@@ -457,34 +481,22 @@ impl ApplicationHandler<UserEvent> for Player
 						self.redrawOnceOnWait = true;
 					}
 
-					/* Create base render state */ {
-						let descriptor = wgpu::TextureDescriptor {
-							label: None,
-							size: wgpu::Extent3d {width: 1, height: 1, depth_or_array_layers: 1},
-							mip_level_count: 1,
-							sample_count: 1,
-							dimension: wgpu::TextureDimension::D2,
-							format: wgpu::TextureFormat::Rgba8Unorm,
-							usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-							view_formats: &[],
-						};
+					/* Create base render state *//* {
 						self.renderState = Some(RenderState::new(
-							context,
-							ColorAttachment::Surface(util::statify(
-								&context.device.create_texture(&descriptor).create_view(
-									&wgpu::TextureViewDescriptor::default()
-								)
-							)),
-							Some(hal::DepthStencilFormat::D32)
+							context, GlobalPass::Simple,
+							ColorAttachment::Surface,
+							Some(hal::DepthStencilFormat::D32),
+							Some("CGV__BaseRenderPass")
 						));
-					}
+					}*/
+					self.renderSetup = Some(RenderSetup::new(context));
 
 					// Initialize camera
 					self.camera = Some(view::MonoCamera::new(context, None, Some("MainCamera")));
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(
-						context, self.renderState.as_ref().unwrap()
+						context, self.renderSetup.as_ref().unwrap()
 					);
 					match appCreationResult {
 						Ok(application) => self.application = Some(application),
@@ -511,9 +523,9 @@ impl ApplicationHandler<UserEvent> for Player
 			=> {
 				if self.context.is_some() {
 					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
-					self.withContextAndRenderState(|this, context, renderState| {
+					self.withContext(|this, context| {
 						context.resize(*newPhysicalSize);
-						renderState.updateSize(this.context.as_mut().unwrap());
+						//renderState.updateSize(this.context.as_mut().unwrap());
 						this.camera.as_mut().unwrap().resize(
 							context, &glm::vec2(newSize.x as u32, newSize.y as u32)
 						);
@@ -548,9 +560,9 @@ impl ApplicationHandler<UserEvent> for Player
 						// All fine, we can draw
 						Ok(()) => {
 							// Update main color attachment for new frame
-							self.renderState.as_mut().unwrap().updateMainSurfaceColorAttachment(
+							/*self.renderState.as_mut().unwrap().updateMainSurfaceColorAttachment(
 								self.context.as_ref().unwrap()
-							);
+							);*/
 
 							// Perform actual redrawing
 							if let Err(error) = self.redraw() {
@@ -583,7 +595,7 @@ impl ApplicationHandler<UserEvent> for Player
 					/////////////////////
 					//- TESTING ////////////////////////////////////////////////////////
 
-					self.withContextAndRenderState(|_, context, renderState| {
+					/*self.withContextAndRenderState(|_, context, renderState| {
 						let da = renderState.depthStencilAttachment.as_ref().unwrap();
 						let mut enc = context.device.create_command_encoder(
 							&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
@@ -617,7 +629,7 @@ impl ApplicationHandler<UserEvent> for Player
 							buf.unmap();
 							tracing::debug!("Unmapped!!!");
 						}
-					});
+					});*/
 
 					//- [END] TESTING //////////////////////////////////////////////////
 					/////////////////////

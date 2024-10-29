@@ -56,7 +56,8 @@ pub struct OrbitCamera {
 	dragMMB: bool,
 	dragRMB: bool,
 	roll: bool,
-	lastMousePos: Option<glm::Vec2>
+	lastMousePos: Option<glm::Vec2>,
+	dirty: bool
 }
 
 impl OrbitCamera
@@ -74,7 +75,8 @@ impl OrbitCamera
 			proj: glm::Mat4::identity(),
 			view: glm::Mat4::identity(),
 			dragLMB: false, dragMMB: false, dragRMB: false, roll: false,
-			lastMousePos: None
+			lastMousePos: None,
+			dirty: true
 		}
 	}
 
@@ -121,8 +123,13 @@ impl CameraInteractor for OrbitCamera
 		};
 	}
 
-	fn update (&mut self) {
-		self.view = glm::look_at(&self.eye, &self.target, &self.up);
+	fn update (&mut self) -> bool {
+		if self.dirty {
+			self.view = glm::look_at(&self.eye, &self.target, &self.up);
+			self.dirty = false;
+			true
+		}
+		else { false }
 	}
 
 	fn input (&mut self, event: &WindowEvent, _: &'static Player) -> EventOutcome
@@ -139,15 +146,15 @@ impl CameraInteractor for OrbitCamera
 				match *button {
 					MouseButton::Left => {
 						self.dragLMB = *state == ElementState::Pressed;
-						HandledExclusively(/* redraw */true)
+						HandledExclusively(/* redraw */false)
 					},
 					MouseButton::Middle => {
 						self.dragMMB = *state == ElementState::Pressed;
-						HandledExclusively(/* redraw */true)
+						HandledExclusively(/* redraw */false)
 					},
 					MouseButton::Right => {
 						self.dragRMB = *state == ElementState::Pressed;
-						HandledExclusively(/* redraw */true)
+						HandledExclusively(/* redraw */false)
 					},
 					_ => NotHandled // we didn't consume the event
 				}
@@ -178,6 +185,7 @@ impl CameraInteractor for OrbitCamera
 						self.eye =    self.target
 						           - (self.target-self.eye).norm()*glm::cross(&self.up, &right);
 					}
+					self.dirty = true;
 					return HandledExclusively(/* redraw */true);
 				}
 
@@ -186,6 +194,7 @@ impl CameraInteractor for OrbitCamera
 					let fore = dist.norm()*delta.y*0.0078125 * dist.normalize();
 					self.target += fore;
 					self.eye += fore;
+					self.dirty = true;
 					return HandledExclusively(/* redraw */true);
 				}
 
@@ -196,6 +205,7 @@ impl CameraInteractor for OrbitCamera
 					let diff = speed.x*right + speed.y*self.up;
 					self.target += diff;
 					self.eye += diff;
+					self.dirty = true;
 					return HandledExclusively(/* redraw */true);
 				}
 
@@ -210,10 +220,12 @@ impl CameraInteractor for OrbitCamera
 				{
 					MouseScrollDelta::LineDelta(_, y) => {
 						self.eye = self.target + toEye*(1.+y*-0.125);
+						self.dirty = true;
 						HandledExclusively(/* redraw */true)
 					},
 					MouseScrollDelta::PixelDelta(delta) => {
 						self.eye = self.target + toEye*(1.+(delta.y as f32)*(-1./1024.));
+						self.dirty = true;
 						HandledExclusively(/* redraw */true)
 					}
 				}

@@ -18,7 +18,7 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result, GlobalPass};
+use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result, GlobalPass, RenderSetup};
 
 // CGV Framework
 use cgv;
@@ -127,8 +127,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create(&self, context: &cgv::Context, renderState: &cgv::RenderState)
-			  -> Result<Box<dyn cgv::Application>>
+	fn create (&self, context: &cgv::Context, renderSetup: &RenderSetup) -> Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
@@ -209,10 +208,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		let pipelineLayout =
 			context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
-				bind_group_layouts: &[
-					&renderState.viewingUniforms.bindGroupLayout,
-					&texBindGroupLayout
-				],
+				bind_group_layouts: &[&renderSetup.bindGroupLayouts.viewing, &texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
 
@@ -247,7 +243,13 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				// Requires Features::CONSERVATIVE_RASTERIZATION
 				conservative: false,
 			},
-			depth_stencil: renderState.getMainSurfaceDepthStencilState(),
+			depth_stencil: Some(wgpu::DepthStencilState {
+				format: wgpu::TextureFormat::Depth32Float,
+				depth_write_enabled: false,
+				depth_compare: wgpu::CompareFunction::LessEqual,
+				stencil: Default::default(),
+				bias: Default::default(),
+			}),
 			multisample: wgpu::MultisampleState {
 				count: 1, // 2.
 				mask: !0, // 3.

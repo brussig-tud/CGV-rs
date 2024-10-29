@@ -113,3 +113,24 @@ pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T
 	#[allow(invalid_reference_casting)]
 	unsafe { &mut *((reference as *const T) as *mut T) }
 }
+
+/// If the given option contains a string or string slice, returns an option containing the concatenation of the two
+/// inputs.
+///
+/// # Arguments
+///
+/// * `option` – The optional string.
+/// * `concat` – The string to concatenate to the option in case it does contain something.
+///
+/// # Returns
+///
+/// The concatenation of both strings in case `option` contained something, [`None`] otherwise.
+#[inline(always)]
+pub fn concatIfSome<Str: AsRef<str>> (option: &Option<Str>, concat: &str) -> Option<String>
+{
+	if let Some(string) = option {
+		Some(format!("{}{concat}", string.as_ref()))
+	} else {
+		None
+	}
+}

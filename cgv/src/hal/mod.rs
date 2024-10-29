@@ -216,7 +216,8 @@ impl Texture
 		let readbackBuffer = match &specialUsageFlags {
 			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
 				&wgpu::BufferDescriptor {
-					label, size: size.actual,
+					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
+					size: size.actual,
 					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 					mapped_at_creation: false
 				}
@@ -276,8 +277,7 @@ impl Texture
 		};
 
 		let descriptor = wgpu::TextureDescriptor {
-			format,	label,
-			size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
+			format,	label, size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
 			mip_level_count: 1,
 			sample_count: 1,
 			dimension: wgpu::TextureDimension::D2,
@@ -312,7 +312,8 @@ impl Texture
 		let readbackBuffer = match usageFlags {
 			wgpu::TextureUsages::COPY_SRC => Some(Box::new(context.device.create_buffer(
 				&wgpu::BufferDescriptor {
-					label, size: size.actual,
+					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
+					size: size.actual,
 					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 					mapped_at_creation: false
 				}
@@ -373,8 +374,7 @@ impl Texture
 		};
 
 		let descriptor = wgpu::TextureDescriptor {
-			label,
-			size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
+			label, size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: 1},
 			mip_level_count: 1,
 			sample_count: 1,
 			dimension: wgpu::TextureDimension::D2,
@@ -414,7 +414,8 @@ impl Texture
 		let readbackBuffer = match specialUsageFlags {
 			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
 				&wgpu::BufferDescriptor {
-					label, size: size.actual,
+					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
+					size: size.actual,
 					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 					mapped_at_creation: false
 				}

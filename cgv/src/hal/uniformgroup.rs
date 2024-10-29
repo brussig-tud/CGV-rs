@@ -29,66 +29,46 @@ pub struct UniformGroup<UniformsStruct: Sized+Default> {
 
 impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 {
-	pub fn create (context: &Context, visibility: wgpu::ShaderStages, label: Option<&str>) -> Self
+	pub fn create (context: &Context, visibility: wgpu::ShaderStages, name: Option<&str>) -> Self
 	{
 		// Create device objects
 		// - buffer
-		let buffer = {
-			let labelString: String;
-			let label = if let Some(label) = label {
-				labelString = format!("{label}_buffer");
-				Some(labelString.as_str())
-			} else { None };
-			context.device.create_buffer(
-				&wgpu::BufferDescriptor {
-					label, size: size_of::<UniformsStruct>() as u64,
-					usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-					mapped_at_creation: false,
-				}
-			)
-		};
+		let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+			label: util::concatIfSome(&name, "_buffer").as_deref(),
+			size: size_of::<UniformsStruct>() as u64,
+			usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+			mapped_at_creation: false,
+		});
 		// - bind group layout
-		let bindGroupLayout = {
-			let labelString: String;
-			let label = if let Some(label) = label {
-				labelString = format!("{label}_bindGroupLayout");
-				Some(labelString.as_str())
-			} else { None };
-			context.device.create_bind_group_layout(
-				&wgpu::BindGroupLayoutDescriptor {
-					label, entries: &[
-						wgpu::BindGroupLayoutEntry {
-							binding: 0, visibility,
-							ty: wgpu::BindingType::Buffer {
-								ty: wgpu::BufferBindingType::Uniform,
-								has_dynamic_offset: false,
-								min_binding_size: None,
-							},
-							count: None,
-						}
-					],
-				}
-			)
-		};
+		let bindGroupLayout = Self::createBindGroupLayout(context, visibility, name);
 		// - bind group
-		let bindGroup = {
-			let labelString: String;
-			let label = if let Some(label) = label {
-				labelString = format!("{label}_bindGroup");
-				Some(labelString.as_str())
-			} else { None };
-			context.device.create_bind_group(&wgpu::BindGroupDescriptor {
-				label, layout: &bindGroupLayout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0, resource: buffer.as_entire_binding(),
-					}
-				]
-			})
-		};
+		let bindGroup = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
+			label: util::concatIfSome(&name, "_bindGroup").as_deref(),
+			layout: &bindGroupLayout,
+			entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }]
+		});
 
 		// Done!
 		Self {data: Default::default(), buffer, bindGroupLayout, bindGroup}
+	}
+
+	pub(crate) fn createBindGroupLayout (context: &Context, visibility: wgpu::ShaderStages, groupName: Option<&str>)
+		-> wgpu::BindGroupLayout
+	{
+		context.device.create_bind_group_layout(
+			&wgpu::BindGroupLayoutDescriptor {
+				label: util::concatIfSome(&groupName, "_bindGroupLayout").as_deref(),
+				entries: &[wgpu::BindGroupLayoutEntry {
+					binding: 0, visibility,
+					ty: wgpu::BindingType::Buffer {
+						ty: wgpu::BufferBindingType::Uniform,
+						has_dynamic_offset: false,
+						min_binding_size: None,
+					},
+					count: None,
+				}]
+			}
+		)
 	}
 
 	pub fn upload (&self, context: &Context, immediate: bool) {
