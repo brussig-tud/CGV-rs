@@ -81,11 +81,10 @@ pub struct RenderState
 	pub globalPass: GlobalPass,
 	pub viewingUniforms: ViewingUniformGroup,
 
-	clearColor: wgpu::Color,
-	colorAttachment: ColorAttachment<'static>,
+	pub(crate) colorAttachment: ColorAttachment<'static>,
 
 	depthStencilFormat: Option<hal::DepthStencilFormat>,
-	pub depthStencilAttachment: Option<DepthStencilAttachment>
+	pub(crate) depthStencilAttachment: Option<DepthStencilAttachment>
 }
 
 impl RenderState
@@ -113,7 +112,6 @@ impl RenderState
 			globalPass,
 			viewingUniforms,
 
-			clearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
 			colorAttachment,
 
 			depthStencilFormat,
@@ -172,10 +170,7 @@ impl RenderState
 			},
 			resolve_target: None,
 			ops: wgpu::Operations {
-				load: /*match self.clearColor {
-					Some(color) => wgpu::LoadOp::Clear(color),
-					None => wgpu::LoadOp::Load
-				}*/wgpu::LoadOp::Clear(self.clearColor),
+				load: wgpu::LoadOp::Load,
 				store: wgpu::StoreOp::Store,
 			},
 		})
@@ -184,11 +179,10 @@ impl RenderState
 	pub fn getMainSurfaceDepthStencilAttachment (&self) -> Option<wgpu::RenderPassDepthStencilAttachment>
 	{
 		if let Some(dsa) = &self.depthStencilAttachment {
-			tracing::debug!("Attaching depth/stencil buffer with dims={:?}", dsa.texture.dims());
 			Some(wgpu::RenderPassDepthStencilAttachment {
 				view: &dsa.texture.view,
 				depth_ops: Some(wgpu::Operations {
-					load: wgpu::LoadOp::Clear(1.)/*wgpu::LoadOp::Load*/,
+					load: wgpu::LoadOp::Load,
 					store: wgpu::StoreOp::Store,
 				}),
 				stencil_ops: None,
@@ -262,7 +256,8 @@ impl RenderStatePrivateInterface for RenderState {
 // Functions
 //
 
-fn colorAttachmentEnumStr (colorAttachment: &ColorAttachment) -> &'static str {
+fn colorAttachmentEnumStr (colorAttachment: &ColorAttachment) -> &'static str
+{
 	match colorAttachment {
 		ColorAttachment::Surface => "Surface",
 		ColorAttachment::Texture(_) => "Texture",

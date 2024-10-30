@@ -23,9 +23,12 @@
 /// Separate module exposing all kinds of information and CGV-specific functionality for use by dependent build scripts.
 pub mod build;
 
-// The module encapsulating all low-level graphics state.
+// The module encapsulating all low-level graphics objects.
 mod context;
 pub use context::Context; // re-export
+
+// A submodule implementing a self-contained clear operation.
+mod clear;
 
 // The module encapsulating rendering-related higher-level managed render state (common uniform buffers etc.)
 mod renderstate;
@@ -46,6 +49,8 @@ pub extern crate nalgebra_glm as glm;
 /// Re-export important 3rd party libraries/library components
 pub use tracing;
 pub use anyhow::Result as Result;
+pub use anyhow::Error as Error;
+pub use anyhow::anyhow as anyhow;
 pub use winit::event;
 pub use wgpu;
 
@@ -74,9 +79,7 @@ use winit::{
 
 // Local imports
 use crate::{context::*, renderstate::*};
-
-
-
+use crate::clear::{ClearColor, ClearDepth};
 //////
 //
 // Vault
@@ -189,6 +192,9 @@ pub struct ManagedBindGroupLayouts {
 /// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, in case they want to
 /// interface with the managed [render pipeline](wgpu::RenderPipeline) setup.
 pub struct RenderSetup {
+	/// The clear color that will be used on the main framebuffer in case no [`Application`] requests a specific one.
+	defaultClearColor: wgpu::Color,
+
 	/// The bind groups provided for interfacing with centrally managed uniforms.
 	pub bindGroupLayouts: ManagedBindGroupLayouts
 }
@@ -196,8 +202,9 @@ impl RenderSetup
 {
 	pub(crate) fn new (context: &Context) -> Self {
 		Self {
+			defaultClearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
 			bindGroupLayouts: ManagedBindGroupLayouts {
-				viewing: renderstate::ViewingUniformGroup::createBindGroupLayout(
+				viewing: ViewingUniformGroup::createBindGroupLayout(
 					context, wgpu::ShaderStages::VERTEX_FRAGMENT, Some("CGV__ViewingBindGroupLayout")
 				)
 			}
@@ -254,8 +261,7 @@ pub trait Application
 	/// * `device` – The active device for rendering.
 	/// * `queue` – A queue from the active device for submitting commands.
 	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
-	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass)
-		-> anyhow::Result<()>;
+	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> anyhow::Result<()>;
 }
 
 
@@ -277,11 +283,11 @@ pub struct Player
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
-	//renderState: Option<renderstate::RenderState>,
 	renderSetup: Option<RenderSetup>,
 
 	camera: Option<Box<dyn view::Camera>>,
-	cameraInteractor: Box<dyn view::CameraInteractor>
+	cameraInteractor: Box<dyn view::CameraInteractor>,
+	clearers: Vec<clear::Clear>
 }
 unsafe impl Send for Player {}
 unsafe impl Sync for Player {}
@@ -316,11 +322,11 @@ impl Player
 			applicationFactory: None,
 			application: None,
 
-			//renderState: None,
 			renderSetup: None,
 
 			camera: None,
-			cameraInteractor: Box::new(view::OrbitCamera::new())
+			cameraInteractor: Box::new(view::OrbitCamera::new()),
+			clearers: Vec::new(),
 		})
 	}
 
@@ -353,6 +359,7 @@ impl Player
 
 		// Determine the global passes we need to make
 		let passes = self.camera.as_ref().unwrap().declareGlobalPasses();
+		let cameraName = self.camera.as_ref().unwrap().name();
 		for passNr in 0..passes.len()
 		{
 			// Get actual pass information
@@ -362,28 +369,52 @@ impl Player
 			// Update surface
 			util::mutify(pass.renderState).beginGlobalPass(context);
 
+			// Clear surface
+			let mut passPrepCommands = context.device.create_command_encoder(
+				&wgpu::CommandEncoderDescriptor { label: Some("CGV__PrepareGlobalPassCommandEncoder") }
+			);
+			self.clearers[passNr].clear(
+				&mut passPrepCommands, &renderState.getMainSurfaceColorAttachment(),
+				&renderState.getMainSurfaceDepthStencilAttachment()
+			);
+
 			/* Update managed render state */ {
 				// Uniforms
 				// - viewing
 				renderState.viewingUniforms.data.projection = *self.cameraInteractor.projection();
 				renderState.viewingUniforms.data.view = *self.cameraInteractor.view();
 				renderState.viewingUniforms.upload(context, true);
-
-				// Commit to GPU
-				context.queue.submit([]);
 			};
 
+			// Commit preparation work to GPU
+			context.queue.submit([passPrepCommands.finish()]);
+
+			let mut renderResult = Ok(());
 			if let Some(application) = self.application.as_mut() {
-				application.render(&context, pass.renderState, &pass.pass)?;
+				renderResult = application.render(&context, pass.renderState, &pass.pass);
 			}
 
 			// Finish the pass
 			renderState.endGlobalPass();
-			if let Some(callback) = util::mutify(&pass.completionCallback) {
-				callback(context, passNr as u32);
+			match &renderResult
+			{
+				Ok(()) => {
+					tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.pass);
+					if let Some(callback) = util::mutify(&pass.completionCallback) {
+						callback(context, passNr as u32);
+					}
+				}
+				Err(error) => {
+					tracing::error!(
+						"Camera[{:?}]: Global pass #{passNr} ({:?}) failed!\n\tReason: {:?}",
+						cameraName, pass.pass, error
+					);
+					return renderResult;
+				}
 			}
 		}
 
+		// Done!
 		Ok(())
 	}
 
@@ -480,18 +511,30 @@ impl ApplicationHandler<UserEvent> for Player
 						self.redrawOnceOnWait = true;
 					}
 
-					/* Create base render state *//* {
-						self.renderState = Some(RenderState::new(
-							context, GlobalPass::Simple,
-							ColorAttachment::Surface,
-							Some(hal::DepthStencilFormat::D32),
-							Some("CGV__BaseRenderPass")
-						));
-					}*/
+					// Create render setup
 					self.renderSetup = Some(RenderSetup::new(context));
 
 					// Initialize camera
+					// - create default camera
 					self.camera = Some(view::MonoCamera::new(context, None, Some("MainCamera")));
+					/* - initialize global pass resources */ {
+						let passes = util::statify(self.camera.as_ref().unwrap()).declareGlobalPasses();
+						for pass in passes {
+							let depthClearing =
+								if let Some(dsa) = &pass.renderState.depthStencilAttachment {
+									Some(ClearDepth { value: 1., attachment: dsa })
+								}
+								else { None };
+							self.clearers.push(clear::Clear::new(
+								context,
+								Some(&ClearColor {
+									value: self.renderSetup.as_ref().unwrap().defaultClearColor,
+									attachment: &pass.renderState.colorAttachment
+								}),
+								depthClearing.as_ref()
+							));
+						}
+					}
 
 					// Create the application
 					let appCreationResult = self.applicationFactory.take().unwrap().create(
@@ -524,7 +567,6 @@ impl ApplicationHandler<UserEvent> for Player
 					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
 					self.withContext(|this, context| {
 						context.resize(*newPhysicalSize);
-						//renderState.updateSize(this.context.as_mut().unwrap());
 						this.camera.as_mut().unwrap().resize(
 							context, &glm::vec2(newSize.x as u32, newSize.y as u32)
 						);
@@ -558,12 +600,7 @@ impl ApplicationHandler<UserEvent> for Player
 					{
 						// All fine, we can draw
 						Ok(()) => {
-							// Update main color attachment for new frame
-							/*self.renderState.as_mut().unwrap().updateMainSurfaceColorAttachment(
-								self.context.as_ref().unwrap()
-							);*/
-
-							// Perform actual redrawing
+							// Perform actual redrawing inside Player implementation
 							if let Err(error) = self.redraw() {
 								tracing::error!("Error while redrawing: {:?}", error);
 							}

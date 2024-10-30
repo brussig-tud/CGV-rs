@@ -18,11 +18,10 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result, GlobalPass, RenderSetup};
+use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result};
 
 // CGV Framework
 use cgv;
-use cgv::glm::Vec2;
 use cgv::util;
 
 
@@ -127,7 +126,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, renderSetup: &RenderSetup) -> Result<Box<dyn cgv::Application>>
+	fn create (&self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
@@ -245,7 +244,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			},
 			depth_stencil: Some(wgpu::DepthStencilState {
 				format: wgpu::TextureFormat::Depth32Float,
-				depth_write_enabled: false,
+				depth_write_enabled: true,
 				depth_compare: wgpu::CompareFunction::LessEqual,
 				stencil: Default::default(),
 				bias: Default::default(),
@@ -284,11 +283,11 @@ impl cgv::Application for SampleApplication
 {
 	fn onInput(&mut self, _: &event::WindowEvent) -> cgv::EventOutcome { cgv::EventOutcome::NotHandled }
 
-	fn onResize(&mut self, _: &Vec2) {}
+	fn onResize(&mut self, _: &glm::Vec2) {}
 
 	fn update(&mut self) {}
 
-	fn render(&mut self, context: &cgv::Context, renderState: &cgv::RenderState, _: &GlobalPass)
+	fn render(&mut self, context: &cgv::Context, renderState: &cgv::RenderState, _: &cgv::GlobalPass)
 		-> Result<()>
 	{
 		// Get a command encoder

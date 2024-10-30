@@ -80,6 +80,13 @@ pub trait Camera
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
 	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];
+
+	/// Report the individual name of the camera instance.
+	///
+	/// # Returns
+	///
+	/// The name given to the camera instance (usually upon creation).
+	fn name (&self) -> &str;
 }
 
 /// A camera that can take input and start full scene render passes with its desired projection and view matrices.

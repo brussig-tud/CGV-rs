@@ -10,11 +10,6 @@
 // Local imports
 use crate::*;
 use view::*;
-use crate::hal::DepthStencilFormat;
-//////
-//
-// Structs
-//
 
 
 
@@ -60,34 +55,27 @@ impl MonoCamera
 			} else {
 				ColorAttachment::Surface
 			},
-			Some(DepthStencilFormat::D32),
-			Some("CGV__MonoCameraSimpleRenderState")
+			Some(hal::DepthStencilFormat::D32),
+			Some((name.clone() + "_renderState").as_str())
 		));
 
+		// Create Self with fields initialized up to now
 		let mut result = Box::new(Self {
 			name,
 			renderTarget,
 			renderState,
 			globalPasses: Vec::new(),
 		});
-		/* setup global passes */ {
-			let selfRef = util::mutify(result.as_mut());
-			result.globalPasses.push(GlobalPassDeclaration {
-				pass: GlobalPass::Simple,
-				renderState: util::mutify(&result.renderState),
-				completionCallback: Some(Box::new(move |context, pass| {
-					selfRef.globalPassDone(context, pass);
-				})),
-			});
-		}
 
+		// setup global passes
+		result.globalPasses.push(GlobalPassDeclaration {
+			pass: GlobalPass::Simple,
+			renderState: util::mutify(&result.renderState),
+			completionCallback: None,
+		});
+
+		// Done!
 		result
-	}
-
-	fn globalPassDone (&mut self, _: &Context, pass: u32) {
-		tracing::debug!(
-			"Camera[{:?}]: Global pass #{pass} done: {:?}", self.name.as_str(), self.globalPasses[pass as usize].pass
-		);
 	}
 }
 
@@ -109,4 +97,6 @@ impl Camera for MonoCamera
 	fn declareGlobalPasses (&self) ->&[GlobalPassDeclaration] {
 		self.globalPasses.as_slice()
 	}
+
+	fn name (&self) -> &str { &self.name }
 }

@@ -171,16 +171,16 @@ pub fn deployCgvApplication (outputPath: &std::path::Path, webDeployment: WebDep
 	Ok(())
 }
 
-/// Performs a full web deployment of the CGV-rs WASM application that the build script calling this belongs to.
+/// Performs a full web deployment of the *CGV-rs* WASM application that the calling build script belongs to.
 ///
 /// # Arguments
 ///
 /// * `outputPath` – The path to deploy to.
-/// * `changeCheckedFilesOrPaths` – This function will inject a new file system location that will be monitored for
-///                                 changes into the Cargo `build.rs` re-run decision logic. Therefore, the calling
-///                                 build script must make explicit any locations it would normally depend on being
-///                                 monitored automatically by Cargo. It can do so here if it doesn't already do it
-///                                 elsewhere (passing in an empty slice is perfectly OK).
+/// * `changeCheckedFilesOrPaths` – This function is injecting a new file system location that will be monitored for
+///                                 changes into the Cargo `build.rs` re-run decision logic. Therefore, as per cargo
+///                                 monitoring rules, the calling build script must make explicit any locations it would
+///                                 normally depend on being monitored automatically by Cargo. It can do so here if it
+///                                 doesn't already do it elsewhere (passing in an empty slice is perfectly OK).
 pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> Result<()>
 {
 	////
