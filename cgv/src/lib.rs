@@ -80,6 +80,7 @@ use winit::{
 // Local imports
 use crate::{context::*, renderstate::*};
 use crate::clear::{ClearColor, ClearDepth};
+use crate::hal::DepthStencilFormat;
 //////
 //
 // Vault
@@ -191,17 +192,27 @@ pub struct ManagedBindGroupLayouts {
 
 /// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, in case they want to
 /// interface with the managed [render pipeline](wgpu::RenderPipeline) setup.
-pub struct RenderSetup {
+pub struct RenderSetup
+{
+	/// The color format used for the render targets of managed [global passes](GlobalPass).
+	colorFormat: wgpu::TextureFormat,
+
+	/// The depth/stencil format used for the render targets of managed [global passes](GlobalPass).
+	depthStencilFormat: wgpu::TextureFormat,
+
 	/// The clear color that will be used on the main framebuffer in case no [`Application`] requests a specific one.
 	defaultClearColor: wgpu::Color,
 
 	/// The bind groups provided for interfacing with centrally managed uniforms.
-	pub bindGroupLayouts: ManagedBindGroupLayouts
+	bindGroupLayouts: ManagedBindGroupLayouts
 }
 impl RenderSetup
 {
-	pub(crate) fn new (context: &Context) -> Self {
+	pub(crate) fn new (context: &Context, colorFormat: wgpu::TextureFormat, depthStencilFormat: DepthStencilFormat)
+		-> Self
+	{
 		Self {
+			colorFormat, depthStencilFormat: depthStencilFormat.into(),
 			defaultClearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
 			bindGroupLayouts: ManagedBindGroupLayouts {
 				viewing: ViewingUniformGroup::createBindGroupLayout(
@@ -210,6 +221,14 @@ impl RenderSetup
 			}
 		}
 	}
+
+	pub fn colorFormat(&self) -> wgpu::TextureFormat { self.colorFormat }
+
+	pub fn depthStencilFormat(&self) -> wgpu::TextureFormat { self.depthStencilFormat }
+
+	pub fn defaultClearColor(&self) -> &wgpu::Color { &self.defaultClearColor }
+
+	pub fn bindGroupLayouts(&self) -> &ManagedBindGroupLayouts { &self.bindGroupLayouts }
 }
 
 
@@ -512,11 +531,13 @@ impl ApplicationHandler<UserEvent> for Player
 					}
 
 					// Create render setup
-					self.renderSetup = Some(RenderSetup::new(context));
+					self.renderSetup = Some(RenderSetup::new(context, context.config.format, DepthStencilFormat::D32));
 
 					// Initialize camera
 					// - create default camera
-					self.camera = Some(view::MonoCamera::new(context, None, Some("MainCamera")));
+					self.camera = Some(
+						view::MonoCamera::new(context, None, self.renderSetup.as_ref().unwrap(), Some("MainCamera"))
+					);
 					/* - initialize global pass resources */ {
 						let passes = util::statify(self.camera.as_ref().unwrap()).declareGlobalPasses();
 						for pass in passes {

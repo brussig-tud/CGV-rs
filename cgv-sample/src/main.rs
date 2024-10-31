@@ -18,7 +18,10 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, wgpu::util::DeviceExt, event, glm, Result};
+use cgv::{wgpu, event, glm, Result};
+
+// WGPU
+use wgpu::util::DeviceExt;
 
 // CGV Framework
 use cgv;
@@ -207,7 +210,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		let pipelineLayout =
 			context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
-				bind_group_layouts: &[&renderSetup.bindGroupLayouts.viewing, &texBindGroupLayout],
+				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
 
@@ -243,7 +246,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				conservative: false,
 			},
 			depth_stencil: Some(wgpu::DepthStencilState {
-				format: wgpu::TextureFormat::Depth32Float,
+				format: renderSetup.depthStencilFormat(),
 				depth_write_enabled: true,
 				depth_compare: wgpu::CompareFunction::LessEqual,
 				stencil: Default::default(),

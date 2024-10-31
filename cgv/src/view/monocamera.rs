@@ -31,8 +31,9 @@ pub struct MonoCamera {
 
 impl MonoCamera
 {
-	pub fn new (context: &Context, allocateOwnedRenderTarget: Option<glm::UVec2>, name: Option<&str>)
-		-> Box<Self>
+	pub fn new (
+		context: &Context, allocateOwnedRenderTarget: Option<glm::UVec2>, renderSetup: &RenderSetup, name: Option<&str>
+	) -> Box<Self>
 	{
 		// Determine name
 		let name: String = if let Some(name) = name { name } else { "UnnamedMonoCamera" }.into();
@@ -40,7 +41,7 @@ impl MonoCamera
 		// Initialize render target if requested
 		let renderTarget = if let Some(dims) = &allocateOwnedRenderTarget {
 			Some(Box::new(hal::RenderTarget::new(
-				context, dims, wgpu::TextureFormat::Bgra8Unorm, hal::DepthStencilFormat::D32, name.as_str()
+				context, dims, renderSetup.colorFormat, renderSetup.depthStencilFormat().into(), name.as_str()
 			)))
 		}
 		else {

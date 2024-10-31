@@ -72,6 +72,21 @@ impl From<DepthStencilFormat> for wgpu::TextureFormat {
 impl From<&DepthStencilFormat> for wgpu::TextureFormat {
 	fn from(format: &DepthStencilFormat) -> Self { (*format).into() }
 }
+impl From<wgpu::TextureFormat> for DepthStencilFormat {
+	fn from(format: wgpu::TextureFormat) -> Self {
+		match format {
+			wgpu::TextureFormat::Depth16Unorm => DepthStencilFormat::D16,
+			wgpu::TextureFormat::Depth24Plus => DepthStencilFormat::D24,
+			wgpu::TextureFormat::Depth32Float => DepthStencilFormat::D32,
+			wgpu::TextureFormat::Depth24PlusStencil8 => DepthStencilFormat::D24S8,
+			wgpu::TextureFormat::Depth32FloatStencil8 => DepthStencilFormat::D32S8,
+			_ => panic!("cannot convert unsupported format \"{:?}\" into cgv::hal::DepthStencilFormat!", format)
+		}
+	}
+}
+impl From<&wgpu::TextureFormat> for DepthStencilFormat {
+	fn from(format: &wgpu::TextureFormat) -> Self { (*format).into() }
+}
 
 
 
