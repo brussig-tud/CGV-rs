@@ -40,17 +40,15 @@ pub const CLIPSPACE_TRANSFORM_OGL2WGPU: glm::Mat4 = glm::Mat4::new(
 ////
 // OrbitCamera
 
-/// A camera for orbital movements around a focal point.
+/// A camera interactor for orbital movement around a focal point.
 #[derive(Debug)]
-pub struct OrbitCamera {
+pub struct OrbitInteractor {
 	eye: glm::Vec3,
 	target: glm::Vec3,
 	up: glm::Vec3,
-	aspect: f32,
 	fov: FoV,
 	zNear: f32,
 	zFar: f32,
-	proj: glm::Mat4,
 	view: glm::Mat4,
 	dragLMB: bool,
 	dragMMB: bool,
@@ -60,19 +58,17 @@ pub struct OrbitCamera {
 	dirty: bool
 }
 
-impl OrbitCamera
+impl OrbitInteractor
 {
 	pub fn new () -> Self
 	{
-		OrbitCamera {
+		OrbitInteractor {
 			eye: glm::Vec3::new(0., 0., 2.),
 			target: glm::Vec3::zeros(),
 			up: glm::Vec3::new(0., 1., 0.),
-			aspect: 1.,
 			fov: FoV::Perspective(util::math::deg2rad!(60.)),
 			zNear: 0.01,
 			zFar: 100.,
-			proj: glm::Mat4::identity(),
 			view: glm::Mat4::identity(),
 			dragLMB: false, dragMMB: false, dragRMB: false, roll: false,
 			lastMousePos: None,
@@ -94,33 +90,29 @@ impl OrbitCamera
 	}
 }
 
-impl CameraInteractor for OrbitCamera
+impl CameraInteractor for OrbitInteractor
 {
-	fn projection (&self) -> &glm::Mat4 {
-		&self.proj
-	}
-
-	fn view (&self) -> &glm::Mat4 {
-		&self.view
-	}
-
-	fn resize (&mut self, viewportDims: &glm::Vec2)
+	fn projection (&self, viewportDims: &glm::UVec2) -> glm::Mat4
 	{
-		self.aspect = viewportDims.x / viewportDims.y;
-		self.proj = match self.fov
+		let aspect = viewportDims.x as f32 / viewportDims.y as f32;
+		match self.fov
 		{
 			FoV::Perspective(fov)
-			=> CLIPSPACE_TRANSFORM_OGL2WGPU * glm::perspective(self.aspect, fov, self.zNear, self.zFar),
+			=> CLIPSPACE_TRANSFORM_OGL2WGPU * glm::perspective(aspect, fov, self.zNear, self.zFar),
 
 			FoV::Orthographic(fov)
 			=> {
 				let halfHeight = fov*0.5;
-				let halfWidth = halfHeight*self.aspect;
+				let halfWidth = halfHeight*aspect;
 				CLIPSPACE_TRANSFORM_OGL2WGPU * glm::ortho(
 					-halfWidth, halfWidth, -halfHeight, halfHeight, self.zNear, self.zFar
 				)
 			}
-		};
+		}
+	}
+
+	fn view (&self) -> &glm::Mat4 {
+		&self.view
 	}
 
 	fn update (&mut self) -> bool {

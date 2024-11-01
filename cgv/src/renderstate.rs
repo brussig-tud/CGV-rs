@@ -78,7 +78,6 @@ pub struct DepthStencilAttachment {
 
 pub struct RenderState
 {
-	pub globalPass: GlobalPass,
 	pub viewingUniforms: ViewingUniformGroup,
 
 	pub(crate) colorAttachment: ColorAttachment<'static>,
@@ -90,7 +89,7 @@ pub struct RenderState
 impl RenderState
 {
 	pub fn new(
-		context: &Context, globalPass: GlobalPass, colorAttachment: ColorAttachment<'static>,
+		context: &Context, colorAttachment: ColorAttachment<'static>,
 		depthStencilFormat: Option<hal::DepthStencilFormat>, name: Option<&str>
 	) -> Self
 	{
@@ -109,7 +108,6 @@ impl RenderState
 
 		// Henceforth, we mutate this result object for the remaining initialization
 		let mut result = Self {
-			globalPass,
 			viewingUniforms,
 
 			colorAttachment,

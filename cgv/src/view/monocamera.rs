@@ -50,7 +50,7 @@ impl MonoCamera
 
 		// Initialize the main (and only) render state
 		let renderState = Box::new(RenderState::new(
-			context, GlobalPass::Simple,
+			context,
 			if let Some(rt) = util::statify(&renderTarget) {
 				ColorAttachment::Texture(&rt.color)
 			} else {
@@ -82,17 +82,28 @@ impl MonoCamera
 
 impl Camera for MonoCamera
 {
-	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2)
+	fn projection (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
+		&self.renderState.viewingUniforms.data.projection
+	}
+
+	fn view (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
+		&self.renderState.viewingUniforms.data.view
+	}
+
+	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2, interactor: &dyn CameraInteractor)
 	{
 		if self.renderTarget.is_some() {
 			self.renderTarget = Some(Box::new(hal::RenderTarget::new(
 				context, viewportDims, wgpu::TextureFormat::Bgra8Unorm, hal::DepthStencilFormat::D32, self.name.as_str()
 			)))
 		}
-		self.renderState.updateSize(context, viewportDims)
+		self.renderState.updateSize(context, viewportDims);
+		self.renderState.viewingUniforms.data.projection = interactor.projection(viewportDims);
 	}
 
-	fn update (&mut self, _: &dyn CameraInteractor) {}
+	fn update (&mut self, interactor: &dyn CameraInteractor) {
+		self.renderState.viewingUniforms.data.view = *interactor.view();
+	}
 
 	fn declareGlobalPasses (&self) ->&[GlobalPassDeclaration] {
 		self.globalPasses.as_slice()

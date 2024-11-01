@@ -71,10 +71,12 @@ impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 		)
 	}
 
-	pub fn upload (&self, context: &Context, immediate: bool) {
+	pub fn upload (&self, context: &Context) {
 		context.queue.write_buffer(&self.buffer, 0, util::slicify(&self.data));
-		if immediate {
-			context.queue.submit([]);
-		}
+	}
+
+	pub fn uploadImmediatly (&self, context: &Context) {
+		context.queue.write_buffer(&self.buffer, 0, util::slicify(&self.data));
+		context.queue.submit([]);
 	}
 }

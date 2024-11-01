@@ -76,8 +76,13 @@ use winit::{
 
 // Local imports
 use crate::{context::*, renderstate::*};
-use crate::clear::{ClearColor, ClearDepth};
-use crate::hal::DepthStencilFormat;
+use clear::{ClearColor, ClearDepth};
+use hal::DepthStencilFormat;
+#[allow(unused_imports)] // prevent this warning in WASM. ToDo: investigate
+use view::Camera;
+
+
+
 //////
 //
 // Vault
@@ -341,7 +346,7 @@ impl Player
 			renderSetup: None,
 
 			camera: None,
-			cameraInteractor: Box::new(view::OrbitCamera::new()),
+			cameraInteractor: Box::new(view::OrbitInteractor::new()),
 			clearers: Vec::new(),
 		})
 	}
@@ -397,9 +402,10 @@ impl Player
 			/* Update managed render state */ {
 				// Uniforms
 				// - viewing
-				renderState.viewingUniforms.data.projection = *self.cameraInteractor.projection();
-				renderState.viewingUniforms.data.view = *self.cameraInteractor.view();
-				renderState.viewingUniforms.upload(context, true);
+				let camera = self.camera.as_ref().unwrap().as_ref();
+				renderState.viewingUniforms.data.projection = *camera.projection(pass);
+				renderState.viewingUniforms.data.view = *camera.view(pass);
+				renderState.viewingUniforms.upload(context);
 			};
 
 			// Commit preparation work to GPU
@@ -519,11 +525,10 @@ impl ApplicationHandler<UserEvent> for Player
 						"style", "width:100% !important; height:100% !important"
 					).unwrap();
 
-					// On non-WASM on the other hand, the surface is correctly configured for the initial size so we
-					// need to inform the camera separately. However, we do need to schedule a single redraw to not get
-					// garbage on the screen as the surface is displayed for the first time for some reason...
+					// On non-WASM on the other hand, the surface is correctly configured for the initial size. However,
+					// we do need to schedule a single redraw to not get garbage on the screen as the surface is
+					// displayed for the first time for some reason...
 					#[cfg(not(target_arch="wasm32"))] {
-						self.cameraInteractor.resize(&glm::vec2(context.size.width as f32, context.size.height as f32));
 						self.redrawOnceOnWait = true;
 					}
 
@@ -532,11 +537,25 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Initialize camera
 					// - create default camera
-					self.camera = Some(
-						view::MonoCamera::new(context, None, self.renderSetup.as_ref().unwrap(), Some("MainCamera"))
-					);
+					self.camera = Some({
+						#[allow(unused_mut)] // prevent the warning in WASM builds (we need mutability in non-WASM)
+						let mut camera = view::MonoCamera::new(
+							context, None, self.renderSetup.as_ref().unwrap(), Some("MainCamera")
+						);
+
+						// On non-WASM, we don't get an initial resize operation so we have to initialize the camera
+						// manually.
+						#[cfg(not(target_arch="wasm32"))] {
+							camera.resize(
+								context, &glm::vec2(context.size.width, context.size.height),
+								self.cameraInteractor.as_ref()
+							);
+						}
+						camera
+					});
 					/* - initialize global pass resources */ {
-						let passes = util::statify(self.camera.as_ref().unwrap()).declareGlobalPasses();
+						let passes =
+							util::statify(self.camera.as_ref().unwrap()).declareGlobalPasses();
 						for pass in passes {
 							let depthClearing =
 								if let Some(dsa) = &pass.renderState.depthStencilAttachment {
@@ -586,9 +605,8 @@ impl ApplicationHandler<UserEvent> for Player
 					self.withContext(|this, context| {
 						context.resize(*newPhysicalSize);
 						this.camera.as_mut().unwrap().resize(
-							context, &glm::vec2(newSize.x as u32, newSize.y as u32)
+							context, &glm::vec2(newSize.x as u32, newSize.y as u32), this.cameraInteractor.as_ref()
 						);
-						this.cameraInteractor.resize(&newSize);
 						this.application.as_mut().unwrap().onResize(
 							&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
 						);
@@ -645,6 +663,7 @@ impl ApplicationHandler<UserEvent> for Player
 						Err(wgpu::SurfaceError::Timeout) =>
 							{ tracing::warn!("Surface timeout") }
 					};
+
 
 					/////////////////////
 					//- TESTING ////////////////////////////////////////////////////////
