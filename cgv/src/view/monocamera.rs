@@ -92,8 +92,7 @@ impl Camera for MonoCamera
 		self.renderState.updateSize(context, viewportDims)
 	}
 
-	fn update (&mut self, interactor: &dyn CameraInteractor)
-	{}
+	fn update (&mut self, _: &dyn CameraInteractor) {}
 
 	fn declareGlobalPasses (&self) ->&[GlobalPassDeclaration] {
 		self.globalPasses.as_slice()

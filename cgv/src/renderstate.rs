@@ -134,7 +134,7 @@ impl RenderState
 			// - initialize fields that are used by other initializations
 			let dims: glm::UVec2 = match self.colorAttachment
 			{
-				ColorAttachment::Surface/* | ColorAttachment::SurfaceView(_)*/
+				ColorAttachment::Surface
 				=> glm::vec2(context.config.width.max(1), context.config.height.max(1)),
 
 				ColorAttachment::Texture(texture) => texture.dims2WH(),
@@ -231,7 +231,7 @@ impl RenderStatePrivateInterface for RenderState {
 			),
 			ColorAttachment::Texture(_) => {},
 			ColorAttachment::SurfaceView(_) => unreachable!(
-				"Invalid color attachment kind for starting a global Pass: {:?}", colorAttachmentEnumStr(&self.colorAttachment)
+				"internal logic error: color attachment should never be `SurfaceView` when starting a global pass"
 			)
 		}
 	}
@@ -243,7 +243,7 @@ impl RenderStatePrivateInterface for RenderState {
 			ColorAttachment::SurfaceView(_) => self.colorAttachment = ColorAttachment::Surface,
 			ColorAttachment::Texture(_) => {/* no action needed */},
 			ColorAttachment::Surface => unreachable!(
-				"Invalid color attachment kind for starting a global Pass: {:?}", colorAttachmentEnumStr(&self.colorAttachment)
+				"internal logic error: color attachment should never be `Surface` when ending a global pass"
 			)
 		}
 	}
