@@ -1,5 +1,7 @@
+
 [workspace]
-members = ["cgv", "cgv-sample"]
+members = ["cgv", "cgv-build", "cgv-sample"]
+default-members = ["cgv", "cgv-sample"]
 resolver = "2"
 
 [workspace.package]

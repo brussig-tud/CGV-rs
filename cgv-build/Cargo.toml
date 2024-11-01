@@ -1,0 +1,12 @@
+
+[package]
+name = "cgv-build"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+cargo_metadata = "0.18.1"
+anyhow = "1.0.89"

@@ -1,7 +1,8 @@
+
 [package]
 name = "cgv-sample"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 
 [package.metadata]
 nice-name = "CGV-rs Example"
@@ -12,4 +13,4 @@ nice-name = "CGV-rs Example"
 cgv = {path="../cgv"}
 
 [build-dependencies]
-cgv = {path="../cgv"}
+cgv-build = {path="../cgv-build"}

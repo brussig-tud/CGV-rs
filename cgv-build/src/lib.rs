@@ -1,6 +1,36 @@
 
 //////
 //
+// Language config
+//
+
+// Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
+#![allow(non_snake_case)]
+
+// And this one... the macros are there for clients! Why should the library have to use every single one? WTF...
+#![allow(unused_macros)]
+
+// We're pasting whole modules from the cgv crate in here, including many things we don't actually need, due to the
+// utterly stupid way Rust build scripts work, so we don't have a choice about this one
+#![allow(dead_code)]
+
+
+
+//////
+//
+// Includes
+//
+
+// CGV-rs util modules
+mod util {
+	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/mod.rs"));
+	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/path.rs"));
+}
+
+
+
+//////
+//
 // Imports
 //
 
@@ -8,11 +38,13 @@
 use std::{env, fs};
 
 // Anyhow library
-use anyhow::{Context, Result};
+pub use anyhow::{Context, Result};
 
 // Cargo Metadata parsing library
 use cargo_metadata::MetadataCommand;
-use crate::util;
+
+
+
 //////
 //
 // Classes
@@ -107,7 +139,7 @@ pub fn copyRecursively<PathRef: AsRef<std::path::Path>> (source: PathRef, dest: 
 }
 
 /// Retrieve the base path of the CGV crate.
-pub fn cgvCrateDirectory () -> &'static std::path::Path {
+pub fn cgvBuildCrateDirectory() -> &'static std::path::Path {
 	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
 		|| env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>().unwrap()
 	);
@@ -117,7 +149,7 @@ pub fn cgvCrateDirectory () -> &'static std::path::Path {
 /// Retrieve the path to the favicon resources
 pub fn webResourcesDirFavicon () -> &'static std::path::Path {
 	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
-		|| cgvCrateDirectory().join("web/favicon")
+		|| cgvBuildCrateDirectory().join("web/favicon")
 	);
 	PATH.as_path()
 }
@@ -125,7 +157,7 @@ pub fn webResourcesDirFavicon () -> &'static std::path::Path {
 /// Retrieve the path to the `index.html` template for web deployments.
 pub fn templateFileIndexHtml () -> &'static std::path::Path {
 	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
-		|| cgvCrateDirectory().join("web/index.html")
+		|| cgvBuildCrateDirectory().join("web/index.html")
 	);
 	PATH.as_path()
 }
@@ -133,7 +165,7 @@ pub fn templateFileIndexHtml () -> &'static std::path::Path {
 /// Retrieve the path to the `site.webmanifest` template for web deployments.
 pub fn templateFileSiteWebmanifest () -> &'static std::path::Path {
 	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
-		|| cgvCrateDirectory().join("web/site.webmanifest")
+		|| cgvBuildCrateDirectory().join("web/site.webmanifest")
 	);
 	PATH.as_path()
 }
@@ -210,7 +242,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 		);
 		println!("cargo::rerun-if-changed={}", dep_absPath.as_os_str().to_str().unwrap());
 	}
-	println!("cargo::rerun-if-changed={}", &cgvCrateDirectory().to_str()
+	println!("cargo::rerun-if-changed={}", &cgvBuildCrateDirectory().to_str()
 		.context("CGV-rs seems to appears to reside at a non-UTF-8 path")?
 	);
 	let outputPath = util::path::normalizeToAnchor(&manifestPath, &outputPath);

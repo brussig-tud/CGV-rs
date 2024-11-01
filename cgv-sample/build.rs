@@ -4,7 +4,7 @@
 /// still needs to be invoked manually afterwards to insert the actual WASM module into the package.
 ///
 /// **ToDo**: look into `cargo install` to see if it can be used instead of the build script to include *wasm-bindgen*
-fn main() -> cgv::Result<()> {
+fn main() -> cgv_build::Result<()> {
 	// CGV-rs provides automation for this (including a check if we're even building for wasm32 to begin with)
-	cgv::build::webDeployIfWasm("../pkg", &["Cargo.toml"])
+	cgv_build::webDeployIfWasm("../pkg", &["Cargo.toml"])
 }
