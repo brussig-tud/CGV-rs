@@ -55,11 +55,17 @@ pub struct OrbitInteractor {
 	dragRMB: bool,
 	roll: bool,
 	lastMousePos: Option<glm::Vec2>,
-	dirty: bool
+	dirty: bool,
+
+	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
+	lmbDownT: time::Instant
 }
 
 impl OrbitInteractor
 {
+	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
+	const DBL_CLICK_TIMEOUT: time::Duration = time::Duration::from_millis(250);
+
 	pub fn new () -> Self
 	{
 		OrbitInteractor {
@@ -72,7 +78,8 @@ impl OrbitInteractor
 			view: glm::Mat4::identity(),
 			dragLMB: false, dragMMB: false, dragRMB: false, roll: false,
 			lastMousePos: None,
-			dirty: true
+			dirty: true,
+			lmbDownT: time::Instant::now()-Self::DBL_CLICK_TIMEOUT
 		}
 	}
 
@@ -124,7 +131,7 @@ impl CameraInteractor for OrbitInteractor
 		else { false }
 	}
 
-	fn input (&mut self, event: &WindowEvent, _: &'static Player) -> EventOutcome
+	fn input (&mut self, event: &WindowEvent, player: &'static Player) -> EventOutcome
 	{
 		match event
 		{
@@ -138,6 +145,21 @@ impl CameraInteractor for OrbitInteractor
 				match *button {
 					MouseButton::Left => {
 						self.dragLMB = *state == ElementState::Pressed;
+						if state.is_pressed() {
+							let nowT = time::Instant::now();
+							if nowT - self.lmbDownT < Self::DBL_CLICK_TIMEOUT {
+								tracing::warn!("DOUBLE CLICK!!!");
+								self.lmbDownT = nowT - Self::DBL_CLICK_TIMEOUT;
+								let lastMousePos = self.lastMousePos.as_ref().unwrap();
+								let depth = player.getDepthAtSurfacePixel(
+									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32)
+								);
+								tracing::warn!("DEPTH: {:?}", depth);
+							}
+							else {
+								self.lmbDownT = nowT;
+							}
+						}
 						HandledExclusively(/* redraw */false)
 					},
 					MouseButton::Middle => {

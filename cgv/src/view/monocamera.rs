@@ -110,4 +110,54 @@ impl Camera for MonoCamera
 	}
 
 	fn name (&self) -> &str { &self.name }
+
+	fn getDepthValue (&self, context: &Context, surfaceCoords: &glm::UVec2) -> Option<f32>
+	{
+		if let Some(da) = util::statify(&self.renderState.depthStencilAttachment) {
+			let mut enc = context.device.create_command_encoder(
+				&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
+			);
+			enc.copy_texture_to_buffer(
+				*da.texture.readbackView_tex.as_ref().unwrap(),
+				*da.texture.readbackView_buf.as_ref().unwrap(), da.texture.descriptor.size
+			);
+			context.queue.submit(Some(enc.finish()));
+			let dims = da.texture.dims2WH();
+			let rowStride = da.texture.size.actual as u32 / (dims.y * size_of::<f32>() as u32);
+			let loc = (surfaceCoords.y*rowStride + surfaceCoords.x) as usize;
+			tracing::debug!("Querying {:?} - stride={rowStride}", surfaceCoords);
+			{
+				tracing::debug!("Mapping...");
+				let buf = da.texture.readbackBuffer.as_ref().unwrap().as_ref();
+				let depth = std::sync::atomic::AtomicU32::new((-1f32).to_bits());
+				let depthRef = util::mutify(&depth);
+				buf.slice(0..da.texture.size.actual).map_async(
+					wgpu::MapMode::Read, move |result| {
+						if result.is_ok() {
+							tracing::debug!("Mapped!!!");
+							let bufView = buf.slice(..).get_mapped_range();
+							let bytes = bufView.iter().as_slice();
+							let floats = unsafe { std::slice::from_raw_parts(
+								bytes.as_ptr() as *const f32, bytes.len()/size_of::<f32>()
+							)};
+							let depth = floats[loc];
+							tracing::warn!("Depth={depth}");
+							depthRef.store(depth.to_bits(), std::sync::atomic::Ordering::Relaxed);
+							drop(bufView);
+							buf.unmap();
+							tracing::debug!("Unmapped!!!");
+						}
+						else {
+							tracing::debug!("Mapping Failure!!!");
+						}
+					}
+				);
+				tracing::debug!("Polling...");
+				context.device.poll(wgpu::Maintain::Wait);
+				context.queue.submit([]);
+				Some(f32::from_bits(depth.load(std::sync::atomic::Ordering::Acquire)))
+			}
+		}
+		else { None }
+	}
 }

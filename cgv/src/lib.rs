@@ -48,6 +48,9 @@ pub use tracing;
 pub use anyhow::Result as Result;
 pub use anyhow::Error as Error;
 pub use anyhow::anyhow as anyhow;
+pub mod time {
+	pub use web_time::{Instant as Instant, Duration as Duration};
+}
 pub use winit::event;
 pub use wgpu;
 
@@ -270,7 +273,7 @@ pub trait Application
 	/// # Arguments
 	///
 	/// * `newSize` – The new main window surface size, in pixels.
-	fn onResize (&mut self, newSize: &glm::Vec2);
+	fn onResize (&mut self, newSize: &glm::UVec2);
 
 	/// Called when the [player](Player) wants to prepare a new frame for rendering.
 	fn update (&mut self);
@@ -440,14 +443,31 @@ impl Player
 		Ok(())
 	}
 
-	pub fn withContext<Closure: FnOnce(&'static mut Player, &'static mut Context)> (&mut self, codeBlock: Closure) {
+	pub fn withContext<ReturnType, Closure: FnOnce(&'static Player, &'static Context) -> ReturnType> (
+		&self, codeBlock: Closure
+	) -> ReturnType
+	{
+		let this = util::statify(self);
+		codeBlock(this, this.context.as_ref().unwrap())
+	}
+
+	pub fn withContextMut<ReturnType, Closure: FnOnce(&'static mut Player, &'static mut Context) -> ReturnType> (
+		&mut self, codeBlock: Closure
+	) -> ReturnType
+	{
 		let this = util::mutify(self);
-		codeBlock(util::mutify(self), this.context.as_mut().unwrap());
+		codeBlock(util::mutify(self), this.context.as_mut().unwrap())
 	}
 
 	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
 		tracing::info!("Exiting...");
 		eventLoop.exit();
+	}
+
+	pub fn getDepthAtSurfacePixel (&self, pixelCoords: &glm::UVec2) -> Option<f32> {
+		self.withContext(|this, context| {
+			this.camera.as_ref().unwrap().getDepthValue(context, pixelCoords)
+		})
 	}
 }
 
@@ -543,8 +563,7 @@ impl ApplicationHandler<UserEvent> for Player
 							context, None, self.renderSetup.as_ref().unwrap(), Some("MainCamera")
 						);
 
-						// On non-WASM, we don't get an initial resize operation so we have to initialize the camera
-						// manually.
+						// On non-WASM, we don't get an initial resize so we have to initialize the camera manually.
 						#[cfg(not(target_arch="wasm32"))] {
 							camera.resize(
 								context, &glm::vec2(context.size.width, context.size.height),
@@ -601,15 +620,11 @@ impl ApplicationHandler<UserEvent> for Player
 			WindowEvent::Resized(newPhysicalSize)
 			=> {
 				if self.context.is_some() {
-					let newSize = glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32);
-					self.withContext(|this, context| {
+					let newSize = glm::vec2(newPhysicalSize.width, newPhysicalSize.height);
+					self.withContextMut(|this, context| {
 						context.resize(*newPhysicalSize);
-						this.camera.as_mut().unwrap().resize(
-							context, &glm::vec2(newSize.x as u32, newSize.y as u32), this.cameraInteractor.as_ref()
-						);
-						this.application.as_mut().unwrap().onResize(
-							&glm::vec2(newPhysicalSize.width as f32, newPhysicalSize.height as f32)
-						);
+						this.camera.as_mut().unwrap().resize(context, &newSize, this.cameraInteractor.as_ref());
+						this.application.as_mut().unwrap().onResize(&newSize);
 					});
 				}
 				#[cfg(not(target_arch="wasm32"))] {
@@ -663,49 +678,6 @@ impl ApplicationHandler<UserEvent> for Player
 						Err(wgpu::SurfaceError::Timeout) =>
 							{ tracing::warn!("Surface timeout") }
 					};
-
-
-					/////////////////////
-					//- TESTING ////////////////////////////////////////////////////////
-
-					/*self.withContextAndRenderState(|_, context, renderState| {
-						let da = renderState.depthStencilAttachment.as_ref().unwrap();
-						let mut enc = context.device.create_command_encoder(
-							&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
-						);
-						enc.copy_texture_to_buffer(
-							*da.texture.readbackView_tex.as_ref().unwrap(),
-							*da.texture.readbackView_buf.as_ref().unwrap(), da.texture.descriptor.size
-						);
-						context.queue.submit(Some(enc.finish()));
-						{
-							tracing::debug!("Mapping...");
-							let buf = da.texture.readbackBuffer.as_ref().unwrap().as_ref();
-							buf.slice(0..da.texture.size.actual).map_async(
-								wgpu::MapMode::Read, |result| {
-									if result.is_ok() {
-										let bufView = buf.slice(..).get_mapped_range_mut();
-										/*let floats: &mut [f32] = view.iter().as_slice();
-										floats.fill(42.0);
-										drop(view);
-										capturable.unmap();*/
-										tracing::debug!("Mapped!!!");
-									}
-									else {
-										tracing::debug!("Mapping Failure!!!");
-									}
-								}
-							);
-							tracing::debug!("Polling...");
-							context.device.poll(wgpu::Maintain::Wait);
-							context.queue.submit([]);
-							buf.unmap();
-							tracing::debug!("Unmapped!!!");
-						}
-					});*/
-
-					//- [END] TESTING //////////////////////////////////////////////////
-					/////////////////////
 				}
 			},
 
