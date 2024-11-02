@@ -313,8 +313,6 @@ pub struct Player
 	cameraInteractor: Box<dyn view::CameraInteractor>,
 	clearers: Vec<clear::Clear>
 }
-unsafe impl Send for Player {}
-unsafe impl Sync for Player {}
 
 impl Player
 {
