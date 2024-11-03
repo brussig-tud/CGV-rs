@@ -463,11 +463,26 @@ impl Player
 	}
 
 	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
-		&self, pixelCoords: glm::UVec2, callback: Closure
+		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) = self.camera.as_ref().unwrap().getDepthReadbackDispatcher() {
-			dispatcher.getDepthValueAsync(self.context.as_ref().unwrap(), pixelCoords, |depth| {
-				callback(Some(depth));
+		if let Some(dispatcher) =
+			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
+				dispatcher.getDepthValueAsync(self.context.as_ref().unwrap(), |depth| {
+					callback(Some(depth));
+				})
+			}
+		else {
+			callback(None)
+		}
+	}
+
+	pub fn unprojectPointAtSurfacePixelAsync<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
+		&self, pixelCoords: &glm::UVec2, callback: Closure
+	){
+		if let Some(dispatcher) =
+			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.unprojectPointAsync(self.context.as_ref().unwrap(), |point| {
+				callback(Some(point));
 			})
 		}
 		else {

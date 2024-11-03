@@ -53,18 +53,41 @@ pub enum FoV {
 //
 
 pub struct DepthReadbackDispatcher<'a> {
+	pixelCoords: glm::UVec2,
+	projection: &'a glm::Mat4,
 	depthTexture: &'a hal::Texture
 }
 impl<'a> DepthReadbackDispatcher<'a>
 {
-	pub fn new(depthTexture: &'a hal::Texture) -> Self { Self { depthTexture } }
+	pub fn new (pixelCoords: &glm::UVec2, projection: &'a glm::Mat4, depthTexture: &'a hal::Texture) -> Self {
+		Self { pixelCoords: *pixelCoords, projection, depthTexture }
+	}
 
 	pub fn getDepthValueAsync<Closure: FnOnce(f32) + wgpu::WasmNotSend + 'static> (
-		&self, context: &Context, surfaceCoords: glm::UVec2, callback: Closure
+		&self, context: &Context, callback: Closure
 	){
+		let pixelCoords = self.pixelCoords;
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
-			let loc = surfaceCoords.y as usize *rowStride + surfaceCoords.x as usize;
+			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			callback(hal::decodeDepth(loc, texels));
+		});
+	}
+
+	pub fn unprojectPointAsync<Closure: FnOnce(&glm::Vec4) + wgpu::WasmNotSend + 'static> (
+		&self, context: &Context, callback: Closure
+	){
+		let pixelCoords = self.pixelCoords;
+		let dims = self.depthTexture.dims2WH();
+		let projection = util::statify(self.projection);
+		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
+			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
+			let dims = glm::vec2(dims.x as f32, dims.y as f32);
+			let projected = glm::vec4(
+				pixelCoords.x as f32 / dims.x, pixelCoords.y as f32 / dims.y,
+				hal::decodeDepth(loc, texels), 1.
+			);
+			let unprojected = glm::inverse(projection) * projected;
+			callback(&unprojected);
 		});
 	}
 }
@@ -87,6 +110,8 @@ pub trait Camera
 	///            will only ever query matrices for passes the camera [declared itself](Camera::declareGlobalPasses).
 	fn projection (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
 
+	fn projectionAt (&self, pixelCoords: &glm::UVec2) -> &glm::Mat4;
+
 	/// Borrow the view matrix for the given global pass.
 	///
 	/// # Arguments
@@ -94,6 +119,8 @@ pub trait Camera
 	/// * `pass` – The declaration of the global pass the [`Player`] requires the view matrix for. The [`Player`] will
 	///            only ever query matrices for passes the camera [declared itself](Camera::declareGlobalPasses).
 	fn view (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
+
+	fn viewAt (&self, pixelCoords: &glm::UVec2) -> &glm::Mat4;
 
 	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
@@ -131,10 +158,19 @@ pub trait Camera
 
 	/// Obtain a dispatcher for asynchronously reading back the depth value at the given pixel coordinates.
 	///
+	/// Dispatchers are tailored towards the pixel coordinates requested. The reason for this is that cameras might
+	/// compose the final image from several viewports, and not actually attach any depth at all to the main surface,
+	/// but the render targets for the individual viewports *could* have depth attached. Providing the coordinates the
+	/// caller is interested in here ensures that the camera can still provide depth in such situations.
+	///
+	/// # Arguments
+	///
+	/// * `pixelCoords` – The pixel coordinates at which to get the depth value.
+	///
 	/// # Returns
 	///
-	/// `Some` dispatcher if the camera has a depth buffer, `None` otherwise.
-	fn getDepthReadbackDispatcher (&self) -> Option<DepthReadbackDispatcher>;
+	/// `Some` dispatcher if the camera can provide depth for the given pixel coordinates, `None` otherwise.
+	fn getDepthReadbackDispatcher (&self, pixelCoords: &glm::UVec2) -> Option<DepthReadbackDispatcher>;
 }
 
 /// A camera that can take input and start full scene render passes with its desired projection and view matrices.

@@ -150,10 +150,12 @@ impl CameraInteractor for OrbitInteractor
 							if nowT - self.lmbDownT < Self::DBL_CLICK_TIMEOUT {
 								self.lmbDownT = nowT - Self::DBL_CLICK_TIMEOUT;
 								let lastMousePos = self.lastMousePos.as_ref().unwrap();
-								player.getDepthAtSurfacePixelAsync(
-									glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
-									|depth| {
-										tracing::warn!("DEPTH: {:?}", depth);
+								player.unprojectPointAtSurfacePixelAsync(
+									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
+									|point| {
+										if let Some(point) = point {
+											tracing::warn!("New focus: {:?}", point);
+										}
 									}
 								);
 							}

@@ -85,8 +85,14 @@ impl Camera for MonoCamera
 	fn projection (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.data.projection
 	}
+	fn projectionAt (&self, _: &glm::UVec2) -> &glm::Mat4 {
+		&self.renderState.viewingUniforms.data.projection
+	}
 
 	fn view (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
+		&self.renderState.viewingUniforms.data.view
+	}
+	fn viewAt (&self, _: &glm::UVec2) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.data.view
 	}
 
@@ -111,10 +117,10 @@ impl Camera for MonoCamera
 
 	fn name (&self) -> &str { &self.name }
 
-	fn getDepthReadbackDispatcher (&self) -> Option<DepthReadbackDispatcher>
+	fn getDepthReadbackDispatcher (&self, pixelCoords: &glm::UVec2) -> Option<DepthReadbackDispatcher>
 	{
 		if let Some(da) = &self.renderState.depthStencilAttachment {
-			Some(DepthReadbackDispatcher::new(&da.texture))
+			Some(DepthReadbackDispatcher::new(&pixelCoords, self.projectionAt(&pixelCoords), &da.texture))
 		}
 		else { None }
 	}
