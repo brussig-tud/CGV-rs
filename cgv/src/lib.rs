@@ -462,11 +462,17 @@ impl Player
 		eventLoop.exit();
 	}
 
-	pub fn getDepthAtSurfacePixel (&self, _pixelCoords: &glm::UVec2) -> Option<f32> {
-		/*self.withContext(|this, context| {
-			this.camera.as_ref().unwrap().getDepthValue(context, pixelCoords)
-		})*/
-		None
+	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
+		&self, pixelCoords: glm::UVec2, callback: Closure
+	){
+		if let Some(dispatcher) = self.camera.as_ref().unwrap().getDepthReadbackDispatcher() {
+			dispatcher.getDepthValueAsync(self.context.as_ref().unwrap(), pixelCoords, |depth| {
+				callback(Some(depth));
+			})
+		}
+		else {
+			callback(None)
+		}
 	}
 }
 

@@ -148,13 +148,14 @@ impl CameraInteractor for OrbitInteractor
 						if state.is_pressed() {
 							let nowT = time::Instant::now();
 							if nowT - self.lmbDownT < Self::DBL_CLICK_TIMEOUT {
-								tracing::warn!("DOUBLE CLICK!!!");
 								self.lmbDownT = nowT - Self::DBL_CLICK_TIMEOUT;
 								let lastMousePos = self.lastMousePos.as_ref().unwrap();
-								let depth = player.getDepthAtSurfacePixel(
-									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32)
+								player.getDepthAtSurfacePixelAsync(
+									glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
+									|depth| {
+										tracing::warn!("DEPTH: {:?}", depth);
+									}
 								);
-								tracing::warn!("DEPTH: {:?}", depth);
 							}
 							else {
 								self.lmbDownT = nowT;

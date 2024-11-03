@@ -49,6 +49,30 @@ pub enum FoV {
 
 //////
 //
+// Classes
+//
+
+pub struct DepthReadbackDispatcher<'a> {
+	depthTexture: &'a hal::Texture
+}
+impl<'a> DepthReadbackDispatcher<'a>
+{
+	pub fn new(depthTexture: &'a hal::Texture) -> Self { Self { depthTexture } }
+
+	pub fn getDepthValueAsync<Closure: FnOnce(f32) + wgpu::WasmNotSend + 'static> (
+		&self, context: &Context, surfaceCoords: glm::UVec2, callback: Closure
+	){
+		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
+			let loc = surfaceCoords.y as usize *rowStride + surfaceCoords.x as usize;
+			callback(hal::decodeDepth(loc, texels));
+		});
+	}
+}
+
+
+
+//////
+//
 // Traits
 //
 
@@ -105,18 +129,12 @@ pub trait Camera
 	/// The name given to the camera instance (usually upon creation).
 	fn name (&self) -> &str;
 
-	/*/// Retrieve the depth buffer value at the given surface pixel coordinates.
-	///
-	/// # Arguments
-	///
-	/// * `context` – The graphics context.
-	/// * `surfaceCoords` – The pixel coordinates on the window surface at which to get the depth value.
-	/// * `frameID` – The pixel coordinates on the window surface at which to get the depth value.
+	/// Obtain a dispatcher for asynchronously reading back the depth value at the given pixel coordinates.
 	///
 	/// # Returns
 	///
-	/// `Some` depth value, if the pixel is covered by a depth/stencil buffer, `None` otherwise.
-	fn accessDepth (&self, context: &Context, surfaceCoords: &glm::UVec2, frameID: u64) -> Option<f32>;*/
+	/// `Some` dispatcher if the camera has a depth buffer, `None` otherwise.
+	fn getDepthReadbackDispatcher (&self) -> Option<DepthReadbackDispatcher>;
 }
 
 /// A camera that can take input and start full scene render passes with its desired projection and view matrices.

@@ -15,7 +15,7 @@ use wgpu;
 
 // Image library
 use image::GenericImageView;
-
+use wgpu::WasmNotSend;
 // Local imports
 use crate::*;
 use crate::util::math::alignToFactor;
@@ -88,18 +88,13 @@ impl From<&wgpu::TextureFormat> for DepthStencilFormat {
 	fn from(format: &wgpu::TextureFormat) -> Self { (*format).into() }
 }
 
-/// Accesses the actual texels during [texture readback](Texture::readback).
-pub struct TexelAccessor<'a, TexelType> {
-	texels: &'a [TexelType],
-	rowStride: usize,
-}
-
-/// Holds information on how to access texels during [texture readback](Texture::readback).
-pub enum ReadbackInfo<'a> {
-	U16(TexelAccessor<'a, u16>),
-	U32(TexelAccessor<'a, u32>),
-	U64(TexelAccessor<'a, u64>),
-	F32(TexelAccessor<'a, f32>)
+/// Encapsulates the slice of texels provided during [texture readback](Texture::readback).
+#[derive(Debug)]
+pub enum ReadBackTexels<'a> {
+	U16(&'a [u16]),
+	U32(&'a [u32]),
+	U64(&'a [u64]),
+	F32(&'a [f32])
 }
 
 
@@ -515,8 +510,9 @@ impl Texture
 		dpi::PhysicalSize::new(size.width, size.height)
 	}
 
-	pub fn readback<'map, Closure: FnOnce(ReadbackInfo<'map>)> (&self, context: &Context, callback: Closure)
-	{
+	pub fn readbackAsync<'map, Closure: FnOnce(ReadBackTexels<'map>, usize) + WasmNotSend + 'static> (
+		&self, context: &Context, callback: Closure
+	){
 		let mut enc = context.device.create_command_encoder(
 			&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
 		);
@@ -530,36 +526,35 @@ impl Texture
 		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
 		buf.slice(0..self.size.actual as u64).map_async(
 			wgpu::MapMode::Read, move |result| {
-				if result.is_ok() {
+				if result.is_ok()
+				{
 					let bufView = buf.slice(..).get_mapped_range();
 					let bytes = bufView.iter().as_slice();
-					let accessInfo = match this.descriptor.format {
-						wgpu::TextureFormat::Depth16Unorm => ReadbackInfo::U16(TexelAccessor {
-							texels: unsafe {
-								std::slice::from_raw_parts(
-									bytes.as_ptr() as *const u16, bytes.len() / size_of::<u16>()
-								)
-							},
-							rowStride: this.size.actual / (dims.y as usize * size_of::<u16>())
-						}),
-						wgpu::TextureFormat::Depth24PlusStencil8 => ReadbackInfo::U32(TexelAccessor {
-							texels: unsafe {
-								std::slice::from_raw_parts(
-									bytes.as_ptr() as *const u32, bytes.len() / size_of::<u32>()
-								)
-							},
-							rowStride: this.size.actual / (dims.y as usize * size_of::<u32>())
-						}),
-						wgpu::TextureFormat::Depth32Float => ReadbackInfo::F32(TexelAccessor {
-							texels: unsafe {
-								std::slice::from_raw_parts(
-									bytes.as_ptr() as *const f32, bytes.len() / size_of::<f32>()
-								)
-							},
-							rowStride: this.size.actual / (dims.y as usize * size_of::<f32>())
-						}),
-						_ => panic!("readback for texture format {:?} not yet implemented", this.descriptor.format)
+					let rowStride;
+					let readbackInfo = match this.descriptor.format {
+						wgpu::TextureFormat::Depth16Unorm => {
+							rowStride = this.size.actual / (dims.y as usize * size_of::<u16>());
+							ReadBackTexels::U16(unsafe { std::slice::from_raw_parts(
+								bytes.as_ptr() as *const u16, bytes.len() / size_of::<u16>()
+							)})
+						},
+						wgpu::TextureFormat::Depth24PlusStencil8 => {
+							rowStride = this.size.actual / (dims.y as usize * size_of::<u32>());
+							ReadBackTexels::U32(unsafe { std::slice::from_raw_parts(
+								bytes.as_ptr() as *const u32, bytes.len() / size_of::<u32>()
+							)})
+						},
+						wgpu::TextureFormat::Depth32Float => {
+							rowStride = this.size.actual / (dims.y as usize * size_of::<f32>());
+							ReadBackTexels::F32(unsafe { std::slice::from_raw_parts(
+								bytes.as_ptr() as *const f32, bytes.len() / size_of::<f32>()
+							)})
+						},
+						_ => unimplemented!(
+							"readback for texture format {:?} not yet implemented", this.descriptor.format
+						)
 					};
+					callback(readbackInfo, rowStride);
 					drop(bufView);
 					buf.unmap();
 				}
@@ -617,5 +612,24 @@ pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> usize
 		=> 4,
 
 		_ => panic!("Unsupported texture format: {:?}", format)
+	}
+}
+
+pub fn decodeDepthU16 (_value: u16) -> f32 {
+	unimplemented!("internal representation of 16-bit integer depth is as of yet unknown");
+}
+
+pub fn decodeDepthU32 (_value: u32) -> f32 {
+	unimplemented!("internal representation of 24-bit integer depth with or without stencil is as of yet unknown");
+}
+
+pub fn decodeDepth (location: usize, texels: ReadBackTexels) -> f32
+{
+	match texels
+	{
+		ReadBackTexels::U16(texels) => decodeDepthU16(texels[location]),
+		ReadBackTexels::U32(texels) => decodeDepthU32(texels[location]),
+		ReadBackTexels::F32(texels) => texels[location],
+		_ => unreachable!("texel type {:?} cannot contain depth and should not be passed", texels)
 	}
 }
