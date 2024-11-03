@@ -462,10 +462,11 @@ impl Player
 		eventLoop.exit();
 	}
 
-	pub fn getDepthAtSurfacePixel (&self, pixelCoords: &glm::UVec2) -> Option<f32> {
-		self.withContext(|this, context| {
+	pub fn getDepthAtSurfacePixel (&self, _pixelCoords: &glm::UVec2) -> Option<f32> {
+		/*self.withContext(|this, context| {
 			this.camera.as_ref().unwrap().getDepthValue(context, pixelCoords)
-		})
+		})*/
+		None
 	}
 }
 

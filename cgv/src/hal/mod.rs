@@ -35,7 +35,7 @@ pub use uniformgroup::UniformGroup; // re-export
 
 //////
 //
-// Enums
+// Structs and enums
 //
 
 /// High-level enum encompassing all supported formats for depth/stencil buffers.
@@ -88,6 +88,20 @@ impl From<&wgpu::TextureFormat> for DepthStencilFormat {
 	fn from(format: &wgpu::TextureFormat) -> Self { (*format).into() }
 }
 
+/// Accesses the actual texels during [texture readback](Texture::readback).
+pub struct TexelAccessor<'a, TexelType> {
+	texels: &'a [TexelType],
+	rowStride: usize,
+}
+
+/// Holds information on how to access texels during [texture readback](Texture::readback).
+pub enum ReadbackInfo<'a> {
+	U16(TexelAccessor<'a, u16>),
+	U32(TexelAccessor<'a, u32>),
+	U64(TexelAccessor<'a, u64>),
+	F32(TexelAccessor<'a, f32>)
+}
+
 
 
 //////
@@ -97,8 +111,8 @@ impl From<&wgpu::TextureFormat> for DepthStencilFormat {
 
 /// Encapsulates the logical and real GPU-side physical size (including padding for alignment) of a texture
 pub struct TextureSize {
-	pub logical: u64,
-	pub actual: u64
+	pub logical: usize,
+	pub actual: usize
 }
 
 
@@ -221,18 +235,20 @@ impl Texture
 		});
 
 		let size = {
-			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as u64;
-			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as u64;
+			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as usize;
+			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as usize;
 			TextureSize {
 				logical: logicalBytesPerRow * heightTimesDepth,
-				actual: alignToFactor(logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64) * heightTimesDepth
+				actual: heightTimesDepth * alignToFactor(
+					logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize
+				)
 			}
 		};
 		let readbackBuffer = match &specialUsageFlags {
 			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
 				&wgpu::BufferDescriptor {
 					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
-					size: size.actual,
+					size: size.actual as u64,
 					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 					mapped_at_creation: false
 				}
@@ -317,18 +333,20 @@ impl Texture
 		);
 
 		let size = {
-			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as u64;
-			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as u64;
+			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as usize;
+			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as usize;
 			TextureSize {
 				logical: logicalBytesPerRow * heightTimesDepth,
-				actual: alignToFactor(logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64) * heightTimesDepth
+				actual: heightTimesDepth * alignToFactor(
+					logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize
+				)
 			}
 		};
 		let readbackBuffer = match usageFlags {
 			wgpu::TextureUsages::COPY_SRC => Some(Box::new(context.device.create_buffer(
 				&wgpu::BufferDescriptor {
 					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
-					size: size.actual,
+					size: size.actual as u64,
 					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 					mapped_at_creation: false
 				}
@@ -419,18 +437,20 @@ impl Texture
 		);
 
 		let size = {
-			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as u64;
-			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as u64;
+			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as usize;
+			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as usize;
 			TextureSize {
 				logical: logicalBytesPerRow * heightTimesDepth,
-				actual: alignToFactor(logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64) * heightTimesDepth
+				actual: heightTimesDepth * alignToFactor(
+					logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize
+				)
 			}
 		};
 		let readbackBuffer = match specialUsageFlags {
 			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
 				&wgpu::BufferDescriptor {
 					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
-					size: size.actual,
+					size: size.actual as u64,
 					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
 					mapped_at_creation: false
 				}
@@ -468,7 +488,7 @@ impl Texture
 	}
 
 	/// The logical size of the uncompressed texture (excluding mipmap levels) in bytes.
-	pub fn size (&self) -> u64 { self.size.logical }
+	pub fn size (&self) -> usize { self.size.logical }
 
 	pub fn dims (&self) -> glm::UVec3 {
 		let size = &self.descriptor.size;
@@ -493,6 +513,62 @@ impl Texture
 	pub fn physicalSizeWH (&self) -> dpi::PhysicalSize<u32> {
 		let size = &self.descriptor.size;
 		dpi::PhysicalSize::new(size.width, size.height)
+	}
+
+	pub fn readback<'map, Closure: FnOnce(ReadbackInfo<'map>)> (&self, context: &Context, callback: Closure)
+	{
+		let mut enc = context.device.create_command_encoder(
+			&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
+		);
+		enc.copy_texture_to_buffer(
+			*self.readbackView_tex.as_ref().unwrap(),
+			*self.readbackView_buf.as_ref().unwrap(), self.descriptor.size
+		);
+		context.queue.submit(Some(enc.finish()));
+		let dims = self.dims2WH();
+		let this = util::statify(self);
+		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
+		buf.slice(0..self.size.actual as u64).map_async(
+			wgpu::MapMode::Read, move |result| {
+				if result.is_ok() {
+					let bufView = buf.slice(..).get_mapped_range();
+					let bytes = bufView.iter().as_slice();
+					let accessInfo = match this.descriptor.format {
+						wgpu::TextureFormat::Depth16Unorm => ReadbackInfo::U16(TexelAccessor {
+							texels: unsafe {
+								std::slice::from_raw_parts(
+									bytes.as_ptr() as *const u16, bytes.len() / size_of::<u16>()
+								)
+							},
+							rowStride: this.size.actual / (dims.y as usize * size_of::<u16>())
+						}),
+						wgpu::TextureFormat::Depth24PlusStencil8 => ReadbackInfo::U32(TexelAccessor {
+							texels: unsafe {
+								std::slice::from_raw_parts(
+									bytes.as_ptr() as *const u32, bytes.len() / size_of::<u32>()
+								)
+							},
+							rowStride: this.size.actual / (dims.y as usize * size_of::<u32>())
+						}),
+						wgpu::TextureFormat::Depth32Float => ReadbackInfo::F32(TexelAccessor {
+							texels: unsafe {
+								std::slice::from_raw_parts(
+									bytes.as_ptr() as *const f32, bytes.len() / size_of::<f32>()
+								)
+							},
+							rowStride: this.size.actual / (dims.y as usize * size_of::<f32>())
+						}),
+						_ => panic!("readback for texture format {:?} not yet implemented", this.descriptor.format)
+					};
+					drop(bufView);
+					buf.unmap();
+				}
+				else {
+					tracing::error!("readback buffer could not be mapped");
+				}
+			}
+		);
+		context.device.poll(wgpu::Maintain::Wait);
 	}
 }
 
@@ -530,7 +606,7 @@ impl RenderTarget {
 // Functions
 //
 
-pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> u64
+pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> usize
 {
 	match format {
 		wgpu::TextureFormat::Depth16Unorm => 2,

@@ -111,7 +111,7 @@ impl Camera for MonoCamera
 
 	fn name (&self) -> &str { &self.name }
 
-	fn getDepthValue (&self, context: &Context, surfaceCoords: &glm::UVec2) -> Option<f32>
+	/*fn getDepthValue (&self, context: &Context, surfaceCoords: &glm::UVec2) -> Option<f32>
 	{
 		if let Some(da) = util::statify(&self.renderState.depthStencilAttachment) {
 			let mut enc = context.device.create_command_encoder(
@@ -159,5 +159,5 @@ impl Camera for MonoCamera
 			}
 		}
 		else { None }
-	}
+	}*/
 }

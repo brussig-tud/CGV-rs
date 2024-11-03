@@ -105,17 +105,18 @@ pub trait Camera
 	/// The name given to the camera instance (usually upon creation).
 	fn name (&self) -> &str;
 
-	/// Retrieve the depth buffer value at the given surface pixel coordinates.
+	/*/// Retrieve the depth buffer value at the given surface pixel coordinates.
 	///
 	/// # Arguments
 	///
 	/// * `context` – The graphics context.
 	/// * `surfaceCoords` – The pixel coordinates on the window surface at which to get the depth value.
+	/// * `frameID` – The pixel coordinates on the window surface at which to get the depth value.
 	///
 	/// # Returns
 	///
 	/// `Some` depth value, if the pixel is covered by a depth/stencil buffer, `None` otherwise.
-	fn getDepthValue (&self, context: &Context, surfaceCoords: &glm::UVec2) -> Option<f32>;
+	fn accessDepth (&self, context: &Context, surfaceCoords: &glm::UVec2, frameID: u64) -> Option<f32>;*/
 }
 
 /// A camera that can take input and start full scene render passes with its desired projection and view matrices.

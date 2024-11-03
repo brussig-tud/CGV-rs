@@ -64,7 +64,7 @@ pub struct OrbitInteractor {
 impl OrbitInteractor
 {
 	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
-	const DBL_CLICK_TIMEOUT: time::Duration = time::Duration::from_millis(250);
+	const DBL_CLICK_TIMEOUT: time::Duration = time::Duration::from_millis(175);
 
 	pub fn new () -> Self
 	{
@@ -79,7 +79,7 @@ impl OrbitInteractor
 			dragLMB: false, dragMMB: false, dragRMB: false, roll: false,
 			lastMousePos: None,
 			dirty: true,
-			lmbDownT: time::Instant::now()-Self::DBL_CLICK_TIMEOUT
+			lmbDownT: time::Instant::now()-time::Duration::from_millis(75),
 		}
 	}
 
