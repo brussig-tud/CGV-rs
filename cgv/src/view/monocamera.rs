@@ -120,7 +120,12 @@ impl Camera for MonoCamera
 	fn getDepthReadbackDispatcher (&self, pixelCoords: &glm::UVec2) -> Option<DepthReadbackDispatcher>
 	{
 		if let Some(da) = &self.renderState.depthStencilAttachment {
-			Some(DepthReadbackDispatcher::new(&pixelCoords, self.projectionAt(&pixelCoords), &da.texture))
+			Some(DepthReadbackDispatcher::new(
+				&pixelCoords, &Viewport {
+					min: glm::vec2(0u32, 0u32), extend: da.texture.dims2WH()
+				},
+				self.projectionAt(&pixelCoords), self.viewAt(&pixelCoords), &da.texture
+			))
 		}
 		else { None }
 	}

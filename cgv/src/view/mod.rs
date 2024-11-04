@@ -52,18 +52,43 @@ pub enum FoV {
 // Classes
 //
 
+#[derive(Clone, Copy)]
+pub struct Viewport {
+	pub min: glm::UVec2,
+	pub extend: glm::UVec2
+}
+impl Viewport {
+	pub fn transformFromClip (&self, clipSpaceXY: &glm::Vec2) -> glm::UVec2 {
+		todo!("implement forward viewspace transform")
+	}
+	pub fn transformToClip (&self, viewportSpaceXY: &glm::UVec2) -> glm::Vec2 {
+		let pixelCoords_vpRel = *viewportSpaceXY - self.min;
+		let pixelCoords_clip01 =
+			glm::vec2(pixelCoords_vpRel.x as f32, pixelCoords_vpRel.y as f32).component_div(
+				&glm::vec2(self.extend.x as f32, self.extend.y as f32)
+			);
+		let pixelCoords_clip = pixelCoords_clip01*2f32 - glm::vec2(1f32, 1f32);
+		glm::vec2(pixelCoords_clip.x, -pixelCoords_clip.y)
+	}
+}
+
 pub struct DepthReadbackDispatcher<'a> {
 	pixelCoords: glm::UVec2,
+	viewport: Viewport,
 	projection: &'a glm::Mat4,
+	view: &'a glm::Mat4,
 	depthTexture: &'a hal::Texture
 }
 impl<'a> DepthReadbackDispatcher<'a>
 {
-	pub fn new (pixelCoords: &glm::UVec2, projection: &'a glm::Mat4, depthTexture: &'a hal::Texture) -> Self {
-		Self { pixelCoords: *pixelCoords, projection, depthTexture }
+	pub fn new (
+		pixelCoords: &glm::UVec2, viewport: &Viewport, projection: &'a glm::Mat4, view: &'a glm::Mat4,
+		depthTexture: &'a hal::Texture
+	) -> Self {
+		Self { pixelCoords: *pixelCoords, viewport: *viewport, projection, view, depthTexture }
 	}
 
-	pub fn getDepthValueAsync<Closure: FnOnce(f32) + wgpu::WasmNotSend + 'static> (
+	pub fn getDepthValue_async<Closure: FnOnce(f32) + wgpu::WasmNotSend + 'static> (
 		&self, context: &Context, callback: Closure
 	){
 		let pixelCoords = self.pixelCoords;
@@ -73,21 +98,45 @@ impl<'a> DepthReadbackDispatcher<'a>
 		});
 	}
 
-	pub fn unprojectPointAsync<Closure: FnOnce(&glm::Vec4) + wgpu::WasmNotSend + 'static> (
+	pub fn unprojectPointH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
 		&self, context: &Context, callback: Closure
 	){
 		let pixelCoords = self.pixelCoords;
-		let dims = self.depthTexture.dims2WH();
+		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
 		let projection = util::statify(self.projection);
+		let view = util::statify(self.view);
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
-			let dims = glm::vec2(dims.x as f32, dims.y as f32);
 			let projected = glm::vec4(
-				pixelCoords.x as f32 / dims.x, pixelCoords.y as f32 / dims.y,
-				hal::decodeDepth(loc, texels), 1.
+				pixelCoords_clip.x, pixelCoords_clip.y, hal::decodeDepth(loc, texels), 1.
 			);
-			let unprojected = glm::inverse(projection) * projected;
-			callback(&unprojected);
+			if projected.z < 1. {
+				let unprojected = glm::inverse(projection) * projected;
+				let unviewed = glm::inverse(view) * unprojected;
+				callback(Some(&unviewed));
+			}
+			else { callback(None); }
+		});
+	}
+
+	pub fn unprojectPoint_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
+		&self, context: &Context, callback: Closure
+	){
+		let pixelCoords = self.pixelCoords;
+		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
+		let projection = util::statify(self.projection);
+		let view = util::statify(self.view);
+		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
+			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
+			let projected = glm::vec4(
+				pixelCoords_clip.x, pixelCoords_clip.y, hal::decodeDepth(loc, texels), 1.
+			);
+			if projected.z < 1. {
+				let unprojected = glm::inverse(projection) * projected;
+				let unviewed = glm::inverse(view) * unprojected;
+				callback(Some(&(glm::vec4_to_vec3(&unviewed) / unviewed.w)));
+			}
+			else { callback(None); }
 		});
 	}
 }

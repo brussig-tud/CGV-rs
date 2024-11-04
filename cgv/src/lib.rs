@@ -467,7 +467,7 @@ impl Player
 	){
 		if let Some(dispatcher) =
 			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
-				dispatcher.getDepthValueAsync(self.context.as_ref().unwrap(), |depth| {
+				dispatcher.getDepthValue_async(self.context.as_ref().unwrap(), |depth| {
 					callback(Some(depth));
 				})
 			}
@@ -476,13 +476,27 @@ impl Player
 		}
 	}
 
-	pub fn unprojectPointAtSurfacePixelAsync<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
+	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
 		if let Some(dispatcher) =
 			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.unprojectPointAsync(self.context.as_ref().unwrap(), |point| {
-				callback(Some(point));
+			dispatcher.unprojectPointH_async(self.context.as_ref().unwrap(), |point| {
+				callback(point);
+			})
+		}
+		else {
+			callback(None)
+		}
+	}
+
+	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
+		&self, pixelCoords: &glm::UVec2, callback: Closure
+	){
+		if let Some(dispatcher) =
+			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.unprojectPoint_async(self.context.as_ref().unwrap(), |point| {
+				callback(point);
 			})
 		}
 		else {
