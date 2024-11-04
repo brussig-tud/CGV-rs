@@ -6,7 +6,7 @@
 
 // Standard library
 /* Nothing here yet */
-use std::cmp::min;
+
 // Winit library
 use winit::dpi;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
@@ -143,8 +143,8 @@ impl CameraInteractor for OrbitInteractor
 	{
 		if let Some(focusChange) = &mut self.focusChange
 		{
-			focusChange.t = f32::min(focusChange.t + 0.05f32, 1f32);
-			let targetCur = glm::mix(&focusChange.old, &focusChange.new, focusChange.t);
+			focusChange.t = f32::min(focusChange.t + 0.015625f32, 1f32);
+			let targetCur = math::smoothLerp3(&focusChange.old, &focusChange.new, focusChange.t);
 			let offset = targetCur - self.target;
 			self.target += offset;
 			self.eye += offset;
@@ -174,12 +174,16 @@ impl CameraInteractor for OrbitInteractor
 
 			WindowEvent::MouseInput {state, button, ..}
 			=> {
-				match *button {
-					MouseButton::Left => {
+				match *button
+				{
+					MouseButton::Left =>
+					{
 						self.dragLMB = *state == ElementState::Pressed;
-						if state.is_pressed() {
+						if state.is_pressed()
+						{
 							let nowT = time::Instant::now();
-							if nowT - self.lmbDownT < Self::DBL_CLICK_TIMEOUT {
+							if nowT - self.lmbDownT < Self::DBL_CLICK_TIMEOUT
+							{
 								self.lmbDownT = nowT - Self::DBL_CLICK_TIMEOUT;
 								let lastMousePos = self.lastMousePos.as_ref().unwrap();
 								let this = util::mutify(self);

@@ -15,7 +15,7 @@ use wgpu;
 
 // Image library
 use image::GenericImageView;
-use wgpu::WasmNotSend;
+
 // Local imports
 use crate::*;
 use crate::util::math::alignToFactor;
@@ -510,7 +510,7 @@ impl Texture
 		dpi::PhysicalSize::new(size.width, size.height)
 	}
 
-	pub fn readbackAsync<'map, Closure: FnOnce(ReadBackTexels<'map>, usize) + WasmNotSend + 'static> (
+	pub fn readbackAsync<'map, Closure: FnOnce(ReadBackTexels<'map>, usize) + wgpu::WasmNotSend + 'static> (
 		&self, context: &Context, callback: Closure
 	){
 		let mut enc = context.device.create_command_encoder(

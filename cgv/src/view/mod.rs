@@ -57,17 +57,24 @@ pub struct Viewport {
 	pub min: glm::UVec2,
 	pub extend: glm::UVec2
 }
-impl Viewport {
-	pub fn transformFromClip (&self, clipSpaceXY: &glm::Vec2) -> glm::UVec2 {
-		todo!("implement forward viewspace transform")
-	}
-	pub fn transformToClip (&self, viewportSpaceXY: &glm::UVec2) -> glm::Vec2 {
-		let pixelCoords_vpRel = *viewportSpaceXY - self.min;
-		let pixelCoords_clip01 =
-			glm::vec2(pixelCoords_vpRel.x as f32, pixelCoords_vpRel.y as f32).component_div(
+impl Viewport
+{
+	pub fn transformFromClip (&self, clipSpaceXY: &glm::Vec2) -> glm::UVec2
+	{
+		let scaled =
+			((glm::vec2(clipSpaceXY.x, -clipSpaceXY.y) + glm::vec2(1f32, 1f32)) * 0.5).component_mul(
 				&glm::vec2(self.extend.x as f32, self.extend.y as f32)
 			);
-		let pixelCoords_clip = pixelCoords_clip01*2f32 - glm::vec2(1f32, 1f32);
+		glm::vec2(scaled.x as u32, scaled.y as u32)
+	}
+	pub fn transformToClip (&self, screenSpaceXY: &glm::UVec2) -> glm::Vec2
+	{
+		let pixelCoords_vpRel = *screenSpaceXY - self.min;
+		let pixelCoords_clip =
+			  glm::vec2(pixelCoords_vpRel.x as f32, pixelCoords_vpRel.y as f32).component_div(
+			  	&glm::vec2(self.extend.x as f32, self.extend.y as f32)
+			  )
+			* 2f32  -  glm::vec2(1f32, 1f32);
 		glm::vec2(pixelCoords_clip.x, -pixelCoords_clip.y)
 	}
 }
@@ -111,8 +118,7 @@ impl<'a> DepthReadbackDispatcher<'a>
 				pixelCoords_clip.x, pixelCoords_clip.y, hal::decodeDepth(loc, texels), 1.
 			);
 			if projected.z < 1. {
-				let unprojected = glm::inverse(projection) * projected;
-				let unviewed = glm::inverse(view) * unprojected;
+				let unviewed = glm::inverse(&(projection * view)) * projected;
 				callback(Some(&unviewed));
 			}
 			else { callback(None); }
@@ -132,8 +138,7 @@ impl<'a> DepthReadbackDispatcher<'a>
 				pixelCoords_clip.x, pixelCoords_clip.y, hal::decodeDepth(loc, texels), 1.
 			);
 			if projected.z < 1. {
-				let unprojected = glm::inverse(projection) * projected;
-				let unviewed = glm::inverse(view) * unprojected;
+				let unviewed = glm::inverse(&(projection * view)) * projected;
 				callback(Some(&(glm::vec4_to_vec3(&unviewed) / unviewed.w)));
 			}
 			else { callback(None); }

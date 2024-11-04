@@ -15,6 +15,7 @@
 //
 
 /// Submodule providing assorted math utilities.
+#[cfg(not(feature="buildScriptUsage"))]
 pub mod math;
 
 /// Submodule providing operations on file system paths.

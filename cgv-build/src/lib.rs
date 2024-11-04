@@ -24,7 +24,6 @@
 // CGV-rs util modules
 mod util {
 	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/mod.rs"));
-	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/path.rs"));
 }
 
 
@@ -242,12 +241,13 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 		);
 		println!("cargo::rerun-if-changed={}", dep_absPath.as_os_str().to_str().unwrap());
 	}
-	println!("cargo::rerun-if-changed={}", &cgvBuildCrateDirectory().to_str()
-		.context("CGV-rs seems to appears to reside at a non-UTF-8 path")?
+	println!(
+		"cargo::rerun-if-changed={}",
+		&cgvBuildCrateDirectory().to_str().context("CGV-rs seems to appears to reside at a non-UTF-8 path")?
 	);
 	let outputPath = util::path::normalizeToAnchor(&manifestPath, &outputPath);
-	println!("cargo::rerun-if-changed={}", outputPath.as_os_str().to_str()
-		.context("`outputPath` contains non-UTF-8 characters")?
+	println!("cargo::rerun-if-changed={}",
+		outputPath.as_os_str().to_str().context("`outputPath` contains non-UTF-8 characters")?
 	);
 
 	// Setup cargo-metadata to retrieve our custom fields

@@ -7,6 +7,9 @@
 // Standard library
 use std::ops::*;
 
+// GLM library
+use glm;
+
 
 
 //////
@@ -57,4 +60,15 @@ macro_rules! rad2deg { ($rad:expr) => {$rad * 180./3.141592653589793238462643383
 /// The number rounded up to the nearest multiple of `factor`
 pub fn alignToFactor<T: Copy + Rem<Output=T> + Add<Output=T> + Sub<Output=T>> (number: T, factor: T) -> T {
 	number + factor - (number % factor)
+}
+
+/// Generic cubic polynomial for C1-smooth interpolation.
+pub fn smoothstep (t_linear: f32) -> f32 {
+	let t2 = t_linear*t_linear;
+	glm::clamp_scalar(-2f32*t2*t_linear + 3f32*t2, 0f32, 1f32)
+}
+
+/// Generic C1-smooth cubic interpolation.
+pub fn smoothLerp3 (v1: &glm::Vec3, v2: &glm::Vec3, t_linear: f32) -> glm::Vec3 {
+	glm::mix(v1, v2, smoothstep(t_linear))
 }
