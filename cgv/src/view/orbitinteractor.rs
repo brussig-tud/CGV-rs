@@ -155,12 +155,15 @@ impl CameraInteractor for OrbitInteractor
 									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
 									|point| {
 										if let Some(point) = point {
-											this.target = *point;
+											let offset = *point - this.target;
+											this.target += offset;
+											this.eye += offset;
 											this.dirty = true;
 											tracing::debug!("Double-click to new focus: {:?}", point);
 										}
 									}
 								);
+								return HandledExclusively(/* redraw */true);
 							}
 							else {
 								self.lmbDownT = nowT;
