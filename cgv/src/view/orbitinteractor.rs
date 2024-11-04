@@ -6,7 +6,7 @@
 
 // Standard library
 /* Nothing here yet */
-
+use std::cmp::min;
 // Winit library
 use winit::dpi;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
@@ -34,6 +34,20 @@ pub const CLIPSPACE_TRANSFORM_OGL2WGPU: glm::Mat4 = glm::Mat4::new(
 
 //////
 //
+// Structs
+//
+
+#[derive(Debug)]
+struct FocusChange {
+	pub old: glm::Vec3,
+	pub new: glm::Vec3,
+	pub t: f32
+}
+
+
+
+// ////
+//
 // Classes
 //
 
@@ -55,6 +69,8 @@ pub struct OrbitInteractor {
 	dragRMB: bool,
 	roll: bool,
 	lastMousePos: Option<glm::Vec2>,
+
+	focusChange: Option<FocusChange>,
 	dirty: bool,
 
 	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
@@ -78,6 +94,7 @@ impl OrbitInteractor
 			view: glm::Mat4::identity(),
 			dragLMB: false, dragMMB: false, dragRMB: false, roll: false,
 			lastMousePos: None,
+			focusChange: None,
 			dirty: true,
 			lmbDownT: time::Instant::now()-time::Duration::from_millis(75),
 		}
@@ -122,13 +139,28 @@ impl CameraInteractor for OrbitInteractor
 		&self.view
 	}
 
-	fn update (&mut self) -> bool {
-		if self.dirty {
+	fn update (&mut self, player: &'static Player) -> bool
+	{
+		if let Some(focusChange) = &mut self.focusChange
+		{
+			focusChange.t = f32::min(focusChange.t + 0.05f32, 1f32);
+			let targetCur = glm::mix(&focusChange.old, &focusChange.new, focusChange.t);
+			let offset = targetCur - self.target;
+			self.target += offset;
+			self.eye += offset;
+			if targetCur == focusChange.new {
+				self.focusChange = None;
+			}
+			self.dirty = true;
+			player.postRedraw();
+		}
+		let updated = if self.dirty {
 			self.view = glm::look_at(&self.eye, &self.target, &self.up);
 			self.dirty = false;
 			true
 		}
-		else { false }
+		else { false };
+		updated
 	}
 
 	fn input (&mut self, event: &WindowEvent, player: &'static Player) -> EventOutcome
@@ -155,11 +187,10 @@ impl CameraInteractor for OrbitInteractor
 									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
 									|point| {
 										if let Some(point) = point {
-											let offset = *point - this.target;
-											this.target += offset;
-											this.eye += offset;
-											this.dirty = true;
 											tracing::debug!("Double-click to new focus: {:?}", point);
+											this.focusChange = Some(FocusChange {
+												old: this.target, new: *point, t: 0.
+											});
 										}
 									}
 								);

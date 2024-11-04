@@ -239,11 +239,15 @@ pub trait CameraInteractor
 	/// transformation matrices from higher-level parameters etc. This is guaranteed to be called at least once before
 	/// the interactor is asked to calculate any matrices.
 	///
+	/// # Arguments
+	///
+	/// * `player` – Access to the CGV-rs player instance, useful e.g. to schedule redraws when animating the camera.
+	///
 	/// # Returns
 	///
 	/// `true` if any update to the extrinsic or intrinsic camera parameters occured, `false` otherwise. This
 	/// information is utilized to optimize managed bind group updates.
-	fn update (&mut self) -> bool;
+	fn update (&mut self, player: &'static Player) -> bool;
 
 	/// Report a window event to the camera.
 	///

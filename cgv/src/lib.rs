@@ -375,7 +375,7 @@ impl Player
 		let context = util::statify(self.context.as_ref().unwrap());
 
 		// Update the active camera
-		if self.cameraInteractor.update() {
+		if self.cameraInteractor.update(util::statify(self)) {
 			self.camera.as_mut().unwrap().update(self.cameraInteractor.as_ref());
 		}
 
@@ -439,6 +439,10 @@ impl Player
 
 		// Done!
 		Ok(())
+	}
+
+	pub fn postRedraw (&self) {
+		self.context.as_ref().unwrap().window.request_redraw();
 	}
 
 	pub fn withContext<ReturnType, Closure: FnOnce(&'static Player, &'static Context) -> ReturnType> (
