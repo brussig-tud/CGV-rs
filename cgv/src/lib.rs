@@ -447,14 +447,6 @@ impl Player
 			}
 		}
 
-		// Update frame stats
-		if self.continousRedrawRequests > 0 {
-			let now = time::Instant::now();
-			self.prevFrameDuration = now - self.prevFrameInstant;
-			self.prevFrameInstant = now;
-			context.window().request_redraw();
-		}
-
 		// Done!
 		Ok(())
 	}
@@ -745,8 +737,7 @@ impl ApplicationHandler<UserEvent> for Player
 							}
 
 							// Swap buffers
-							let x = self.context.as_mut().unwrap().endFrame();
-							x.present();
+							self.context.as_mut().unwrap().endFrame().present();
 						}
 
 						// Reconfigure the surface if it's lost or outdated
@@ -766,6 +757,14 @@ impl ApplicationHandler<UserEvent> for Player
 						Err(wgpu::SurfaceError::Timeout) =>
 							{ tracing::warn!("Surface timeout") }
 					};
+
+					// Update frame stats
+					if self.continousRedrawRequests > 0 {
+						let now = time::Instant::now();
+						self.prevFrameDuration = now - self.prevFrameInstant;
+						self.prevFrameInstant = now;
+						self.context.as_ref().unwrap().window().request_redraw();
+					}
 				}
 			},
 
