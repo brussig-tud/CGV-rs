@@ -46,7 +46,7 @@ struct FocusChange {
 
 
 
-// ////
+//////
 //
 // Classes
 //
@@ -88,7 +88,7 @@ impl OrbitInteractor
 			eye: glm::Vec3::new(0., 0., 2.),
 			target: glm::Vec3::zeros(),
 			up: glm::Vec3::new(0., 1., 0.),
-			fov: FoV::Perspective(util::math::deg2rad!(60.)),
+			fov: FoV::Perspective(math::deg2rad!(60.)),
 			zNear: 0.01,
 			zFar: 100.,
 			view: glm::Mat4::identity(),
@@ -143,16 +143,16 @@ impl CameraInteractor for OrbitInteractor
 	{
 		if let Some(focusChange) = &mut self.focusChange
 		{
-			focusChange.t = f32::min(focusChange.t + 0.015625f32, 1f32);
+			focusChange.t = f32::min(focusChange.t + player.lastFrameTime()*1.5, 1f32);
 			let targetCur = math::smoothLerp3(&focusChange.old, &focusChange.new, focusChange.t);
 			let offset = targetCur - self.target;
 			self.target += offset;
 			self.eye += offset;
 			if targetCur == focusChange.new {
 				self.focusChange = None;
+				player.dropContinuousRedrawRequest();
 			}
 			self.dirty = true;
-			player.postRedraw();
 		}
 		let updated = if self.dirty {
 			self.view = glm::look_at(&self.eye, &self.target, &self.up);
@@ -189,22 +189,23 @@ impl CameraInteractor for OrbitInteractor
 								let this = util::mutify(self);
 								player.unprojectPointAtSurfacePixel_async(
 									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
-									|point| {
+									move |point| {
 										if let Some(point) = point {
 											tracing::debug!("Double-click to new focus: {:?}", point);
 											this.focusChange = Some(FocusChange {
 												old: this.target, new: *point, t: 0.
 											});
+											player.pushContinuousRedrawRequest();
 										}
 									}
 								);
-								return HandledExclusively(/* redraw */true);
+								return HandledExclusively(/* redraw */false); // redrawing handled elsewhere
 							}
 							else {
 								self.lmbDownT = nowT;
 							}
 						}
-						HandledExclusively(/* redraw */false)
+						HandledExclusively(/* redraw */false) // no changes to camera parameters yet, no redraw required
 					},
 					MouseButton::Middle => {
 						self.dragMMB = *state == ElementState::Pressed;
@@ -220,6 +221,7 @@ impl CameraInteractor for OrbitInteractor
 
 			WindowEvent::CursorMoved {position, ..}
 			=> {
+				// Preamble
 				let delta = self.processMouseMove(position);
 				let dist = self.target - self.eye;
 
@@ -253,6 +255,10 @@ impl CameraInteractor for OrbitInteractor
 					self.target += fore;
 					self.eye += fore;
 					self.dirty = true;
+					if self.focusChange.is_some() {
+						self.focusChange = None;
+						player.dropContinuousRedrawRequest();
+					}
 					return HandledExclusively(/* redraw */true);
 				}
 
@@ -264,6 +270,10 @@ impl CameraInteractor for OrbitInteractor
 					self.target += diff;
 					self.eye += diff;
 					self.dirty = true;
+					if self.focusChange.is_some() {
+						self.focusChange = None;
+						player.dropContinuousRedrawRequest();
+					}
 					return HandledExclusively(/* redraw */true);
 				}
 

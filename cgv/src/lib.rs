@@ -92,7 +92,7 @@ use view::Camera;
 //
 
 // Populate the vault
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch="wasm32"))]
 #[ctor::ctor]
 fn initTracingProxy () {
 	initTracing()
@@ -115,7 +115,7 @@ fn initTracing ()
 		));
 
 	let subscriber = tracing_subscriber::registry().with(envFilter);
-	#[cfg(target_arch = "wasm32")] {
+	#[cfg(target_arch="wasm32")] {
 		use tracing_wasm::{WASMLayer, WASMLayerConfig};
 
 		console_error_panic_hook::set_once();
@@ -123,7 +123,7 @@ fn initTracing ()
 
 		subscriber.with(wasm_layer).init();
 	}
-	#[cfg(not(target_arch = "wasm32"))] {
+	#[cfg(not(target_arch="wasm32"))] {
 		let fmt_layer = tracing_subscriber::fmt::Layer::default();
 		subscriber.with(fmt_layer).init();
 	}
@@ -298,7 +298,7 @@ pub struct Player
 	eventLoop: Option<EventLoop<UserEvent>>,
 	eventLoopProxy: EventLoopProxy<UserEvent>,
 
-	#[cfg(target_arch = "wasm32")]
+	#[cfg(target_arch="wasm32")]
 	canvas: Option<web_sys::Element>,
 
 	context: Option<Context>,
@@ -311,8 +311,14 @@ pub struct Player
 
 	camera: Option<Box<dyn view::Camera>>,
 	cameraInteractor: Box<dyn view::CameraInteractor>,
-	clearers: Vec<clear::Clear>
+	clearers: Vec<clear::Clear>,
+
+	continousRedrawRequests: u32,
+	prevFrameInstant: time::Instant,
+	prevFrameDuration: time::Duration,
 }
+unsafe impl Sync for Player {}
+unsafe impl Send for Player {}
 
 impl Player
 {
@@ -335,7 +341,7 @@ impl Player
 			eventLoopProxy: eventLoop.create_proxy(),
 			eventLoop: Some(eventLoop),
 
-			#[cfg(target_arch = "wasm32")]
+			#[cfg(target_arch="wasm32")]
 			canvas: None,
 
 			context: None,
@@ -349,6 +355,10 @@ impl Player
 			camera: None,
 			cameraInteractor: Box::new(view::OrbitInteractor::new()),
 			clearers: Vec::new(),
+
+			continousRedrawRequests: 0,
+			prevFrameInstant: time::Instant::now(),
+			prevFrameDuration: time::Duration::from_secs(0)
 		})
 	}
 
@@ -437,12 +447,52 @@ impl Player
 			}
 		}
 
+		// Update frame stats
+		if self.continousRedrawRequests > 0 {
+			let now = time::Instant::now();
+			self.prevFrameDuration = now - self.prevFrameInstant;
+			self.prevFrameInstant = now;
+			context.window().request_redraw();
+		}
+
 		// Done!
 		Ok(())
 	}
 
-	pub fn postRedraw (&self) {
-		self.context.as_ref().unwrap().window.request_redraw();
+	pub fn pushContinuousRedrawRequest (&self)
+	{
+		let this = util::mutify(self);
+		if self.continousRedrawRequests < 1 {
+			this.prevFrameInstant = time::Instant::now();
+			this.prevFrameDuration = time::Duration::from_secs(0);
+			tracing::info!("Starting continuous redrawing");
+			self.context.as_ref().unwrap().window().request_redraw();
+		}
+		this.continousRedrawRequests += 1;
+	}
+
+	pub fn dropContinuousRedrawRequest (&self)
+	{
+		if self.continousRedrawRequests < 1 {
+			panic!("logic error - more continuous redraw requests dropped than were pushed");
+		}
+		let this = util::mutify(self);
+		this.continousRedrawRequests -= 1;
+		if self.continousRedrawRequests < 1 {
+			this.prevFrameDuration = time::Duration::from_secs(0);
+			tracing::info!("Stopping continuous redrawing");
+		}
+	}
+
+	pub fn postRedraw (&self)
+	{
+		if self.continousRedrawRequests < 1 {
+			self.context.as_ref().unwrap().window.request_redraw();
+		}
+	}
+
+	pub fn lastFrameTime (&self) -> f32 {
+		self.prevFrameDuration.as_secs_f32()
 	}
 
 	pub fn withContext<ReturnType, Closure: FnOnce(&'static Player, &'static Context) -> ReturnType> (
@@ -525,7 +575,7 @@ impl ApplicationHandler<UserEvent> for Player
 			.create_window(windowAttribs)
 			.expect("Couldn't create window.");
 
-		#[cfg(target_arch = "wasm32")] {
+		#[cfg(target_arch="wasm32")] {
 			use web_sys::Element;
 			use winit::platform::web::WindowExtWebSys;
 
@@ -540,7 +590,7 @@ impl ApplicationHandler<UserEvent> for Player
 				.expect("Couldn't append canvas to document body.");
 		}
 
-		#[cfg(target_arch = "wasm32")] {
+		#[cfg(target_arch="wasm32")] {
 			let state_future = Context::new(window);
 			let eventLoopProxy = self.eventLoopProxy.clone();
 			let future = async move {
@@ -551,7 +601,7 @@ impl ApplicationHandler<UserEvent> for Player
 			};
 			wasm_bindgen_futures::spawn_local(future);
 		}
-		#[cfg(not(target_arch = "wasm32"))] {
+		#[cfg(not(target_arch="wasm32"))] {
 			let context = pollster::block_on(Context::new(window));
 			assert!(self
 				.eventLoopProxy
@@ -724,7 +774,7 @@ impl ApplicationHandler<UserEvent> for Player
 			| WindowEvent::MouseWheel{..} | WindowEvent::ModifiersChanged{..}
 			=> {
 				let player = util::statify(self);
-				if let Some(context) = self.context.as_mut()
+				if let Some(_) = self.context.as_mut()
 				{
 					// GUI gets first dibs
 					/* nothing here yet */
@@ -734,13 +784,13 @@ impl ApplicationHandler<UserEvent> for Player
 					{
 						EventOutcome::HandledExclusively(redraw) => {
 							if redraw {
-								context.window.request_redraw();
+								self.postRedraw();
 							}
 							return;
 						}
 						EventOutcome::HandledDontClose(redraw)
 						=> if redraw {
-							context.window.request_redraw()
+							self.postRedraw()
 						}
 
 						EventOutcome::NotHandled => {}
@@ -752,11 +802,11 @@ impl ApplicationHandler<UserEvent> for Player
 						match app.onInput(&event)
 						{
 							EventOutcome::HandledExclusively(redraw) => {
-								if redraw { context.window.request_redraw() }
+								if redraw { self.postRedraw() }
 								return;
 							}
 							EventOutcome::HandledDontClose(redraw)
-							=> if redraw { context.window.request_redraw() }
+							=> if redraw { self.postRedraw() }
 
 							EventOutcome::NotHandled => {}
 						}
@@ -781,11 +831,11 @@ impl ApplicationHandler<UserEvent> for Player
 
 	fn about_to_wait (&mut self, _: &ActiveEventLoop)
 	{
-		if let Some(context) = self.context.as_ref() {
+		if let Some(_) = self.context.as_ref() {
 			if self.redrawOnceOnWait {
 				self.redrawOnceOnWait = false;
 				tracing::debug!("Scheduling additional redraw");
-				context.window.request_redraw();
+				self.postRedraw();
 			}
 		};
 	}
