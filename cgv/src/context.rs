@@ -16,6 +16,9 @@ use winit::{window::Window, dpi};
 // WGPU API
 use wgpu;
 
+// EGUI library
+use egui_wgpu;
+
 // Local imports
 use crate::*;
 
@@ -46,6 +49,25 @@ impl Context {
 	// Creating some of the wgpu types requires async code
 	pub async fn new (window: Window) -> Result<Context>
 	{
+		/*let eguiConfig = egui_wgpu::WgpuConfiguration {
+			supported_backends: egui_wgpu::wgpu::Backends::PRIMARY,
+			device_descriptor: Arc::new(|adapter| -> wgpu::DeviceDescriptor {
+				wgpu::DeviceDescriptor {
+					required_features: wgpu::Features::empty(),
+					required_limits: if cfg!(target_arch="wasm32") {
+						wgpu::Limits::default()
+					} else {
+						wgpu::Limits::default()
+					},
+					label: None,
+					memory_hints: Default::default(),
+				}
+			}),
+			present_mode: Default::default(),
+			desired_maximum_frame_latency: None,
+			power_preference: Default::default(),
+			on_surface_error: Arc::new(()),
+		};*/
 		let size = window.inner_size();
 
 		// The instance is a handle to our GPU
@@ -74,7 +96,7 @@ impl Context {
 				required_features: wgpu::Features::empty(),
 				// WebGL doesn't support all of wgpu's features, so if
 				// we're building for the web, we'll have to disable some.
-				required_limits: if cfg!(target_arch = "wasm32") {
+				required_limits: if cfg!(target_arch="wasm32") {
 					wgpu::Limits::default()
 				} else {
 					wgpu::Limits::default()
