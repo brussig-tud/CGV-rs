@@ -96,7 +96,7 @@ impl OrbitInteractor
 			lastMousePos: None,
 			focusChange: None,
 			dirty: true,
-			lmbDownT: time::Instant::now()-time::Duration::from_millis(75),
+			lmbDownT: time::Instant::now()-time::Duration::from_millis(1),
 		}
 	}
 

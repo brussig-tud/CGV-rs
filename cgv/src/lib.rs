@@ -315,7 +315,7 @@ pub struct Player
 
 	continousRedrawRequests: u32,
 	prevFrameInstant: time::Instant,
-	prevFrameDuration: time::Duration,
+	prevFrameDuration: time::Duration
 }
 unsafe impl Sync for Player {}
 unsafe impl Send for Player {}
