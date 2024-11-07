@@ -307,8 +307,8 @@ impl cgv::Application for SampleApplication
 				timestamp_writes: None,
 			});
 			renderPass.set_pipeline(&self.pipeline);
-			renderPass.set_bind_group(0, Some(&renderState.viewingUniforms.bindGroup), &[]);
-			renderPass.set_bind_group(1, Some(&self.texBindGroup), &[]);
+			renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
+			renderPass.set_bind_group(1, &self.texBindGroup, &[]);
 			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
 			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);

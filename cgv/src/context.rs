@@ -13,12 +13,6 @@ use anyhow::Result;
 // Winit library
 use winit::{window::Window, dpi};
 
-// WGPU API
-use wgpu;
-
-// EGUI library
-use egui_wgpu;
-
 // Local imports
 use crate::*;
 
@@ -32,8 +26,10 @@ use crate::*;
 pub struct Context
 {
 	pub surface: wgpu::Surface<'static>,
-	pub device: wgpu::Device,
-	pub queue: wgpu::Queue,
+	pub instance: Arc<wgpu::Instance>,
+	pub adapter: Arc<wgpu::Adapter>,
+	pub device: Arc<wgpu::Device>,
+	pub queue: Arc<wgpu::Queue>,
 
 	pub config: wgpu::SurfaceConfiguration,
 	pub surfaceConfigured: bool,
@@ -49,10 +45,32 @@ impl Context {
 	// Creating some of the wgpu types requires async code
 	pub async fn new (window: Window) -> Result<Context>
 	{
-		/*let eguiConfig = egui_wgpu::WgpuConfiguration {
-			supported_backends: egui_wgpu::wgpu::Backends::PRIMARY,
-			device_descriptor: Arc::new(|adapter| -> wgpu::DeviceDescriptor {
-				wgpu::DeviceDescriptor {
+		let size = window.inner_size();
+
+		// The instance is a handle to our GPU
+		// Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
+		let instance = Arc::new(wgpu::Instance::new(wgpu::InstanceDescriptor {
+			#[cfg(not(target_arch="wasm32"))]
+				backends: wgpu::Backends::PRIMARY,
+			#[cfg(target_arch="wasm32")]
+				backends: wgpu::Backends::BROWSER_WEBGPU,
+			..Default::default()
+		}));
+
+		let window = Arc::new(window);
+		let surface = instance.create_surface(window.clone()).unwrap();
+
+		let adapter = Arc::new(instance.request_adapter(
+			&wgpu::RequestAdapterOptions {
+				power_preference: wgpu::PowerPreference::default(),
+				compatible_surface: Some(&surface),
+				force_fallback_adapter: false,
+			},
+		).await.unwrap());
+
+		let (device, queue) = {
+			let (device, queue) = adapter.request_device(
+				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::empty(),
 					required_limits: if cfg!(target_arch="wasm32") {
 						wgpu::Limits::default()
@@ -61,67 +79,27 @@ impl Context {
 					},
 					label: None,
 					memory_hints: Default::default(),
-				}
-			}),
-			present_mode: Default::default(),
-			desired_maximum_frame_latency: None,
-			power_preference: Default::default(),
-			on_surface_error: Arc::new(()),
-		};*/
-		let size = window.inner_size();
-
-		// The instance is a handle to our GPU
-		// Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-		let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-			#[cfg(not(target_arch="wasm32"))]
-				backends: wgpu::Backends::PRIMARY,
-			#[cfg(target_arch="wasm32")]
-				backends: wgpu::Backends::BROWSER_WEBGPU,
-			..Default::default()
-		});
-
-		let window = Arc::new(window);
-		let surface = instance.create_surface(window.clone()).unwrap();
-
-		let adapter = instance.request_adapter(
-			&wgpu::RequestAdapterOptions {
-				power_preference: wgpu::PowerPreference::default(),
-				compatible_surface: Some(&surface),
-				force_fallback_adapter: false,
-			},
-		).await.unwrap();
-
-		let (device, queue) = adapter.request_device(
-			&wgpu::DeviceDescriptor {
-				required_features: wgpu::Features::empty(),
-				// WebGL doesn't support all of wgpu's features, so if
-				// we're building for the web, we'll have to disable some.
-				required_limits: if cfg!(target_arch="wasm32") {
-					wgpu::Limits::default()
-				} else {
-					wgpu::Limits::default()
 				},
-				label: None,
-				memory_hints: Default::default(),
-			},
-			None, // Trace path
-		).await.unwrap();
+				None, // trace path
+			).await?;
+			(Arc::new(device), Arc::new(queue))
+		};
 
-		let surface_caps = surface.get_capabilities(&adapter);
+		let surfaceCaps = surface.get_capabilities(&adapter);
 		// Shader code in this tutorial assumes an sRGB surface texture. Using a different
 		// one will result in all the colors coming out darker. If you want to support non
 		// sRGB surfaces, you'll need to account for that when drawing to the frame.
-		let surface_format = surface_caps.formats.iter()
+		let surface_format = surfaceCaps.formats.iter()
 			.find(|f| !f.is_srgb())
 			.copied()
-			.unwrap_or(surface_caps.formats[0]);
+			.unwrap_or(surfaceCaps.formats[0]);
 		let config = wgpu::SurfaceConfiguration {
 			usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
 			format: surface_format,
 			width: size.width,
 			height: size.height,
-			present_mode: surface_caps.present_modes[0],
-			alpha_mode: surface_caps.alpha_modes[0],
+			present_mode: surfaceCaps.present_modes[0],
+			alpha_mode: surfaceCaps.alpha_modes[0],
 			view_formats: vec![],
 			desired_maximum_frame_latency: 1,
 		};
@@ -138,6 +116,8 @@ impl Context {
 		// Done!
 		Ok(Self {
 			surface,
+			instance,
+			adapter,
 			device,
 			queue,
 			config,

@@ -52,7 +52,7 @@ pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
 pub use winit::event;
-pub use wgpu;
+pub use egui_wgpu::wgpu as wgpu;
 
 
 
@@ -304,6 +304,8 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,
 
+	egui: Option<egui_wgpu::Renderer>,
+
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
@@ -346,6 +348,8 @@ impl Player
 
 			context: None,
 			redrawOnceOnWait: false,
+
+			egui: None,
 
 			applicationFactory: None,
 			application: None,
@@ -634,6 +638,21 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Create render setup
 					self.renderSetup = Some(RenderSetup::new(context, context.config.format, DepthStencilFormat::D32));
+
+					// Attach egui
+					let eguiConfig = egui_wgpu::WgpuConfiguration {
+						present_mode: context.config.present_mode,
+						desired_maximum_frame_latency: Some(context.config.desired_maximum_frame_latency),
+						wgpu_setup: egui_wgpu::WgpuSetup::Existing {
+							instance: context.instance.clone(), adapter: context.adapter.clone(),
+							device: context.device.clone(), queue: context.queue.clone(),
+						},
+						..Default::default()
+					};
+					self.egui = Some(egui_wgpu::Renderer::new(
+						&context.device, context.config.format,
+						Some(self.renderSetup.as_ref().unwrap().depthStencilFormat), 1, false
+					));
 
 					// Initialize camera
 					// - create default camera

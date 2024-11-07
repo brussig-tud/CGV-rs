@@ -166,7 +166,7 @@ impl Clear
 				timestamp_writes: None,
 			});
 			renderPass.set_pipeline(&self.pipeline);
-			renderPass.draw(0..1, 0..0);
+			renderPass.draw(0..0, 0..0);
 		}
 	}
 

@@ -12,3 +12,7 @@ readme = "README.md"
 description = "A high performance, web-enabled rapid prototyping framework for computer graphics and visualization research."
 license = "MIT"
 license-file = "LICENSE"
+
+[profile.release]
+opt-level = 3
+lto = true

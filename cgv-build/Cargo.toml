@@ -8,8 +8,8 @@ edition.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
-cargo_metadata = "0.18.1"
-anyhow = "1.0.89"
+cargo_metadata = "*"
+anyhow = "*"
 
 [features]
 default = ["buildScriptUsage"]
