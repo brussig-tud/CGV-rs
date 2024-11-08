@@ -20,6 +20,9 @@
 // Module definitions
 //
 
+// egui platform integration
+mod egui;
+
 // The module encapsulating all low-level graphics objects.
 mod context;
 pub use context::Context; // re-export
@@ -53,6 +56,7 @@ pub mod time {
 }
 pub use winit::event;
 pub use egui_wgpu::wgpu as wgpu;
+use egui as egui_integration;
 
 
 
@@ -304,7 +308,7 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,
 
-	egui: Option<egui_wgpu::Renderer>,
+	egui: Option<egui_wgpu::winit::Painter>,
 
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
@@ -638,21 +642,6 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Create render setup
 					self.renderSetup = Some(RenderSetup::new(context, context.config.format, DepthStencilFormat::D32));
-
-					// Attach egui
-					let eguiConfig = egui_wgpu::WgpuConfiguration {
-						present_mode: context.config.present_mode,
-						desired_maximum_frame_latency: Some(context.config.desired_maximum_frame_latency),
-						wgpu_setup: egui_wgpu::WgpuSetup::Existing {
-							instance: context.instance.clone(), adapter: context.adapter.clone(),
-							device: context.device.clone(), queue: context.queue.clone(),
-						},
-						..Default::default()
-					};
-					self.egui = Some(egui_wgpu::Renderer::new(
-						&context.device, context.config.format,
-						Some(self.renderSetup.as_ref().unwrap().depthStencilFormat), 1, false
-					));
 
 					// Initialize camera
 					// - create default camera

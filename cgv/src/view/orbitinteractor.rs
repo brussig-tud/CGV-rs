@@ -143,10 +143,10 @@ impl CameraInteractor for OrbitInteractor
 	{
 		if let Some(focusChange) = &mut self.focusChange
 		{
-			focusChange.t = f32::min(focusChange.t + player.lastFrameTime()*1.5, 1f32);
+			focusChange.t = f32::min(focusChange.t + player.lastFrameTime()*2f32, 1f32);
 			let targetCur = math::smoothLerp3(&focusChange.old, &focusChange.new, focusChange.t);
 			let offset = targetCur - self.target;
-			self.target += offset;
+			self.target = targetCur;
 			self.eye += offset;
 			if targetCur == focusChange.new {
 				self.focusChange = None;

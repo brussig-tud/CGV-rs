@@ -13,6 +13,10 @@ use anyhow::Result;
 // Winit library
 use winit::{window::Window, dpi};
 
+// Egui library
+use ::egui;
+use egui_wgpu;
+
 // Local imports
 use crate::*;
 
@@ -38,10 +42,15 @@ pub struct Context
 	pub(crate) surfaceView: Option<wgpu::TextureView>,
 
 	pub size: dpi::PhysicalSize<u32>,
-	pub window: Arc<Window>
+	pub window: Arc<Window>,
+
+	pub egui: egui::Context,
+	pub eguiPlatform: egui_integration::Platform,
+	pub eguiRenderer: egui_wgpu::Renderer
 }
 
-impl Context {
+impl Context
+{
 	// Creating some of the wgpu types requires async code
 	pub async fn new (window: Window) -> Result<Context>
 	{
@@ -86,9 +95,6 @@ impl Context {
 		};
 
 		let surfaceCaps = surface.get_capabilities(&adapter);
-		// Shader code in this tutorial assumes an sRGB surface texture. Using a different
-		// one will result in all the colors coming out darker. If you want to support non
-		// sRGB surfaces, you'll need to account for that when drawing to the frame.
 		let surface_format = surfaceCaps.formats.iter()
 			.find(|f| !f.is_srgb())
 			.copied()
@@ -103,6 +109,35 @@ impl Context {
 			view_formats: vec![],
 			desired_maximum_frame_latency: 1,
 		};
+
+		// Attach egui
+		let mut eguiPlatform = egui_integration::Platform::new(
+			egui_integration::PlatformDescriptor {
+				physical_width: size.width as u32,
+				physical_height: size.height as u32,
+				scale_factor: window.scale_factor(),
+				font_definitions: egui::FontDefinitions::default(),
+				style: Default::default(),
+			}
+		);
+		let egui = eguiPlatform.context();
+		/*let eguiConfig = egui_wgpu::WgpuConfiguration {
+			present_mode: config.present_mode,
+			desired_maximum_frame_latency: Some(config.desired_maximum_frame_latency),
+			wgpu_setup: egui_wgpu::WgpuSetup::Existing {
+				instance: instance.clone(), adapter: adapter.clone(),
+				device: device.clone(), queue: queue.clone(),
+			},
+			..Default::default()
+		};
+		let mut eguiPainter = egui_wgpu::winit::Painter::new(
+			eguiConfig, 1, Some(hal::DepthStencilFormat::D32.into()),
+			true, false
+		);
+		eguiPainter.set_window(egui::ViewportId::ROOT, Some(window.clone())).await?;*/
+		let eguiRenderer = egui_wgpu::Renderer::new(
+			&device, config.format, Some(hal::DepthStencilFormat::D32.into()), 1, false
+		);
 
 		let surfaceConfigured;
 		#[cfg(not(target_arch = "wasm32"))] {
@@ -125,7 +160,10 @@ impl Context {
 			surfaceTexture: None,
 			surfaceView: None,
 			size,
-			window
+			window,
+			egui,
+			eguiPlatform,
+			eguiRenderer
 		})
 	}
 
