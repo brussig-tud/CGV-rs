@@ -78,7 +78,7 @@ impl Context
 		).await.unwrap());
 
 		let (device, queue) = {
-			let (device, queue) = adapter.request_device(
+			let (device, queue) = match adapter.request_device(
 				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::empty(),
 					required_limits: if cfg!(target_arch="wasm32") {
@@ -90,7 +90,13 @@ impl Context
 					memory_hints: Default::default(),
 				},
 				None, // trace path
-			).await?;
+			).await {
+				Ok((device, queue)) => (device, queue),
+				Err(error) => {
+					tracing::error!("Could not create WGPU device: {:?}", error);
+					panic!("graphics context creation failure");
+				}
+			};
 			(Arc::new(device), Arc::new(queue))
 		};
 
