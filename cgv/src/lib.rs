@@ -299,6 +299,8 @@ pub trait Application
 struct Egui<'a> {
 	pub renderPassColorAttachment: Box<[Option<wgpu::RenderPassColorAttachment<'a>>]>,
 	pub renderPassDescriptor: wgpu::RenderPassDescriptor<'a>,
+
+	pub demoApp: egui_demo_lib::DemoWindows
 }
 impl<'a> Egui<'a>
 {
@@ -317,7 +319,8 @@ impl<'a> Egui<'a>
 				timestamp_writes: None,
 				occlusion_query_set: None,
 			},
-			renderPassColorAttachment
+			renderPassColorAttachment,
+			demoApp: egui_demo_lib::DemoWindows::default()
 		}
 	}
 
@@ -501,7 +504,7 @@ impl Player
 
 		let context = util::mutify(self.context.as_mut().unwrap());
 		context.eguiPlatform.begin_frame();
-		// ...
+		self.egui.as_mut().unwrap().demoApp.ui(&context.eguiPlatform.context());
 		let fullOutput = context.eguiPlatform.end_frame(Some(&context.window));
 		let paintJobs = context.eguiPlatform.context().tessellate(
 			fullOutput.shapes, context.window.scale_factor() as f32
@@ -531,9 +534,13 @@ impl Player
 			context.eguiRenderer.render(&mut rp, &paintJobs, &context.eguiScreenDesc);
 		}
 		context.queue.submit([eguiCmdEncoder.finish()]);
-
 		for texId in &texDelta.free {
 			context.eguiRenderer.free_texture(&texId);
+		}
+
+		// Check if repaint needed
+		if context.eguiPlatform.context().has_requested_repaint() {
+			self.postRedraw();
 		}
 	}
 
@@ -783,6 +790,15 @@ impl ApplicationHandler<UserEvent> for Player
 
 	fn window_event (&mut self, eventLoop: &ActiveEventLoop, _: WindowId, event: WindowEvent)
 	{
+		// GUI gets very first dibs
+		if let Some(context) = &self.context {
+			let exclusive = context.eguiPlatform.captures_event(&event);
+			util::mutify(context).eguiPlatform.handle_event(&event);
+			if exclusive {
+				return;
+			}
+		}
+
 		match &event
 		{
 			// Main window resize
@@ -793,6 +809,7 @@ impl ApplicationHandler<UserEvent> for Player
 					self.withContextMut(|this, context| {
 						context.resize(*newPhysicalSize);
 						context.eguiScreenDesc.size_in_pixels = [newSize.x, newSize.y];
+						context.eguiPlatform.handle_event(&event);
 						this.camera.as_mut().unwrap().resize(context, &newSize, this.cameraInteractor.as_ref());
 						this.application.as_mut().unwrap().onResize(&newSize);
 					});
@@ -873,14 +890,9 @@ impl ApplicationHandler<UserEvent> for Player
 			| WindowEvent::MouseWheel{..} | WindowEvent::ModifiersChanged{..}
 			=> {
 				let player = util::statify(self);
-				if let Some(context) = self.context.as_mut()
+				if self.context.is_some()
 				{
-					// GUI gets first dibs
-					if context.eguiPlatform.captures_event(&event) {
-
-					}
-
-					// Camera is next
+					// Camera first
 					match self.cameraInteractor.input(&event, player)
 					{
 						EventOutcome::HandledExclusively(redraw) => {
