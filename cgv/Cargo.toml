@@ -20,6 +20,7 @@ egui = {git="https://github.com/emilk/egui.git", default-features=true}
 epaint = {git="https://github.com/emilk/egui.git", default-features=true}
 #egui-winit = {git="https://github.com/emilk/egui.git", default-features=true}
 egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}
+#egui_wgpu_backend = {git="https://github.com/hasenbanck/egui_wgpu_backend.git", default-features=true}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 copypasta = "*"
 webbrowser = "*"

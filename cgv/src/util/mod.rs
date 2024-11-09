@@ -115,6 +115,16 @@ pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T
 	unsafe { &mut *((reference as *const T) as *mut T) }
 }
 
+/// Creates an (invalid if derefenced) reference to an object of the specified type.
+///
+/// # Returns
+///
+/// A `'static` reference to some object of the specified type. Must not be dereferenced.
+#[inline(always)]
+pub const fn defaultRef<T> () -> &'static T {
+	unsafe { &*(1usize as *const T) }
+}
+
 /// If the given option contains a string or string slice, returns an option containing the concatenation of the two
 /// inputs.
 ///

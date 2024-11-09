@@ -296,6 +296,36 @@ pub trait Application
 ////
 // Player
 
+struct Egui<'a> {
+	pub renderPassColorAttachment: Box<[Option<wgpu::RenderPassColorAttachment<'a>>]>,
+	pub renderPassDescriptor: wgpu::RenderPassDescriptor<'a>,
+}
+impl<'a> Egui<'a>
+{
+	pub fn new (_: &Context) -> Self
+	{
+		let renderPassColorAttachment = Box::new([Some(wgpu::RenderPassColorAttachment {
+			view: util::defaultRef::<wgpu::TextureView>(),
+			resolve_target: None,
+			ops: wgpu::Operations {load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store}
+		})]);
+		Self {
+			renderPassDescriptor: wgpu::RenderPassDescriptor {
+				label: Some("CGV__EguiRenderPass"),
+				color_attachments: util::statify(renderPassColorAttachment.as_ref()),
+				depth_stencil_attachment: None,
+				timestamp_writes: None,
+				occlusion_query_set: None,
+			},
+			renderPassColorAttachment
+		}
+	}
+
+	pub fn updateSurface (&'a mut self, context: &'a Context) {
+		self.renderPassColorAttachment.as_mut()[0].as_mut().unwrap().view = &context.surfaceView.as_ref().unwrap();
+	}
+}
+
 /// The central application host class.
 pub struct Player
 {
@@ -308,8 +338,6 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,
 
-	egui: Option<egui_wgpu::winit::Painter>,
-
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	application: Option<Box<dyn Application>>,
 
@@ -320,8 +348,11 @@ pub struct Player
 	clearers: Vec<clear::Clear>,
 
 	continousRedrawRequests: u32,
-	prevFrameInstant: time::Instant,
-	prevFrameDuration: time::Duration
+	startInstant: time::Instant,
+	prevFrameElapsed: time::Duration,
+	prevFrameDuration: time::Duration,
+
+	egui: Option<Egui<'static>>
 }
 unsafe impl Sync for Player {}
 unsafe impl Send for Player {}
@@ -353,8 +384,6 @@ impl Player
 			context: None,
 			redrawOnceOnWait: false,
 
-			egui: None,
-
 			applicationFactory: None,
 			application: None,
 
@@ -365,8 +394,11 @@ impl Player
 			clearers: Vec::new(),
 
 			continousRedrawRequests: 0,
-			prevFrameInstant: time::Instant::now(),
-			prevFrameDuration: time::Duration::from_secs(0)
+			startInstant: time::Instant::now(),
+			prevFrameElapsed: time::Duration::from_secs(0),
+			prevFrameDuration: time::Duration::from_secs(0),
+
+			egui: None,
 		})
 	}
 
@@ -455,15 +487,61 @@ impl Player
 			}
 		}
 
+		// Render egui
+		self.renderEgui();
+
 		// Done!
 		Ok(())
+	}
+
+	fn renderEgui (&mut self)
+	{
+		////
+		// Compose GUI for current frame
+
+		let context = util::mutify(self.context.as_mut().unwrap());
+		context.eguiPlatform.begin_frame();
+		// ...
+		let fullOutput = context.eguiPlatform.end_frame(Some(&context.window));
+		let paintJobs = context.eguiPlatform.context().tessellate(
+			fullOutput.shapes, context.window.scale_factor() as f32
+		);
+		let texDelta = &fullOutput.textures_delta;
+
+
+		////
+		// Actually render
+
+		let mut eguiCmdEncoder = context.device.create_command_encoder(
+			&wgpu::CommandEncoderDescriptor { label: Some("CGV__EguiPassCommandEncoder") }
+		);
+		context.eguiRenderer.update_buffers(
+			&context.device, &context.queue, &mut eguiCmdEncoder, &paintJobs, &context.eguiScreenDesc
+		);
+		for tex in &texDelta.set {
+			context.eguiRenderer.update_texture(&context.device, &context.queue, tex.0, &tex.1);
+		}
+		/* Render pass private scope */ {
+			let this = util::mutify(self);
+			let context = util::statify(context);
+			this.egui.as_mut().unwrap().updateSurface(context);
+			let mut rp = util::mutify(&eguiCmdEncoder).begin_render_pass(
+				&self.egui.as_ref().unwrap().renderPassDescriptor
+			);
+			context.eguiRenderer.render(&mut rp, &paintJobs, &context.eguiScreenDesc);
+		}
+		context.queue.submit([eguiCmdEncoder.finish()]);
+
+		for texId in &texDelta.free {
+			context.eguiRenderer.free_texture(&texId);
+		}
 	}
 
 	pub fn pushContinuousRedrawRequest (&self)
 	{
 		let this = util::mutify(self);
 		if self.continousRedrawRequests < 1 {
-			this.prevFrameInstant = time::Instant::now();
+			this.prevFrameElapsed = this.startInstant.elapsed();
 			this.prevFrameDuration = time::Duration::from_secs(0);
 			tracing::info!("Starting continuous redrawing");
 			self.context.as_ref().unwrap().window().request_redraw();
@@ -643,6 +721,9 @@ impl ApplicationHandler<UserEvent> for Player
 					// Create render setup
 					self.renderSetup = Some(RenderSetup::new(context, context.config.format, DepthStencilFormat::D32));
 
+					// Create egui state
+					self.egui = Some(Egui::new(context));
+
 					// Initialize camera
 					// - create default camera
 					self.camera = Some({
@@ -711,6 +792,7 @@ impl ApplicationHandler<UserEvent> for Player
 					let newSize = glm::vec2(newPhysicalSize.width, newPhysicalSize.height);
 					self.withContextMut(|this, context| {
 						context.resize(*newPhysicalSize);
+						context.eguiScreenDesc.size_in_pixels = [newSize.x, newSize.y];
 						this.camera.as_mut().unwrap().resize(context, &newSize, this.cameraInteractor.as_ref());
 						this.application.as_mut().unwrap().onResize(&newSize);
 					});
@@ -718,6 +800,12 @@ impl ApplicationHandler<UserEvent> for Player
 				#[cfg(not(target_arch="wasm32"))] {
 					self.redrawOnceOnWait = true;
 				}
+			}
+
+			// Main window DPI change
+			WindowEvent::ScaleFactorChanged {scale_factor, ..}
+			=> if let Some(context) = &mut self.context {
+				context.eguiScreenDesc.pixels_per_point = *scale_factor as f32;
 			}
 
 			// Application close
@@ -735,10 +823,14 @@ impl ApplicationHandler<UserEvent> for Player
 					tracing::debug!("Redrawing");
 
 					// Update main surface attachments to draw on them
-					match self.context.as_mut().unwrap().newFrame()
+					let context = self.context.as_mut().unwrap();
+					match context.newFrame()
 					{
 						// All fine, we can draw
 						Ok(()) => {
+							// Advance egui
+							context.eguiPlatform.update_time(self.startInstant.elapsed().as_secs_f64());
+
 							// Perform actual redrawing inside Player implementation
 							if let Err(error) = self.redraw() {
 								tracing::error!("Error while redrawing: {:?}", error);
@@ -768,9 +860,9 @@ impl ApplicationHandler<UserEvent> for Player
 
 					// Update frame stats
 					if self.continousRedrawRequests > 0 {
-						let now = time::Instant::now();
-						self.prevFrameDuration = now - self.prevFrameInstant;
-						self.prevFrameInstant = now;
+						let elapsed = self.startInstant.elapsed();
+						self.prevFrameDuration = elapsed - self.prevFrameElapsed;
+						self.prevFrameElapsed = elapsed;
 						self.context.as_ref().unwrap().window().request_redraw();
 					}
 				}
@@ -781,10 +873,12 @@ impl ApplicationHandler<UserEvent> for Player
 			| WindowEvent::MouseWheel{..} | WindowEvent::ModifiersChanged{..}
 			=> {
 				let player = util::statify(self);
-				if let Some(_) = self.context.as_mut()
+				if let Some(context) = self.context.as_mut()
 				{
 					// GUI gets first dibs
-					/* nothing here yet */
+					if context.eguiPlatform.captures_event(&event) {
+
+					}
 
 					// Camera is next
 					match self.cameraInteractor.input(&event, player)

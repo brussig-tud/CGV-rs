@@ -44,7 +44,7 @@ pub struct Context
 	pub size: dpi::PhysicalSize<u32>,
 	pub window: Arc<Window>,
 
-	pub egui: egui::Context,
+	pub eguiScreenDesc: egui_wgpu::ScreenDescriptor,
 	pub eguiPlatform: egui_integration::Platform,
 	pub eguiRenderer: egui_wgpu::Renderer
 }
@@ -117,7 +117,10 @@ impl Context
 		};
 
 		// Attach egui
-		let mut eguiPlatform = egui_integration::Platform::new(
+		let eguiScreenDesc = egui_wgpu::ScreenDescriptor {
+			size_in_pixels: [size.width, size.height], pixels_per_point: window.scale_factor() as f32
+		};
+		let eguiPlatform = egui_integration::Platform::new(
 			egui_integration::PlatformDescriptor {
 				physical_width: size.width as u32,
 				physical_height: size.height as u32,
@@ -126,8 +129,8 @@ impl Context
 				style: Default::default(),
 			}
 		);
-		let egui = eguiPlatform.context();
-		/*let eguiConfig = egui_wgpu::WgpuConfiguration {
+		/*let egui = eguiPlatform.context();
+		let eguiConfig = egui_wgpu::WgpuConfiguration {
 			present_mode: config.present_mode,
 			desired_maximum_frame_latency: Some(config.desired_maximum_frame_latency),
 			wgpu_setup: egui_wgpu::WgpuSetup::Existing {
@@ -141,8 +144,9 @@ impl Context
 			true, false
 		);
 		eguiPainter.set_window(egui::ViewportId::ROOT, Some(window.clone())).await?;*/
+
 		let eguiRenderer = egui_wgpu::Renderer::new(
-			&device, config.format, Some(hal::DepthStencilFormat::D32.into()), 1, false
+			&device, config.format, /* depth/stencil */None, 1, false
 		);
 
 		let surfaceConfigured;
@@ -167,7 +171,7 @@ impl Context
 			surfaceView: None,
 			size,
 			window,
-			egui,
+			eguiScreenDesc,
 			eguiPlatform,
 			eguiRenderer
 		})
