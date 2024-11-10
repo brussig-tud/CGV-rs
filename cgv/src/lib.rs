@@ -21,7 +21,7 @@
 //
 
 // egui platform integration
-mod egui;
+/*mod egui;
 
 // The module encapsulating all low-level graphics objects.
 mod context;
@@ -38,7 +38,7 @@ pub use renderstate::RenderState; // re-export
 pub mod hal;
 
 /// The module containing all viewing functionality
-pub mod view;
+pub mod view;*/
 
 /// The module containing utilities used throughout (i.e. not specific to any other module).
 pub mod util;
@@ -54,9 +54,9 @@ pub use anyhow::anyhow as anyhow;
 pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
-pub use winit::event;
-pub use egui_wgpu::wgpu as wgpu;
-use egui as egui_integration;
+//pub use winit::event;
+pub use eframe::wgpu as wgpu;
+//use egui as egui_integration;
 
 
 
@@ -66,27 +66,30 @@ use egui as egui_integration;
 //
 
 // Standard library
-use std::any::Any;
-
+use std::{sync::Arc, sync::Mutex, any::Any};
+use std::fmt::{Debug, Display, Formatter};
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
 use ctor;
+use eframe::egui_wgpu;
+use eframe::egui_wgpu::{CallbackResources, ScreenDescriptor};
+use eframe::epaint::PaintCallbackInfo;
 
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
+use crate::wgpu::{CommandBuffer, CommandEncoder, Device, Queue, RenderPass};
 // Winit library
-use winit::{
+/*use winit::{
 	application::ApplicationHandler,
 	event::*, event_loop::*, keyboard::*, window::*
-};
+};*/
 
 // Local imports
-use crate::{context::*, renderstate::*};
+/*use crate::{context::*, renderstate::*};
 use clear::{ClearColor, ClearDepth};
 use hal::DepthStencilFormat;
 #[allow(unused_imports)] // prevent this warning in WASM. ToDo: investigate
-use view::Camera;
+use view::Camera;*/
 
 
 
@@ -141,12 +144,12 @@ fn initTracing ()
 //
 
 // The type used for our user-defined event.
-enum UserEvent {
+/*enum UserEvent {
 	ContextReady(Result<Context>)
-}
+}*/
 
 /// Enumeration of possible event handling outcomes.
-pub enum EventOutcome
+/*pub enum EventOutcome
 {
 	/// The event was handled and should be closed. The wrapped `bool` indicates whether a redraw
 	/// needs to happen as a result of the processing that was done.
@@ -159,7 +162,7 @@ pub enum EventOutcome
 
 	/// The event was not handled.
 	NotHandled
-}
+}*/
 
 /// Holds information about the eye(s) in a stereo render pass.
 #[derive(Debug)]
@@ -185,12 +188,12 @@ pub enum GlobalPass
 	Custom(Box<dyn Any>)
 }
 
-pub struct GlobalPassDeclaration<'a>
+/*pub struct GlobalPassDeclaration<'a>
 {
 	pub pass: GlobalPass,
 	pub renderState: &'a mut RenderState,
 	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
-}
+}*/
 
 /// Collects all bind group layouts availabel for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
 /// setup of the *CGV-rs* [`Player`].
@@ -215,7 +218,7 @@ pub struct RenderSetup
 	/// The bind groups provided for interfacing with centrally managed uniforms.
 	bindGroupLayouts: ManagedBindGroupLayouts
 }
-impl RenderSetup
+/*impl RenderSetup
 {
 	pub(crate) fn new (context: &Context, colorFormat: wgpu::TextureFormat, depthStencilFormat: DepthStencilFormat)
 		-> Self
@@ -238,7 +241,7 @@ impl RenderSetup
 	pub fn defaultClearColor(&self) -> &wgpu::Color { &self.defaultClearColor }
 
 	pub fn bindGroupLayouts(&self) -> &ManagedBindGroupLayouts { &self.bindGroupLayouts }
-}
+}*/
 
 
 
@@ -248,20 +251,12 @@ impl RenderSetup
 //
 
 ////
-// ApplicationFactory
-
-pub trait ApplicationFactory {
-	fn create(&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
-}
-
-
-////
 // Application
 
 /// An application that can be [run](Player::run) by a [`Player`].
 pub trait Application
 {
-	/// Called when there is user input that can be processed.
+	/*/// Called when there is user input that can be processed.
 	///
 	/// # Arguments
 	///
@@ -289,60 +284,37 @@ pub trait Application
 	/// * `device` – The active device for rendering.
 	/// * `queue` – A queue from the active device for submitting commands.
 	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
-	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> anyhow::Result<()>;
+	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> anyhow::Result<()>;*/
+}
+
+////
+// ApplicationFactory
+
+pub trait ApplicationFactory {
+	//fn create (&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
+	fn create (self) -> Result<Box<dyn Application>>;
 }
 
 
 ////
 // Player
 
-struct Egui<'a> {
-	pub renderPassColorAttachment: Box<[Option<wgpu::RenderPassColorAttachment<'a>>]>,
-	pub renderPassDescriptor: wgpu::RenderPassDescriptor<'a>,
-
-	pub demoApp: egui_demo_lib::DemoWindows
-}
-impl<'a> Egui<'a>
-{
-	pub fn new (_: &Context) -> Self
-	{
-		let renderPassColorAttachment = Box::new([Some(wgpu::RenderPassColorAttachment {
-			view: util::defaultRef::<wgpu::TextureView>(),
-			resolve_target: None,
-			ops: wgpu::Operations {load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store}
-		})]);
-		Self {
-			renderPassDescriptor: wgpu::RenderPassDescriptor {
-				label: Some("CGV__EguiRenderPass"),
-				color_attachments: util::statify(renderPassColorAttachment.as_ref()),
-				depth_stencil_attachment: None,
-				timestamp_writes: None,
-				occlusion_query_set: None,
-			},
-			renderPassColorAttachment,
-			demoApp: egui_demo_lib::DemoWindows::default()
-		}
-	}
-
-	pub fn updateSurface (&'a mut self, context: &'a Context) {
-		self.renderPassColorAttachment.as_mut()[0].as_mut().unwrap().view = &context.surfaceView.as_ref().unwrap();
-	}
-}
-
 /// The central application host class.
 pub struct Player
 {
-	eventLoop: Option<EventLoop<UserEvent>>,
+	/*eventLoop: Option<EventLoop<UserEvent>>,
 	eventLoopProxy: EventLoopProxy<UserEvent>,
 
 	#[cfg(target_arch="wasm32")]
 	canvas: Option<web_sys::Element>,
 
 	context: Option<Context>,
-	redrawOnceOnWait: bool,
+	redrawOnceOnWait: bool,*/
 
-	applicationFactory: Option<Box<dyn ApplicationFactory>>,
-	application: Option<Box<dyn Application>>,
+	renderManager: Arc<RenderManager>,
+
+	applicationFactory: Box<dyn ApplicationFactory>,
+	application: Option<Box<dyn Application>>/*,
 
 	renderSetup: Option<RenderSetup>,
 
@@ -355,40 +327,41 @@ pub struct Player
 	prevFrameElapsed: time::Duration,
 	prevFrameDuration: time::Duration,
 
-	egui: Option<Egui<'static>>
+	egui: Option<Egui<'static>>*/
 }
 unsafe impl Sync for Player {}
 unsafe impl Send for Player {}
 
 impl Player
 {
-	pub fn new () -> Result<Self>
+	pub fn new (applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext) -> Result<Self>
 	{
-		// In case of WASM, make sure the JavaScript console is set up for receiving log messages first thing (for non-
-		// WASM targets, tracing/logging is already being set up at module loading time)
-		#[cfg(target_arch="wasm32")]
-		initTracing();
+		tracing::info!("Player startup");
 
-		// Log that we have begun the startup process
-		tracing::info!("Starting...");
+		if cc.wgpu_render_state.is_none() {
+			return Err(anyhow!("eframe is not configured to use the WGPU backend"));
+		}
+		let eguiRs = cc.wgpu_render_state.as_ref().unwrap();
 
 		// Launch main event loop. Most initialization is event-driven and will happen in there.
-		let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
-		eventLoop.set_control_flow(ControlFlow::Wait);
+		/*let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
+		eventLoop.set_control_flow(ControlFlow::Wait);*/
 
 		// Done, now construct
 		Ok(Self {
-			eventLoopProxy: eventLoop.create_proxy(),
+			/*eventLoopProxy: eventLoop.create_proxy(),
 			eventLoop: Some(eventLoop),
 
 			#[cfg(target_arch="wasm32")]
 			canvas: None,
 
 			context: None,
-			redrawOnceOnWait: false,
+			redrawOnceOnWait: false,*/
 
-			applicationFactory: None,
-			application: None,
+			renderManager: Arc::new(RenderManager {}),
+
+			applicationFactory,
+			application: None/*,
 
 			renderSetup: None,
 
@@ -401,28 +374,104 @@ impl Player
 			prevFrameElapsed: time::Duration::from_secs(0),
 			prevFrameDuration: time::Duration::from_secs(0),
 
-			egui: None,
+			egui: None,*/
 		})
 	}
 
-	pub fn run<F: ApplicationFactory + 'static> (mut self, applicationFactory: F) -> Result<()>
+	#[cfg(not(target_arch="wasm32"))]
+	pub fn run<F: ApplicationFactory + 'static> (applicationFactory: F) -> Result<()>
 	{
+		// Log that we have begun the startup process
+		tracing::info!("Starting...");
+
 		// Set the application factory
-		self.applicationFactory = Some(Box::new(applicationFactory));
+		//self.applicationFactory = Some(Box::new(applicationFactory));
 
 		// Run the event loop
-		self.eventLoop.take().unwrap().run_app(&mut self)?;
+		//self.eventLoop.take().unwrap().run_app(&mut self)?;
+		let options = eframe::NativeOptions {
+			viewport: egui::ViewportBuilder::default().with_inner_size([1152., 720.]),
+			multisampling: 0,
+			renderer: eframe::Renderer::Wgpu,
+			..Default::default()
+		};
 
-		// Done!
+		// Run and report result
+		match eframe::run_native(
+			"CGV-rs Player", options, Box::new(
+				move |cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc)?))
+			)
+		){
+			Ok(_) => Ok(()),
+			Err(error) => Err(anyhow::anyhow!("{:?}", error))
+		}
+	}
+
+	#[cfg(target_arch="wasm32")]
+	pub fn run<F: ApplicationFactory + 'static> (applicationFactory: F) -> Result<()>
+	{
+		// In case of WASM, make sure the JavaScript console is set up for receiving log messages first thing (for non-
+		// WASM targets, tracing/logging is already being set up at module loading time)
+		initTracing();
+
+		let webOptions = eframe::WebOptions {
+			dithering: false,
+			..Default::default()
+		};
+
+		use eframe::wasm_bindgen::JsCast as _;
+		use eframe::web_sys;
+		wasm_bindgen_futures::spawn_local(async move {
+			let document = web_sys::window()
+				.expect("No window")
+				.document()
+				.expect("No document");
+
+			let canvas = document
+				.get_element_by_id("cgvRsCanvas")
+				.expect("Failed to find target canvas with id=`cgvRsCanvas`!")
+				.dyn_into::<web_sys::HtmlCanvasElement>()
+				.expect("Element with id=`cgvRsCanvas` was not a HtmlCanvasElement!");
+
+			let startResult = eframe::WebRunner::new()
+				.start(
+					canvas,
+					webOptions,
+					Box::new(|cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc)?)))
+				)
+				.await;
+
+			// Remove the loading text and spinner:
+			match startResult {
+				Ok(_) => if let Some(loadingIndicator) =
+					document.get_element_by_id("cgvLoadingIndicator") { loadingIndicator.remove(); },
+				Err(error) => {
+					let msgDetail = if let Some(errorDesc) = error.as_string()
+						{ errorDesc }
+					else
+						{ format!("{:?}", error) };
+					if let Some(loadingIndicator) =
+						document.get_element_by_id("cgvLoadingIndicator") {
+							let msg = format!(
+								"<p>The CGV-rs Player has crashed.<br/>Reason: {:?}</p><p>See the developer console for details. </p>", msgDetail
+							);
+							loadingIndicator.set_inner_html(msg.as_str());
+					}
+					panic!("FATAL: failed to start CGV-rs Player:\n{msgDetail}");
+				}
+			};
+		});
+
+		// Done (although we won't actually ever reach this code)
 		Ok(())
 	}
 
-	fn context (&mut self) -> &mut Context {
+	/*fn context (&mut self) -> &mut Context {
 		self.context.as_mut().unwrap()
-	}
+	}*/
 
 	// Performs the actual redrawing logic
-	fn redraw (&mut self) -> Result<()>
+	/*fn redraw (&mut self) -> Result<()>
 	{
 		// Obtain context
 		let context = util::statify(self.context.as_ref().unwrap());
@@ -641,10 +690,51 @@ impl Player
 		else {
 			callback(None)
 		}
+	}*/
+
+	fn custom_painting (&mut self, ui: &mut egui::Ui) {
+		let (rect, response) =
+			ui.allocate_exact_size(egui::Vec2::splat(384.0), egui::Sense::click_and_drag());
+
+		//self.angle += response.drag_motion().x * 0.01;
+
+		// Clone locals so we can move them into the paint callback:
+		//let angle = self.angle;
+		//let rotating_triangle = self.rotating_triangle.clone();
+		let rm = self.renderManager.clone();
+
+		ui.painter().add(egui_wgpu::Callback::new_paint_callback(rect, RenderManager {}));
 	}
 }
 
-impl ApplicationHandler<UserEvent> for Player
+impl eframe::App for Player {
+	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
+	{
+		egui::CentralPanel::default().show(ctx, |ui|
+		{
+			ui.horizontal(|ui| {
+				ui.spacing_mut().item_spacing.x = 0.0;
+				ui.label("The triangle is being painted using ");
+				ui.hyperlink_to("CGV-rs", "https://github.com/brussig-tud/CGV-rs");
+				ui.label(". (WGPU)");
+			});
+
+			egui::Frame::canvas(ui.style()).show(ui, |ui| {
+				self.custom_painting(ui);
+			});
+			ui.label("Drag to rotate!");
+		});
+	}
+
+	/*fn on_exit(&mut self, gl: Option<&glow::Context>)
+	{
+		if let Some(gl) = gl {
+			self.rotating_triangle.lock().destroy(gl);
+		}
+	}*/
+}
+
+/*impl ApplicationHandler<UserEvent> for Player
 {
 	fn resumed (&mut self, event_loop: &ActiveEventLoop)
 	{
@@ -951,5 +1041,40 @@ impl ApplicationHandler<UserEvent> for Player
 				self.postRedraw();
 			}
 		};
+	}
+}*/
+
+struct RenderManager {
+}
+unsafe impl Sync for RenderManager {}
+unsafe impl Send for RenderManager {}
+
+impl egui_wgpu::CallbackTrait for RenderManager
+{
+	fn prepare (
+		&self, _device: &Device, _queue: &Queue, _screenDesc: &ScreenDescriptor,
+		_eguiEncoder: &mut CommandEncoder, _callbackResources: &mut CallbackResources
+	) -> Vec<CommandBuffer>
+	{
+		/* doNothing() */
+		tracing::info!("Prepare!!!");
+		Vec::new()
+	}
+
+	fn finish_prepare (
+		&self, _device: &Device, _queue: &Queue, _eguiEncoder: &mut CommandEncoder,
+		_callbackResources: &mut CallbackResources
+	) -> Vec<CommandBuffer>
+	{
+		/* doNothing() */
+		tracing::info!("Finish Prepare!!!");
+		Vec::new()
+	}
+
+	fn paint(
+		&self, _info: PaintCallbackInfo, _renderPass: &mut RenderPass<'static>, _callbackResources: &CallbackResources
+	){
+		/* doNothing() */
+		tracing::info!("Paint!!!");
 	}
 }

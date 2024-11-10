@@ -15,10 +15,17 @@ tracing-subscriber = {version = "*", features = ["env-filter"]}
 cfg-if = "*"
 ctor = "*"
 web-time = "*"
-wgpu = {version="*", features=["webgpu"]}
-egui = {git="https://github.com/emilk/egui.git", default-features=true}
+egui = {git="https://github.com/emilk/egui.git", default-features=true, features=[
+	"color-hex", "mint", "rayon", "unity"
+]}
+egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
+	"all_loaders", "datepicker", "syntect"
+]}
+eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
+	"default_fonts", "wayland", "wgpu", "x11"
+]}
 #egui-winit = {git="https://github.com/emilk/egui.git", default-features=true}
-egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}
+#egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}
 #egui_wgpu_backend = {git="https://github.com/hasenbanck/egui_wgpu_backend.git", default-features=true}
 egui_demo_lib = {git="https://github.com/emilk/egui.git", default-features=true}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
@@ -27,16 +34,18 @@ webbrowser = "*"
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
 pollster = "*"
-winit = {version="*", default-features=false, features=["x11", "rwh_06"]}
+#winit = {version="*", default-features=false, features=["x11", "rwh_06"]}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
 tracing-wasm = "*"
-#wgpu = {version="23", features=["webgpu"]}
-wasm-bindgen = "*"
+#wasm-bindgen = "*"
 wasm-bindgen-futures = "*"
-web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
-winit = {version="*"}
+#web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
+#winit = {version="*"}
+egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
+	"fragile-send-sync-non-atomic-wasm"
+]}
 
 [features]
 default = []

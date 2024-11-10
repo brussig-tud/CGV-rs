@@ -16,3 +16,10 @@ license-file = "LICENSE"
 [profile.release]
 opt-level = 3
 lto = true
+panic = "abort" # This leads to better optimizations and smaller binaries (and is the default in Wasm anyways).
+
+[profile.dev.package."*"]
+opt-level = 3  # We don't need debug stuff in the dependencies by default
+
+[profile.release.package."*"]
+opt-level = 3

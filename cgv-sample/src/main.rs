@@ -18,7 +18,7 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, event, glm, Result};
+use cgv::{wgpu, /*event, */glm, tracing, Result};
 
 // WGPU
 use wgpu::util::DeviceExt;
@@ -129,12 +129,12 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> Result<Box<dyn cgv::Application>>
+	fn create (self/*, context: &cgv::Context, renderSetup: &cgv::RenderSetup*/) -> Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
 
-		let shader = context.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+		/*let shader = context.device.create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: Some("Shader"),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
 		});
@@ -259,13 +259,13 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			},
 			multiview: None, // 5.
 			cache: None, // 6.
-		});
+		});*/
 
 		Ok(Box::new(SampleApplication {
-			pipeline,
+			/*pipeline,
 			vertexBuffer,
 			indexBuffer,
-			texBindGroup
+			texBindGroup*/
 		}))
 	}
 }
@@ -276,15 +276,15 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 #[derive(Debug)]
 pub struct SampleApplication {
-	pipeline: wgpu::RenderPipeline,
+	/*pipeline: wgpu::RenderPipeline,
 	vertexBuffer: wgpu::Buffer,
 	indexBuffer: wgpu::Buffer,
-	texBindGroup: wgpu::BindGroup
+	texBindGroup: wgpu::BindGroup*/
 }
 
 impl cgv::Application for SampleApplication
 {
-	fn onInput(&mut self, _: &event::WindowEvent) -> cgv::EventOutcome { cgv::EventOutcome::NotHandled }
+	/*fn onInput(&mut self, _: &event::WindowEvent) -> cgv::EventOutcome { cgv::EventOutcome::NotHandled }
 
 	fn onResize(&mut self, _: &glm::UVec2) {}
 
@@ -298,7 +298,7 @@ impl cgv::Application for SampleApplication
 			&wgpu::CommandEncoderDescriptor{label: Some("SampleCommandEncoder")}
 		);
 
-		/* create render pass */ {
+		*//* create render pass *//* {
 			let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 				label: Some("SampleRenderPass"),
 				color_attachments: &[renderState.getMainSurfaceColorAttachment()],
@@ -319,15 +319,17 @@ impl cgv::Application for SampleApplication
 
 		// Done!
 		Ok(())
-	}
+	}*/
 }
 
 // Application entry point
 pub fn main() -> Result<()>
 {
 	// Create a player
-	let player = cgv::Player::new()?;
+	//let player = cgv::Player::new()?;
 
 	// Hand off control flow, passing in a factory for our SampleApplication
-	player.run(SampleApplicationFactory{})
+	let result = cgv::Player::run(SampleApplicationFactory{});
+	if let Err(error) = &result { tracing::error!("{}", error); panic!("{}", error); }
+	result
 }
