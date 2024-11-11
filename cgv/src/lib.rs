@@ -85,7 +85,7 @@ use winit::platform::x11::EventLoopBuilderExtX11;
 // Egui library and framework
 use eframe::egui_wgpu;
 use eframe::epaint;
-use egui::Modifiers;
+
 // Local imports
 /*use crate::{context::*, renderstate::*};
 use clear::{ClearColor, ClearDepth};
@@ -313,8 +313,9 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,*/
 
-	demoWindows: egui_demo_lib::DemoWindows,
+	themeSet: bool,
 	sidePanelID: u32,
+	demoWindows: egui_demo_lib::DemoWindows,
 
 	renderManager: Arc<RenderManager>,
 
@@ -363,8 +364,9 @@ impl Player
 			context: None,
 			redrawOnceOnWait: false,*/
 
-			demoWindows: egui_demo_lib::DemoWindows::default(),
+			themeSet: false,
 			sidePanelID: 0,
+			demoWindows: egui_demo_lib::DemoWindows::default(),
 
 			renderManager: Arc::new(RenderManager {}),
 
@@ -411,11 +413,11 @@ impl Player
 				// Conditional code for the two supported display protocols on *nix. Wayland takes precedence in case
 				// both protocols are enabled.
 				#[cfg(all(not(target_os="windows"),not(target_os="macos")))] {
-					// - just Wayland
-					#[cfg(all(not(feature="x11"),feature="wayland"))]
+					// - Wayland (either just Wayland or both)
+					#[cfg(all(feature="wayland"))]
 						elBuilder.with_wayland();
 					// - just X11
-					#[cfg(feature="x11")]
+					#[cfg(all(feature="x11",not(feature="wayland")))]
 						elBuilder.with_x11();
 					// - neither - invalid configuration!
 					#[cfg(all(not(feature="wayland"),not(feature="x11")))]
@@ -757,13 +759,14 @@ impl eframe::App for Player {
 		{
 			egui::menu::bar(ui, |ui|
 			{
+				// The global [ESC] quit shortcut
 				let quit_shortcut =
-					egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::Escape);
-
+					egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
 				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
 					self.exit(ui.ctx());
 				}
 
+				// Menu bar
 				ui.menu_button("File", |ui| {
 					ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
 					#[cfg(not(target_arch="wasm32"))]
@@ -777,6 +780,30 @@ impl eframe::App for Player {
 					ui.label("<nothing here>");
 				});
 				ui.separator();
+
+				// Dark/Light mode toggle
+				/*ui.label("Theme:");*/ {
+					let mut themePref = ui.ctx().options(|opt| opt.theme_preference);
+					if !self.themeSet && themePref == egui::ThemePreference::System {
+						if ui.ctx().style().visuals.dark_mode { themePref = egui::ThemePreference::Dark; }
+						else { themePref = egui::ThemePreference::Light; }
+					}
+					if ui.button(match themePref {
+						egui::ThemePreference::Dark => "Theme 🌙",
+						egui::ThemePreference::Light => "Theme ☀",
+						egui::ThemePreference::System => "Theme 💻"
+					}).clicked() {
+						ui.ctx().set_theme(match themePref {
+							egui::ThemePreference::System => egui::ThemePreference::Dark,
+							egui::ThemePreference::Dark => egui::ThemePreference::Light,
+							egui::ThemePreference::Light => { self.themeSet = true; egui::ThemePreference::System }
+						});
+					};
+				}
+				ui.separator();
+
+				// Application focus switcher
+				/* nothing here yet */
 			});
 		}));
 
