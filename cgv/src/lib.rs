@@ -54,9 +54,7 @@ pub use anyhow::anyhow as anyhow;
 pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
-//pub use winit::event;
 pub use eframe::wgpu as wgpu;
-//use egui as egui_integration;
 
 
 
@@ -66,26 +64,27 @@ pub use eframe::wgpu as wgpu;
 //
 
 // Standard library
-use std::{sync::Arc, sync::Mutex, any::Any};
-use std::fmt::{Debug, Display, Formatter};
+use std::{sync::Arc, any::Any};
 
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
 use ctor;
-
-use eframe::egui_wgpu;
-use eframe::egui_wgpu::{CallbackResources, ScreenDescriptor};
-use eframe::epaint::PaintCallbackInfo;
 
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use crate::wgpu::{CommandBuffer, CommandEncoder, Device, Queue, RenderPass};
 
 // Winit library
-#[cfg(all(not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
+#[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
+#[allow(unused_imports)]
 use winit::platform::wayland::EventLoopBuilderExtWayland;
-#[cfg(all(not(target_os="windows"),not(target_os="macos"),feature="x11"))]
+#[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="x11"))]
+#[allow(unused_imports)]
 use winit::platform::x11::EventLoopBuilderExtX11;
+
+// Egui library and framework
+use eframe::egui_wgpu;
+use eframe::epaint;
 
 // Local imports
 /*use crate::{context::*, renderstate::*};
@@ -410,7 +409,6 @@ impl Player
 				// Conditional code for the two supported display protocols on *nix. Wayland takes precedence in case
 				// both protocols are enabled.
 				#[cfg(all(not(target_os="windows"),not(target_os="macos")))] {
-					tracing::warn!("Running on non-Windows/non-MacOS!");
 					// - just Wayland
 					#[cfg(all(not(feature="x11"),feature="wayland"))]
 						elBuilder.with_wayland();
@@ -426,7 +424,7 @@ impl Player
 			wgpu_options: Default::default(),
 			//persist_window: false,
 			//persistence_path: None,
-			dithering: false,
+			dithering: true,
 			..Default::default()
 		};
 
@@ -449,7 +447,7 @@ impl Player
 		initTracing();
 
 		let webOptions = eframe::WebOptions {
-			dithering: false,
+			dithering: true,
 			..Default::default()
 		};
 
@@ -745,7 +743,7 @@ impl eframe::App for Player {
 	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
 	{
 		self.demo_windows.ui(ctx);
-		/*egui::CentralPanel::default().show(ctx, |ui|
+		egui::CentralPanel::default().show(ctx, |ui|
 		{
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x = 0.0;
@@ -754,11 +752,11 @@ impl eframe::App for Player {
 				ui.label(". (WGPU)");
 			});
 
-			/*egui::Frame::canvas(ui.style()).show(ui, |ui| {
+			egui::Frame::canvas(ui.style()).show(ui, |ui| {
 				self.custom_painting(ui);
-			});*/
+			});
 			ui.label("Drag to rotate!");
-		});*/
+		});
 	}
 
 	/*fn on_exit(&mut self, gl: Option<&glow::Context>)
@@ -1087,29 +1085,27 @@ unsafe impl Send for RenderManager {}
 impl egui_wgpu::CallbackTrait for RenderManager
 {
 	fn prepare (
-		&self, _device: &Device, _queue: &Queue, _screenDesc: &ScreenDescriptor,
-		_eguiEncoder: &mut CommandEncoder, _callbackResources: &mut CallbackResources
+		&self, _device: &Device, _queue: &Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
+		_eguiEncoder: &mut CommandEncoder, _callbackResources: &mut egui_wgpu::CallbackResources
 	) -> Vec<CommandBuffer>
 	{
 		/* doNothing() */
-		tracing::info!("Prepare!!!");
 		Vec::new()
 	}
 
 	fn finish_prepare (
 		&self, _device: &Device, _queue: &Queue, _eguiEncoder: &mut CommandEncoder,
-		_callbackResources: &mut CallbackResources
+		_callbackResources: &mut egui_wgpu::CallbackResources
 	) -> Vec<CommandBuffer>
 	{
 		/* doNothing() */
-		tracing::info!("Finish Prepare!!!");
 		Vec::new()
 	}
 
 	fn paint(
-		&self, _info: PaintCallbackInfo, _renderPass: &mut RenderPass<'static>, _callbackResources: &CallbackResources
+		&self, _info: epaint::PaintCallbackInfo, _renderPass: &mut RenderPass<'static>,
+		_callbackResources: &egui_wgpu::CallbackResources
 	){
 		/* doNothing() */
-		tracing::info!("Paint!!!");
 	}
 }
