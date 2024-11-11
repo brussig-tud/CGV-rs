@@ -68,9 +68,11 @@ pub use eframe::wgpu as wgpu;
 // Standard library
 use std::{sync::Arc, sync::Mutex, any::Any};
 use std::fmt::{Debug, Display, Formatter};
+
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
 use ctor;
+
 use eframe::egui_wgpu;
 use eframe::egui_wgpu::{CallbackResources, ScreenDescriptor};
 use eframe::epaint::PaintCallbackInfo;
@@ -78,11 +80,12 @@ use eframe::epaint::PaintCallbackInfo;
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use crate::wgpu::{CommandBuffer, CommandEncoder, Device, Queue, RenderPass};
+
 // Winit library
-/*use winit::{
-	application::ApplicationHandler,
-	event::*, event_loop::*, keyboard::*, window::*
-};*/
+#[cfg(feature="wayland")]
+use winit::platform::wayland::EventLoopBuilderExtWayland;
+#[cfg(feature="x11")]
+use winit::platform::x11::EventLoopBuilderExtX11;
 
 // Local imports
 /*use crate::{context::*, renderstate::*};
@@ -395,8 +398,35 @@ impl Player
 		//self.eventLoop.take().unwrap().run_app(&mut self)?;
 		let options = eframe::NativeOptions {
 			viewport: egui::ViewportBuilder::default().with_inner_size([1152., 720.]),
+			vsync: false,
 			multisampling: 0,
+			//depth_buffer: 0,
+			//stencil_buffer: 0,
+			hardware_acceleration: eframe::HardwareAcceleration::Off,
 			renderer: eframe::Renderer::Wgpu,
+			//..Default::default()
+			//run_and_return: false,
+			event_loop_builder: Some(Box::new(|elBuilder| {
+				// Conditional code for the two supported display protocols on *nix. Wayland takes precedence in case
+				// both protocols are enabled.
+				#[cfg(all(not(target_os="windows"),not(target_os="macos")))] {
+					tracing::warn!("Running on non-Windows/non-MacOS!");
+					// - just Wayland
+					#[cfg(all(not(feature="x11"),feature="wayland"))]
+						elBuilder.with_wayland();
+					// - just X11
+					#[cfg(feature="x11")]
+						elBuilder.with_x11();
+					// - neither - invalid configuration!
+					#[cfg(all(not(feature="wayland"),not(feature="x11")))]
+						compile_error!("Must enable one of "x11" or "wayland" for Unix builds!");
+				}
+			})),
+			//centered: false,
+			wgpu_options: Default::default(),
+			//persist_window: false,
+			//persistence_path: None,
+			dithering: false,
 			..Default::default()
 		};
 

@@ -16,18 +16,19 @@ cfg-if = "*"
 ctor = "*"
 web-time = "*"
 egui = {git="https://github.com/emilk/egui.git", default-features=true, features=[
-	"color-hex", "mint", "rayon", "unity"
+	"color-hex", "mint", "rayon"
 ]}
 egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
 eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
-	"default_fonts", "wgpu", "x11" # disable "wayland" for Debian compatibility
+	"default_fonts", "wayland", "wgpu", "x11"
 ]}
 #egui-winit = {git="https://github.com/emilk/egui.git", default-features=true}
 #egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}
 #egui_wgpu_backend = {git="https://github.com/hasenbanck/egui_wgpu_backend.git", default-features=true}
 egui_demo_lib = {git="https://github.com/emilk/egui.git", default-features=true}
+winit = "*"
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 copypasta = "*"
 webbrowser = "*"
@@ -48,5 +49,7 @@ egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, fe
 ]}
 
 [features]
-default = []
+default = ["wayland", "x11"]
 buildScriptUsage = []
+wayland = ["eframe/wayland"]
+x11 = ["eframe/x11"]
