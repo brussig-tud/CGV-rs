@@ -22,7 +22,7 @@ egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, f
 	"all_loaders", "datepicker", "syntect"
 ]}
 eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
-	"default_fonts", "wayland", "wgpu", "x11"
+	"default_fonts", "wgpu", "x11" # disable "wayland" for Debian compatibility
 ]}
 #egui-winit = {git="https://github.com/emilk/egui.git", default-features=true}
 #egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}

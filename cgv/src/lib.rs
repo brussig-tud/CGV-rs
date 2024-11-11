@@ -311,6 +311,8 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,*/
 
+	demo_windows: egui_demo_lib::DemoWindows,
+
 	renderManager: Arc<RenderManager>,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
@@ -357,6 +359,8 @@ impl Player
 
 			context: None,
 			redrawOnceOnWait: false,*/
+
+			demo_windows: egui_demo_lib::DemoWindows::default(),
 
 			renderManager: Arc::new(RenderManager {}),
 
@@ -710,7 +714,8 @@ impl Player
 impl eframe::App for Player {
 	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
 	{
-		egui::CentralPanel::default().show(ctx, |ui|
+		self.demo_windows.ui(ctx);
+		/*egui::CentralPanel::default().show(ctx, |ui|
 		{
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x = 0.0;
@@ -719,11 +724,11 @@ impl eframe::App for Player {
 				ui.label(". (WGPU)");
 			});
 
-			egui::Frame::canvas(ui.style()).show(ui, |ui| {
+			/*egui::Frame::canvas(ui.style()).show(ui, |ui| {
 				self.custom_painting(ui);
-			});
+			});*/
 			ui.label("Drag to rotate!");
-		});
+		});*/
 	}
 
 	/*fn on_exit(&mut self, gl: Option<&glow::Context>)
