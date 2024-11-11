@@ -85,7 +85,7 @@ use winit::platform::x11::EventLoopBuilderExtX11;
 // Egui library and framework
 use eframe::egui_wgpu;
 use eframe::epaint;
-
+use egui::Modifiers;
 // Local imports
 /*use crate::{context::*, renderstate::*};
 use clear::{ClearColor, ClearDepth};
@@ -313,7 +313,8 @@ pub struct Player
 	context: Option<Context>,
 	redrawOnceOnWait: bool,*/
 
-	demo_windows: egui_demo_lib::DemoWindows,
+	demoWindows: egui_demo_lib::DemoWindows,
+	sidePanelID: u32,
 
 	renderManager: Arc<RenderManager>,
 
@@ -362,7 +363,8 @@ impl Player
 			context: None,
 			redrawOnceOnWait: false,*/
 
-			demo_windows: egui_demo_lib::DemoWindows::default(),
+			demoWindows: egui_demo_lib::DemoWindows::default(),
+			sidePanelID: 0,
 
 			renderManager: Arc::new(RenderManager {}),
 
@@ -401,7 +403,7 @@ impl Player
 			multisampling: 0,
 			//depth_buffer: 0,
 			//stencil_buffer: 0,
-			hardware_acceleration: eframe::HardwareAcceleration::Off,
+			hardware_acceleration: eframe::HardwareAcceleration::Required,
 			renderer: eframe::Renderer::Wgpu,
 			//..Default::default()
 			//run_and_return: false,
@@ -434,7 +436,10 @@ impl Player
 				move |cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc)?))
 			)
 		){
-			Ok(_) => Ok(()),
+			Ok(_) => {
+				tracing::info!("Shutdown complete.");
+				Ok(())
+			},
 			Err(error) => Err(anyhow::anyhow!("{:?}", error))
 		}
 	}
@@ -675,14 +680,14 @@ impl Player
 	{
 		let this = util::mutify(self);
 		codeBlock(util::mutify(self), this.context.as_mut().unwrap())
-	}
+	}*/
 
-	pub fn exit (&self, eventLoop: &ActiveEventLoop) {
+	pub fn exit (&self, eguiContext: &egui::Context) {
 		tracing::info!("Exiting...");
-		eventLoop.exit();
+		eguiContext.send_viewport_cmd(egui::ViewportCommand::Close);
 	}
 
-	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
+	/*pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
 		if let Some(dispatcher) =
@@ -742,14 +747,92 @@ impl Player
 impl eframe::App for Player {
 	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
 	{
-		self.demo_windows.ui(ctx);
+		//self.demo_windows.ui(ctx);
+
+		////
+		// Menu bar
+
+		egui::TopBottomPanel::top("menu_bar").show(ctx, |ui|
+		egui::ScrollArea::horizontal().show(ui, |ui|
+		{
+			egui::menu::bar(ui, |ui|
+			{
+				let quit_shortcut =
+					egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::Escape);
+
+				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+					self.exit(ui.ctx());
+				}
+
+				ui.menu_button("File", |ui| {
+					ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+					#[cfg(not(target_arch="wasm32"))]
+					if ui.add(
+						egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
+					).clicked()
+					{
+						self.exit(ui.ctx());
+					}
+					#[cfg(target_arch="wasm32")]
+					ui.label("<nothing here>");
+				});
+				ui.separator();
+			});
+		}));
+
+
+		////
+		// Side panel
+
+		egui::SidePanel::right("CGV__sidePanel")
+			.resizable(true)
+			.default_width(256.)
+			.show(ctx, |ui|
+		{
+			egui::ScrollArea::both().show(ui, |ui|
+			{
+				ui.horizontal(|ui|
+				{
+					ui.vertical(|ui|
+					{
+						match self.sidePanelID {
+							0 => {
+								// Player UI
+								ui.vertical(|ui| {
+									ui.label("<nothing here yet>");
+								});
+							},
+							1 => {
+								// Camera UI
+								ui.vertical(|ui| {
+									ui.label("<nothing here yet>")
+								});
+							},
+							2 => {
+								// Application UI
+								ui.vertical(|ui| {
+									ui.label("<nothing here yet>")
+								});
+							},
+							_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
+						}
+					});
+				});
+				ui.allocate_space(ui.available_size());
+			});
+		});
+
+
+		////
+		// 3D viewport
+
 		egui::CentralPanel::default().show(ctx, |ui|
 		{
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x = 0.0;
-				ui.label("The triangle is being painted using ");
+				ui.label("This is the default rendering area of ");
 				ui.hyperlink_to("CGV-rs", "https://github.com/brussig-tud/CGV-rs");
-				ui.label(". (WGPU)");
+				ui.label(".");
 			});
 
 			egui::Frame::canvas(ui.style()).show(ui, |ui| {
