@@ -82,9 +82,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use crate::wgpu::{CommandBuffer, CommandEncoder, Device, Queue, RenderPass};
 
 // Winit library
-#[cfg(feature="wayland")]
+#[cfg(all(not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
 use winit::platform::wayland::EventLoopBuilderExtWayland;
-#[cfg(feature="x11")]
+#[cfg(all(not(target_os="windows"),not(target_os="macos"),feature="x11"))]
 use winit::platform::x11::EventLoopBuilderExtX11;
 
 // Local imports
