@@ -15,6 +15,7 @@ tracing-subscriber = {version = "*", features = ["env-filter"]}
 cfg-if = "*"
 ctor = "*"
 web-time = "*"
+winit = "*"
 egui = {git="https://github.com/emilk/egui.git", default-features=true, features=[
 	"color-hex", "mint", "rayon"
 ]}
@@ -28,20 +29,18 @@ eframe = {git="https://github.com/emilk/egui.git", default-features=false, featu
 #egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}
 #egui_wgpu_backend = {git="https://github.com/hasenbanck/egui_wgpu_backend.git", default-features=true}
 egui_demo_lib = {git="https://github.com/emilk/egui.git", default-features=true}
-winit = "*"
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 copypasta = "*"
 webbrowser = "*"
 
 [target.'cfg(not(target_arch="wasm32"))'.dependencies]
-pollster = "*"
-#winit = {version="*", default-features=false, features=["x11", "rwh_06"]}
+#pollster = "*"
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
 tracing-wasm = "*"
-#wasm-bindgen = "*"
 wasm-bindgen-futures = "*"
+wgpu = {version="*", default-features=false, features=["webgpu"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
 #winit = {version="*"}
 egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
