@@ -25,20 +25,20 @@ mod player;
 pub use player::Player; // re-export
 
 // The module encapsulating all low-level graphics objects.
-/*mod context;
+mod context;
 pub use context::Context; // re-export
 
-// A submodule implementing a self-contained clear operation.
+/*// A submodule implementing a self-contained clear operation.
 mod clear;
 
 // The module encapsulating rendering-related higher-level managed render state (common uniform buffers etc.)
 mod renderstate;
-pub use renderstate::RenderState; // re-export
+pub use renderstate::RenderState; // re-export*/
 
 /// The parent module of all GPU abstractions.
 pub mod hal;
 
-/// The module containing all viewing functionality
+/*/// The module containing all viewing functionality
 pub mod view;*/
 
 /// The module containing utilities used throughout (i.e. not specific to any other module).

@@ -158,6 +158,8 @@ pub struct Player
 	sidePanelID: u32,
 	demoWindows: egui_demo_lib::DemoWindows,
 
+
+
 	renderManager: Arc<RenderManager>,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
@@ -282,7 +284,7 @@ impl Player
 					#[cfg(all(not(target_os="windows"),not(target_os="macos")))]
 						supported_backends: wgpu::Backends::VULKAN,
 					#[cfg(target_os="windows")]
-						supported_backends: wgpu::Backends::VULKAN,
+						supported_backends: wgpu::Backends::DX12,
 					#[cfg(target_os="macos")]
 						supported_backends: wgpu::Backends::METAL,
 					power_preference: wgpu::PowerPreference::None,

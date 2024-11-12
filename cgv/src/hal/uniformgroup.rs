@@ -33,7 +33,7 @@ impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 	{
 		// Create device objects
 		// - buffer
-		let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+		let buffer = context.device().create_buffer(&wgpu::BufferDescriptor {
 			label: util::concatIfSome(&name, "_buffer").as_deref(),
 			size: size_of::<UniformsStruct>() as u64,
 			usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -42,7 +42,7 @@ impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 		// - bind group layout
 		let bindGroupLayout = Self::createBindGroupLayout(context, visibility, name);
 		// - bind group
-		let bindGroup = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
+		let bindGroup = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
 			label: util::concatIfSome(&name, "_bindGroup").as_deref(),
 			layout: &bindGroupLayout,
 			entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }]
@@ -55,7 +55,7 @@ impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 	pub(crate) fn createBindGroupLayout (context: &Context, visibility: wgpu::ShaderStages, groupName: Option<&str>)
 		-> wgpu::BindGroupLayout
 	{
-		context.device.create_bind_group_layout(
+		context.device().create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
 				label: util::concatIfSome(&groupName, "_bindGroupLayout").as_deref(),
 				entries: &[wgpu::BindGroupLayoutEntry {
@@ -72,11 +72,11 @@ impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 	}
 
 	pub fn upload (&self, context: &Context) {
-		context.queue.write_buffer(&self.buffer, 0, util::slicify(&self.data));
+		context.queue().write_buffer(&self.buffer, 0, util::slicify(&self.data));
 	}
 
 	pub fn uploadImmediatly (&self, context: &Context) {
-		context.queue.write_buffer(&self.buffer, 0, util::slicify(&self.data));
-		context.queue.submit([]);
+		context.queue().write_buffer(&self.buffer, 0, util::slicify(&self.data));
+		context.queue().submit([]);
 	}
 }

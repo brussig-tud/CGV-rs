@@ -4,32 +4,18 @@
 // Imports
 //
 
-// Anyhow library
-use anyhow::Result;
-
-// Winit library
-use winit::dpi;
+// Standard library
+/* nothing here yet */
 
 // WGPU API
-use wgpu;
+use crate::wgpu;
 
 // Image library
 use image::GenericImageView;
 
 // Local imports
 use crate::*;
-use crate::util::math::alignToFactor;
-
-
-
-//////
-//
-// Module definitions
-//
-
-/// Submodule providing the UniformGroup facilities
-mod uniformgroup;
-pub use uniformgroup::UniformGroup; // re-export
+use util::math::alignToFactor;
 
 
 
@@ -38,54 +24,10 @@ pub use uniformgroup::UniformGroup; // re-export
 // Structs and enums
 //
 
-/// High-level enum encompassing all supported formats for depth/stencil buffers.
-#[derive(Clone, Copy, Default)]
-pub enum DepthStencilFormat
-{
-	/// 16-bits integer.
-	D16,
-
-	/// 24-bits integer.
-	D24,
-
-	/// 32-bits floating point.
-	#[default]
-	D32,
-
-	/// 24-bits integer depth + 8-bits stencil.
-	D24S8,
-
-	/// 32-bits floating point depth + 8-bits stencil (requires feature support).
-	D32S8
-}
-impl From<DepthStencilFormat> for wgpu::TextureFormat {
-	fn from(format: DepthStencilFormat) -> Self {
-		match format {
-			DepthStencilFormat::D16 => wgpu::TextureFormat::Depth16Unorm,
-			DepthStencilFormat::D24 => wgpu::TextureFormat::Depth24Plus,
-			DepthStencilFormat::D32 => wgpu::TextureFormat::Depth32Float,
-			DepthStencilFormat::D24S8 => wgpu::TextureFormat::Depth24PlusStencil8,
-			DepthStencilFormat::D32S8 => wgpu::TextureFormat::Depth32FloatStencil8
-		}
-	}
-}
-impl From<&DepthStencilFormat> for wgpu::TextureFormat {
-	fn from(format: &DepthStencilFormat) -> Self { (*format).into() }
-}
-impl From<wgpu::TextureFormat> for DepthStencilFormat {
-	fn from(format: wgpu::TextureFormat) -> Self {
-		match format {
-			wgpu::TextureFormat::Depth16Unorm => DepthStencilFormat::D16,
-			wgpu::TextureFormat::Depth24Plus => DepthStencilFormat::D24,
-			wgpu::TextureFormat::Depth32Float => DepthStencilFormat::D32,
-			wgpu::TextureFormat::Depth24PlusStencil8 => DepthStencilFormat::D24S8,
-			wgpu::TextureFormat::Depth32FloatStencil8 => DepthStencilFormat::D32S8,
-			_ => panic!("cannot convert unsupported format \"{:?}\" into cgv::hal::DepthStencilFormat!", format)
-		}
-	}
-}
-impl From<&wgpu::TextureFormat> for DepthStencilFormat {
-	fn from(format: &wgpu::TextureFormat) -> Self { (*format).into() }
+/// Encapsulates the logical and real GPU-side physical size (including padding for alignment) of a texture
+pub struct TextureSize {
+	pub logical: usize,
+	pub actual: usize
 }
 
 /// Encapsulates the slice of texels provided during [texture readback](Texture::readback).
@@ -103,13 +45,6 @@ pub enum ReadBackTexels<'a> {
 //
 // Classes
 //
-
-/// Encapsulates the logical and real GPU-side physical size (including padding for alignment) of a texture
-pub struct TextureSize {
-	pub logical: usize,
-	pub actual: usize
-}
-
 
 /// Represents a texture object, its data and interface to that data.
 #[allow(unused)]
@@ -198,10 +133,10 @@ impl Texture
 			},
 			view_formats: &[],
 		};
-		let texture = Box::new(context.device.create_texture(&descriptor));
+		let texture = Box::new(context.device().create_texture(&descriptor));
 
 		// Upload to GPU
-		context.queue.write_texture(
+		context.queue().write_texture(
 			wgpu::ImageCopyTexture {
 				aspect: wgpu::TextureAspect::All,
 				texture: &texture,
@@ -216,10 +151,10 @@ impl Texture
 			},
 			size,
 		);
-		context.queue.submit([]); // make sure the texture transfer starts immediately
+		context.queue().submit([]); // make sure the texture transfer starts immediately
 
 		// Create sampler
-		let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
+		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::ClampToEdge,
 			address_mode_v: wgpu::AddressMode::ClampToEdge,
 			address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -240,7 +175,7 @@ impl Texture
 			}
 		};
 		let readbackBuffer = match &specialUsageFlags {
-			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
+			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device().create_buffer(
 				&wgpu::BufferDescriptor {
 					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
 					size: size.actual as u64,
@@ -310,9 +245,9 @@ impl Texture
 			usage: usageFlags,
 			view_formats: &[],
 		};
-		let texture = Box::new(context.device.create_texture(&descriptor));
+		let texture = Box::new(context.device().create_texture(&descriptor));
 
-		let sampler = context.device.create_sampler(
+		let sampler = context.device().create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
 				address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -338,7 +273,7 @@ impl Texture
 			}
 		};
 		let readbackBuffer = match usageFlags {
-			wgpu::TextureUsages::COPY_SRC => Some(Box::new(context.device.create_buffer(
+			wgpu::TextureUsages::COPY_SRC => Some(Box::new(context.device().create_buffer(
 				&wgpu::BufferDescriptor {
 					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
 					size: size.actual as u64,
@@ -389,7 +324,7 @@ impl Texture
 	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::RENDER_ATTACHMENT`]).
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn createDepthStencilTexture(
-		context: &Context, dims: &glm::UVec2, format: DepthStencilFormat,
+		context: &Context, dims: &glm::UVec2, format: hal::DepthStencilFormat,
 		specialUsageFlags: Option<wgpu::TextureUsages>, label: Option<&str>
 	) -> Self
 	{
@@ -414,9 +349,9 @@ impl Texture
 			},
 			view_formats: &[],
 		};
-		let texture = Box::new(context.device.create_texture(&descriptor));
+		let texture = Box::new(context.device().create_texture(&descriptor));
 
-		let sampler = context.device.create_sampler(
+		let sampler = context.device().create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
 				address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -442,7 +377,7 @@ impl Texture
 			}
 		};
 		let readbackBuffer = match specialUsageFlags {
-			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device.create_buffer(
+			Some(wgpu::TextureUsages::COPY_SRC) => Some(Box::new(context.device().create_buffer(
 				&wgpu::BufferDescriptor {
 					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
 					size: size.actual as u64,
@@ -505,22 +440,17 @@ impl Texture
 		glm::vec2(size.height, size.depth_or_array_layers)
 	}
 
-	pub fn physicalSizeWH (&self) -> dpi::PhysicalSize<u32> {
-		let size = &self.descriptor.size;
-		dpi::PhysicalSize::new(size.width, size.height)
-	}
-
 	pub fn readbackAsync<'map, Closure: FnOnce(ReadBackTexels<'map>, usize) + wgpu::WasmNotSend + 'static> (
 		&self, context: &Context, callback: Closure
 	){
-		let mut enc = context.device.create_command_encoder(
+		let mut enc = context.device().create_command_encoder(
 			&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
 		);
 		enc.copy_texture_to_buffer(
 			*self.readbackView_tex.as_ref().unwrap(),
 			*self.readbackView_buf.as_ref().unwrap(), self.descriptor.size
 		);
-		context.queue.submit(Some(enc.finish()));
+		context.queue().submit(Some(enc.finish()));
 		let dims = self.dims2WH();
 		let this = util::statify(self);
 		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
@@ -563,34 +493,7 @@ impl Texture
 				}
 			}
 		);
-		context.device.poll(wgpu::Maintain::Wait);
-	}
-}
-
-
-/// A container for a color and depth/stencil texture which can both be rendered to.
-pub struct RenderTarget {
-	pub color: hal::Texture,
-	pub depth: hal::Texture,
-}
-
-impl RenderTarget {
-	pub fn new (
-		context: &Context, dims: &glm::UVec2, colorFormat: wgpu::TextureFormat,
-		depthStencilFormat: hal::DepthStencilFormat, label: &str
-	) -> Self
-	{
-		let colorLabel = format!("{label}_colorTarget");
-		let depthLabel = format!("{label}_depthStencilTarget");
-		Self {
-			color: hal::Texture::createEmptyTexture(
-				context, dims, colorFormat, wgpu::TextureUsages::RENDER_ATTACHMENT,
-				Some(colorLabel.as_str())
-			),
-			depth: hal::Texture::createDepthStencilTexture(
-				context, dims, depthStencilFormat, Some(wgpu::TextureUsages::COPY_SRC), Some(depthLabel.as_str())
-			)
-		}
+		context.device().poll(wgpu::Maintain::Wait);
 	}
 }
 
@@ -601,6 +504,7 @@ impl RenderTarget {
 // Functions
 //
 
+/// Returns the number of bytes per texel for the given texture format.
 pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> usize
 {
 	match format {
@@ -612,24 +516,5 @@ pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> usize
 		=> 4,
 
 		_ => panic!("Unsupported texture format: {:?}", format)
-	}
-}
-
-pub fn decodeDepthU16 (_value: u16) -> f32 {
-	unimplemented!("internal representation of 16-bit integer depth is as of yet unknown");
-}
-
-pub fn decodeDepthU32 (_value: u32) -> f32 {
-	unimplemented!("internal representation of 24-bit integer depth with or without stencil is as of yet unknown");
-}
-
-pub fn decodeDepth (location: usize, texels: ReadBackTexels) -> f32
-{
-	match texels
-	{
-		ReadBackTexels::U16(texels) => decodeDepthU16(texels[location]),
-		ReadBackTexels::U32(texels) => decodeDepthU32(texels[location]),
-		ReadBackTexels::F32(texels) => texels[location],
-		_ => unreachable!("texel type {:?} cannot contain depth and should not be passed", texels)
 	}
 }
