@@ -18,7 +18,7 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, /*event, */glm, tracing, Result};
+use cgv::{wgpu, /*event, */glm, Result};
 
 // WGPU
 use wgpu::util::DeviceExt;
@@ -323,13 +323,7 @@ impl cgv::Application for SampleApplication
 }
 
 // Application entry point
-pub fn main() -> Result<()>
-{
-	// Create a player
-	//let player = cgv::Player::new()?;
-
-	// Hand off control flow, passing in a factory for our SampleApplication
-	let result = cgv::Player::run(SampleApplicationFactory{});
-	if let Err(error) = &result { tracing::error!("{}", error); panic!("{}", error); }
-	result
+pub fn main() -> Result<()> {
+	// Immediately hand off control flow, passing in a factory for our SampleApplication
+	cgv::Player::run(SampleApplicationFactory{})
 }

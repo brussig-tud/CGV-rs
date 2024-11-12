@@ -99,6 +99,13 @@ pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
 	unsafe { &*(reference as *const T) }
 }
 
+#[inline(always)]
+pub fn detachRef<T: ?Sized> (reference: &T) -> &T {
+	let ptr = reference as *const T;
+	let reference = unsafe { &*ptr };
+	reference
+}
+
 /// Returns a mutable reference to the given object behind the given immutable reference.
 ///
 /// # Arguments

@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{sync::Arc, any::Any};
+use std::{sync::Arc, rc::Rc, any::Any};
 
 // Winit library
 #[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
@@ -90,7 +90,7 @@ pub enum GlobalPass
 	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
 }*/
 
-/// Collects all bind group layouts availabel for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
+/// Collects all bind group layouts available for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
 /// setup of the *CGV-rs* [`Player`].
 pub struct ManagedBindGroupLayouts {
 	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
@@ -144,7 +144,7 @@ pub struct RenderSetup
 // Player
 
 /// The central application host class.
-pub struct Player<'a>
+pub struct Player
 {
 	/*eventLoop: Option<EventLoop<UserEvent>>,
 	eventLoopProxy: EventLoopProxy<UserEvent>,
@@ -160,8 +160,8 @@ pub struct Player<'a>
 	demoWindows: egui_demo_lib::DemoWindows,
 
 	prevFramebufferDims: glm::UVec2,
-	context: Context<'a>,
-	renderManager: Arc<RenderManager>,
+	context: Context,
+	mainFramebuffer: Rc<hal::Framebuffer<'static>>,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
 	application: Option<Box<dyn Application>>/*,
@@ -179,10 +179,10 @@ pub struct Player<'a>
 
 	egui: Option<Egui<'static>>*/
 }
-unsafe impl<'a> Sync for Player<'a> {}
-unsafe impl<'a> Send for Player<'a> {}
+unsafe impl Sync for Player {}
+unsafe impl Send for Player {}
 
-impl<'a> Player<'a>
+impl Player
 {
 	pub fn new (applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext) -> Result<Self>
 	{
@@ -204,6 +204,13 @@ impl<'a> Player<'a>
 		/*let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
 		eventLoop.set_control_flow(ControlFlow::Wait);*/
 
+		// Create context
+		let context = Context::new(WgpuSetup {
+			adapter: &eguiRs.adapter,
+			device: &eguiRs.device,
+			queue: &eguiRs.queue
+		});
+
 		tracing::info!("Startup complete.");
 
 		// Done, now construct
@@ -222,13 +229,13 @@ impl<'a> Player<'a>
 			demoWindows: egui_demo_lib::DemoWindows::default(),
 
 			prevFramebufferDims: Default::default(),
-			context: Context::new(&WgpuSetup {
-				adapter: &eguiRs.adapter,
-				device: &eguiRs.device,
-				queue: &eguiRs.queue
-
-			}),
-			renderManager: Arc::new(RenderManager {}),
+			mainFramebuffer: Rc::new(hal::FramebufferBuilder::withDims(&glm::vec2(1, 1))
+				.withLabel("CGV__MainFramebuffer")
+				.attachColor(wgpu::TextureFormat::Bgra8Unorm, None)
+				.attachDepthStencil(hal::DepthStencilFormat::D32, Some(wgpu::TextureUsages::COPY_SRC))
+				.build(&context)
+			),
+			context,
 
 			applicationFactory,
 			application: None,
@@ -295,7 +302,7 @@ impl<'a> Player<'a>
 						supported_backends: wgpu::Backends::DX12,
 					#[cfg(target_os="macos")]
 						supported_backends: wgpu::Backends::METAL,
-					power_preference: wgpu::PowerPreference::None,
+					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
 						//required_features: Default::default(),
@@ -640,17 +647,16 @@ impl<'a> Player<'a>
 		// Clone locals so we can move them into the paint callback:
 		//let angle = self.angle;
 		//let rotating_triangle = self.rotating_triangle.clone();
-		let rm = self.renderManager.clone();
 
-		ui.painter().add(egui_wgpu::Callback::new_paint_callback(rect, RenderManager {}));
+		ui.painter().add(egui_wgpu::Callback::new_paint_callback(
+			rect, RenderManager { framebuffer: self.mainFramebuffer.clone() }
+		));
 	}
 }
 
-impl<'a> eframe::App for Player<'a> {
+impl eframe::App for Player {
 	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
 	{
-		//self.demo_windows.ui(ctx);
-
 		////
 		// Menu bar
 
@@ -719,8 +725,7 @@ impl<'a> eframe::App for Player<'a> {
 			{
 				ui.horizontal(|ui|
 				{
-					ui.vertical(|ui|
-					{
+					ui.vertical(|ui| {
 						match self.activeSidePanel {
 							0 => {
 								// Player UI
@@ -759,9 +764,10 @@ impl<'a> eframe::App for Player<'a> {
 				let centerPanelSpace = ui.available_size();
 				glm::vec2(centerPanelSpace.x as u32, centerPanelSpace.y as u32)
 			};
-			if availableSpace != self.prevFramebufferDims {
-				self.context.onResize(&availableSpace);
+			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0 {
+				util::mutify(self.mainFramebuffer.as_ref()).resize(&self.context, &availableSpace);
 				self.prevFramebufferDims = availableSpace;
+				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
 			}
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x = 0.0;
@@ -1096,12 +1102,13 @@ impl<'a> eframe::App for Player<'a> {
 	}
 }*/
 
-struct RenderManager {
+struct RenderManager<'rm> {
+	framebuffer: Rc<hal::Framebuffer<'rm>>
 }
-unsafe impl Sync for RenderManager {}
-unsafe impl Send for RenderManager {}
+unsafe impl<'fb> Sync for RenderManager<'fb> {}
+unsafe impl<'fb> Send for RenderManager<'fb> {}
 
-impl egui_wgpu::CallbackTrait for RenderManager
+impl<'fb> egui_wgpu::CallbackTrait for RenderManager<'fb>
 {
 	fn prepare (
 		&self, _device: &Device, _queue: &Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
