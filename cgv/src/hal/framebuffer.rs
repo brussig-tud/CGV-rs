@@ -79,7 +79,8 @@ impl From<&wgpu::TextureFormat> for DepthStencilFormat {
 pub struct Framebuffer<'a>{
 	color: [Option<&'a hal::Texture>; 8],
 	depth: Option<&'a hal::Texture>,
-	owned: [Option<hal::Texture>; 9]
+	owned: [Option<hal::Texture>; 9],
+	anyAttachment: Option<&'a hal::Texture>
 }
 impl<'a> Framebuffer<'a> {
 	/*pub fn new (
@@ -99,6 +100,10 @@ impl<'a> Framebuffer<'a> {
 			)
 		}
 	}*/
+
+	pub fn dims (&self) -> glm::UVec2 {
+		self.anyAttachment.unwrap().dimsWH()
+	}
 }
 
 /// A builder for [framebuffers](Framebuffer).

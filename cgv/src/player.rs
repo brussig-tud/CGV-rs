@@ -24,6 +24,7 @@ use eframe::epaint;
 
 // Local imports
 use crate::*;
+use crate::context::WgpuSetup;
 /*use crate::{context::*, renderstate::*};
 use clear::{ClearColor, ClearDepth};
 use hal::DepthStencilFormat;
@@ -143,7 +144,7 @@ pub struct RenderSetup
 // Player
 
 /// The central application host class.
-pub struct Player
+pub struct Player<'a>
 {
 	/*eventLoop: Option<EventLoop<UserEvent>>,
 	eventLoopProxy: EventLoopProxy<UserEvent>,
@@ -155,11 +156,11 @@ pub struct Player
 	redrawOnceOnWait: bool,*/
 
 	themeSet: bool,
-	sidePanelID: u32,
+	activeSidePanel: u32,
 	demoWindows: egui_demo_lib::DemoWindows,
 
-
-
+	prevFramebufferDims: glm::UVec2,
+	context: Context<'a>,
 	renderManager: Arc<RenderManager>,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
@@ -178,10 +179,10 @@ pub struct Player
 
 	egui: Option<Egui<'static>>*/
 }
-unsafe impl Sync for Player {}
-unsafe impl Send for Player {}
+unsafe impl<'a> Sync for Player<'a> {}
+unsafe impl<'a> Send for Player<'a> {}
 
-impl Player
+impl<'a> Player<'a>
 {
 	pub fn new (applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext) -> Result<Self>
 	{
@@ -217,15 +218,22 @@ impl Player
 			redrawOnceOnWait: false,*/
 
 			themeSet: false,
-			sidePanelID: 0,
+			activeSidePanel: 0,
 			demoWindows: egui_demo_lib::DemoWindows::default(),
 
+			prevFramebufferDims: Default::default(),
+			context: Context::new(&WgpuSetup {
+				adapter: &eguiRs.adapter,
+				device: &eguiRs.device,
+				queue: &eguiRs.queue
+
+			}),
 			renderManager: Arc::new(RenderManager {}),
 
 			applicationFactory,
-			application: None/*,
+			application: None,
 
-			renderSetup: None,
+			/*renderSetup: None,
 
 			camera: None,
 			cameraInteractor: Box::new(view::OrbitInteractor::new()),
@@ -638,7 +646,7 @@ impl Player
 	}
 }
 
-impl eframe::App for Player {
+impl<'a> eframe::App for Player<'a> {
 	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
 	{
 		//self.demo_windows.ui(ctx);
@@ -713,7 +721,7 @@ impl eframe::App for Player {
 				{
 					ui.vertical(|ui|
 					{
-						match self.sidePanelID {
+						match self.activeSidePanel {
 							0 => {
 								// Player UI
 								ui.vertical(|ui| {
@@ -746,6 +754,15 @@ impl eframe::App for Player {
 
 		egui::CentralPanel::default().show(ctx, |ui|
 		{
+			// Update framebuffer size
+			let availableSpace = {
+				let centerPanelSpace = ui.available_size();
+				glm::vec2(centerPanelSpace.x as u32, centerPanelSpace.y as u32)
+			};
+			if availableSpace != self.prevFramebufferDims {
+				self.context.onResize(&availableSpace);
+				self.prevFramebufferDims = availableSpace;
+			}
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x = 0.0;
 				ui.label("This is the default rendering area of ");
@@ -753,6 +770,7 @@ impl eframe::App for Player {
 				ui.label(".");
 			});
 
+			// Delegate drawing to render manager
 			egui::Frame::canvas(ui.style()).show(ui, |ui| {
 				self.custom_painting(ui);
 			});

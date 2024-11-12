@@ -20,10 +20,9 @@ use crate::hal;
 
 /// Used to pass the *egui_wgpu* setup into the [`Context`] constructor.
 pub(crate) struct WgpuSetup<'a> {
-	instance: &'a Arc<wgpu::Instance>,
-	adapter: &'a Arc<wgpu::Adapter>,
-	device: &'a Arc<wgpu::Device>,
-	queue: &'a Arc<wgpu::Queue>,
+	pub adapter: &'a Arc<wgpu::Adapter>,
+	pub device: &'a Arc<wgpu::Device>,
+	pub queue: &'a Arc<wgpu::Queue>,
 }
 
 
@@ -36,12 +35,9 @@ pub(crate) struct WgpuSetup<'a> {
 /// The CGV-rs rendering context storing all global graphics state.
 pub struct Context<'a>
 {
-	instance: Arc<wgpu::Instance>,
 	adapter: Arc<wgpu::Adapter>,
 	device: Arc<wgpu::Device>,
 	queue: Arc<wgpu::Queue>,
-
-	size: glm::UVec2,
 
 	mainFramebuffer: hal::Framebuffer<'a>
 }
@@ -52,18 +48,20 @@ impl<'a> Context<'a>
 	pub(crate) fn new (wgpuSetup: &WgpuSetup) -> Self
 	{
 		Self {
-			instance: wgpuSetup.instance.clone(),
 			adapter: wgpuSetup.adapter.clone(),
 			device: wgpuSetup.device.clone(),
 			queue: wgpuSetup.queue.clone(),
-			size: glm::vec2(0, 0),
 			mainFramebuffer: Default::default()
 		}
 	}
 
-	/// Reference the *WGPU* instance.
-	#[inline(always)]
-	pub fn instance (&self) -> &wgpu::Instance { &self.instance }
+	pub(crate) fn onResize (&mut self, newSize: &glm::UVec2)
+	{
+		if newSize.x > 0 && newSize.y > 0 {
+			//self.size = *newSize;
+			tracing::info!("Main framebuffer resized to {:?}", newSize);
+		}
+	}
 
 	/// Reference the *WGPU* instance.
 	#[inline(always)]
@@ -77,11 +75,8 @@ impl<'a> Context<'a>
 	#[inline(always)]
 	pub fn queue (&self) -> &wgpu::Queue { &self.queue }
 
-	pub fn resize (&mut self, newSize: &glm::UVec2)
-	{
-		if newSize.x > 0 && newSize.y > 0 {
-			tracing::info!("Resizing to {:?}", newSize);
-			self.size = *newSize;
-		}
+	/// Retrieve the current dimensions of the main framebuffer.
+	pub fn framebufferDims (&self) -> glm::UVec2 {
+		self.mainFramebuffer.dims()
 	}
 }

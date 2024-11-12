@@ -425,17 +425,17 @@ impl Texture
 		glm::vec3(size.width, size.height, size.depth_or_array_layers)
 	}
 
-	pub fn dims2WH (&self) -> glm::UVec2 {
+	pub fn dimsWH (&self) -> glm::UVec2 {
 		let size = &self.descriptor.size;
 		glm::vec2(size.width, size.height)
 	}
 
-	pub fn dims2WD (&self) -> glm::UVec2 {
+	pub fn dimsWD (&self) -> glm::UVec2 {
 		let size = &self.descriptor.size;
 		glm::vec2(size.width, size.depth_or_array_layers)
 	}
 
-	pub fn dims2HD (&self) -> glm::UVec2 {
+	pub fn dimsHD (&self) -> glm::UVec2 {
 		let size = &self.descriptor.size;
 		glm::vec2(size.height, size.depth_or_array_layers)
 	}
@@ -451,7 +451,7 @@ impl Texture
 			*self.readbackView_buf.as_ref().unwrap(), self.descriptor.size
 		);
 		context.queue().submit(Some(enc.finish()));
-		let dims = self.dims2WH();
+		let dims = self.dimsWH();
 		let this = util::statify(self);
 		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
 		buf.slice(0..self.size.actual as u64).map_async(
