@@ -10,39 +10,30 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow = "*"
 tracing = "*"
-nalgebra-glm = "*"
 tracing-subscriber = {version = "*", features = ["env-filter"]}
 cfg-if = "*"
 ctor = "*"
 web-time = "*"
 winit = "*"
-egui = {git="https://github.com/emilk/egui.git", default-features=true, features=[
-	"color-hex", "mint", "rayon"
-]}
+egui = {git="https://github.com/emilk/egui.git", default-features=true, features=["color-hex", "rayon"]}
 egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
 eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
 	"default_fonts", "wayland", "wgpu", "x11"
 ]}
-#egui-winit = {git="https://github.com/emilk/egui.git", default-features=true}
-#egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=["winit"]}
-#egui_wgpu_backend = {git="https://github.com/hasenbanck/egui_wgpu_backend.git", default-features=true}
-egui_demo_lib = {git="https://github.com/emilk/egui.git", default-features=true}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 copypasta = "*"
 webbrowser = "*"
-
-[target.'cfg(not(target_arch="wasm32"))'.dependencies]
-#pollster = "*"
+nalgebra-glm = "*"
+mint = "*"
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
 tracing-wasm = "*"
 wasm-bindgen-futures = "*"
-wgpu = {version="*", default-features=false, features=["webgpu"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
-#winit = {version="*"}
+wgpu = {version="*", default-features=false, features=["webgpu"]}
 egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}

@@ -129,26 +129,26 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (self/*, context: &cgv::Context, renderSetup: &cgv::RenderSetup*/) -> Result<Box<dyn cgv::Application>>
+	fn create (self, context: &cgv::Context/*, renderSetup: &cgv::RenderSetup*/) -> Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
 
-		/*let shader = context.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: Some("Shader"),
+		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: Some("Example__ShaderModule"),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
 		});
 
-		let vertexBuffer = context.device.create_buffer_init(
+		let vertexBuffer = context.device().create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
-				label: Some("HermiteNodes"),
+				label: Some("Example__HermiteNodes"),
 				contents: util::slicify(NODES),
 				usage: wgpu::BufferUsages::VERTEX,
 			}
 		);
-		let indexBuffer = context.device.create_buffer_init(
+		let indexBuffer = context.device().create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
-				label: Some("HermiteIndices"),
+				label: Some("Example__HermiteIndices"),
 				contents: util::slicify(INDICES),
 				usage: wgpu::BufferUsages::INDEX,
 			}
@@ -159,9 +159,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// Load resources
 
 		let tex = cgv::hal::Texture::fromBlob(
-			context, util::sourceBytes!("/res/tex/cgvCube.png"), None, Some("TestTexture")
+			context, util::sourceBytes!("/res/tex/cgvCube.png"), None, Some("Example__TestTexture")
 		)?;
-		let texBindGroupLayout = context.device.create_bind_group_layout(
+		let texBindGroupLayout = context.device().create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
 				entries: &[
 					wgpu::BindGroupLayoutEntry {
@@ -183,10 +183,10 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 						count: None,
 					},
 				],
-				label: Some("TestBindGroupLayout"),
+				label: Some("Example__TestBindGroupLayout"),
 			}
 		);
-		let texBindGroup = context.device.create_bind_group(
+		let texBindGroup = context.device().create_bind_group(
 			&wgpu::BindGroupDescriptor {
 				layout: &texBindGroupLayout,
 				entries: &[
@@ -199,7 +199,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 						resource: wgpu::BindingResource::Sampler(&tex.sampler),
 					}
 				],
-				label: Some("TestBindGroup"),
+				label: Some("Example__TestBindGroup"),
 			}
 		);
 
@@ -207,7 +207,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		////
 		// Create pipeline
 
-		let pipelineLayout =
+		/*let pipelineLayout =
 			context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
 				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &texBindGroupLayout],
@@ -262,10 +262,10 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		});*/
 
 		Ok(Box::new(SampleApplication {
-			/*pipeline,
+			//pipeline,
 			vertexBuffer,
 			indexBuffer,
-			texBindGroup*/
+			texBindGroup
 		}))
 	}
 }
@@ -276,10 +276,10 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 #[derive(Debug)]
 pub struct SampleApplication {
-	/*pipeline: wgpu::RenderPipeline,
+	//pipeline: wgpu::RenderPipeline,
 	vertexBuffer: wgpu::Buffer,
 	indexBuffer: wgpu::Buffer,
-	texBindGroup: wgpu::BindGroup*/
+	texBindGroup: wgpu::BindGroup
 }
 
 impl cgv::Application for SampleApplication

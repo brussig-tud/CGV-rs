@@ -173,6 +173,5 @@ pub trait Application
 // ApplicationFactory
 
 pub trait ApplicationFactory {
-	//fn create (&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
-	fn create (self) -> Result<Box<dyn Application>>;
+	fn create (self, context: &Context/*, renderSetup: &RenderSetup*/) -> Result<Box<dyn Application>>;
 }

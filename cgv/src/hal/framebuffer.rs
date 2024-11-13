@@ -97,24 +97,6 @@ pub struct Framebuffer<'label> {
 }
 impl<'label> Framebuffer<'label>
 {
-	/*pub fn new (
-		context: &Context, dims: &glm::UVec2, colorFormat: wgpu::TextureFormat,
-		depthStencilFormat: hal::DepthStencilFormat, label: &str
-	) -> Self
-	{
-		let colorLabel = format!("{label}_colorTarget");
-		let depthLabel = format!("{label}_depthStencilTarget");
-		Self {
-			color: hal::Texture::createEmptyTexture(
-				context, dims, colorFormat, wgpu::TextureUsages::RENDER_ATTACHMENT,
-				Some(colorLabel.as_str())
-			),
-			depth: hal::Texture::createDepthStencilTexture(
-				context, dims, depthStencilFormat, Some(wgpu::TextureUsages::COPY_SRC), Some(depthLabel.as_str())
-			)
-		}
-	}*/
-
 	/// Query the current dimensions of the framebuffer.
 	pub fn dims (&self) -> glm::UVec2 {
 		self.dims
@@ -135,6 +117,16 @@ impl<'label> Framebuffer<'label>
 				context, newDims, old.descriptor.format, old.descriptor.usage, old.name.as_deref()
 			));
 		}
+	}
+
+	/// Reference the color attachment in the given *slot*. Will panic if *slot* has no attachment.
+	pub fn color (&self, slot: usize) -> &hal::Texture {
+		&self.color[slot]
+	}
+
+	/// Reference the depth/stencil attachment. Will panic if there is no depth/stencil attachment.
+	pub fn depthStencil (&self) -> &hal::Texture {
+		self.depthStencil.as_ref().unwrap()
 	}
 }
 

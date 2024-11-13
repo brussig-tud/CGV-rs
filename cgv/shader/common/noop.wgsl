@@ -1,6 +1,6 @@
 
 ////
-// Interface - streams
+// Streams
 
 struct VertexOutput {
 	@builtin(position) dummy: vec4f,
@@ -10,6 +10,7 @@ struct VertexOutput {
 ////
 // Vertex shader
 
+// Shader entry point
 @vertex
 fn vs_main () -> VertexOutput
 {
@@ -22,6 +23,7 @@ fn vs_main () -> VertexOutput
 ////
 // Fragment shader
 
+// Shader entry point
 @fragment
 fn fs_main (in: VertexOutput) -> @location(0) vec4f {
 	return vec4f(0, 0, 0, 0);

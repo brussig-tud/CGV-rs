@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{sync::Arc, rc::Rc, any::Any};
+use std::{sync::Arc, any::Any};
 
 // Winit library
 #[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
@@ -140,6 +140,151 @@ pub struct RenderSetup
 
 
 
+//////
+//
+// Classes
+//
+
+////
+// ViewportCompositor
+
+struct ViewportCompositor {
+	name: Option<String>,
+	texBindGroupName: Option<String>,
+	sampler: wgpu::Sampler,
+	texBindGroupLayout: wgpu::BindGroupLayout,
+	texBindGroup: wgpu::BindGroup,
+	pipeline: wgpu::RenderPipeline
+}
+impl ViewportCompositor {
+	pub fn new (context: &Context, source: &hal::Texture, name: Option<&str>) -> Self
+	{
+		let name = name.map(String::from);
+
+		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: util::concatIfSome(&name, "_shaderModule").as_deref(),
+			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
+		});
+
+		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
+			address_mode_u: wgpu::AddressMode::ClampToEdge,
+			address_mode_v: wgpu::AddressMode::ClampToEdge,
+			address_mode_w: wgpu::AddressMode::ClampToEdge,
+			mag_filter: wgpu::FilterMode::Nearest,
+			min_filter: wgpu::FilterMode::Nearest,
+			mipmap_filter: wgpu::FilterMode::Nearest,
+			..Default::default()
+		});
+
+		let texBindGroupLayout = context.device().create_bind_group_layout(
+			&wgpu::BindGroupLayoutDescriptor {
+				label: util::concatIfSome(&name, "_texBindGroupLayout").as_deref(),
+				entries: &[
+					wgpu::BindGroupLayoutEntry {
+						binding: 0,
+						visibility: wgpu::ShaderStages::FRAGMENT,
+						ty: wgpu::BindingType::Texture {
+							multisampled: false,
+							view_dimension: wgpu::TextureViewDimension::D2,
+							sample_type: wgpu::TextureSampleType::Float { filterable: true },
+						},
+						count: None,
+					},
+					wgpu::BindGroupLayoutEntry {
+						binding: 1,
+						visibility: wgpu::ShaderStages::FRAGMENT,
+						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+						count: None,
+					},
+				]
+			}
+		);
+		let texBindGroupName = util::concatIfSome(&name, "_texBindGroup");
+		let texBindGroup = context.device().create_bind_group(
+			&wgpu::BindGroupDescriptor {
+				label: texBindGroupName.as_deref(),
+				layout: &texBindGroupLayout,
+				entries: &[
+					wgpu::BindGroupEntry {
+						binding: 0,
+						resource: wgpu::BindingResource::TextureView(&source.view),
+					},
+					wgpu::BindGroupEntry {
+						binding: 1,
+						resource: wgpu::BindingResource::Sampler(&sampler),
+					}
+				]
+			}
+		);
+
+		let pipelineLayout = context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+			label: util::concatIfSome(&name, "_pipelineLayout").as_deref(),
+			bind_group_layouts: &[&texBindGroupLayout],
+			push_constant_ranges: &[],
+		});
+
+		let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+			label: util::concatIfSome(&name, "_pipeline").as_deref(),
+			layout: Some(&pipelineLayout),
+			vertex: wgpu::VertexState {
+				module: &shader,
+				entry_point: None,
+				buffers: &[],
+				compilation_options: wgpu::PipelineCompilationOptions::default(),
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &shader,
+				entry_point: Some("fs_non_premultiplied"),
+				targets: &[Some(wgpu::ColorTargetState {
+					format: context.surfaceFormat(),
+					blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+					write_mask: wgpu::ColorWrites::ALL,
+				})],
+				compilation_options: wgpu::PipelineCompilationOptions::default(),
+			}),
+			primitive: wgpu::PrimitiveState {
+				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				cull_mode: None,
+				..Default::default()
+			},
+			depth_stencil: None,
+			multisample: wgpu::MultisampleState::default(),
+			multiview: None,
+			cache: None,
+		});
+
+		Self {
+			name, texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline
+		}
+	}
+
+	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture) {
+		self.texBindGroup = context.device().create_bind_group(
+			&wgpu::BindGroupDescriptor {
+				label: util::concatIfSome(&self.name, "_texBindGroup").as_deref(),
+				layout: &self.texBindGroupLayout,
+				entries: &[
+					wgpu::BindGroupEntry {
+						binding: 0,
+						resource: wgpu::BindingResource::TextureView(&source.view),
+					},
+					wgpu::BindGroupEntry {
+						binding: 1,
+						resource: wgpu::BindingResource::Sampler(&self.sampler),
+					}
+				]
+			}
+		);
+	}
+
+	pub fn composit (&self, renderPass: &mut wgpu::RenderPass) {
+		renderPass.set_pipeline(&self.pipeline);
+		renderPass.set_bind_group(0, &self.texBindGroup, &[]);
+		renderPass.draw(0..3, 0..1);
+	}
+}
+
+
 ////
 // Player
 
@@ -157,11 +302,11 @@ pub struct Player
 
 	themeSet: bool,
 	activeSidePanel: u32,
-	demoWindows: egui_demo_lib::DemoWindows,
 
 	prevFramebufferDims: glm::UVec2,
 	context: Context,
-	mainFramebuffer: Rc<hal::Framebuffer<'static>>,
+	mainFramebuffer: /*Rc<*/hal::Framebuffer<'static>/*>*/,
+	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
 	application: Option<Box<dyn Application>>/*,
@@ -208,8 +353,15 @@ impl Player
 		let context = Context::new(WgpuSetup {
 			adapter: &eguiRs.adapter,
 			device: &eguiRs.device,
-			queue: &eguiRs.queue
+			queue: &eguiRs.queue,
+			surfaceFormat: eguiRs.target_format,
 		});
+
+		let mainFramebuffer = hal::FramebufferBuilder::withDims(&glm::vec2(1, 1))
+			.withLabel("CGV__MainFramebuffer")
+			.attachColor(wgpu::TextureFormat::Bgra8Unorm, Some(wgpu::TextureUsages::TEXTURE_BINDING))
+			.attachDepthStencil(hal::DepthStencilFormat::D32, Some(wgpu::TextureUsages::COPY_SRC))
+			.build(&context);
 
 		tracing::info!("Startup complete.");
 
@@ -226,15 +378,12 @@ impl Player
 
 			themeSet: false,
 			activeSidePanel: 0,
-			demoWindows: egui_demo_lib::DemoWindows::default(),
 
 			prevFramebufferDims: Default::default(),
-			mainFramebuffer: Rc::new(hal::FramebufferBuilder::withDims(&glm::vec2(1, 1))
-				.withLabel("CGV__MainFramebuffer")
-				.attachColor(wgpu::TextureFormat::Bgra8Unorm, None)
-				.attachDepthStencil(hal::DepthStencilFormat::D32, Some(wgpu::TextureUsages::COPY_SRC))
-				.build(&context)
+			viewportCompositor: ViewportCompositor::new(
+				&context, mainFramebuffer.color(0), Some("CGV__MainViewportCompositor")
 			),
+			mainFramebuffer,
 			context,
 
 			applicationFactory,
@@ -637,21 +786,6 @@ impl Player
 			callback(None)
 		}
 	}*/
-
-	fn custom_painting (&mut self, ui: &mut egui::Ui) {
-		let (rect, response) =
-			ui.allocate_exact_size(egui::Vec2::splat(384.0), egui::Sense::click_and_drag());
-
-		//self.angle += response.drag_motion().x * 0.01;
-
-		// Clone locals so we can move them into the paint callback:
-		//let angle = self.angle;
-		//let rotating_triangle = self.rotating_triangle.clone();
-
-		ui.painter().add(egui_wgpu::Callback::new_paint_callback(
-			rect, RenderManager { framebuffer: self.mainFramebuffer.clone() }
-		));
-	}
 }
 
 impl eframe::App for Player {
@@ -757,39 +891,39 @@ impl eframe::App for Player {
 		////
 		// 3D viewport
 
-		egui::CentralPanel::default().show(ctx, |ui|
+		// Update viewport frame style
+		let mut frame = egui::Frame::central_panel(&ctx.style());
+		frame.inner_margin = egui::Margin::ZERO;
+
+		egui::CentralPanel::default().frame(frame).show(ctx, |ui|
 		{
+			// Keep track of reasons to force a scene redraw
+			let mut forceRedrawScene = false;
+
 			// Update framebuffer size
-			let availableSpace = {
-				let centerPanelSpace = ui.available_size();
-				glm::vec2(centerPanelSpace.x as u32, centerPanelSpace.y as u32)
-			};
-			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0 {
-				util::mutify(self.mainFramebuffer.as_ref()).resize(&self.context, &availableSpace);
+			let availableSpace_egui = ui.available_size();
+			let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
+			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
+			{
+				self.mainFramebuffer.resize(&self.context, &availableSpace);
+				self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color(0));
 				self.prevFramebufferDims = availableSpace;
 				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
+				// ToDo: inform camera, applications of resize
+				forceRedrawScene = true; // We'll need to redraw the whole scene
 			}
-			ui.horizontal(|ui| {
-				ui.spacing_mut().item_spacing.x = 0.0;
-				ui.label("This is the default rendering area of ");
-				ui.hyperlink_to("CGV-rs", "https://github.com/brussig-tud/CGV-rs");
-				ui.label(".");
-			});
 
-			// Delegate drawing to render manager
-			egui::Frame::canvas(ui.style()).show(ui, |ui| {
-				self.custom_painting(ui);
-			});
-			ui.label("Drag to rotate!");
+			// Dispatch remaining logic to render manager
+			let (rect, response) =
+				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
+			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
+				rect, RenderManager {
+					forceRedrawScene, framebuffer: util::statify(&self.mainFramebuffer),
+					viewportCompositor: util::statify(&self.viewportCompositor),
+				}
+			));
 		});
 	}
-
-	/*fn on_exit(&mut self, gl: Option<&glow::Context>)
-	{
-		if let Some(gl) = gl {
-			self.rotating_triangle.lock().destroy(gl);
-		}
-	}*/
 }
 
 /*impl ApplicationHandler<UserEvent> for Player
@@ -1102,13 +1236,15 @@ impl eframe::App for Player {
 	}
 }*/
 
-struct RenderManager<'rm> {
-	framebuffer: Rc<hal::Framebuffer<'rm>>
+struct RenderManager<'pass> {
+	framebuffer: &'pass hal::Framebuffer<'pass>,
+	viewportCompositor: &'pass ViewportCompositor,
+	forceRedrawScene: bool
 }
-unsafe impl<'fb> Sync for RenderManager<'fb> {}
-unsafe impl<'fb> Send for RenderManager<'fb> {}
+unsafe impl<'pass> Sync for RenderManager<'pass> {}
+unsafe impl<'pass> Send for RenderManager<'pass> {}
 
-impl<'fb> egui_wgpu::CallbackTrait for RenderManager<'fb>
+impl<'pass> egui_wgpu::CallbackTrait for RenderManager<'pass>
 {
 	fn prepare (
 		&self, _device: &Device, _queue: &Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
@@ -1129,9 +1265,10 @@ impl<'fb> egui_wgpu::CallbackTrait for RenderManager<'fb>
 	}
 
 	fn paint(
-		&self, _info: epaint::PaintCallbackInfo, _renderPass: &mut RenderPass<'static>,
+		&self, _info: epaint::PaintCallbackInfo, renderPass: &mut RenderPass<'static>,
 		_callbackResources: &egui_wgpu::CallbackResources
 	){
-		/* doNothing() */
+		// Composit rendering result to egui viewport
+		self.viewportCompositor.composit(renderPass);
 	}
 }

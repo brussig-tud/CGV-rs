@@ -1,17 +1,6 @@
 
 ////
-// Interface - uniforms
-
-struct Viewing {
-	modelview: mat4x4<f32>,
-	projection: mat4x4<f32>
-}
-@group(0) @binding(0)
-var<uniform> viewing: Viewing;
-
-
-////
-// Interface - streams
+// Streams
 
 struct VertexInput {
 	@location(0) pos: vec4f,
@@ -29,6 +18,17 @@ struct VertexOutput {
 ////
 // Vertex shader
 
+// Uniforms
+// - viewing uniform group definition
+struct Viewing {
+	modelview: mat4x4<f32>,
+	projection: mat4x4<f32>
+}
+// - viewing uniform
+@group(0) @binding(0)
+var<uniform> viewing: Viewing;
+
+// Shader entry point
 @vertex
 fn vs_main (vert: VertexInput) -> VertexOutput
 {
@@ -43,12 +43,14 @@ fn vs_main (vert: VertexInput) -> VertexOutput
 ////
 // Fragment shader
 
+// Uniforms
+// - textures
 @group(1) @binding(0)
 var tex: texture_2d<f32>;
-
 @group(1) @binding(1)
 var smpler: sampler;
 
+// Shader entry point
 @fragment
 fn fs_main (in: VertexOutput) -> @location(0) vec4f {
 	var texColor = textureSample(tex, smpler, in.texcoord);
