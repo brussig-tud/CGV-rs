@@ -35,6 +35,16 @@ pub use orbitinteractor::OrbitInteractor; // re-export
 // Enums
 //
 
+/// Convenience enum for informing [`Camera`] implementations whether they should manage their own framebuffer or render
+/// to a client-provided target.
+pub enum RenderTarget<'fb> {
+	/// An internally managed framebuffer of the specified dimensions and formats should be used.
+	Internal(glm::UVec2, wgpu::TextureFormat, hal::DepthStencilFormat),
+
+	/// Rendering should be performed into to the referenced framebuffer.
+	Provided(&'fb hal::Framebuffer)
+}
+
 /// Enum representing either a perspective or orthographic field-of-view in the vertical direction.
 #[derive(Debug)]
 pub enum FoV {
@@ -264,5 +274,5 @@ pub trait CameraInteractor
 	/// # Returns
 	///
 	/// The outcome of the event processing.
-	fn input (&mut self, event: &WindowEvent, player: &'static Player) -> crate::EventOutcome;
+	fn input (&mut self, event: &WindowEvent, player: &'static Player) -> EventOutcome;
 }

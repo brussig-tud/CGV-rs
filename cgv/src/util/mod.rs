@@ -5,8 +5,7 @@
 //
 
 // Standard library
-#[cfg(not(feature="buildScriptUsage"))]
-use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
+// /* nothing here yet */
 
 
 
@@ -14,6 +13,10 @@ use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 //
 // Module definitions
 //
+
+/// Submodule providing unsafe utilities
+#[cfg(not(feature="buildScriptUsage"))]
+pub mod notsafe;
 
 /// Submodule providing assorted math utilities.
 #[cfg(not(feature="buildScriptUsage"))]
@@ -146,87 +149,6 @@ pub const fn defaultRef<T> () -> &'static T {
 ///
 /// The concatenation of both strings in case `option` contained something, [`None`] otherwise.
 #[inline(always)]
-pub fn concatIfSome<Str: AsRef<str>> (option: &Option<Str>, concat: &str) -> Option<String>
-{
-	if let Some(string) = option {
-		Some(format!("{}{concat}", string.as_ref()))
-	} else {
-		None
-	}
-}
-
-pub fn forceAssign<T: Sized> (target: &mut T, source: &T) {
-	unsafe { std::ptr::copy_nonoverlapping(source as *const T, target as *mut T, 1); }
-}
-
-
-
-//////
-//
-// Classes
-//
-
-////
-// Phony
-
-/// A container for holding a *phony* object of the given type.
-#[cfg(not(feature="buildScriptUsage"))]
-pub struct Phony<T: Sized> where [(); size_of::<T>()]:
-{
-	mem: [u8; size_of::<T>()]
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> Phony<T> where [(); size_of::<T>()]:
-{
-	/// Allocate memory to hold the phony object.
-	pub fn new() -> Self { Phony {
-		mem: [0; size_of::<T>()]
-	}}
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> AsRef<T> for Phony<T> where [(); size_of::<T>()]:
-{
-	#[inline(always)]
-	fn as_ref (&self) -> &T {
-		unsafe { &*(&self.mem as *const u8 as *const T) }
-	}
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> AsMut<T> for Phony<T> where [(); size_of::<T>()]:
-{
-	#[inline(always)]
-	fn as_mut (&mut self) -> &mut T {
-		unsafe { &mut *(&mut self.mem as *mut u8 as *mut T) }
-	}
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> Borrow<T> for Phony<T> where [(); size_of::<T>()]:
-{
-	#[inline(always)]
-	fn borrow (&self) -> &T {
-		self.as_ref()
-	}
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> BorrowMut<T> for Phony<T> where [(); size_of::<T>()]:
-{
-	#[inline(always)]
-	fn borrow_mut (&mut self) -> &mut T {
-		self.as_mut()
-	}
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> Deref for Phony<T> where [(); size_of::<T>()]:
-{
-	type Target = T;
-	fn deref (&self) -> &Self::Target {
-		self.as_ref()
-	}
-}
-#[cfg(not(feature="buildScriptUsage"))]
-impl<T: Sized> DerefMut for Phony<T> where [(); size_of::<T>()]:
-{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		self.as_mut()
-	}
+pub fn concatIfSome<Str: AsRef<str>> (option: &Option<Str>, concat: &str) -> Option<String> {
+	option.as_ref().map(|source| format!("{}{concat}", source.as_ref()))
 }

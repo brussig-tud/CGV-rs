@@ -25,26 +25,21 @@
 
 // The module implementing the Player
 mod player;
-pub use player::Player; // re-export
+pub use player::{Player, EventOutcome, ManagedBindGroupLayouts, RenderSetup}; // re-export
 
 // The module encapsulating all low-level graphics objects.
 mod context;
-// - re-exports
-pub use context::Context;
-pub use context::ManagedBindGroupLayouts;
+pub use context::Context; // re-export
 
 // The module encapsulating rendering-related higher-level managed render state (common uniform buffers etc.)
-mod renderstate;
+pub mod renderstate;
 pub use renderstate::RenderState; // re-export
-
-/*// A submodule implementing a self-contained clear operation.
-mod clear;*/
 
 /// The parent module of all GPU abstractions.
 pub mod hal;
 
-/// The module containing all viewing functionality
-//pub mod view;
+/// The module containing all viewing functionality.
+pub mod view;
 
 /// The module containing utilities used throughout (i.e. not specific to any other module).
 pub mod util;
@@ -68,6 +63,9 @@ pub use eframe::wgpu as wgpu;
 //
 // Imports
 //
+
+// Standart library
+use std::any::Any;
 
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
@@ -119,6 +117,44 @@ fn initTracing ()
 		let fmt_layer = tracing_subscriber::fmt::Layer::default();
 		subscriber.with(fmt_layer).init();
 	}
+}
+
+
+
+///////
+//
+// Enums and structs
+//
+
+/// Holds information about the eye(s) in a stereo render pass.
+#[derive(Debug)]
+pub struct StereoEye {
+	/// The index of the eye currently being rendered.
+	pub current: u32,
+
+	/// The maximum eye index in the current stereo render.
+	pub max: u32
+}
+
+/// Enumerates the kinds of global render passes over the scene.
+#[derive(Debug)]
+pub enum GlobalPass
+{
+	/// A simple, straight-to-the-target global pass.
+	Simple,
+
+	/// A stereo pass - the encapsulated value indicates which eye exactly is being rendered currently.
+	Stereo(StereoEye),
+
+	/// A custom pass, with a custom value.
+	Custom(Box<dyn Any>)
+}
+
+pub struct GlobalPassDeclaration<'rs>
+{
+	pub pass: GlobalPass,
+	pub renderState: &'rs mut RenderState<'rs>,
+	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
 }
 
 

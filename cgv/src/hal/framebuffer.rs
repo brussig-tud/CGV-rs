@@ -5,8 +5,9 @@
 //
 
 // Standard library
-/* nothing here yet */
 use std::hint::unreachable_unchecked;
+pub use std::borrow::Borrow;
+
 // Local imports
 use crate::*;
 
@@ -16,6 +17,50 @@ use crate::*;
 //
 // Structs and enums
 //
+
+/// Convenience enum providing for the common use case that a [`Framebuffer`] can either be owned or borrowed from
+/// somewhere else (e.g. as a client-provided render target).
+pub enum DynamicFramebuffer<'fb> {
+	/// Stores an owned [`Framebuffer`].
+	Owned(Framebuffer),
+
+	/// References a foreign [`Framebuffer`].
+	Borrowed(&'fb Framebuffer),
+}
+impl<'fb> DynamicFramebuffer<'fb>
+{
+	/// Evaluates to `true` if the framebuffer is [`Owned`](DynamicFramebuffer::Owned), `false` otherwise.
+	pub fn isOwned (&self) -> bool {
+		if let DynamicFramebuffer::Owned(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// Evaluates to `true` if the framebuffer is [`Borrowed`](DynamicFramebuffer::Borrowed), `false` otherwise.
+	pub fn isBorrowed (&self) -> bool {
+		if let DynamicFramebuffer::Borrowed(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+}
+impl<'fb> AsRef<Framebuffer> for DynamicFramebuffer<'fb> {
+	fn as_ref (&self) -> &Framebuffer {
+		match self {
+			DynamicFramebuffer::Owned(framebuffer) => framebuffer,
+			DynamicFramebuffer::Borrowed(framebuffer) => framebuffer,
+		}
+	}
+}
+impl<'fb> Borrow<Framebuffer> for DynamicFramebuffer<'fb>
+{
+	fn borrow (&self) -> &Framebuffer {
+		self.as_ref()
+	}
+}
 
 /// High-level enum encompassing all supported formats for depth/stencil buffers.
 #[derive(Clone, Copy, Default, Debug)]
@@ -164,6 +209,12 @@ impl<'label> FramebufferBuilder<'label>
 	/// Use the specified debugging label.
 	pub fn withLabel (&mut self, label: &'label str) -> &mut Self {
 		self.label = Some(label);
+		self
+	}
+
+	/// Use the specified debugging label if `Some`, otherwise don't use a debugging label.
+	pub fn withLabelIfSome (&mut self, label: Option<&'label str>) -> &mut Self {
+		self.label = label;
 		self
 	}
 

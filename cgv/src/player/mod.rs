@@ -1,6 +1,17 @@
 
 //////
 //
+// Module definitions
+//
+
+/// Submodule providing the [`RenderSetup`].
+mod rendersetup;
+pub use rendersetup::RenderSetup; // - re-export
+
+
+
+//////
+//
 // Imports
 //
 
@@ -37,13 +48,15 @@ use view::Camera;*/
 // Enums and structs
 //
 
-// The type used for our user-defined event.
-/*enum UserEvent {
-	ContextReady(Result<Context>)
-}*/
+/// Collects all bind group layouts available for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
+/// setup of the *CGV-rs* [`Player`].
+pub struct ManagedBindGroupLayouts {
+	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
+	pub viewing: wgpu::BindGroupLayout
+}
 
 /// Enumeration of possible event handling outcomes.
-/*pub enum EventOutcome
+pub enum EventOutcome
 {
 	/// The event was handled and should be closed. The wrapped `bool` indicates whether a redraw
 	/// needs to happen as a result of the processing that was done.
@@ -56,79 +69,7 @@ use view::Camera;*/
 
 	/// The event was not handled.
 	NotHandled
-}*/
-
-/// Holds information about the eye(s) in a stereo render pass.
-#[derive(Debug)]
-pub struct StereoEye {
-	/// The index of the eye currently being rendered.
-	pub current: u32,
-
-	/// The maximum eye index in the current stereo render.
-	pub max: u32
 }
-
-/// Enumerates the kinds of global render passes over the scene.
-#[derive(Debug)]
-pub enum GlobalPass
-{
-	/// A simple, straight-to-the-target global pass.
-	Simple,
-
-	/// A stereo pass - the encapsulated value indicates which eye exactly is being rendered currently.
-	Stereo(StereoEye),
-
-	/// A custom pass, with a custom value.
-	Custom(Box<dyn Any>)
-}
-
-/*pub struct GlobalPassDeclaration<'a>
-{
-	pub pass: GlobalPass,
-	pub renderState: &'a mut RenderState,
-	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
-}*/
-
-/// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, in case they want to
-/// interface with the managed [render pipeline](wgpu::RenderPipeline) setup.
-/*pub struct RenderSetup
-{
-	/// The color format used for the render targets of managed [global passes](GlobalPass).
-	colorFormat: wgpu::TextureFormat,
-
-	/// The depth/stencil format used for the render targets of managed [global passes](GlobalPass).
-	depthStencilFormat: wgpu::TextureFormat,
-
-	/// The clear color that will be used on the main framebuffer in case no [`Application`] requests a specific one.
-	defaultClearColor: wgpu::Color,
-
-	/// The bind groups provided for interfacing with centrally managed uniforms.
-	bindGroupLayouts: ManagedBindGroupLayouts
-}*/
-/*impl RenderSetup
-{
-	pub(crate) fn new (context: &Context, colorFormat: wgpu::TextureFormat, depthStencilFormat: DepthStencilFormat)
-		-> Self
-	{
-		Self {
-			colorFormat, depthStencilFormat: depthStencilFormat.into(),
-			defaultClearColor: wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.},
-			bindGroupLayouts: ManagedBindGroupLayouts {
-				viewing: ViewingUniformGroup::createBindGroupLayout(
-					context, wgpu::ShaderStages::VERTEX_FRAGMENT, Some("CGV__ViewingBindGroupLayout")
-				)
-			}
-		}
-	}
-
-	pub fn colorFormat(&self) -> wgpu::TextureFormat { self.colorFormat }
-
-	pub fn depthStencilFormat(&self) -> wgpu::TextureFormat { self.depthStencilFormat }
-
-	pub fn defaultClearColor(&self) -> &wgpu::Color { &self.defaultClearColor }
-
-	pub fn bindGroupLayouts(&self) -> &ManagedBindGroupLayouts { &self.bindGroupLayouts }
-}*/
 
 
 
@@ -148,7 +89,7 @@ struct ViewportCompositor {
 	pipeline: wgpu::RenderPipeline
 }
 impl ViewportCompositor {
-	pub fn new (context: &Context, source: &hal::Texture, name: Option<&str>) -> Self
+	pub fn new (context: &Context, renderSetup: &RenderSetup, source: &hal::Texture, name: Option<&str>) -> Self
 	{
 		let name = name.map(String::from);
 
@@ -157,6 +98,7 @@ impl ViewportCompositor {
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
 		});
 
+		// ToDo: introduce a sampler library and put that there
 		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::ClampToEdge,
 			address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -227,7 +169,7 @@ impl ViewportCompositor {
 				module: &shader,
 				entry_point: Some("fs_non_premultiplied"),
 				targets: &[Some(wgpu::ColorTargetState {
-					format: context.surfaceFormat(),
+					format: renderSetup.surfaceFormat(),
 					blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
 					write_mask: wgpu::ColorWrites::ALL,
 				})],
@@ -294,15 +236,14 @@ pub struct Player
 	themeSet: bool,
 	activeSidePanel: u32,
 
-	prevFramebufferDims: glm::UVec2,
 	context: Context,
+	renderSetup: RenderSetup,
+	prevFramebufferDims: glm::UVec2,
 	mainFramebuffer: /*Rc<*/hal::Framebuffer/*>*/,
 	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
 	application: Option<Box<dyn Application>>/*,
-
-	renderSetup: Option<RenderSetup>,
 
 	camera: Option<Box<dyn view::Camera>>,
 	cameraInteractor: Box<dyn view::CameraInteractor>,
@@ -341,12 +282,17 @@ impl Player
 		eventLoop.set_control_flow(ControlFlow::Wait);*/
 
 		// Create context
-		let context = Context::new(WgpuSetup {
+		let context = Context::new(&WgpuSetup {
 			adapter: &eguiRs.adapter,
 			device: &eguiRs.device,
-			queue: &eguiRs.queue,
-			surfaceFormat: eguiRs.target_format,
+			queue: &eguiRs.queue
 		});
+
+		// Log render setup
+		let renderSetup = RenderSetup::new(
+			&context, eguiRs.target_format, eguiRs.target_format, hal::DepthStencilFormat::D32,
+			wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.}, 1., wgpu::CompareFunction::Less
+		);
 
 		let mainFramebuffer = hal::FramebufferBuilder::withDims(&glm::vec2(1, 1))
 			.withLabel("CGV__MainFramebuffer")
@@ -372,10 +318,11 @@ impl Player
 
 			prevFramebufferDims: Default::default(),
 			viewportCompositor: ViewportCompositor::new(
-				&context, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
+				&context, &renderSetup, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
 			),
 			mainFramebuffer,
 			context,
+			renderSetup,
 
 			applicationFactory,
 			application: None,
@@ -422,13 +369,13 @@ impl Player
 				#[cfg(all(not(target_os="windows"),not(target_os="macos")))] {
 					// - Wayland (either just Wayland or both)
 					#[cfg(all(feature="wayland"))]
-						elBuilder.with_wayland();
+					elBuilder.with_wayland();
 					// - just X11
 					#[cfg(all(feature="x11",not(feature="wayland")))]
-						elBuilder.with_x11();
+					elBuilder.with_x11();
 					// - neither - invalid configuration!
 					#[cfg(all(not(feature="wayland"),not(feature="x11")))]
-						compile_error!("Must enable one of `x11` or `wayland` for Unix builds!");
+					compile_error!("Must enable one of `x11` or `wayland` for Unix builds!");
 				}
 			})),
 			//centered: false,
@@ -437,11 +384,11 @@ impl Player
 				//desired_maximum_frame_latency: None,
 				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew {
 					#[cfg(all(not(target_os="windows"),not(target_os="macos")))]
-						supported_backends: wgpu::Backends::VULKAN,
+					supported_backends: wgpu::Backends::VULKAN,
 					#[cfg(target_os="windows")]
-						supported_backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
+					supported_backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
 					#[cfg(target_os="macos")]
-						supported_backends: wgpu::Backends::METAL,
+					supported_backends: wgpu::Backends::METAL,
 					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
@@ -533,15 +480,15 @@ impl Player
 					document.get_element_by_id("cgvLoadingIndicator") { loadingIndicator.remove(); },
 				Err(error) => {
 					let msgDetail = if let Some(errorDesc) = error.as_string()
-						{ errorDesc }
+					{ errorDesc }
 					else
-						{ format!("{:?}", error) };
+					{ format!("{:?}", error) };
 					if let Some(loadingIndicator) =
 						document.get_element_by_id("cgvLoadingIndicator") {
-							let msg = format!(
-								"<p>The CGV-rs Player has crashed.<br/>Reason: {:?}</p><p>See the developer console for details. </p>", msgDetail
-							);
-							loadingIndicator.set_inner_html(msg.as_str());
+						let msg = format!(
+							"<p>The CGV-rs Player has crashed.<br/>Reason: {:?}</p><p>See the developer console for details. </p>", msgDetail
+						);
+						loadingIndicator.set_inner_html(msg.as_str());
 					}
 					panic!("FATAL: failed to start CGV-rs Player:\n{msgDetail}");
 				}
@@ -786,56 +733,56 @@ impl eframe::App for Player {
 		// Menu bar
 
 		egui::TopBottomPanel::top("menu_bar").show(ctx, |ui|
-		egui::ScrollArea::horizontal().show(ui, |ui|
-		{
-			egui::menu::bar(ui, |ui|
-			{
-				// The global [ESC] quit shortcut
-				let quit_shortcut =
-					egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
-				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
-					self.exit(ui.ctx());
-				}
+			egui::ScrollArea::horizontal().show(ui, |ui|
+				{
+					egui::menu::bar(ui, |ui|
+						{
+							// The global [ESC] quit shortcut
+							let quit_shortcut =
+								egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
+							if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+								self.exit(ui.ctx());
+							}
 
-				// Menu bar
-				ui.menu_button("File", |ui| {
-					ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-					#[cfg(not(target_arch="wasm32"))]
-					if ui.add(
-						egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
-					).clicked()
-					{
-						self.exit(ui.ctx());
-					}
-					#[cfg(target_arch="wasm32")]
-					ui.label("<nothing here>");
-				});
-				ui.separator();
+							// Menu bar
+							ui.menu_button("File", |ui| {
+								ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+								#[cfg(not(target_arch="wasm32"))]
+								if ui.add(
+									egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
+								).clicked()
+								{
+									self.exit(ui.ctx());
+								}
+								#[cfg(target_arch="wasm32")]
+								ui.label("<nothing here>");
+							});
+							ui.separator();
 
-				/* Dark/Light mode toggle */ {
-					let mut themePref = ui.ctx().options(|opt| opt.theme_preference);
-					if !self.themeSet && themePref == egui::ThemePreference::System {
-						if ui.ctx().style().visuals.dark_mode { themePref = egui::ThemePreference::Dark; }
-						else { themePref = egui::ThemePreference::Light; }
-					}
-					if ui.button(match themePref {
-						egui::ThemePreference::Dark => "Theme 🌙",
-						egui::ThemePreference::Light => "Theme ☀",
-						egui::ThemePreference::System => "Theme 💻"
-					}).clicked() {
-						ui.ctx().set_theme(match themePref {
-							egui::ThemePreference::System => egui::ThemePreference::Dark,
-							egui::ThemePreference::Dark => egui::ThemePreference::Light,
-							egui::ThemePreference::Light => { self.themeSet = true; egui::ThemePreference::System }
+							/* Dark/Light mode toggle */ {
+							let mut themePref = ui.ctx().options(|opt| opt.theme_preference);
+							if !self.themeSet && themePref == egui::ThemePreference::System {
+								if ui.ctx().style().visuals.dark_mode { themePref = egui::ThemePreference::Dark; }
+								else { themePref = egui::ThemePreference::Light; }
+							}
+							if ui.button(match themePref {
+								egui::ThemePreference::Dark => "Theme 🌙",
+								egui::ThemePreference::Light => "Theme ☀",
+								egui::ThemePreference::System => "Theme 💻"
+							}).clicked() {
+								ui.ctx().set_theme(match themePref {
+									egui::ThemePreference::System => egui::ThemePreference::Dark,
+									egui::ThemePreference::Dark => egui::ThemePreference::Light,
+									egui::ThemePreference::Light => { self.themeSet = true; egui::ThemePreference::System }
+								});
+							};
+						}
+							ui.separator();
+
+							// Application focus switcher
+							/* nothing here yet */
 						});
-					};
-				}
-				ui.separator();
-
-				// Application focus switcher
-				/* nothing here yet */
-			});
-		}));
+				}));
 
 
 		////
@@ -845,38 +792,38 @@ impl eframe::App for Player {
 			.resizable(true)
 			.default_width(256.)
 			.show(ctx, |ui|
-		{
-			egui::ScrollArea::both().show(ui, |ui|
-			{
-				ui.horizontal(|ui|
 				{
-					ui.vertical(|ui| {
-						match self.activeSidePanel {
-							0 => {
-								// Player UI
-								ui.vertical(|ui| {
-									ui.label("<nothing here yet>");
+					egui::ScrollArea::both().show(ui, |ui|
+						{
+							ui.horizontal(|ui|
+								{
+									ui.vertical(|ui| {
+										match self.activeSidePanel {
+											0 => {
+												// Player UI
+												ui.vertical(|ui| {
+													ui.label("<nothing here yet>");
+												});
+											},
+											1 => {
+												// Camera UI
+												ui.vertical(|ui| {
+													ui.label("<nothing here yet>")
+												});
+											},
+											2 => {
+												// Application UI
+												ui.vertical(|ui| {
+													ui.label("<nothing here yet>")
+												});
+											},
+											_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
+										}
+									});
 								});
-							},
-							1 => {
-								// Camera UI
-								ui.vertical(|ui| {
-									ui.label("<nothing here yet>")
-								});
-							},
-							2 => {
-								// Application UI
-								ui.vertical(|ui| {
-									ui.label("<nothing here yet>")
-								});
-							},
-							_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
-						}
-					});
+							ui.allocate_space(ui.available_size());
+						});
 				});
-				ui.allocate_space(ui.available_size());
-			});
-		});
 
 
 		////
@@ -888,32 +835,32 @@ impl eframe::App for Player {
 
 		// Draw actual viewport panel
 		egui::CentralPanel::default().frame(frame).show(ctx, |ui|
-		{
-			// Keep track of reasons to force a scene redraw
-			let mut forceRedrawScene = false;
-
-			// Update framebuffer size
-			let availableSpace_egui = ui.available_size();
-			let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
-			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
 			{
-				self.mainFramebuffer.resize(&self.context, &availableSpace);
-				self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color0());
-				self.prevFramebufferDims = availableSpace;
-				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
-				// ToDo: inform camera, applications of resize
-				forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
-			}
+				// Keep track of reasons to force a scene redraw
+				let mut forceRedrawScene = false;
 
-			// Dispatch remaining logic to render manager
-			let (rect, _response) =
-				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
-			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
-				rect, RenderManager {
-					forceRedrawScene, viewportCompositor: util::statify(&self.viewportCompositor),
+				// Update framebuffer size
+				let availableSpace_egui = ui.available_size();
+				let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
+				if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
+				{
+					self.mainFramebuffer.resize(&self.context, &availableSpace);
+					self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color0());
+					self.prevFramebufferDims = availableSpace;
+					tracing::info!("Main framebuffer resized to {:?}", availableSpace);
+					// ToDo: inform camera, applications of resize
+					forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
 				}
-			));
-		});
+
+				// Dispatch remaining logic to render manager
+				let (rect, _response) =
+					ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
+				ui.painter().add(egui_wgpu::Callback::new_paint_callback(
+					rect, RenderManager {
+						forceRedrawScene, viewportCompositor: util::statify(&self.viewportCompositor),
+					}
+				));
+			});
 	}
 }
 

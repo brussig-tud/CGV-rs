@@ -16,17 +16,13 @@
 
 /// Submodule providing the [`Texture`](texture::Texture) facilities
 mod texture;
-// - re-exports
-pub use texture::Texture;
-pub use texture::TextureSize;
-pub use texture::ReadBackTexels;
+pub use texture::{Texture, TextureSize, ReadBackTexels}; // re-export
 
 /// Submodule providing the [`Framebuffer`](texture::Framebuffer) facilities
 mod framebuffer;
 // - re-exports
-pub use framebuffer::Framebuffer;
-pub use framebuffer::FramebufferBuilder;
-pub use framebuffer::DepthStencilFormat;
+pub use framebuffer::{Framebuffer, FramebufferBuilder, DynamicFramebuffer, DepthStencilFormat};
+pub use framebuffer::{decodeDepth, decodeDepthU16, decodeDepthU32};
 
 /// Submodule providing the [`UniformGroup`](uniformgroup::UniformGroup) facilities
 mod uniformgroup;
