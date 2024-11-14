@@ -1,6 +1,21 @@
 
 //////
 //
+// Module definitions
+//
+
+/// The internal submodule for the MonoCamera implementation
+mod monocamera;
+pub use monocamera::MonoCamera; // re-export
+
+/// The internal submodule for the OrbitCamera implementation
+mod orbitinteractor;
+pub use orbitinteractor::OrbitInteractor; // re-export
+
+
+
+//////
+//
 // Imports
 //
 
@@ -12,21 +27,6 @@ use winit::event::WindowEvent;
 
 // Local imports
 use crate::*;
-
-
-
-//////
-//
-// Module definitions
-//
-
-/// The internal submodule for the MonoCamera implementation
-mod monocamera;
-pub use monocamera::MonoCamera; // re-export
-
-/// The internal submodule for the OrbitCamera implementation
-mod orbitinteractor;
-pub use orbitinteractor::OrbitInteractor; // re-export
 
 
 
@@ -211,7 +211,7 @@ pub trait Camera
 	fn update (&mut self, interactor: &dyn CameraInteractor);
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
-	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];
+	fn declareGlobalPasses (&'static self) -> &'static [GlobalPassDeclaration<'static>];
 
 	/// Report the individual name of the camera instance.
 	///

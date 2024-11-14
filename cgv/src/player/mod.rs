@@ -236,6 +236,7 @@ pub struct Player
 	themeSet: bool,
 	activeSidePanel: u32,
 
+	egui: egui::Context,
 	context: Context,
 	renderSetup: RenderSetup,
 	prevFramebufferDims: glm::UVec2,
@@ -243,18 +244,15 @@ pub struct Player
 	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
-	application: Option<Box<dyn Application>>/*,
+	application: Option<Box<dyn Application>>,
 
-	camera: Option<Box<dyn view::Camera>>,
+	camera: Box<dyn view::Camera>,
 	cameraInteractor: Box<dyn view::CameraInteractor>,
-	clearers: Vec<clear::Clear>,
 
 	continousRedrawRequests: u32,
 	startInstant: time::Instant,
 	prevFrameElapsed: time::Duration,
-	prevFrameDuration: time::Duration,
-
-	egui: Option<Egui<'static>>*/
+	prevFrameDuration: time::Duration
 }
 unsafe impl Sync for Player {}
 unsafe impl Send for Player {}
@@ -305,13 +303,10 @@ impl Player
 		// Done, now construct
 		Ok(Self {
 			/*eventLoopProxy: eventLoop.create_proxy(),
-			eventLoop: Some(eventLoop),
+			eventLoop: Some(eventLoop),*/
 
-			#[cfg(target_arch="wasm32")]
-			canvas: None,
-
-			context: None,
-			redrawOnceOnWait: false,*/
+			egui: cc.egui_ctx.clone(),
+			//redrawOnceOnWait: false,
 
 			themeSet: false,
 			activeSidePanel: 0,
@@ -320,25 +315,24 @@ impl Player
 			viewportCompositor: ViewportCompositor::new(
 				&context, &renderSetup, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
 			),
-			mainFramebuffer,
-			context,
-			renderSetup,
 
 			applicationFactory,
 			application: None,
 
-			/*renderSetup: None,
-
-			camera: None,
+			camera: Box::new(view::MonoCamera::new(
+				&context, view::RenderTarget::Provided(util::statify(&mainFramebuffer)),
+				&renderSetup, Some("CGV__MainCamera")
+			)),
+			mainFramebuffer,
+			context,
+			renderSetup,
 			cameraInteractor: Box::new(view::OrbitInteractor::new()),
-			clearers: Vec::new(),
+			//clearers: Vec::new(),
 
 			continousRedrawRequests: 0,
 			startInstant: time::Instant::now(),
 			prevFrameElapsed: time::Duration::from_secs(0),
 			prevFrameDuration: time::Duration::from_secs(0),
-
-			egui: None,*/
 		})
 	}
 
@@ -577,84 +571,36 @@ impl Player
 
 		// Done!
 		Ok(())
-	}
-
-	fn renderEgui (&mut self)
-	{
-		////
-		// Compose GUI for current frame
-
-		let context = util::mutify(self.context.as_mut().unwrap());
-		context.eguiPlatform.begin_frame();
-		self.egui.as_mut().unwrap().demoApp.ui(&context.eguiPlatform.context());
-		let fullOutput = context.eguiPlatform.end_frame(Some(&context.window));
-		let paintJobs = context.eguiPlatform.context().tessellate(
-			fullOutput.shapes, context.window.scale_factor() as f32
-		);
-		let texDelta = &fullOutput.textures_delta;
-
-
-		////
-		// Actually render
-
-		let mut eguiCmdEncoder = context.device.create_command_encoder(
-			&wgpu::CommandEncoderDescriptor { label: Some("CGV__EguiPassCommandEncoder") }
-		);
-		context.eguiRenderer.update_buffers(
-			&context.device, &context.queue, &mut eguiCmdEncoder, &paintJobs, &context.eguiScreenDesc
-		);
-		for tex in &texDelta.set {
-			context.eguiRenderer.update_texture(&context.device, &context.queue, tex.0, &tex.1);
-		}
-		/* Render pass private scope */ {
-			let this = util::mutify(self);
-			let context = util::statify(context);
-			this.egui.as_mut().unwrap().updateSurface(context);
-			let mut rp = util::mutify(&eguiCmdEncoder).begin_render_pass(
-				&self.egui.as_ref().unwrap().renderPassDescriptor
-			);
-			context.eguiRenderer.render(&mut rp, &paintJobs, &context.eguiScreenDesc);
-		}
-		context.queue.submit([eguiCmdEncoder.finish()]);
-		for texId in &texDelta.free {
-			context.eguiRenderer.free_texture(&texId);
-		}
-
-		// Check if repaint needed
-		if context.eguiPlatform.context().has_requested_repaint() {
-			self.postRedraw();
-		}
-	}
+	}*/
 
 	pub fn pushContinuousRedrawRequest (&self)
 	{
 		let this = util::mutify(self);
-		if self.continousRedrawRequests < 1 {
+		if this.continousRedrawRequests < 1 {
 			this.prevFrameElapsed = this.startInstant.elapsed();
 			this.prevFrameDuration = time::Duration::from_secs(0);
 			tracing::info!("Starting continuous redrawing");
-			self.context.as_ref().unwrap().window().request_redraw();
+			this.egui.request_repaint();
 		}
 		this.continousRedrawRequests += 1;
 	}
 
 	pub fn dropContinuousRedrawRequest (&self)
 	{
-		if self.continousRedrawRequests < 1 {
+		let this = util::mutify(self);
+		if this.continousRedrawRequests < 1 {
 			panic!("logic error - more continuous redraw requests dropped than were pushed");
 		}
-		let this = util::mutify(self);
 		this.continousRedrawRequests -= 1;
-		if self.continousRedrawRequests < 1 {
+		if this.continousRedrawRequests < 1 {
 			this.prevFrameDuration = time::Duration::from_secs(0);
 			tracing::info!("Stopping continuous redrawing");
 		}
 	}
 
-	pub fn postRedraw (&self)
-	{
+	pub fn postRedraw (&self) {
 		if self.continousRedrawRequests < 1 {
-			self.context.as_ref().unwrap().window.request_redraw();
+			self.egui.request_repaint();
 		}
 	}
 
@@ -662,7 +608,7 @@ impl Player
 		self.prevFrameDuration.as_secs_f32()
 	}
 
-	pub fn withContext<ReturnType, Closure: FnOnce(&'static Player, &'static Context) -> ReturnType> (
+	/*pub fn withContext<ReturnType, Closure: FnOnce(&'static Player, &'static Context) -> ReturnType> (
 		&self, codeBlock: Closure
 	) -> ReturnType
 	{
@@ -686,12 +632,11 @@ impl Player
 	/*pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) =
-			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
-				dispatcher.getDepthValue_async(self.context.as_ref().unwrap(), |depth| {
-					callback(Some(depth));
-				})
-			}
+		if let Some(dispatcher) = self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.getDepthValue_async(self.context.as_ref().unwrap(), |depth| {
+				callback(Some(depth));
+			})
+		}
 		else {
 			callback(None)
 		}
@@ -700,8 +645,7 @@ impl Player
 	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) =
-			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
+		if let Some(dispatcher) = self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
 			dispatcher.unprojectPointH_async(self.context.as_ref().unwrap(), |point| {
 				callback(point);
 			})
@@ -709,21 +653,20 @@ impl Player
 		else {
 			callback(None)
 		}
-	}
+	}*/
 
 	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) =
-			self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.unprojectPoint_async(self.context.as_ref().unwrap(), |point| {
+		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.unprojectPoint_async(&self.context, |point| {
 				callback(point);
 			})
 		}
 		else {
 			callback(None)
 		}
-	}*/
+	}
 }
 
 impl eframe::App for Player {
