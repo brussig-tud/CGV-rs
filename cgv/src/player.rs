@@ -16,7 +16,7 @@ use winit::platform::wayland::EventLoopBuilderExtWayland;
 use winit::platform::x11::EventLoopBuilderExtX11;
 
 // WGPU API
-use crate::wgpu;
+use wgpu;
 
 // Egui library and framework
 use eframe::egui_wgpu;
@@ -27,7 +27,6 @@ use crate::*;
 use crate::context::WgpuSetup;
 /*use crate::{context::*, renderstate::*};
 use clear::{ClearColor, ClearDepth};
-use hal::DepthStencilFormat;
 #[allow(unused_imports)] // prevent this warning in WASM. ToDo: investigate
 use view::Camera;*/
 
@@ -90,16 +89,9 @@ pub enum GlobalPass
 	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
 }*/
 
-/// Collects all bind group layouts available for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
-/// setup of the *CGV-rs* [`Player`].
-pub struct ManagedBindGroupLayouts {
-	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
-	pub viewing: wgpu::BindGroupLayout
-}
-
 /// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, in case they want to
 /// interface with the managed [render pipeline](wgpu::RenderPipeline) setup.
-pub struct RenderSetup
+/*pub struct RenderSetup
 {
 	/// The color format used for the render targets of managed [global passes](GlobalPass).
 	colorFormat: wgpu::TextureFormat,
@@ -112,7 +104,7 @@ pub struct RenderSetup
 
 	/// The bind groups provided for interfacing with centrally managed uniforms.
 	bindGroupLayouts: ManagedBindGroupLayouts
-}
+}*/
 /*impl RenderSetup
 {
 	pub(crate) fn new (context: &Context, colorFormat: wgpu::TextureFormat, depthStencilFormat: DepthStencilFormat)
@@ -149,7 +141,6 @@ pub struct RenderSetup
 // ViewportCompositor
 
 struct ViewportCompositor {
-	name: Option<String>,
 	texBindGroupName: Option<String>,
 	sampler: wgpu::Sampler,
 	texBindGroupLayout: wgpu::BindGroupLayout,
@@ -254,14 +245,14 @@ impl ViewportCompositor {
 		});
 
 		Self {
-			name, texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline
+			texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline
 		}
 	}
 
 	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture) {
 		self.texBindGroup = context.device().create_bind_group(
 			&wgpu::BindGroupDescriptor {
-				label: util::concatIfSome(&self.name, "_texBindGroup").as_deref(),
+				label: self.texBindGroupName.as_deref(),
 				layout: &self.texBindGroupLayout,
 				entries: &[
 					wgpu::BindGroupEntry {
@@ -305,7 +296,7 @@ pub struct Player
 
 	prevFramebufferDims: glm::UVec2,
 	context: Context,
-	mainFramebuffer: /*Rc<*/hal::Framebuffer<'static>/*>*/,
+	mainFramebuffer: /*Rc<*/hal::Framebuffer/*>*/,
 	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
@@ -381,7 +372,7 @@ impl Player
 
 			prevFramebufferDims: Default::default(),
 			viewportCompositor: ViewportCompositor::new(
-				&context, mainFramebuffer.color(0), Some("CGV__MainViewportCompositor")
+				&context, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
 			),
 			mainFramebuffer,
 			context,
@@ -895,6 +886,7 @@ impl eframe::App for Player {
 		let mut frame = egui::Frame::central_panel(&ctx.style());
 		frame.inner_margin = egui::Margin::ZERO;
 
+		// Draw actual viewport panel
 		egui::CentralPanel::default().frame(frame).show(ctx, |ui|
 		{
 			// Keep track of reasons to force a scene redraw
@@ -906,20 +898,19 @@ impl eframe::App for Player {
 			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
 			{
 				self.mainFramebuffer.resize(&self.context, &availableSpace);
-				self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color(0));
+				self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color0());
 				self.prevFramebufferDims = availableSpace;
 				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
 				// ToDo: inform camera, applications of resize
-				forceRedrawScene = true; // We'll need to redraw the whole scene
+				forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
 			}
 
 			// Dispatch remaining logic to render manager
-			let (rect, response) =
+			let (rect, _response) =
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
 			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
 				rect, RenderManager {
-					forceRedrawScene, framebuffer: util::statify(&self.mainFramebuffer),
-					viewportCompositor: util::statify(&self.viewportCompositor),
+					forceRedrawScene, viewportCompositor: util::statify(&self.viewportCompositor),
 				}
 			));
 		});
@@ -1236,36 +1227,35 @@ impl eframe::App for Player {
 	}
 }*/
 
-struct RenderManager<'pass> {
-	framebuffer: &'pass hal::Framebuffer<'pass>,
-	viewportCompositor: &'pass ViewportCompositor,
+struct RenderManager<'vc> {
+	viewportCompositor: &'vc ViewportCompositor,
 	forceRedrawScene: bool
 }
-unsafe impl<'pass> Sync for RenderManager<'pass> {}
-unsafe impl<'pass> Send for RenderManager<'pass> {}
+unsafe impl<'vc> Sync for RenderManager<'vc> {}
+unsafe impl<'vc> Send for RenderManager<'vc> {}
 
-impl<'pass> egui_wgpu::CallbackTrait for RenderManager<'pass>
+impl<'vc> egui_wgpu::CallbackTrait for RenderManager<'vc>
 {
 	fn prepare (
-		&self, _device: &Device, _queue: &Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
-		_eguiEncoder: &mut CommandEncoder, _callbackResources: &mut egui_wgpu::CallbackResources
-	) -> Vec<CommandBuffer>
+		&self, _device: &wgpu::Device, _queue: &wgpu::Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
+		_eguiEncoder: &mut wgpu::CommandEncoder, _callbackResources: &mut egui_wgpu::CallbackResources
+	) -> Vec<wgpu::CommandBuffer>
 	{
 		/* doNothing() */
 		Vec::new()
 	}
 
 	fn finish_prepare (
-		&self, _device: &Device, _queue: &Queue, _eguiEncoder: &mut CommandEncoder,
+		&self, _device: &wgpu::Device, _queue: &wgpu::Queue, _eguiEncoder: &mut wgpu::CommandEncoder,
 		_callbackResources: &mut egui_wgpu::CallbackResources
-	) -> Vec<CommandBuffer>
+	) -> Vec<wgpu::CommandBuffer>
 	{
 		/* doNothing() */
 		Vec::new()
 	}
 
-	fn paint(
-		&self, _info: epaint::PaintCallbackInfo, renderPass: &mut RenderPass<'static>,
+	fn paint (
+		&self, _info: epaint::PaintCallbackInfo, renderPass: &mut wgpu::RenderPass<'static>,
 		_callbackResources: &egui_wgpu::CallbackResources
 	){
 		// Composit rendering result to egui viewport

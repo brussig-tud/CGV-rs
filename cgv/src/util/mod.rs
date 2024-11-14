@@ -5,7 +5,8 @@
 //
 
 // Standard library
-/* nothing here yet */
+#[cfg(not(feature="buildScriptUsage"))]
+use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 
 
 
@@ -44,6 +45,7 @@ macro_rules! sourceFile {
 		include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
 	};
 }
+
 #[allow(unused_imports)]
 pub use sourceFile;
 
@@ -150,5 +152,81 @@ pub fn concatIfSome<Str: AsRef<str>> (option: &Option<Str>, concat: &str) -> Opt
 		Some(format!("{}{concat}", string.as_ref()))
 	} else {
 		None
+	}
+}
+
+pub fn forceAssign<T: Sized> (target: &mut T, source: &T) {
+	unsafe { std::ptr::copy_nonoverlapping(source as *const T, target as *mut T, 1); }
+}
+
+
+
+//////
+//
+// Classes
+//
+
+////
+// Phony
+
+/// A container for holding a *phony* object of the given type.
+#[cfg(not(feature="buildScriptUsage"))]
+pub struct Phony<T: Sized> where [(); size_of::<T>()]:
+{
+	mem: [u8; size_of::<T>()]
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> Phony<T> where [(); size_of::<T>()]:
+{
+	/// Allocate memory to hold the phony object.
+	pub fn new() -> Self { Phony {
+		mem: [0; size_of::<T>()]
+	}}
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> AsRef<T> for Phony<T> where [(); size_of::<T>()]:
+{
+	#[inline(always)]
+	fn as_ref (&self) -> &T {
+		unsafe { &*(&self.mem as *const u8 as *const T) }
+	}
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> AsMut<T> for Phony<T> where [(); size_of::<T>()]:
+{
+	#[inline(always)]
+	fn as_mut (&mut self) -> &mut T {
+		unsafe { &mut *(&mut self.mem as *mut u8 as *mut T) }
+	}
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> Borrow<T> for Phony<T> where [(); size_of::<T>()]:
+{
+	#[inline(always)]
+	fn borrow (&self) -> &T {
+		self.as_ref()
+	}
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> BorrowMut<T> for Phony<T> where [(); size_of::<T>()]:
+{
+	#[inline(always)]
+	fn borrow_mut (&mut self) -> &mut T {
+		self.as_mut()
+	}
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> Deref for Phony<T> where [(); size_of::<T>()]:
+{
+	type Target = T;
+	fn deref (&self) -> &Self::Target {
+		self.as_ref()
+	}
+}
+#[cfg(not(feature="buildScriptUsage"))]
+impl<T: Sized> DerefMut for Phony<T> where [(); size_of::<T>()]:
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		self.as_mut()
 	}
 }

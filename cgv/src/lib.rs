@@ -4,11 +4,14 @@
 // Language config
 //
 
+// No point allowing unstable features if we still get warnings
+#![allow(incomplete_features)]
+
+// Required for util::Phony
+#![feature(generic_const_exprs)]
+
 // Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
 #![allow(non_snake_case)]
-
-// Eff this "feature" as well.
-/*#![allow(unused_must_use)]*/
 
 // And this one... the macros are there for clients! Why should the library have to use every single one? WTF...
 #![allow(unused_macros)]
@@ -26,20 +29,22 @@ pub use player::Player; // re-export
 
 // The module encapsulating all low-level graphics objects.
 mod context;
-pub use context::Context; // re-export
-
-/*// A submodule implementing a self-contained clear operation.
-mod clear;
+// - re-exports
+pub use context::Context;
+pub use context::ManagedBindGroupLayouts;
 
 // The module encapsulating rendering-related higher-level managed render state (common uniform buffers etc.)
 mod renderstate;
-pub use renderstate::RenderState; // re-export*/
+pub use renderstate::RenderState; // re-export
+
+/*// A submodule implementing a self-contained clear operation.
+mod clear;*/
 
 /// The parent module of all GPU abstractions.
 pub mod hal;
 
-/*/// The module containing all viewing functionality
-pub mod view;*/
+/// The module containing all viewing functionality
+//pub mod view;
 
 /// The module containing utilities used throughout (i.e. not specific to any other module).
 pub mod util;
@@ -70,14 +75,6 @@ use ctor;
 
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use crate::wgpu::{CommandBuffer, CommandEncoder, Device, Queue, RenderPass};
-
-// Local imports
-/*use crate::{context::*, renderstate::*};
-use clear::{ClearColor, ClearDepth};
-use hal::DepthStencilFormat;
-#[allow(unused_imports)] // prevent this warning in WASM. ToDo: investigate
-use view::Camera;*/
 
 
 

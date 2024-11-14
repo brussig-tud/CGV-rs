@@ -89,13 +89,12 @@ enum TextureCreationParams {
 /// A logical render target consisting of any number of (including zero) color textures and optionally a depth/stencil
 /// texture.
 #[derive(Default)]
-pub struct Framebuffer<'label> {
-	pub(in crate::hal::framebuffer) label: Option<&'label str>,
+pub struct Framebuffer {
 	pub(in crate::hal::framebuffer) color: Vec<hal::Texture>,
 	pub(in crate::hal::framebuffer) depthStencil: Option<hal::Texture>,
 	pub(in crate::hal::framebuffer) dims: glm::UVec2
 }
-impl<'label> Framebuffer<'label>
+impl Framebuffer
 {
 	/// Query the current dimensions of the framebuffer.
 	pub fn dims (&self) -> glm::UVec2 {
@@ -119,17 +118,35 @@ impl<'label> Framebuffer<'label>
 		}
 	}
 
-	/// Reference the color attachment in the given *slot*. Will panic if *slot* has no attachment.
-	pub fn color (&self, slot: usize) -> &hal::Texture {
-		&self.color[slot]
+	/// Convenience method to reference the *0*-th color attachment, assuming it exists. Panics if it doesn't.
+	///
+	/// # Returns
+	///
+	/// A reference to the texture in the *0*-th color slot.
+	pub fn color0 (&self) -> &hal::Texture {
+		&self.color[0]
 	}
 
-	/// Reference the depth/stencil attachment. Will panic if there is no depth/stencil attachment.
-	pub fn depthStencil (&self) -> &hal::Texture {
-		self.depthStencil.as_ref().unwrap()
+	/// Reference the color attachment in the given *slot*.
+	///
+	/// # Returns
+	///
+	/// `Some` reference to the texture in the color slot if it exists, `None` otherwise.
+	pub fn color (&self, slot: usize) -> Option<&hal::Texture> {
+		(slot < self.color.len()).then_some(&self.color[slot])
+	}
+
+	/// Reference the depth/stencil attachment.
+	///
+	/// # Returns
+	///
+	/// `Some` reference to the depth/stencil texture if it exists, `None` otherwise.
+	pub fn depthStencil (&self) -> Option<&hal::Texture> {
+		self.depthStencil.as_ref()
 	}
 }
 
+/// A builder for [`Framebuffer`] instances.
 pub struct FramebufferBuilder<'label>
 {
 	label: Option<&'label str>,
@@ -173,7 +190,7 @@ impl<'label> FramebufferBuilder<'label>
 	}
 
 	/// Build the framebuffer as configured.
-	pub fn build (&self, context: &Context) -> Framebuffer<'label>
+	pub fn build (&self, context: &Context) -> Framebuffer
 	{
 		// Create color attachments, if any
 		let mut color: Vec<hal::Texture> = Vec::with_capacity(self.color.len());
@@ -191,7 +208,7 @@ impl<'label> FramebufferBuilder<'label>
 		}
 
 		// Create depth/stencil attachment, if any
-		let depthStencil = if let Some(depthStencil) = &self.depthStencil {
+		let depthStencil = self.depthStencil.as_ref().map(|depthStencil| {
 			let (format, additionalUsages) =
 				if let TextureCreationParams::DepthStencil{
 					format, additionalUsages
@@ -200,16 +217,14 @@ impl<'label> FramebufferBuilder<'label>
 				} else {
 					unsafe { unreachable_unchecked(); }
 				};
-			Some(hal::Texture::createDepthStencilTexture(
+			hal::Texture::createDepthStencilTexture(
 				context, &self.dims, *format, *additionalUsages,
-				util::concatIfSome(&self.label, &format!("_depthStencilAttachment")).as_deref()
-			))
-		} else {
-			None
-		};
+				util::concatIfSome(&self.label, "_depthStencilAttachment").as_deref()
+			)
+		});
 
 		Framebuffer {
-			label: self.label, color, depthStencil, dims: self.dims
+			color, depthStencil, dims: self.dims
 		}
 	}
 }
