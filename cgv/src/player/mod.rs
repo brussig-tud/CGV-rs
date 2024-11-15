@@ -8,6 +8,10 @@
 mod rendersetup;
 pub use rendersetup::RenderSetup; // - re-export
 
+/// Submodule providing the [`ViewportCompositor`]
+mod viewportcompositor;
+use viewportcompositor::*;
+
 
 
 //////
@@ -46,7 +50,7 @@ use crate::*;
 
 /// Struct containing information about a key event. Essentially replicates [`egui::Event::Key`].
 #[derive(Debug)]
-pub struct KeyEvent
+pub struct KeyInfo
 {
 	/// The key code of the key the event relates to. See [`egui::Event::Key`] for details.
 	pub key: egui::Key,
@@ -62,10 +66,19 @@ pub struct KeyEvent
 	pub modifiers: egui::Modifiers
 }
 
+/// Struct containing information about a click.
+#[derive(Debug)]
+pub struct ClickInfo {
+	/// The pointer button the click originated from.
+	button: egui::PointerButton,
+
+	/// The pointer coordinates within the main viewport at the time of the click, in pixels.
+	position: glm::UVec2
+}
+
 /// Struct containing information about a drag event.
 #[derive(Debug)]
-pub struct DragEvent
-{
+pub struct DragInfo {
 	/// Which pointer buttons are down. Should be query using the [`egui::PointerButton`] enum.
 	pub buttons: [bool; 5],
 
@@ -75,12 +88,22 @@ pub struct DragEvent
 
 /// Enumeration of input events.
 #[derive(Debug)]
-pub enum InputEvent {
-	/// An event related to keyboard state. See [`KeyEvent`].
-	Key(KeyEvent),
+pub enum InputEvent
+{
+	/// An event related to keyboard state. See [`KeyInfo`].
+	Key(KeyInfo),
 
-	/// A pre-processed drag motion (including touch screen swipes). See [`DragEvent`].
-	Dragged(DragEvent)
+	/// A simple click or tap.
+	Click(ClickInfo),
+
+	/// A double click or tap.
+	DoubleClick(ClickInfo),
+
+	/// A triple click or tap.
+	TripleClick(ClickInfo),
+
+	/// A pre-processed drag motion (including touch screen swipes). See [`DragInfo`].
+	Dragged(DragInfo)
 }
 
 /// Enumeration of possible event handling outcomes.
@@ -112,146 +135,6 @@ pub struct ManagedBindGroupLayouts {
 //
 // Classes
 //
-
-////
-// ViewportCompositor
-
-struct ViewportCompositor {
-	texBindGroupName: Option<String>,
-	sampler: wgpu::Sampler,
-	texBindGroupLayout: wgpu::BindGroupLayout,
-	texBindGroup: wgpu::BindGroup,
-	pipeline: wgpu::RenderPipeline
-}
-impl ViewportCompositor {
-	pub fn new (context: &Context, renderSetup: &RenderSetup, source: &hal::Texture, name: Option<&str>) -> Self
-	{
-		let name = name.map(String::from);
-
-		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
-		});
-
-		// ToDo: introduce a sampler library and put that there
-		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
-			address_mode_u: wgpu::AddressMode::ClampToEdge,
-			address_mode_v: wgpu::AddressMode::ClampToEdge,
-			address_mode_w: wgpu::AddressMode::ClampToEdge,
-			mag_filter: wgpu::FilterMode::Nearest,
-			min_filter: wgpu::FilterMode::Nearest,
-			mipmap_filter: wgpu::FilterMode::Nearest,
-			..Default::default()
-		});
-
-		let texBindGroupLayout = context.device().create_bind_group_layout(
-			&wgpu::BindGroupLayoutDescriptor {
-				label: util::concatIfSome(&name, "_texBindGroupLayout").as_deref(),
-				entries: &[
-					wgpu::BindGroupLayoutEntry {
-						binding: 0,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Texture {
-							multisampled: false,
-							view_dimension: wgpu::TextureViewDimension::D2,
-							sample_type: wgpu::TextureSampleType::Float { filterable: true },
-						},
-						count: None,
-					},
-					wgpu::BindGroupLayoutEntry {
-						binding: 1,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-						count: None,
-					},
-				]
-			}
-		);
-		let texBindGroupName = util::concatIfSome(&name, "_texBindGroup");
-		let texBindGroup = context.device().create_bind_group(
-			&wgpu::BindGroupDescriptor {
-				label: texBindGroupName.as_deref(),
-				layout: &texBindGroupLayout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: wgpu::BindingResource::TextureView(&source.view),
-					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::Sampler(&sampler),
-					}
-				]
-			}
-		);
-
-		let pipelineLayout = context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-			label: util::concatIfSome(&name, "_pipelineLayout").as_deref(),
-			bind_group_layouts: &[&texBindGroupLayout],
-			push_constant_ranges: &[],
-		});
-
-		let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: util::concatIfSome(&name, "_pipeline").as_deref(),
-			layout: Some(&pipelineLayout),
-			vertex: wgpu::VertexState {
-				module: &shader,
-				entry_point: None,
-				buffers: &[],
-				compilation_options: wgpu::PipelineCompilationOptions::default(),
-			},
-			fragment: Some(wgpu::FragmentState {
-				module: &shader,
-				entry_point: Some("fs_non_premultiplied"),
-				targets: &[Some(wgpu::ColorTargetState {
-					format: renderSetup.surfaceFormat(),
-					blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-					write_mask: wgpu::ColorWrites::ALL,
-				})],
-				compilation_options: wgpu::PipelineCompilationOptions::default(),
-			}),
-			primitive: wgpu::PrimitiveState {
-				topology: wgpu::PrimitiveTopology::TriangleStrip,
-				cull_mode: None,
-				..Default::default()
-			},
-			depth_stencil: None,
-			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-			cache: None,
-		});
-
-		Self {
-			texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline
-		}
-	}
-
-	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture) {
-		self.texBindGroup = context.device().create_bind_group(
-			&wgpu::BindGroupDescriptor {
-				label: self.texBindGroupName.as_deref(),
-				layout: &self.texBindGroupLayout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: wgpu::BindingResource::TextureView(&source.view),
-					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::Sampler(&self.sampler),
-					}
-				]
-			}
-		);
-	}
-
-	pub fn composit (&self, renderPass: &mut wgpu::RenderPass) {
-		renderPass.set_pipeline(&self.pipeline);
-		renderPass.set_bind_group(0, &self.texBindGroup, &[]);
-		renderPass.draw(0..3, 0..1);
-	}
-}
-
 
 ////
 // Player
@@ -290,8 +173,6 @@ pub struct Player
 	prevFrameElapsed: time::Duration,
 	prevFrameDuration: time::Duration
 }
-unsafe impl Sync for Player {}
-unsafe impl Send for Player {}
 
 impl Player
 {
@@ -530,6 +411,58 @@ impl Player
 		Ok(())
 	}
 
+	fn prepareEvents (&self, ui: &egui::Ui, viewportResponse: &egui::Response) -> Vec<InputEvent>
+	{
+		// Pre-allocate event list
+		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
+
+		// Dragging action
+		if viewportResponse.dragged()
+		{
+			let dm = viewportResponse.drag_motion();
+			if dm.length_sq() > 0. {
+				preparedEvents.push(InputEvent::Dragged(DragInfo {
+					buttons: ui.input(|state| {
+						let p = &state.pointer; [
+							p.primary_down(), p.secondary_down(), p.middle_down(),
+							p.button_down(egui::PointerButton::Extra1), p.button_down(egui::PointerButton::Extra2)
+						]
+					}),
+					direction: glm::vec2(dm.x, dm.y)
+				}));
+			}
+		}
+
+		// Clicks
+		let pointerPos = viewportResponse.interact_pointer_pos().map(|pos_egui| {
+			let pos_egui = pos_egui - viewportResponse.rect.min;
+			glm::vec2(pos_egui.x as u32, pos_egui.y as u32)
+		});
+		for button in [
+			egui::PointerButton::Primary, egui::PointerButton::Secondary, egui::PointerButton::Middle,
+			egui::PointerButton::Extra1, egui::PointerButton::Extra2
+		]{
+			if viewportResponse.clicked_by(button) {
+				preparedEvents.push(InputEvent::Click(ClickInfo {
+					button, position: pointerPos.as_ref().unwrap().clone()
+				}));
+			}
+			if viewportResponse.double_clicked_by(button) {
+				preparedEvents.push(InputEvent::DoubleClick(ClickInfo {
+					button, position: pointerPos.as_ref().unwrap().clone()
+				}));
+			}
+			if viewportResponse.triple_clicked_by(button) {
+				preparedEvents.push(InputEvent::TripleClick(ClickInfo {
+					button, position: pointerPos.as_ref().unwrap().clone()
+				}));
+			}
+		}
+
+		// Report result
+		preparedEvents
+	}
+
 	fn dispatchTranslatedEvent (&mut self, event: &InputEvent)
 	{
 		// - create the 'static reference to self that we will pass to the various callback functions
@@ -561,25 +494,25 @@ impl Player
 	fn dispatchEvents (&mut self, events: &[egui::Event], complexEvents: &[InputEvent])
 	{
 		// Gather key events
-		let mut translatedEvents =  Vec::from_iter(events.iter().filter_map(|event| {
+		let mut translatedEvents =  events.iter().filter_map(|event| {
 			match event
 			{
 				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers , ..}
 				=> {
-					Some(InputEvent::Key(KeyEvent {
+					Some(InputEvent::Key(KeyInfo {
 						key: *key, pressed: *pressed, repeat: *repeat, modifiers: *modifiers
 					}))
 				},
 				_ => None
 			}
-		}));
+		});
 
 		// Gather mouse events
 		/* t.b.d. */
 
 		// Dispatch eventsthis
-		translatedEvents.iter().for_each(|event| self.dispatchTranslatedEvent(event));
-		complexEvents.iter().for_each(|event| self.dispatchTranslatedEvent(event))
+		translatedEvents.for_each(|ref event| self.dispatchTranslatedEvent(event));
+		complexEvents.iter().for_each(|event| self.dispatchTranslatedEvent(event));
 	}
 
 	// Performs the actual redrawing logic
@@ -703,32 +636,16 @@ impl Player
 		self.prevFrameDuration.as_secs_f32()
 	}
 
-	/*pub fn withContext<ReturnType, Closure: FnOnce(&'static Player, &'static Context) -> ReturnType> (
-		&self, codeBlock: Closure
-	) -> ReturnType
-	{
-		let this = util::statify(self);
-		codeBlock(this, this.context.as_ref().unwrap())
-	}
-
-	pub fn withContextMut<ReturnType, Closure: FnOnce(&'static mut Player, &'static mut Context) -> ReturnType> (
-		&mut self, codeBlock: Closure
-	) -> ReturnType
-	{
-		let this = util::mutify(self);
-		codeBlock(util::mutify(self), this.context.as_mut().unwrap())
-	}*/
-
 	pub fn exit (&self, eguiContext: &egui::Context) {
 		tracing::info!("Exiting...");
 		eguiContext.send_viewport_cmd(egui::ViewportCommand::Close);
 	}
 
-	/*pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
+	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) = self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.getDepthValue_async(self.context.as_ref().unwrap(), |depth| {
+		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.getDepthValue_async(&self.context, |depth| {
 				callback(Some(depth));
 			})
 		}
@@ -740,15 +657,15 @@ impl Player
 	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) = self.camera.as_ref().unwrap().getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.unprojectPointH_async(self.context.as_ref().unwrap(), |point| {
+		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.unprojectPointH_async(&self.context, |point| {
 				callback(point);
 			})
 		}
 		else {
 			callback(None)
 		}
-	}*/
+	}
 
 	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
@@ -773,55 +690,55 @@ impl eframe::App for Player
 
 		egui::TopBottomPanel::top("menu_bar").show(ctx, |ui|
 			egui::ScrollArea::horizontal().show(ui, |ui|
+			{
+				egui::menu::bar(ui, |ui|
 				{
-					egui::menu::bar(ui, |ui|
+					// The global [ESC] quit shortcut
+					let quit_shortcut =
+						egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
+					if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+						self.exit(ui.ctx());
+					}
+
+					// Menu bar
+					ui.menu_button("File", |ui| {
+						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+						#[cfg(not(target_arch="wasm32"))]
+						if ui.add(
+							egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
+						).clicked()
 						{
-							// The global [ESC] quit shortcut
-							let quit_shortcut =
-								egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
-							if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
-								self.exit(ui.ctx());
-							}
-
-							// Menu bar
-							ui.menu_button("File", |ui| {
-								ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-								#[cfg(not(target_arch="wasm32"))]
-								if ui.add(
-									egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
-								).clicked()
-								{
-									self.exit(ui.ctx());
-								}
-								#[cfg(target_arch="wasm32")]
-								ui.label("<nothing here>");
-							});
-							ui.separator();
-
-							/* Dark/Light mode toggle */ {
-							let mut themePref = ui.ctx().options(|opt| opt.theme_preference);
-							if !self.themeSet && themePref == egui::ThemePreference::System {
-								if ui.ctx().style().visuals.dark_mode { themePref = egui::ThemePreference::Dark; }
-								else { themePref = egui::ThemePreference::Light; }
-							}
-							if ui.button(match themePref {
-								egui::ThemePreference::Dark => "Theme 🌙",
-								egui::ThemePreference::Light => "Theme ☀",
-								egui::ThemePreference::System => "Theme 💻"
-							}).clicked() {
-								ui.ctx().set_theme(match themePref {
-									egui::ThemePreference::System => egui::ThemePreference::Dark,
-									egui::ThemePreference::Dark => egui::ThemePreference::Light,
-									egui::ThemePreference::Light => { self.themeSet = true; egui::ThemePreference::System }
-								});
-							};
+							self.exit(ui.ctx());
 						}
-							ui.separator();
+						#[cfg(target_arch="wasm32")]
+						ui.label("<nothing here>");
+					});
+					ui.separator();
 
-							// Application focus switcher
-							/* nothing here yet */
-						});
-				}));
+					/* Dark/Light mode toggle */ {
+						let mut themePref = ui.ctx().options(|opt| opt.theme_preference);
+						if !self.themeSet && themePref == egui::ThemePreference::System {
+							if ui.ctx().style().visuals.dark_mode { themePref = egui::ThemePreference::Dark; }
+							else { themePref = egui::ThemePreference::Light; }
+						}
+						if ui.button(match themePref {
+							egui::ThemePreference::Dark => "Theme 🌙",
+							egui::ThemePreference::Light => "Theme ☀",
+							egui::ThemePreference::System => "Theme 💻"
+						}).clicked() {
+							ui.ctx().set_theme(match themePref {
+								egui::ThemePreference::System => egui::ThemePreference::Dark,
+								egui::ThemePreference::Dark => egui::ThemePreference::Light,
+								egui::ThemePreference::Light => { self.themeSet = true; egui::ThemePreference::System }
+							});
+						};
+					}
+					ui.separator();
+
+					// Application focus switcher
+					/* nothing here yet */
+				});
+			}));
 
 
 		////
@@ -831,38 +748,37 @@ impl eframe::App for Player
 			.resizable(true)
 			.default_width(256.)
 			.show(ctx, |ui|
+			{
+				egui::ScrollArea::both().show(ui, |ui|
 				{
-					egui::ScrollArea::both().show(ui, |ui|
+					ui.horizontal(|ui|
+					{
+						ui.vertical(|ui| { match self.activeSidePanel
 						{
-							ui.horizontal(|ui|
-								{
-									ui.vertical(|ui| {
-										match self.activeSidePanel {
-											0 => {
-												// Player UI
-												ui.vertical(|ui| {
-													ui.label("<nothing here yet>");
-												});
-											},
-											1 => {
-												// Camera UI
-												ui.vertical(|ui| {
-													ui.label("<nothing here yet>")
-												});
-											},
-											2 => {
-												// Application UI
-												ui.vertical(|ui| {
-													ui.label("<nothing here yet>")
-												});
-											},
-											_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
-										}
-									});
+							0 => {
+								// Player UI
+								ui.vertical(|ui| {
+									ui.label("<nothing here yet>");
 								});
-							ui.allocate_space(ui.available_size());
-						});
+							},
+							1 => {
+								// Camera UI
+								ui.vertical(|ui| {
+									ui.label("<nothing here yet>")
+								});
+							},
+							2 => {
+								// Application UI
+								ui.vertical(|ui| {
+									ui.label("<nothing here yet>")
+								});
+							},
+							_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
+						}});
+					});
+					ui.allocate_space(ui.available_size());
 				});
+			});
 
 
 		////
@@ -891,52 +807,34 @@ impl eframe::App for Player
 				forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
 			}
 
-			// Gather events we want to expose to our own components
-			// - query complex (pre-processed) input events
+			// Gather the complex (composed by egui) events that we want to expose to our own components
+			// (we can't do it in the .input() block further down as the egui context is locked there)
 			let (rect, response) =
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
-			// - pre-translate - we can't do it further down as the gui context is locked inside ui.input()
-			let mut complexEvents = Vec::with_capacity(4); // <-- heuristically chosen
-			if response.dragged()
-			{
-				let dm = response.drag_motion();
-				if dm.length_sq() > 0. {
-					complexEvents.push(InputEvent::Dragged(DragEvent {
-						buttons: ui.input(|state| {
-							let p = &state.pointer; [
-								p.primary_down(), p.secondary_down(), p.middle_down(),
-								p.button_down(egui::PointerButton::Extra1), p.button_down(egui::PointerButton::Extra2)
-							]
-						}),
-						direction: glm::vec2(dm.x, dm.y)
-					}));
-				}
-			}
+			let complexEvents = self.prepareEvents(ui, &response);
 
 			// Actually process the events
-			if response.hovered() {
-				ui.input(|state| {
-					// Remove panel border from the focus area
-					// ToDo: validate that we really do need that for consistent interaction with the viewport
-					let focused = if state.pointer.has_pointer() {
-						if let Some(latestPos) = &state.pointer.latest_pos() {
-							   latestPos.x > rect.min.x && latestPos.y > rect.min.y
-							&& latestPos.x < rect.max.x && latestPos.y < rect.max.y
-						}
-						else if let Some(latestInteract) = &state.pointer.interact_pos() {
-							   latestInteract.x > rect.min.x && latestInteract.y > rect.min.y
-							&& latestInteract.x < rect.max.x && latestInteract.y < rect.max.y
-						} else {
-							false
-						}
+			if response.hovered() { ui.input(|state| {
+				// Remove panel border from the focus area
+				// ToDo: validate that we really do need that for consistent interaction with the viewport
+				let focused = if state.pointer.has_pointer() {
+					if let Some(latestPos) = &state.pointer.latest_pos() {
+						   latestPos.x > rect.min.x && latestPos.y > rect.min.y
+						&& latestPos.x < rect.max.x && latestPos.y < rect.max.y
+					}
+					else if let Some(latestInteract) = &state.pointer.interact_pos() {
+						   latestInteract.x > rect.min.x && latestInteract.y > rect.min.y
+						&& latestInteract.x < rect.max.x && latestInteract.y < rect.max.y
 					} else {
 						false
-					};
-					if focused {
-						self.dispatchEvents(&state.events, &complexEvents);
 					}
-				});
-			}
+				} else {
+					false
+				};
+				if focused {
+					self.dispatchEvents(&state.events, &complexEvents);
+				}
+			})}
 
 			// Hand off remaining logic to render manager
 			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -1262,9 +1160,6 @@ struct RenderManager<'vc> {
 	viewportCompositor: &'vc ViewportCompositor,
 	forceRedrawScene: bool
 }
-unsafe impl<'vc> Sync for RenderManager<'vc> {}
-unsafe impl<'vc> Send for RenderManager<'vc> {}
-
 impl<'vc> egui_wgpu::CallbackTrait for RenderManager<'vc>
 {
 	fn prepare (
