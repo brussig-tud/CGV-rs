@@ -50,5 +50,5 @@ var smpler: sampler;
 @fragment
 fn fs_non_premultiplied (in: VertexOutput) -> @location(0) vec4f {
 	var srcUnpremultiplied = textureSample(source, smpler, in.uv);
-	return vec4f(1,0,1,1/*srcUnpremultiplied.rgb * srcUnpremultiplied.a, srcUnpremultiplied.a*/);
+	return vec4f(srcUnpremultiplied.rgb * srcUnpremultiplied.a, srcUnpremultiplied.a);
 }

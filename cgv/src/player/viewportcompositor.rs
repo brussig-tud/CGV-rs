@@ -40,7 +40,7 @@ impl ViewportCompositor
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
 		});
 
-		// ToDo: introduce a sampler library and put that there
+		// ToDo: introduce a sampler library and put this there
 		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::ClampToEdge,
 			address_mode_v: wgpu::AddressMode::ClampToEdge,

@@ -165,7 +165,6 @@ impl CameraInteractor for OrbitInteractor
 
 	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome
 	{
-		tracing::warn!("Received: {:?}", event);
 		/*match event
 		{
 			WindowEvent::ModifiersChanged(modifiers) => {
