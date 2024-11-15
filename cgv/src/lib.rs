@@ -25,7 +25,7 @@
 
 // The module implementing the Player
 mod player;
-pub use player::{Player, EventOutcome, ManagedBindGroupLayouts, RenderSetup}; // re-export
+pub use player::{Player, InputEvent, EventOutcome, RenderSetup, ManagedBindGroupLayouts}; // re-export
 
 // The module encapsulating all low-level graphics objects.
 mod context;
@@ -170,16 +170,17 @@ pub struct GlobalPassDeclaration<'rs>
 /// An application that can be [run](Player::run) by a [`Player`].
 pub trait Application
 {
-	/*/// Called when there is user input that can be processed.
+	/// Called when there is user input that can be processed.
 	///
 	/// # Arguments
 	///
 	/// * `event` – The input event that the application should inspect and possibly act upon.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to input.
 	///
 	/// # Returns
 	///
-	/// The outcome of the [event processing](EventOutcome).
-	fn onInput (&mut self, event: &WindowEvent) -> EventOutcome;
+	/// The [outcome](EventOutcome) of the event processing.
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;/*
 
 	/// Called when the main window surface was resized.
 	///

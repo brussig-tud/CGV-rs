@@ -269,10 +269,10 @@ pub trait CameraInteractor
 	/// # Arguments
 	///
 	/// * `event` – The event that the camera should inspect and potentially act upon.
-	/// * `player` – Access to the CGV-rs player instance, useful for more involved reactions to input.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to input.
 	///
 	/// # Returns
 	///
-	/// The outcome of the event processing.
-	fn input (&mut self, event: &WindowEvent, player: &'static Player) -> EventOutcome;
+	/// The [outcome](EventOutcome) of the event processing.
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
 }

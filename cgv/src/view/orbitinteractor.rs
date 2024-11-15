@@ -163,9 +163,10 @@ impl CameraInteractor for OrbitInteractor
 		updated
 	}
 
-	fn input (&mut self, event: &WindowEvent, player: &'static Player) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome
 	{
-		match event
+		tracing::warn!("Received: {:?}", event);
+		/*match event
 		{
 			WindowEvent::ModifiersChanged(modifiers) => {
 				self.roll = modifiers.state().shift_key();
@@ -300,7 +301,7 @@ impl CameraInteractor for OrbitInteractor
 			},
 
 			// We didn't consume the event
-			_ => NotHandled
-		}
+			_ => */NotHandled
+		//}
 	}
 }

@@ -284,9 +284,11 @@ pub struct SampleApplication {
 
 impl cgv::Application for SampleApplication
 {
-	/*fn onInput(&mut self, _: &event::WindowEvent) -> cgv::EventOutcome { cgv::EventOutcome::NotHandled }
+	fn input (&mut self, event: &cgv::InputEvent, player: &'static cgv::Player) -> cgv::EventOutcome {
+		cgv::EventOutcome::NotHandled
+	}
 
-	fn onResize(&mut self, _: &glm::UVec2) {}
+	/*fn onResize(&mut self, _: &glm::UVec2) {}
 
 	fn update(&mut self) {}
 

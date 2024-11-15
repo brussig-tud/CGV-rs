@@ -30,16 +30,12 @@ use winit::platform::x11::EventLoopBuilderExtX11;
 use wgpu;
 
 // Egui library and framework
+use egui;
 use eframe::egui_wgpu;
 use eframe::epaint;
 
 // Local imports
 use crate::*;
-use crate::context::WgpuSetup;
-/*use crate::{context::*, renderstate::*};
-use clear::{ClearColor, ClearDepth};
-#[allow(unused_imports)] // prevent this warning in WASM. ToDo: investigate
-use view::Camera;*/
 
 
 
@@ -48,11 +44,43 @@ use view::Camera;*/
 // Enums and structs
 //
 
-/// Collects all bind group layouts available for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
-/// setup of the *CGV-rs* [`Player`].
-pub struct ManagedBindGroupLayouts {
-	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
-	pub viewing: wgpu::BindGroupLayout
+/// Struct containing information about a key event. Essentially replicates [`egui::Event::Key`].
+#[derive(Debug)]
+pub struct KeyEvent
+{
+	/// The key code of the key the event relates to. See [`egui::Event::Key`] for details.
+	pub key: egui::Key,
+
+	/// Whether this is a *press* event (`true`) or *release* (`false`). See [`egui::Event::Key`] for details.
+	pub pressed: bool,
+
+	/// When [`pressed`] is `true`, indicates whether this is a generated *repeat* event due to the user holding the key
+	/// down. See [`egui::Event::Key`] for details.
+	pub repeat: bool,
+
+	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
+	pub modifiers: egui::Modifiers
+}
+
+/// Struct containing information about a drag event.
+#[derive(Debug)]
+pub struct DragEvent
+{
+	/// Which pointer buttons are down. Should be query using the [`egui::PointerButton`] enum.
+	pub buttons: [bool; 5],
+
+	/// The direction of the drag, using logical screen points as unit.
+	pub direction: glm::Vec2
+}
+
+/// Enumeration of input events.
+#[derive(Debug)]
+pub enum InputEvent {
+	/// An event related to keyboard state. See [`KeyEvent`].
+	Key(KeyEvent),
+
+	/// A pre-processed drag motion (including touch screen swipes). See [`DragEvent`].
+	Dragged(DragEvent)
 }
 
 /// Enumeration of possible event handling outcomes.
@@ -69,6 +97,13 @@ pub enum EventOutcome
 
 	/// The event was not handled.
 	NotHandled
+}
+
+/// Collects all bind group layouts available for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
+/// setup of the *CGV-rs* [`Player`].
+pub struct ManagedBindGroupLayouts {
+	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
+	pub viewing: wgpu::BindGroupLayout
 }
 
 
@@ -244,7 +279,8 @@ pub struct Player
 	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
-	application: Option<Box<dyn Application>>,
+	activeApplication: Option<Box<dyn Application>>,
+	applications: Vec<Box<dyn Application>>,
 
 	camera: Box<dyn view::Camera>,
 	cameraInteractor: Box<dyn view::CameraInteractor>,
@@ -280,7 +316,7 @@ impl Player
 		eventLoop.set_control_flow(ControlFlow::Wait);*/
 
 		// Create context
-		let context = Context::new(&WgpuSetup {
+		let context = Context::new(&context::WgpuSetup {
 			adapter: &eguiRs.adapter,
 			device: &eguiRs.device,
 			queue: &eguiRs.queue
@@ -317,7 +353,8 @@ impl Player
 			),
 
 			applicationFactory,
-			application: None,
+			activeApplication: None,
+			applications: Vec::new(),
 
 			camera: Box::new(view::MonoCamera::new(
 				&context, view::RenderTarget::Provided(util::statify(&mainFramebuffer)),
@@ -493,9 +530,57 @@ impl Player
 		Ok(())
 	}
 
-	/*fn context (&mut self) -> &mut Context {
-		self.context.as_mut().unwrap()
-	}*/
+	fn dispatchTranslatedEvent (&mut self, event: &InputEvent)
+	{
+		// - create the 'static reference to self that we will pass to the various callback functions
+		let this = util::mutify(self);
+
+		// Applications get first dibs
+		// - the active (foreground) application
+		if matches!(self.activeApplication.as_deref_mut().map(
+			            	|app| app.input(&event, this)
+			            ).unwrap_or(EventOutcome::NotHandled),
+			   /* == */ EventOutcome::HandledExclusively(_)
+			){
+			// Event was closed by the receiver!
+			return;
+		}
+		// - now any background applications in some undefined order.
+		for app in self.applications.as_mut_slice()
+		{
+			if matches!(app.input(&event, this), EventOutcome::HandledExclusively(_)) {
+				// Event was closed by the receiver!
+				return;
+			}
+		}
+
+		// Finally, the active camera interactor
+		self.cameraInteractor.input(&event, this);
+	}
+
+	fn dispatchEvents (&mut self, events: &[egui::Event], complexEvents: &[InputEvent])
+	{
+		// Gather key events
+		let mut translatedEvents =  Vec::from_iter(events.iter().filter_map(|event| {
+			match event
+			{
+				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers , ..}
+				=> {
+					Some(InputEvent::Key(KeyEvent {
+						key: *key, pressed: *pressed, repeat: *repeat, modifiers: *modifiers
+					}))
+				},
+				_ => None
+			}
+		}));
+
+		// Gather mouse events
+		/* t.b.d. */
+
+		// Dispatch eventsthis
+		translatedEvents.iter().for_each(|event| self.dispatchTranslatedEvent(event));
+		complexEvents.iter().for_each(|event| self.dispatchTranslatedEvent(event))
+	}
 
 	// Performs the actual redrawing logic
 	/*fn redraw (&mut self) -> Result<()>
@@ -572,6 +657,16 @@ impl Player
 		// Done!
 		Ok(())
 	}*/
+
+	#[inline(always)]
+	pub fn context (&self) -> &Context {
+		&self.context
+	}
+
+	#[inline(always)]
+	pub fn egui (&self) -> &egui::Context {
+		&self.egui
+	}
 
 	pub fn pushContinuousRedrawRequest (&self)
 	{
@@ -669,7 +764,8 @@ impl Player
 	}
 }
 
-impl eframe::App for Player {
+impl eframe::App for Player
+{
 	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
 	{
 		////
@@ -778,32 +874,77 @@ impl eframe::App for Player {
 
 		// Draw actual viewport panel
 		egui::CentralPanel::default().frame(frame).show(ctx, |ui|
+		{
+			// Keep track of reasons to force a scene redraw
+			let mut forceRedrawScene = false;
+
+			// Update framebuffer size
+			let availableSpace_egui = ui.available_size();
+			let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
+			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
 			{
-				// Keep track of reasons to force a scene redraw
-				let mut forceRedrawScene = false;
+				self.mainFramebuffer.resize(&self.context, &availableSpace);
+				self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color0());
+				self.prevFramebufferDims = availableSpace;
+				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
+				self.camera.resize(&self.context, &availableSpace, self.cameraInteractor.as_ref());
+				forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
+			}
 
-				// Update framebuffer size
-				let availableSpace_egui = ui.available_size();
-				let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
-				if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
-				{
-					self.mainFramebuffer.resize(&self.context, &availableSpace);
-					self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color0());
-					self.prevFramebufferDims = availableSpace;
-					tracing::info!("Main framebuffer resized to {:?}", availableSpace);
-					// ToDo: inform camera, applications of resize
-					forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
+			// Gather events we want to expose to our own components
+			// - query complex (pre-processed) input events
+			let (rect, response) =
+				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
+			// - pre-translate - we can't do it further down as the gui context is locked inside ui.input()
+			let mut complexEvents = Vec::with_capacity(4); // <-- heuristically chosen
+			if response.dragged()
+			{
+				let dm = response.drag_motion();
+				if dm.length_sq() > 0. {
+					complexEvents.push(InputEvent::Dragged(DragEvent {
+						buttons: ui.input(|state| {
+							let p = &state.pointer; [
+								p.primary_down(), p.secondary_down(), p.middle_down(),
+								p.button_down(egui::PointerButton::Extra1), p.button_down(egui::PointerButton::Extra2)
+							]
+						}),
+						direction: glm::vec2(dm.x, dm.y)
+					}));
 				}
+			}
 
-				// Dispatch remaining logic to render manager
-				let (rect, _response) =
-					ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
-				ui.painter().add(egui_wgpu::Callback::new_paint_callback(
-					rect, RenderManager {
-						forceRedrawScene, viewportCompositor: util::statify(&self.viewportCompositor),
+			// Actually process the events
+			if response.hovered() {
+				ui.input(|state| {
+					// Remove panel border from the focus area
+					// ToDo: validate that we really do need that for consistent interaction with the viewport
+					let focused = if state.pointer.has_pointer() {
+						if let Some(latestPos) = &state.pointer.latest_pos() {
+							   latestPos.x > rect.min.x && latestPos.y > rect.min.y
+							&& latestPos.x < rect.max.x && latestPos.y < rect.max.y
+						}
+						else if let Some(latestInteract) = &state.pointer.interact_pos() {
+							   latestInteract.x > rect.min.x && latestInteract.y > rect.min.y
+							&& latestInteract.x < rect.max.x && latestInteract.y < rect.max.y
+						} else {
+							false
+						}
+					} else {
+						false
+					};
+					if focused {
+						self.dispatchEvents(&state.events, &complexEvents);
 					}
-				));
-			});
+				});
+			}
+
+			// Hand off remaining logic to render manager
+			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
+				rect, RenderManager {
+					forceRedrawScene, viewportCompositor: util::statify(&self.viewportCompositor),
+				}
+			));
+		});
 	}
 }
 
