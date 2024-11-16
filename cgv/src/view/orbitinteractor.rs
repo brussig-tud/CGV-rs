@@ -160,6 +160,28 @@ impl CameraInteractor for OrbitInteractor
 
 	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome
 	{
+		match event {
+			InputEvent::Dragged(info) => {
+				let mut handled= false;
+				let mut redraw= false;
+				if info.button(egui::PointerButton::Primary) {
+					handled = true;
+					redraw = true;
+				}
+				if info.button(egui::PointerButton::Secondary) {
+					handled = true;
+				}
+				if info.button(egui::PointerButton::Middle) {
+				}
+				if handled {
+					EventOutcome::HandledExclusively(redraw)
+				} else {
+					EventOutcome::NotHandled
+				}
+			}
+
+			_ => EventOutcome::NotHandled
+		}
 		/*match event
 		{
 			WindowEvent::ModifiersChanged(modifiers) => {
@@ -295,7 +317,7 @@ impl CameraInteractor for OrbitInteractor
 			},
 
 			// We didn't consume the event
-			_ => */EventOutcome::NotHandled
-		//}
+			_ => EventOutcome::NotHandled
+		}*/
 	}
 }

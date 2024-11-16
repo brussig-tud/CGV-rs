@@ -70,14 +70,14 @@ impl Camera for MonoCamera<'_>
 	fn projection (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().projection
 	}
-	fn projectionAt (&self, _: &glm::UVec2) -> &glm::Mat4 {
+	fn projectionAt (&self, _: glm::UVec2) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().projection
 	}
 
 	fn view (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().view
 	}
-	fn viewAt (&self, _: &glm::UVec2) -> &glm::Mat4 {
+	fn viewAt (&self, _: glm::UVec2) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().view
 	}
 
@@ -100,13 +100,13 @@ impl Camera for MonoCamera<'_>
 
 	fn name (&self) -> &str { &self.name }
 
-	fn getDepthReadbackDispatcher (&self, pixelCoords: &glm::UVec2) -> Option<DepthReadbackDispatcher>
+	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher>
 	{
 		self.framebuffer.depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
 			&pixelCoords, &Viewport {
 				min: glm::vec2(0u32, 0u32), extend: depthStencil.dimsWH()
 			},
-			self.projectionAt(&pixelCoords), self.viewAt(&pixelCoords), &depthStencil
+			self.projectionAt(pixelCoords), self.viewAt(pixelCoords), &depthStencil
 		)})
 	}
 }

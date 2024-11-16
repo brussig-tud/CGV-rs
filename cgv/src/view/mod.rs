@@ -171,7 +171,8 @@ pub trait Camera
 	///            will only ever query matrices for passes the camera [declared itself](Camera::declareGlobalPasses).
 	fn projection (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
 
-	fn projectionAt (&self, pixelCoords: &glm::UVec2) -> &glm::Mat4;
+	/// Get the projection matrix that is effective at the given pixel coordinates.
+	fn projectionAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
 
 	/// Borrow the view matrix for the given global pass.
 	///
@@ -181,7 +182,8 @@ pub trait Camera
 	///            only ever query matrices for passes the camera [declared itself](Camera::declareGlobalPasses).
 	fn view (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
 
-	fn viewAt (&self, pixelCoords: &glm::UVec2) -> &glm::Mat4;
+	/// Get the view matrix that is effective at the given pixel coordinates.
+	fn viewAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
 
 	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
@@ -200,7 +202,7 @@ pub trait Camera
 	/// [declare the global passes over the scene](Camera::declareGlobalPasses) it needs. The framework guarantees that
 	/// the *active* camera will get this method called whenever the *active* [`CameraInteractor`] changes something
 	/// before being asked to declare any render passes for the current frame. For manually managed cameras which are
-	/// *inactive* as  far as the [`Player`] is concerned, updating is the responsibility of the [`Application`].
+	/// *inactive* as far as the [`Player`] is concerned, updating is the responsibility of the [`Application`].
 	///
 	/// # Arguments
 	///
@@ -234,7 +236,7 @@ pub trait Camera
 	/// # Returns
 	///
 	/// `Some` dispatcher if the camera can provide depth for the given pixel coordinates, `None` otherwise.
-	fn getDepthReadbackDispatcher (&self, pixelCoords: &glm::UVec2) -> Option<DepthReadbackDispatcher>;
+	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher>;
 }
 
 /// A camera that can take input and start full scene render passes with its desired projection and view matrices.
@@ -256,12 +258,13 @@ pub trait CameraInteractor
 	///
 	/// # Arguments
 	///
-	/// * `player` – Access to the CGV-rs player instance, useful e.g. to schedule redraws when animating the camera.
+	/// * `player` – Access to the CGV-rs player instance, useful e.g. to request or stop continous redraws when
+	///              animating the camera.
 	///
 	/// # Returns
 	///
 	/// `true` if any update to the extrinsic or intrinsic camera parameters occured, `false` otherwise. This
-	/// information is utilized to optimize managed bind group updates.
+	/// information required to decide whether full scene redraws are necessary.
 	fn update (&mut self, player: &Player) -> bool;
 
 	/// Report a window event to the camera.

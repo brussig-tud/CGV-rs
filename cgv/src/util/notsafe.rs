@@ -14,6 +14,16 @@ use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 // Functions
 //
 
+/// Creates an (invalid if derefenced) reference to an object of the specified type.
+///
+/// # Returns
+///
+/// A `'static` reference to some object of the specified type. Must not be dereferenced.
+#[inline(always)]
+pub const unsafe fn defaultRef<T> () -> &'static T {
+	&*(1usize as *const T)
+}
+
 /// Perform a shallow memory copy for copy-assigning from one value of type `T` to another. Can be used for copying
 /// objects that are not `Copy`.
 ///

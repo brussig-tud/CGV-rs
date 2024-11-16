@@ -5,7 +5,7 @@
 //
 
 // Standard library
-// /* nothing here yet */
+use std::ops::{Deref, DerefMut};
 
 
 
@@ -104,13 +104,6 @@ pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
 	unsafe { &*(reference as *const T) }
 }
 
-#[inline(always)]
-pub fn detachRef<T: ?Sized> (reference: &T) -> &T {
-	let ptr = reference as *const T;
-	let reference = unsafe { &*ptr };
-	reference
-}
-
 /// Returns a mutable reference to the given object behind the given immutable reference.
 ///
 /// # Arguments
@@ -127,15 +120,34 @@ pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T
 	unsafe { &mut *((reference as *const T) as *mut T) }
 }
 
-/// Creates an (invalid if derefenced) reference to an object of the specified type.
+/// Turns a [`Ref`](std::cell::Ref) into an actual (primitive) reference.
+///
+/// # Arguments
+///
+/// * `reference` – The wrapper to turn into a primitive reference.
 ///
 /// # Returns
 ///
-/// A `'static` reference to some object of the specified type. Must not be dereferenced.
+/// A `'static` reference to the same data the input [`RefMut`](std::cell::Ref) references.
 #[inline(always)]
-pub const fn defaultRef<T> () -> &'static T {
-	unsafe { &*(1usize as *const T) }
-}
+fn refify<T> (reference: std::cell::Ref<T>) -> &'static T { unsafe {
+	&*(reference.deref() as *const T)
+}}
+
+/// Turns a [`RefMut`](std::cell::RefMut) into an actual (primitive) mutable reference.
+///
+/// # Arguments
+///
+/// * `reference` – The wrapper to turn into a primitive mutable reference.
+///
+/// # Returns
+///
+/// A mutable `'static` reference to the same data the input [`RefMut`](std::cell::RefMut) references.
+#[inline(always)]
+fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T { unsafe {
+	let mut refMut = reference;
+	&mut *(refMut.deref_mut() as *mut T)
+}}
 
 /// If the given option contains a string or string slice, returns an option containing the concatenation of the two
 /// inputs.

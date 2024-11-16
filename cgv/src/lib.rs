@@ -13,9 +13,6 @@
 // Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
 #![allow(non_snake_case)]
 
-// And this one... the macros are there for clients! Why should the library have to use every single one? WTF...
-#![allow(unused_macros)]
-
 
 
 //////
@@ -42,6 +39,7 @@ pub mod hal;
 pub mod view;
 
 /// The module containing utilities used throughout (i.e. not specific to any other module).
+#[allow(unused)]         // some of our utils are mainly useful for clients
 pub mod util;
 
 /// Make sure we can access glm functionality as such
@@ -150,8 +148,7 @@ pub enum GlobalPass
 	Custom(Box<dyn Any>)
 }
 
-pub struct GlobalPassDeclaration<'rs>
-{
+pub struct GlobalPassDeclaration<'rs> {
 	pub pass: GlobalPass,
 	pub renderState: &'rs RenderState,
 	pub completionCallback: Option<Box<dyn FnMut(&Context, u32)>>
@@ -207,5 +204,5 @@ pub trait Application
 // ApplicationFactory
 
 pub trait ApplicationFactory {
-	fn create (self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
+	fn create (&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
 }

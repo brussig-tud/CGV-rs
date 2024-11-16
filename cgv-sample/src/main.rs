@@ -129,7 +129,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> Result<Box<dyn cgv::Application>>
+	fn create (&self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
