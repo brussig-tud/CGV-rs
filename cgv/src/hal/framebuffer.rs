@@ -147,9 +147,9 @@ impl Framebuffer
 	}
 
 	/// Resize the framebuffer, and adjust all its color attachments accordingly.
-	pub fn resize (&mut self, context: &Context, newDims: &glm::UVec2)
+	pub fn resize (&mut self, context: &Context, newDims: glm::UVec2)
 	{
-		self.dims = *newDims;
+		self.dims = newDims;
 		for slot in 0..self.color.len() {
 			let old = &self.color[slot];
 			self.color[slot] = hal::Texture::createEmptyTexture(
@@ -253,7 +253,7 @@ impl<'label> FramebufferBuilder<'label>
 					unsafe { unreachable_unchecked(); }
 				};
 			color.push(hal::Texture::createEmptyTexture(
-				context, &self.dims, format, usages,
+				context, self.dims, format, usages,
 				util::concatIfSome(&self.label, &format!("_colorAttachment{slot}")).as_deref()
 			));
 		}
@@ -269,7 +269,7 @@ impl<'label> FramebufferBuilder<'label>
 					unsafe { unreachable_unchecked(); }
 				};
 			hal::Texture::createDepthStencilTexture(
-				context, &self.dims, *format, *additionalUsages,
+				context, self.dims, *format, *additionalUsages,
 				util::concatIfSome(&self.label, "_depthStencilAttachment").as_deref()
 			)
 		});

@@ -24,48 +24,40 @@ use view::*;
 /// A camera producing a single, monoscopic image of the scene.
 pub struct MonoCamera<'own> {
 	name: String,
-	framebuffer: Box<hal::DynamicFramebuffer<'own>>,
-	renderState: Box<RenderState<'own>>,
-	globalPasses: Vec<GlobalPassDeclaration<'static>>
+	framebuffer: &'own hal::Framebuffer,
+	renderState: Box<RenderState>,
+	globalPasses: Vec<GlobalPassDeclaration<'own>>
 }
 
-impl<'rs> MonoCamera<'rs>
+impl MonoCamera<'_>
 {
 	pub fn new (
-		context: &Context, renderTarget: RenderTarget<'static>, _: &RenderSetup, name: Option<&str>
+		context: &Context, resolution: glm::UVec2, colorFormat: wgpu::TextureFormat,
+		depthStencilFormat: hal::DepthStencilFormat, name: Option<&str>
 	) -> Self
 	{
 		// Determine name
 		let name: String = if let Some(name) = name { name } else { "UnnamedMonoCamera" }.into();
 
-		// Create owned framebuffer if requested
-		let framebuffer = Box::new(match renderTarget {
-			RenderTarget::Internal(dims, colorFormat, depthStencilFormat)
-			=> {
-				let fb = hal::FramebufferBuilder::withDims(&dims)
-					.withLabel(format!("{name}_framebuffer").as_str())
-					.attachColor(colorFormat, None)
-					.attachDepthStencil(depthStencilFormat, Some(wgpu::TextureUsages::COPY_SRC))
-					.build(context);
-				hal::DynamicFramebuffer::Owned(fb)
-			},
-
-			RenderTarget::Provided(framebuffer)
-			=> hal::DynamicFramebuffer::Borrowed(framebuffer)
-		});
+		// Create framebuffer
+		let framebuffer = hal::FramebufferBuilder::withDims(&resolution)
+			.withLabel(format!("{name}_framebuffer").as_str())
+			.attachColor(colorFormat, Some(wgpu::TextureUsages::TEXTURE_BINDING))
+			.attachDepthStencil(depthStencilFormat, Some(wgpu::TextureUsages::COPY_SRC))
+			.build(context);
 
 		// Initialize the main (and only) render state
-		let renderState = Box::new(RenderState::new(
-			context, util::statify((*framebuffer).as_ref()), Some(format!("{name}_renderState").as_str())
+		let mut renderState = Box::new(RenderState::new(
+			context, framebuffer, Some(format!("{name}_renderState").as_str())
 		));
 
 		// Construct
 		Self {
 			name,
-			framebuffer,
+			framebuffer: util::statify(&renderState.framebuffer),
 			globalPasses: vec![GlobalPassDeclaration {
 				pass: GlobalPass::Simple,
-				renderState: util::mutify(&renderState),
+				renderState: util::statify(&renderState),
 				completionCallback: None,
 			}],
 			renderState
@@ -73,43 +65,44 @@ impl<'rs> MonoCamera<'rs>
 	}
 }
 
-impl<'rs> Camera for MonoCamera<'rs>
+impl Camera for MonoCamera<'_>
 {
 	fn projection (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
-		&self.renderState.viewingUniforms.data.projection
+		&self.renderState.viewingUniforms.borrowData().projection
 	}
 	fn projectionAt (&self, _: &glm::UVec2) -> &glm::Mat4 {
-		&self.renderState.viewingUniforms.data.projection
+		&self.renderState.viewingUniforms.borrowData().projection
 	}
 
 	fn view (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
-		&self.renderState.viewingUniforms.data.view
+		&self.renderState.viewingUniforms.borrowData().view
 	}
 	fn viewAt (&self, _: &glm::UVec2) -> &glm::Mat4 {
-		&self.renderState.viewingUniforms.data.view
+		&self.renderState.viewingUniforms.borrowData().view
 	}
 
-	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2, interactor: &dyn CameraInteractor)
+	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2, interactor: &dyn CameraInteractor)
 	{
-		if let hal::DynamicFramebuffer::Owned(fb) = self.framebuffer.as_mut() {
-			fb.resize(context, viewportDims);
-		}
-		self.renderState.viewingUniforms.data.projection = interactor.projection(viewportDims);
+		self.renderState.framebuffer.resize(context, viewportDims);
+		self.renderState.viewingUniforms.borrowData_mut().projection = interactor.projection(viewportDims);
 	}
 
 	fn update (&mut self, interactor: &dyn CameraInteractor) {
-		self.renderState.viewingUniforms.data.view = *interactor.view();
+		self.renderState.viewingUniforms.borrowData_mut().view = *interactor.view();
 	}
 
-	fn declareGlobalPasses (&'static self) -> &'static [GlobalPassDeclaration<'static>] {
+	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration] {
 		self.globalPasses.as_slice()
+	}
+	fn framebuffer (&self) -> &hal::Framebuffer {
+		&self.framebuffer
 	}
 
 	fn name (&self) -> &str { &self.name }
 
 	fn getDepthReadbackDispatcher (&self, pixelCoords: &glm::UVec2) -> Option<DepthReadbackDispatcher>
 	{
-		(*self.framebuffer).as_ref().depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
+		self.framebuffer.depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
 			&pixelCoords, &Viewport {
 				min: glm::vec2(0u32, 0u32), extend: depthStencil.dimsWH()
 			},

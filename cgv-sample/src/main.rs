@@ -129,7 +129,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (self, context: &cgv::Context/*, renderSetup: &cgv::RenderSetup*/) -> Result<Box<dyn cgv::Application>>
+	fn create (self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
@@ -177,8 +177,6 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 					wgpu::BindGroupLayoutEntry {
 						binding: 1,
 						visibility: wgpu::ShaderStages::FRAGMENT,
-						// This should match the filterable field of the
-						// corresponding Texture entry above.
 						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
 						count: None,
 					},
@@ -207,14 +205,14 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		////
 		// Create pipeline
 
-		/*let pipelineLayout =
-			context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+		let pipelineLayout =
+			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Render Pipeline Layout"),
 				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
 
-		let pipeline = context.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		/*let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Render Pipeline"),
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
@@ -227,7 +225,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				module: &shader,
 				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
 				targets: &[Some(wgpu::ColorTargetState { // 4.
-					format: context.config.format,
+					format: renderSetup.surfaceFormat(),
 					blend: Some(wgpu::BlendState::REPLACE),
 					write_mask: wgpu::ColorWrites::ALL,
 				})],
@@ -288,7 +286,7 @@ impl cgv::Application for SampleApplication
 		cgv::EventOutcome::NotHandled
 	}
 
-	/*fn onResize(&mut self, _: &glm::UVec2) {}
+	fn resize(&mut self, _: &glm::UVec2) {}
 
 	fn update(&mut self) {}
 
@@ -296,32 +294,32 @@ impl cgv::Application for SampleApplication
 		-> Result<()>
 	{
 		// Get a command encoder
-		let mut encoder = context.device.create_command_encoder(
+		let mut encoder = context.device().create_command_encoder(
 			&wgpu::CommandEncoderDescriptor{label: Some("SampleCommandEncoder")}
 		);
 
-		*//* create render pass *//* {
-			let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+		/* create render pass */ {
+			/*let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 				label: Some("SampleRenderPass"),
 				color_attachments: &[renderState.getMainSurfaceColorAttachment()],
 				depth_stencil_attachment: renderState.getMainSurfaceDepthStencilAttachment(),
 				occlusion_query_set: None,
 				timestamp_writes: None,
 			});
-			renderPass.set_pipeline(&self.pipeline);
+			//renderPass.set_pipeline(&self.pipeline);
 			renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
 			renderPass.set_bind_group(1, &self.texBindGroup, &[]);
 			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);*/
 		}
 
 		// Submit
-		context.queue.submit([encoder.finish()]);
+		context.queue().submit([encoder.finish()]);
 
 		// Done!
 		Ok(())
-	}*/
+	}
 }
 
 // Application entry point

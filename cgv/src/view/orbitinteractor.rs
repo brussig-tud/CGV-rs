@@ -7,14 +7,9 @@
 // Standard library
 /* Nothing here yet */
 
-// Winit library
-use winit::dpi;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
-
 // Local imports
 use crate::*;
 use {view::*, util::math};
-use EventOutcome::*;
 
 
 
@@ -64,17 +59,17 @@ pub struct OrbitInteractor {
 	zNear: f32,
 	zFar: f32,
 	view: glm::Mat4,
-	dragLMB: bool,
+	/*dragLMB: bool,
 	dragMMB: bool,
-	dragRMB: bool,
+	dragRMB: bool,*/
 	roll: bool,
-	lastMousePos: Option<glm::Vec2>,
+	//lastMousePos: Option<glm::Vec2>,
 
 	focusChange: Option<FocusChange>,
 	dirty: bool,
 
 	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
-	lmbDownT: time::Instant
+	//lmbDownT: time::Instant
 }
 
 impl OrbitInteractor
@@ -92,15 +87,15 @@ impl OrbitInteractor
 			zNear: 0.01,
 			zFar: 100.,
 			view: glm::Mat4::identity(),
-			dragLMB: false, dragMMB: false, dragRMB: false, roll: false,
-			lastMousePos: None,
+			/*dragLMB: false, dragMMB: false, dragRMB: false, */roll: false,
+			//lastMousePos: None,
 			focusChange: None,
 			dirty: true,
-			lmbDownT: time::Instant::now()-time::Duration::from_millis(1),
+			//lmbDownT: time::Instant::now()-time::Duration::from_millis(1),
 		}
 	}
 
-	pub fn processMouseMove (&mut self, newPos: &dpi::PhysicalPosition<f64>) -> glm::Vec2
+	/*pub fn processMouseMove (&mut self, newPos: &dpi::PhysicalPosition<f64>) -> glm::Vec2
 	{
 		if let Some(oldPos) = self.lastMousePos {
 			let newPos = glm::Vec2::new(newPos.x as f32, newPos.y as f32);
@@ -111,12 +106,12 @@ impl OrbitInteractor
 			self.lastMousePos = Some(glm::Vec2::new(newPos.x as f32, newPos.y as f32));
 			glm::Vec2::zeros()
 		}
-	}
+	}*/
 }
 
 impl CameraInteractor for OrbitInteractor
 {
-	fn projection (&self, viewportDims: &glm::UVec2) -> glm::Mat4
+	fn projection (&self, viewportDims: glm::UVec2) -> glm::Mat4
 	{
 		let aspect = viewportDims.x as f32 / viewportDims.y as f32;
 		match self.fov
@@ -139,7 +134,7 @@ impl CameraInteractor for OrbitInteractor
 		&self.view
 	}
 
-	fn update (&mut self, player: &'static Player) -> bool
+	fn update (&mut self, player: &Player) -> bool
 	{
 		if let Some(focusChange) = &mut self.focusChange
 		{
@@ -163,7 +158,7 @@ impl CameraInteractor for OrbitInteractor
 		updated
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome
 	{
 		/*match event
 		{
@@ -300,7 +295,7 @@ impl CameraInteractor for OrbitInteractor
 			},
 
 			// We didn't consume the event
-			_ => */NotHandled
+			_ => */EventOutcome::NotHandled
 		//}
 	}
 }

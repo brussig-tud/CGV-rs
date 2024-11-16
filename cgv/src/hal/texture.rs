@@ -225,7 +225,7 @@ impl Texture
 	/// * `usageFlags` – The set of [texture usages](wgpu::TextureUsages) the texture is intended for.
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn createEmptyTexture(
-		context: &Context, dims: &glm::UVec2, format: wgpu::TextureFormat, usageFlags: wgpu::TextureUsages,
+		context: &Context, dims: glm::UVec2, format: wgpu::TextureFormat, usageFlags: wgpu::TextureUsages,
 		label: Option<&str>
 	) -> Self
 	{
@@ -324,7 +324,7 @@ impl Texture
 	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::RENDER_ATTACHMENT`]).
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn createDepthStencilTexture(
-		context: &Context, dims: &glm::UVec2, format: hal::DepthStencilFormat,
+		context: &Context, dims: glm::UVec2, format: hal::DepthStencilFormat,
 		specialUsageFlags: Option<wgpu::TextureUsages>, label: Option<&str>
 	) -> Self
 	{

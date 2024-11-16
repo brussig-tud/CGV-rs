@@ -21,13 +21,13 @@ use crate::*;
 //
 
 pub struct UniformGroup<UniformsStruct: Sized+Default> {
-	pub data: UniformsStruct,
+	data: UniformsStruct,
 	buffer: wgpu::Buffer,
 	pub bindGroupLayout: wgpu::BindGroupLayout,
 	pub bindGroup: wgpu::BindGroup,
 }
 
-impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
+impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 {
 	pub fn create (context: &Context, visibility: wgpu::ShaderStages, name: Option<&str>) -> Self
 	{
@@ -69,6 +69,14 @@ impl<UniformsStruct: Sized+Default> UniformGroup<UniformsStruct>
 				}]
 			}
 		)
+	}
+
+	pub fn borrowData (&self) -> &UniformsStruct {
+		&self.data
+	}
+
+	pub fn borrowData_mut (&self) -> &mut UniformsStruct {
+		util::mutify(&self.data) // Zero-abstraction interior mutability
 	}
 
 	pub fn upload (&self, context: &Context) {

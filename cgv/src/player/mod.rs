@@ -20,7 +20,8 @@ use viewportcompositor::*;
 //
 
 // Standard library
-use std::{sync::Arc, any::Any};
+use std::{sync::Arc, sync::RwLock, any::Any};
+use std::ops::{Deref, DerefMut};
 
 // Winit library
 #[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
@@ -129,6 +130,20 @@ pub struct ManagedBindGroupLayouts {
 	pub viewing: wgpu::BindGroupLayout
 }
 
+/// Private helper struct encapsulating all data required to set up [global passes](`crate::GlobalPass`) over the scene inside
+/// the [`RenderManager`].
+struct RenderInfo
+{
+	activeApplication: Option<Box<dyn Application>>,
+	applications: Vec<Box<dyn Application>>,
+
+	camera: Box<dyn view::Camera>,
+	cameraInteractor: Box<dyn view::CameraInteractor>,
+	viewportCompositor: ViewportCompositor,
+}
+unsafe impl Send for RenderInfo {}
+unsafe impl Sync for RenderInfo {}
+
 
 
 //////
@@ -158,15 +173,9 @@ pub struct Player
 	context: Context,
 	renderSetup: RenderSetup,
 	prevFramebufferDims: glm::UVec2,
-	mainFramebuffer: /*Rc<*/hal::Framebuffer/*>*/,
-	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Box<dyn ApplicationFactory>,
-	activeApplication: Option<Box<dyn Application>>,
-	applications: Vec<Box<dyn Application>>,
-
-	camera: Box<dyn view::Camera>,
-	cameraInteractor: Box<dyn view::CameraInteractor>,
+	renderInfo: RenderInfo,
 
 	continousRedrawRequests: u32,
 	startInstant: time::Instant,
@@ -229,23 +238,23 @@ impl Player
 			activeSidePanel: 0,
 
 			prevFramebufferDims: Default::default(),
-			viewportCompositor: ViewportCompositor::new(
-				&context, &renderSetup, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
-			),
-
 			applicationFactory,
-			activeApplication: None,
-			applications: Vec::new(),
+			renderInfo: RenderInfo {
+				activeApplication: None,
+				applications: Vec::new(),
 
-			camera: Box::new(view::MonoCamera::new(
-				&context, view::RenderTarget::Provided(util::statify(&mainFramebuffer)),
-				&renderSetup, Some("CGV__MainCamera")
-			)),
-			mainFramebuffer,
+				camera: Box::new(view::MonoCamera::new(
+					&context, glm::vec2(1, 1), renderSetup.defaultColorFormat(),
+					renderSetup.defaultDepthStencilFormat().into(), Some("CGV__MainCamera")
+				)),
+				cameraInteractor: Box::new(view::OrbitInteractor::new()),
+				viewportCompositor: ViewportCompositor::new(
+					&context, &renderSetup, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
+				),
+				//clearers: Vec::new(),
+			},
 			context,
 			renderSetup,
-			cameraInteractor: Box::new(view::OrbitInteractor::new()),
-			//clearers: Vec::new(),
 
 			continousRedrawRequests: 0,
 			startInstant: time::Instant::now(),
@@ -465,21 +474,21 @@ impl Player
 
 	fn dispatchTranslatedEvent (&mut self, event: &InputEvent)
 	{
-		// - create the 'static reference to self that we will pass to the various callback functions
+		// Create the 'static reference to self that we will pass to the various callback functions
 		let this = util::mutify(self);
 
 		// Applications get first dibs
 		// - the active (foreground) application
-		if matches!(self.activeApplication.as_deref_mut().map(
-			            	|app| app.input(&event, this)
-			            ).unwrap_or(EventOutcome::NotHandled),
-			   /* == */ EventOutcome::HandledExclusively(_)
+		if matches!(self.renderInfo.activeApplication.as_deref_mut().map(
+		            	|app| app.input(&event, this)
+		            ).unwrap_or(EventOutcome::NotHandled),
+		  /* == */ EventOutcome::HandledExclusively(_)
 			){
 			// Event was closed by the receiver!
 			return;
 		}
 		// - now any background applications in some undefined order.
-		for app in self.applications.as_mut_slice()
+		for app in self.renderInfo.applications.as_mut_slice()
 		{
 			if matches!(app.input(&event, this), EventOutcome::HandledExclusively(_)) {
 				// Event was closed by the receiver!
@@ -488,7 +497,7 @@ impl Player
 		}
 
 		// Finally, the active camera interactor
-		self.cameraInteractor.input(&event, this);
+		self.renderInfo.cameraInteractor.input(&event, this);
 	}
 
 	fn dispatchEvents (&mut self, events: &[egui::Event], complexEvents: &[InputEvent])
@@ -644,7 +653,7 @@ impl Player
 	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+		if let Some(dispatcher) = self.renderInfo.camera.getDepthReadbackDispatcher(pixelCoords) {
 			dispatcher.getDepthValue_async(&self.context, |depth| {
 				callback(Some(depth));
 			})
@@ -657,7 +666,7 @@ impl Player
 	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+		if let Some(dispatcher) = self.renderInfo.camera.getDepthReadbackDispatcher(pixelCoords) {
 			dispatcher.unprojectPointH_async(&self.context, |point| {
 				callback(point);
 			})
@@ -670,7 +679,7 @@ impl Player
 	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: &glm::UVec2, callback: Closure
 	){
-		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+		if let Some(dispatcher) = self.renderInfo.camera.getDepthReadbackDispatcher(pixelCoords) {
 			dispatcher.unprojectPoint_async(&self.context, |point| {
 				callback(point);
 			})
@@ -799,11 +808,10 @@ impl eframe::App for Player
 			let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
 			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
 			{
-				self.mainFramebuffer.resize(&self.context, &availableSpace);
-				self.viewportCompositor.updateSource(&self.context, self.mainFramebuffer.color0());
+				self.renderInfo.camera.resize(&self.context, availableSpace, self.renderInfo.cameraInteractor.as_ref());
+				self.renderInfo.viewportCompositor.updateSource(&self.context, self.renderInfo.camera.framebuffer().color0());
 				self.prevFramebufferDims = availableSpace;
 				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
-				self.camera.resize(&self.context, &availableSpace, self.cameraInteractor.as_ref());
 				forceRedrawScene = true; // we'll need to redraw the scene in addition to the UI
 			}
 
@@ -814,7 +822,8 @@ impl eframe::App for Player
 			let complexEvents = self.prepareEvents(ui, &response);
 
 			// Actually process the events
-			if response.hovered() { ui.input(|state| {
+			if response.hovered() { ui.input(|state|
+			{
 				// Remove panel border from the focus area
 				// ToDo: validate that we really do need that for consistent interaction with the viewport
 				let focused = if state.pointer.has_pointer() {
@@ -836,10 +845,22 @@ impl eframe::App for Player
 				}
 			})}
 
+			// Update active camera interactor
+			let this = util::statify(self);
+			if self.renderInfo.cameraInteractor.update(this) {
+				self.renderInfo.camera.update(self.renderInfo.cameraInteractor.as_ref());
+			}
+			fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T { unsafe {
+				#[allow(invalid_reference_casting)]
+				&mut *(reference.deref() as *const T as *mut T)
+			}}
+
 			// Hand off remaining logic to render manager
 			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
 				rect, RenderManager {
-					forceRedrawScene, viewportCompositor: util::statify(&self.viewportCompositor),
+					forceRedrawScene, context: &this.context, /*camera: util::statify(&self.camera),
+					viewportCompositor: util::statify(&self.viewportCompositor),*/
+					renderInfo: util::mutify(&self.renderInfo)
 				}
 			));
 		});
@@ -1156,18 +1177,89 @@ impl eframe::App for Player
 	}
 }*/
 
-struct RenderManager<'vc> {
+struct RenderManager<'ctx, 'cam/*, 'vc, 'app*/> {
+	forceRedrawScene: bool,
+	context: &'ctx Context,
+	/*camera: &'cam dyn view::Camera,
 	viewportCompositor: &'vc ViewportCompositor,
-	forceRedrawScene: bool
+	application: &'app dyn Application*/
+	renderInfo: &'cam RenderInfo
 }
-impl<'vc> egui_wgpu::CallbackTrait for RenderManager<'vc>
+impl egui_wgpu::CallbackTrait for RenderManager<'static, 'static/*, '_, '_*/>
 {
 	fn prepare (
-		&self, _device: &wgpu::Device, _queue: &wgpu::Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
-		_eguiEncoder: &mut wgpu::CommandEncoder, _callbackResources: &mut egui_wgpu::CallbackResources
+		&self, device: &wgpu::Device, queue: &wgpu::Queue, _screenDesc: &egui_wgpu::ScreenDescriptor,
+		eguiEncoder: &mut wgpu::CommandEncoder, _: &mut egui_wgpu::CallbackResources
 	) -> Vec<wgpu::CommandBuffer>
 	{
-		/* doNothing() */
+		// Only redraw the scene if we have to
+		if !self.forceRedrawScene {
+			return Vec::new()
+		}
+
+		// Get mutable access to render info as we would have gotten had we used the CallbackResources facilities
+		// provided by egui_wgpu
+		let ri = {
+			let this = util::mutify(self);
+			util::mutify(&this.renderInfo)
+		};
+
+		// Determine the global passes we need to make
+		let passes = ri.camera.declareGlobalPasses();
+		let cameraName = ri.camera.name();
+		for passNr in 0..passes.len()
+		{
+			// Get actual pass information
+			let pass = &passes[passNr];
+			let renderState = util::mutify(pass.renderState);
+
+			// Update surface
+			//util::mutify(pass.renderState).beginGlobalPass(context);
+
+			// Clear surface
+			let mut passPrepCommands = device.create_command_encoder(
+				&wgpu::CommandEncoderDescriptor { label: Some("CGV__PrepareGlobalPassCommandEncoder") }
+			);/*
+			self.clearers[passNr].clear(
+				&mut passPrepCommands, &renderState.getMainSurfaceColorAttachment(),
+				&renderState.getMainSurfaceDepthStencilAttachment()
+			);*/
+
+			/* Update managed render state */ {
+				// Uniforms
+				// - viewing
+				let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
+				viewingUniforms.projection = * ri.camera.projection(pass);
+				viewingUniforms.view = * ri.camera.view(pass);
+				renderState.viewingUniforms.upload(self.context);
+			};
+
+			// Commit preparation work to GPU
+			queue.submit([passPrepCommands.finish()]);
+
+			let mut renderResult = Ok(());
+			if let Some(ref application) = ri.activeApplication {
+				renderResult = util::mutify(application).render(&self.context, pass.renderState, &pass.pass);
+			}
+
+			// Finish the pass
+			//renderState.endGlobalPass();
+			match &renderResult
+			{
+				Ok(()) => {
+					tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.pass);
+					if let Some(callback) = util::mutify(&pass.completionCallback) {
+						callback(self.context, passNr as u32);
+					}
+				}
+				Err(error) => {
+					tracing::error!(
+						"Camera[{:?}]: Global pass #{passNr} ({:?}) failed!\n\tReason: {:?}",
+						cameraName, pass.pass, error
+					);
+				}
+			}
+		}
 		Vec::new()
 	}
 
@@ -1185,6 +1277,6 @@ impl<'vc> egui_wgpu::CallbackTrait for RenderManager<'vc>
 		_callbackResources: &egui_wgpu::CallbackResources
 	){
 		// Composit rendering result to egui viewport
-		self.viewportCompositor.composit(renderPass);
+		self.renderInfo.viewportCompositor.composit(renderPass);
 	}
 }

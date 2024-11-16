@@ -22,9 +22,6 @@ pub use orbitinteractor::OrbitInteractor; // re-export
 // Standard library
 /* Nothing here yet */
 
-// Winit library
-use winit::event::WindowEvent;
-
 // Local imports
 use crate::*;
 
@@ -196,13 +193,13 @@ pub trait Camera
 	/// * `context` – The graphics context.
 	/// * `viewportDims` – The dimensions of the viewport the camera should produce images for.
 	/// * `interactor` – The currently active camera interactor.
-	fn resize (&mut self, context: &Context, viewportDims: &glm::UVec2, interactor: &dyn CameraInteractor);
+	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2, interactor: &dyn CameraInteractor);
 
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
 	/// transformation matrices for the current camera interactor or anything else it might need to
 	/// [declare the global passes over the scene](Camera::declareGlobalPasses) it needs. The framework guarantees that
-	/// the *active* camera will get this method whenever the *active* [`CameraInteractor`] changes something before
-	/// being asked to declare any render passes for the current frame. For manually managed cameras which are
+	/// the *active* camera will get this method called whenever the *active* [`CameraInteractor`] changes something
+	/// before being asked to declare any render passes for the current frame. For manually managed cameras which are
 	/// *inactive* as  far as the [`Player`] is concerned, updating is the responsibility of the [`Application`].
 	///
 	/// # Arguments
@@ -211,7 +208,10 @@ pub trait Camera
 	fn update (&mut self, interactor: &dyn CameraInteractor);
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
-	fn declareGlobalPasses (&'static self) -> &'static [GlobalPassDeclaration<'static>];
+	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];
+
+	/// Reference the framebuffer containing the rendering of the scene acquired by the camera.
+	fn framebuffer (&self) -> &hal::Framebuffer;
 
 	/// Report the individual name of the camera instance.
 	///
@@ -245,7 +245,7 @@ pub trait CameraInteractor
 	/// # Arguments
 	///
 	/// * `viewportDims` – The dimensions of the viewport the matrix should project to.
-	fn projection (&self, viewportDims: &glm::UVec2) -> glm::Mat4;
+	fn projection (&self, viewportDims: glm::UVec2) -> glm::Mat4;
 
 	/// Borrow a reference to the view matrix for the current internal state of the interactor.
 	fn view (&self) -> &glm::Mat4;
@@ -262,7 +262,7 @@ pub trait CameraInteractor
 	///
 	/// `true` if any update to the extrinsic or intrinsic camera parameters occured, `false` otherwise. This
 	/// information is utilized to optimize managed bind group updates.
-	fn update (&mut self, player: &'static Player) -> bool;
+	fn update (&mut self, player: &Player) -> bool;
 
 	/// Report a window event to the camera.
 	///
@@ -274,5 +274,5 @@ pub trait CameraInteractor
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome;
 }

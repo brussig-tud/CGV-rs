@@ -153,8 +153,8 @@ pub enum GlobalPass
 pub struct GlobalPassDeclaration<'rs>
 {
 	pub pass: GlobalPass,
-	pub renderState: &'rs mut RenderState<'rs>,
-	pub completionCallback: Option<Box<dyn FnMut(&'static Context, u32)>>
+	pub renderState: &'rs RenderState,
+	pub completionCallback: Option<Box<dyn FnMut(&Context, u32)>>
 }
 
 
@@ -180,14 +180,14 @@ pub trait Application
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;/*
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
 
-	/// Called when the main window surface was resized.
+	/// Called when the main framebuffer was resized.
 	///
 	/// # Arguments
 	///
-	/// * `newSize` – The new main window surface size, in pixels.
-	fn onResize (&mut self, newSize: &glm::UVec2);
+	/// * `newSize` – The new main framebuffer size, in pixels.
+	fn resize (&mut self, newSize: &glm::UVec2);
 
 	/// Called when the [player](Player) wants to prepare a new frame for rendering.
 	fn update (&mut self);
@@ -199,7 +199,7 @@ pub trait Application
 	/// * `device` – The active device for rendering.
 	/// * `queue` – A queue from the active device for submitting commands.
 	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
-	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> anyhow::Result<()>;*/
+	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> anyhow::Result<()>;
 }
 
 
@@ -207,5 +207,5 @@ pub trait Application
 // ApplicationFactory
 
 pub trait ApplicationFactory {
-	fn create (self, context: &Context/*, renderSetup: &RenderSetup*/) -> Result<Box<dyn Application>>;
+	fn create (self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
 }

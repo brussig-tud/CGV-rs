@@ -43,44 +43,29 @@ pub type ViewingUniformGroup = hal::UniformGroup<ViewingStruct>;
 ////
 // RenderState
 
-pub struct RenderState<'fb>
+pub struct RenderState
 {
 	pub viewingUniforms: ViewingUniformGroup,
 
-	pub framebuffer: &'fb hal::Framebuffer,
+	pub framebuffer: hal::Framebuffer,
 	pub defaultDepthStencilState: Option<wgpu::DepthStencilState>
 }
-impl<'fb> RenderState<'fb>
+impl RenderState
 {
-	pub fn new(
-		context: &Context, framebuffer: &'fb hal::Framebuffer, name: Option<&str>
-	) -> Self
+	pub fn new (context: &Context, framebuffer: hal::Framebuffer, name: Option<&str>) -> Self
 	{
-		////
-		// Prepare non-inter-referencing fields
-
-		// Uniforms and associated buffers and bind groups
+		// Prepare managed uniforms
+		// - group 0 - viewing transformations
 		let viewingUniforms = hal::UniformGroup::create(
 			context, wgpu::ShaderStages::VERTEX_FRAGMENT,
 			util::concatIfSome(&name, "_viewingUniforms").as_deref()
 		);
 
-
-		////
-		// Construct result object
-
-		// Henceforth, we mutate this result object for the remaining initialization
-		let result = Self {
-			viewingUniforms, framebuffer,
-			defaultDepthStencilState: Self::defaultDepthStencilState(framebuffer)
-		};
-
-
-		////
-		// Initialize inter-referencing fields
-
-		//result.recreateMainSurfaceDepthStencilAttachment(context);
-		result
+		// Done!
+		Self {
+			defaultDepthStencilState: Self::defaultDepthStencilState(&framebuffer),
+			viewingUniforms, framebuffer
+		}
 	}
 
 	// Helper for extracting default depth/stencil state from a framebuffer
@@ -95,10 +80,14 @@ impl<'fb> RenderState<'fb>
 		}})
 	}
 
-	fn updateFramebuffer (&mut self, newFramebuffer: &'fb hal::Framebuffer)
+	fn setFramebuffer (&mut self, newFramebuffer: hal::Framebuffer)
 	{
+		self.defaultDepthStencilState = Self::defaultDepthStencilState(&newFramebuffer);
 		self.framebuffer = newFramebuffer;
-		self.defaultDepthStencilState = Self::defaultDepthStencilState(newFramebuffer)
+	}
+
+	fn resizeFramebuffer (&mut self, context: &Context, dims: glm::UVec2) {
+		self.framebuffer.resize(context, dims)
 	}
 
 	pub fn getMainColorAttachment (&self) -> Option<wgpu::RenderPassColorAttachment>
@@ -139,7 +128,7 @@ pub(crate) trait RenderStatePrivateInterface {
 	fn endGlobalPass (&mut self);
 }
 
-impl<'fb> RenderStatePrivateInterface for RenderState<'fb> {
+impl<'fb> RenderStatePrivateInterface for RenderState {
 	fn beginGlobalPass (&mut self, _: &Context) {
 		/* nothing to do right now */
 	}
