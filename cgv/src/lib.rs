@@ -167,6 +167,16 @@ pub struct GlobalPassDeclaration<'rs> {
 /// An application that can be [run](Player::run) by a [`Player`].
 pub trait Application
 {
+	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
+	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
+	/// their pipelines accordingly.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The graphics context.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
+	fn recreatePipelines (&mut self, context: &Context, player: &Player);
+
 	/// Called when there is user input that can be processed.
 	///
 	/// # Arguments
@@ -177,26 +187,37 @@ pub trait Application
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome;
 
 	/// Called when the main framebuffer was resized.
 	///
 	/// # Arguments
 	///
+	/// * `context` – The graphics context, useful e.g. to re-create resources when they're affected by the resize.
 	/// * `newSize` – The new main framebuffer size, in pixels.
-	fn resize (&mut self, newSize: &glm::UVec2);
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to resizing.
+	fn resize (&mut self, context: &Context, newSize: glm::UVec2, player: &Player);
 
 	/// Called when the [player](Player) wants to prepare a new frame for rendering.
-	fn update (&mut self);
+	///
+	/// # Arguments
+	///
+	/// * `context` – The graphics context for rendering.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved updates.
+	///
+	/// # Returns
+	///
+	/// `true` when the application deems a scene redraw is required, `false` otherwise.
+	fn update (&mut self, context: &Context, player: &Player) -> bool;
 
 	/// Called when the [player](Player) needs the application to render its contents.
 	///
 	/// # Arguments
 	///
-	/// * `device` – The active device for rendering.
-	/// * `queue` – A queue from the active device for submitting commands.
+	/// * `context` – The graphics context for rendering.
+	/// * `renderState` – The render state for the ongoing global render pass over the scene.
 	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
-	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> anyhow::Result<()>;
+	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> Result<()>;
 }
 
 

@@ -18,7 +18,7 @@
 /* Nothing here yet */
 
 // CGV re-imports
-use cgv::{wgpu, /*event, */glm, Result};
+use cgv::{wgpu, glm};
 
 // WGPU
 use wgpu::util::DeviceExt;
@@ -129,7 +129,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> Result<Box<dyn cgv::Application>>
+	fn create (&self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
@@ -282,16 +282,24 @@ pub struct SampleApplication {
 
 impl cgv::Application for SampleApplication
 {
-	fn input (&mut self, event: &cgv::InputEvent, player: &'static cgv::Player) -> cgv::EventOutcome {
+	fn recreatePipelines (&mut self, context: &cgv::Context, _: &cgv::Player)
+	{
+	}
+
+	fn input (&mut self, _: &cgv::InputEvent, _: &cgv::Player) -> cgv::EventOutcome {
+		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize(&mut self, _: &glm::UVec2) {}
+	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2, _: &cgv::Player) {}
 
-	fn update(&mut self) {}
+	fn update (&mut self, _: &cgv::Context, _: &cgv::Player) -> bool {
+		// We're not updating anything, so no need to redraw from us
+		false
+	}
 
-	fn render(&mut self, context: &cgv::Context, renderState: &cgv::RenderState, _: &cgv::GlobalPass)
-		-> Result<()>
+	fn render (&mut self, context: &cgv::Context, renderState: &cgv::RenderState, _: &cgv::GlobalPass)
+		-> cgv::Result<()>
 	{
 		// Get a command encoder
 		let mut encoder = context.device().create_command_encoder(
@@ -323,7 +331,7 @@ impl cgv::Application for SampleApplication
 }
 
 // Application entry point
-pub fn main() -> Result<()> {
+pub fn main() -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our SampleApplication
 	cgv::Player::run(SampleApplicationFactory{})
 }

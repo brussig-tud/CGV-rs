@@ -80,8 +80,7 @@ impl RenderState
 		}})
 	}
 
-	fn setFramebuffer (&mut self, newFramebuffer: hal::Framebuffer)
-	{
+	fn setFramebuffer (&mut self, newFramebuffer: hal::Framebuffer) {
 		self.defaultDepthStencilState = Self::defaultDepthStencilState(&newFramebuffer);
 		self.framebuffer = newFramebuffer;
 	}
@@ -123,7 +122,7 @@ impl RenderState
 ////
 // RenderStatePrivateInterface
 
-pub(crate) trait RenderStatePrivateInterface {
+/*pub(crate) trait RenderStatePrivateInterface {
 	fn beginGlobalPass (&mut self, context: &Context);
 	fn endGlobalPass (&mut self);
 }
@@ -136,4 +135,4 @@ impl<'fb> RenderStatePrivateInterface for RenderState {
 	fn endGlobalPass (&mut self) {
 		/* nothing to do right now */
 	}
-}
+}*/

@@ -51,7 +51,8 @@ struct FocusChange {
 
 /// A camera interactor for orbital movement around a focal point.
 #[derive(Debug)]
-pub struct OrbitInteractor {
+pub struct OrbitInteractor
+{
 	eye: glm::Vec3,
 	target: glm::Vec3,
 	up: glm::Vec3,
@@ -59,24 +60,14 @@ pub struct OrbitInteractor {
 	zNear: f32,
 	zFar: f32,
 	view: glm::Mat4,
-	/*dragLMB: bool,
-	dragMMB: bool,
-	dragRMB: bool,*/
 	roll: bool,
-	//lastMousePos: Option<glm::Vec2>,
 
 	focusChange: Option<FocusChange>,
 	dirty: bool,
-
-	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
-	//lmbDownT: time::Instant
 }
 
 impl OrbitInteractor
 {
-	// ToDo: introduce abstraction to unify input event handling. We need double clicks supported out-of-the-box.
-	const DBL_CLICK_TIMEOUT: time::Duration = time::Duration::from_millis(175);
-
 	pub fn new () -> Self
 	{
 		OrbitInteractor {
@@ -158,7 +149,7 @@ impl CameraInteractor for OrbitInteractor
 		updated
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, _: &Player) -> EventOutcome
 	{
 		match event {
 			InputEvent::Dragged(info) => {

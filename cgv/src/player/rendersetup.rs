@@ -18,7 +18,7 @@ use crate::player::*;
 //
 
 /// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, including everything they
-/// need in order to interface with the managed [render pipeline](wgpu::RenderPipeline) setup.
+/// need in order to interface with the managed [render pass](wgpu::RenderPass) setup.
 pub struct RenderSetup
 {
 	surfaceFormat: wgpu::TextureFormat,
@@ -35,8 +35,7 @@ impl RenderSetup
 		context: &Context, surfaceFormat: wgpu::TextureFormat, defaultColorFormat: wgpu::TextureFormat,
 		defaultDepthStencilFormat: hal::DepthStencilFormat, defaultClearColor: wgpu::Color,
 		defaultDepthClearValue: f32, defaultDepthCompare: wgpu::CompareFunction
-	)
-		-> Self
+	) -> Self
 	{
 		Self {
 			surfaceFormat, defaultColorFormat, defaultClearColor, defaultDepthCompare, defaultDepthClearValue,

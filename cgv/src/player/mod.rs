@@ -20,8 +20,7 @@ use viewportcompositor::*;
 //
 
 // Standard library
-use std::{sync::Arc, sync::RwLock, any::Any};
-use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 // Winit library
 #[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
@@ -115,6 +114,7 @@ pub enum InputEvent
 }
 
 /// Enumeration of possible event handling outcomes.
+#[derive(Debug)]
 pub enum EventOutcome
 {
 	/// The event was handled and should be closed. The wrapped `bool` indicates whether a redraw
@@ -130,7 +130,7 @@ pub enum EventOutcome
 	NotHandled
 }
 
-/// Collects all bind group layouts available for interfacing with the managed [render pipeline](wgpu::RenderPipeline)
+/// Collects all bind group layouts available for interfacing with the managed [render pass](wgpu::RenderPass)
 /// setup of the *CGV-rs* [`Player`].
 pub struct ManagedBindGroupLayouts {
 	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
@@ -521,7 +521,7 @@ impl Player
 		{
 			// Event was handled
 			  EventOutcome::HandledExclusively(redrawRequested)
-			| EventOutcome::HandledDontClose(redrawRequested) => redrawRequested,
+			| EventOutcome::HandledDontClose(redrawRequested) => redraw | redrawRequested,
 
 			// Event was ignored
 			EventOutcome::NotHandled => false
@@ -531,7 +531,7 @@ impl Player
 	fn dispatchEvents (&mut self, events: &[egui::Event], complexEvents: &[InputEvent]) -> bool
 	{
 		// Gather key events
-		let mut translatedEvents =  events.iter().filter_map(|event| {
+		let translatedEvents =  events.iter().filter_map(|event| {
 			match event
 			{
 				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers , ..}
@@ -574,7 +574,7 @@ impl Player
 			//util::mutify(pass.renderState).beginGlobalPass(context);
 
 			// Clear surface
-			let mut passPrepCommands = device.create_command_encoder(
+			let passPrepCommands = device.create_command_encoder(
 				&wgpu::CommandEncoderDescriptor { label: Some("CGV__PrepareGlobalPassCommandEncoder") }
 			);/*
 			self.clearers[passNr].clear(

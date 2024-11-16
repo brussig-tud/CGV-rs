@@ -47,7 +47,7 @@ impl MonoCamera<'_>
 			.build(context);
 
 		// Initialize the main (and only) render state
-		let mut renderState = Box::new(RenderState::new(
+		let renderState = Box::new(RenderState::new(
 			context, framebuffer, Some(format!("{name}_renderState").as_str())
 		));
 
