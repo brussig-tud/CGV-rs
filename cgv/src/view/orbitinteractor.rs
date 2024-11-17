@@ -162,17 +162,17 @@ impl CameraInteractor for OrbitInteractor
 					let fore = dist.normalize();
 					if info.modifiers.shift {
 						self.up = glm::rotate_vec3(
-							&self.up, math::deg2rad!(delta.y*-1./8.), &fore
+							&self.up, math::deg2rad!(delta.y*-1./4.), &fore
 						);
 					}
 					else {
 						let mut right = glm::normalize(&glm::cross(&fore, &self.up));
 						right = glm::rotate_vec3(
-							&right, math::deg2rad!(delta.x*0.25), &self.up
+							&right, math::deg2rad!(delta.x*1./3.), &self.up
 						);
 						self.eye = self.target - dist.norm()*glm::cross(&self.up, &right);
 						self.up = glm::rotate_vec3(
-							&self.up, math::deg2rad!(delta.y*-0.25), &right
+							&self.up, math::deg2rad!(delta.y*-1./3.), &right
 						);
 						self.eye =    self.target
 							- (self.target-self.eye).norm()*glm::cross(&self.up, &right);
@@ -182,7 +182,7 @@ impl CameraInteractor for OrbitInteractor
 				}
 				if info.button(egui::PointerButton::Secondary)
 				{
-					let speed = dist.norm() * delta*0.001953125;
+					let speed = dist.norm() * delta*1./512.;
 					let right = glm::normalize(&glm::cross(&dist, &self.up));
 					let diff = speed.x*right + speed.y*self.up;
 					self.target += diff;
@@ -195,7 +195,7 @@ impl CameraInteractor for OrbitInteractor
 					handled = true;
 				}
 				if info.button(egui::PointerButton::Middle) {
-					let fore = dist.norm()*delta.y*0.00390625 * dist.normalize();
+					let fore = dist.norm()*delta.y*1./256. * dist.normalize();
 					self.target += fore;
 					self.eye += fore;
 					self.dirty = true;
