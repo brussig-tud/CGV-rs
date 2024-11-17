@@ -690,8 +690,8 @@ impl Player
 
 	pub fn pushContinuousRedrawRequest (&self)
 	{
-		// We have to use volatile writes to make sure the optimizer doesn't interfere with our hacky but (presumably)
-		// faster-than-RefCell interior mutability scheme
+		// We have to use volatile writes throughout this function for some reason to make sure the optimizer doesn't
+		// interfere with our hacky but (presumably) faster-than-RefCell interior mutability scheme
 		// ToDo: remove code smell
 		let this = util::mutify(self);
 		if this.continousRedrawRequests < 1
@@ -710,18 +710,27 @@ impl Player
 		unsafe {
 			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests+1)
 		}
-		tracing::info!("Continuous redraw requests: {}", this.continousRedrawRequests);
 	}
 
 	pub fn dropContinuousRedrawRequest (&self)
 	{
+		// We have to use volatile writes throughout this function for some reason to make sure the optimizer doesn't
+		// interfere with our hacky but (presumably) faster-than-RefCell interior mutability scheme
+		// ToDo: remove code smell
 		let this = util::mutify(self); // we use interior mutability
 		if this.continousRedrawRequests < 1 {
 			panic!("logic error - more continuous redraw requests dropped than were pushed");
 		}
-		this.continousRedrawRequests -= 1;
-		if this.continousRedrawRequests < 1 {
-			this.prevFrameDuration = time::Duration::from_secs(0);
+		unsafe {
+			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests-1)
+		}
+		if this.continousRedrawRequests < 1
+		{
+			unsafe {
+				std::ptr::write_volatile(
+					&mut this.prevFrameDuration as *mut time::Duration, time::Duration::from_secs(0)
+				);
+			}
 			tracing::info!("Stopping continuous redrawing");
 		}
 	}
