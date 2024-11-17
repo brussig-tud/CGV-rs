@@ -132,12 +132,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
-		// Load example shader
-
-		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: Some("Example__ShaderModule"),
-			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
-		});
+		// Prepare buffers
 
 		let vertexBuffer = context.device().create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
@@ -158,9 +153,17 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		////
 		// Load resources
 
+		// The example shader
+		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: Some("Example__ShaderModule"),
+			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
+		});
+
+		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(
 			context, util::sourceBytes!("/res/tex/cgvCube.png"), None, Some("Example__TestTexture")
 		)?;
+		#[allow(non_upper_case_globals)]
 		static texBindGroupLayoutEntries: [wgpu::BindGroupLayoutEntry; 2] = [
 			wgpu::BindGroupLayoutEntry {
 				binding: 0,
@@ -240,15 +243,12 @@ impl SampleApplication
 	{
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-				label: Some("Example Render Pipeline Layout"),
+				label: Some("Example__RenderPipelineLayout"),
 				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &self.texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
-
-		let cts = renderState.colorTargetState().clone();
-		let ds = renderState.depthStencilState().clone();
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: Some("Example Render Pipeline"),
+			label: Some("Example__RenderPipeline"),
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
 				module: &self.shader,
@@ -259,16 +259,16 @@ impl SampleApplication
 			fragment: Some(wgpu::FragmentState {
 				module: &self.shader,
 				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
-				targets: &[Some(cts)],
+				targets: &[Some(renderState.colorTargetState().clone())],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			}),
 			primitive: wgpu::PrimitiveState {
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
 				front_face: wgpu::FrontFace::Ccw,
-				cull_mode: None/*Some(wgpu::Face::Back)*/,
+				cull_mode: Some(wgpu::Face::Back),
 				..Default::default()
 			},
-			depth_stencil: Some(ds),
+			depth_stencil: Some(renderState.depthStencilState().clone()),
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
 			cache: None,
@@ -314,7 +314,7 @@ impl cgv::Application for SampleApplication
 	}
 
 	fn render (
-		&mut self, context: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		&mut self, _: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
 		_: &cgv::GlobalPass
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
@@ -330,7 +330,7 @@ impl cgv::Application for SampleApplication
 	}
 }
 
-// Application entry point
+/// The application entry point.
 pub fn main() -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our SampleApplication
 	cgv::Player::run(SampleApplicationFactory{})

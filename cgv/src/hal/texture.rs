@@ -272,17 +272,14 @@ impl Texture
 				)
 			}
 		};
-		let readbackBuffer = match usageFlags {
-			wgpu::TextureUsages::COPY_SRC => Some(Box::new(context.device().create_buffer(
-				&wgpu::BufferDescriptor {
-					label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
-					size: size.actual as u64,
-					usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-					mapped_at_creation: false
-				}
-			))),
-			_ => None
-		};
+		let readbackBuffer = usageFlags.contains(wgpu::TextureUsages::COPY_SRC).then(||
+			Box::new(context.device().create_buffer( &wgpu::BufferDescriptor {
+				label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
+				size: size.actual as u64,
+				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+				mapped_at_creation: false
+			}))
+		);
 		let readbackView_tex = match &readbackBuffer {
 			Some(_) => Some(wgpu::ImageCopyTexture {
 				texture: util::statify(texture.as_ref()),
@@ -493,7 +490,6 @@ impl Texture
 				}
 			}
 		);
-		context.device().poll(wgpu::Maintain::Wait);
 	}
 }
 

@@ -277,5 +277,5 @@ pub trait CameraInteractor
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
 }

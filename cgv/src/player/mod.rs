@@ -41,6 +41,9 @@ use eframe::epaint;
 // Local imports
 use crate::*;
 use crate::view::Camera;
+
+
+
 ///////
 //
 // Enums and structs
@@ -66,24 +69,30 @@ pub struct KeyInfo
 
 /// Struct containing information about a click.
 #[derive(Debug)]
-pub struct ClickInfo {
+pub struct ClickInfo<'mods> {
 	/// The pointer button the click originated from.
-	button: egui::PointerButton,
+	pub button: egui::PointerButton,
+
+	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
+	pub modifiers: &'mods egui::Modifiers,
 
 	/// The pointer coordinates within the main viewport at the time of the click, in pixels.
-	position: glm::UVec2
+	pub position: glm::UVec2
 }
 
 /// Struct containing information about a drag event.
 #[derive(Debug)]
-pub struct DragInfo {
-	/// Which pointer buttons are down. Should be query using the [`egui::PointerButton`] enum.
+pub struct DragInfo<'mods> {
+	/// Which pointer buttons are down. Should be queried using the [`egui::PointerButton`] enum.
 	pub buttons: [bool; 5],
+
+	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
+	pub modifiers: &'mods egui::Modifiers,
 
 	/// The direction of the drag, using logical screen points as unit.
 	pub direction: glm::Vec2
 }
-impl DragInfo {
+impl DragInfo<'_> {
 	/// Convenience method for querying the [`buttons`](DragInfo::buttons) field.
 	#[inline(always)]
 	pub fn button (&self, button: egui::PointerButton) -> bool {
@@ -93,22 +102,25 @@ impl DragInfo {
 
 /// Enumeration of input events.
 #[derive(Debug)]
-pub enum InputEvent
+pub enum InputEvent<'mods>
 {
 	/// An event related to keyboard state. See [`KeyInfo`].
 	Key(KeyInfo),
 
 	/// A simple click or tap.
-	Click(ClickInfo),
+	Click(ClickInfo<'mods>),
 
 	/// A double click or tap.
-	DoubleClick(ClickInfo),
+	DoubleClick(ClickInfo<'mods>),
 
 	/// A triple click or tap.
-	TripleClick(ClickInfo),
+	TripleClick(ClickInfo<'mods>),
+
+	/// A mouse wheel / scroll event. The wrapped value contains the amount in logical screen points.
+	MouseWheel(f32),
 
 	/// A pre-processed drag motion (including touch screen swipes). See [`DragInfo`].
-	Dragged(DragInfo)
+	Dragged(DragInfo<'mods>)
 }
 
 /// Enumeration of possible event handling outcomes.
@@ -148,15 +160,6 @@ pub struct ManagedBindGroupLayouts {
 /// The central application host class.
 pub struct Player
 {
-	/*eventLoop: Option<EventLoop<UserEvent>>,
-	eventLoopProxy: EventLoopProxy<UserEvent>,
-
-	#[cfg(target_arch="wasm32")]
-	canvas: Option<web_sys::Element>,
-
-	context: Option<Context>,
-	redrawOnceOnWait: bool,*/
-
 	themeSet: bool,
 	activeSidePanel: u32,
 
@@ -211,7 +214,8 @@ impl Player
 		// Log render setup
 		let renderSetup = RenderSetup::new(
 			&context, eguiRs.target_format, eguiRs.target_format, hal::DepthStencilFormat::D32,
-			wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.}, 1., wgpu::CompareFunction::Less
+			wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.}, 1.,
+			wgpu::CompareFunction::Less
 		);
 
 		// Create stateful rendering components
@@ -221,8 +225,7 @@ impl Player
 		));
 		let globalPasses = util::statify(&camera).declareGlobalPasses();
 		let viewportCompositor = ViewportCompositor::new(
-			&context, &renderSetup, camera.framebuffer().color0(),
-			Some("CGV__MainViewportCompositor")
+			&context, &renderSetup, camera.framebuffer().color0(), Some("CGV__MainViewportCompositor")
 		);
 
 		// Now construct
@@ -295,7 +298,6 @@ impl Player
 			//stencil_buffer: 0,
 			hardware_acceleration: eframe::HardwareAcceleration::Required,
 			renderer: eframe::Renderer::Wgpu,
-			//..Default::default()
 			//run_and_return: false,
 			event_loop_builder: Some(Box::new(|elBuilder| {
 				// Conditional code for the two supported display protocols on *nix. Wayland takes precedence in case
@@ -433,26 +435,36 @@ impl Player
 		Ok(())
 	}
 
-	fn prepareEvents (&self, ui: &egui::Ui, viewportResponse: &egui::Response) -> Vec<InputEvent>
+	fn prepareEvents<'ui> (&self, ui: &'ui egui::Ui, viewportResponse: &egui::Response) -> Vec<InputEvent<'ui>>
 	{
 		// Pre-allocate event list
 		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
+
+		// Retrieve relevant input state
+		let inputState = ui.input(|state| util::statify(state));
 
 		// Dragging action
 		if viewportResponse.dragged()
 		{
 			let dm = viewportResponse.drag_motion();
-			if dm.length_sq() > 0. {
+			if dm.length_sq() > 0.
+			{
 				preparedEvents.push(InputEvent::Dragged(DragInfo {
-					buttons: ui.input(|state| {
-						let p = &state.pointer; [
+					buttons: {
+						let p = &inputState.pointer; [
 							p.primary_down(), p.secondary_down(), p.middle_down(),
 							p.button_down(egui::PointerButton::Extra1), p.button_down(egui::PointerButton::Extra2)
 						]
-					}),
+					},
+					modifiers: util::statify(&inputState.modifiers),
 					direction: glm::vec2(dm.x, dm.y)
 				}));
 			}
+		}
+
+		// Mouse wheel
+		if inputState.smooth_scroll_delta.y.abs() > 0. {
+			preparedEvents.push(InputEvent::MouseWheel(inputState.smooth_scroll_delta.y));
 		}
 
 		// Clicks
@@ -460,24 +472,24 @@ impl Player
 			let pos_egui = pos_egui - viewportResponse.rect.min;
 			glm::vec2(pos_egui.x as u32, pos_egui.y as u32)
 		});
-		for button in [
-			egui::PointerButton::Primary, egui::PointerButton::Secondary, egui::PointerButton::Middle,
-			egui::PointerButton::Extra1, egui::PointerButton::Extra2
-		]{
-			if viewportResponse.clicked_by(button) {
-				preparedEvents.push(InputEvent::Click(ClickInfo {
-					button, position: pointerPos.as_ref().unwrap().clone()
-				}));
-			}
-			if viewportResponse.double_clicked_by(button) {
-				preparedEvents.push(InputEvent::DoubleClick(ClickInfo {
-					button, position: pointerPos.as_ref().unwrap().clone()
-				}));
-			}
-			if viewportResponse.triple_clicked_by(button) {
-				preparedEvents.push(InputEvent::TripleClick(ClickInfo {
-					button, position: pointerPos.as_ref().unwrap().clone()
-				}));
+		if let Some(pointerPos) = pointerPos
+		{
+			for button in [
+				egui::PointerButton::Primary, egui::PointerButton::Secondary, egui::PointerButton::Middle,
+				egui::PointerButton::Extra1, egui::PointerButton::Extra2
+			]{
+				let clickInfo = ClickInfo {
+					button, modifiers: util::statify(&inputState.modifiers), position: pointerPos
+				};
+				if viewportResponse.triple_clicked_by(button) {
+					preparedEvents.push(InputEvent::TripleClick(clickInfo));
+				}
+				else if viewportResponse.double_clicked_by(button) {
+					preparedEvents.push(InputEvent::DoubleClick(clickInfo));
+				}
+				else if viewportResponse.clicked_by(button) {
+					preparedEvents.push(InputEvent::Click(clickInfo));
+				}
 			}
 		}
 
@@ -541,7 +553,7 @@ impl Player
 		let translatedEvents =  events.iter().filter_map(|event| {
 			match event
 			{
-				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers , ..}
+				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers, ..}
 				=> {
 					Some(InputEvent::Key(KeyInfo {
 						key: *key, pressed: *pressed, repeat: *repeat, modifiers: *modifiers
@@ -563,7 +575,7 @@ impl Player
 
 	/// Performs the logic for preparing applications for rendering the scene.
 	fn prepare (
-		&self, device: &wgpu::Device, queue: &wgpu::Queue, eguiEncoder: &mut wgpu::CommandEncoder
+		&self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Make all global passes needed by the active camera
@@ -595,8 +607,8 @@ impl Player
 			}
 
 			// Prepare the other applications
-			self.applications.iter().fold(&mut cmdBuffers, |commands, app|
-			{
+			self.applications.iter().fold(
+				&mut cmdBuffers, |commands, app| {
 					if let Some(newCommands) = util::mutify(app).prepareFrame(
 						&self.context, pass.info.renderState, &pass.info.pass
 					){
@@ -605,23 +617,6 @@ impl Player
 					commands
 				}
 			);
-
-			// Finish the pass
-			/*match renderResult
-			{
-				Ok(_) => {
-					tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.info.pass);
-					if let Some(callback) = util::mutify(&pass.completionCallback) {
-						callback(&self.context, passNr as u32);
-					}
-				}
-				Err(error) => {
-					tracing::error!(
-						"Camera[{:?}]: Global pass #{passNr} ({:?}) failed!\n\tReason: {:?}",
-						cameraName, pass.info.pass, error
-					);
-				}
-			}*/
 		}
 
 		// Done!
@@ -630,7 +625,7 @@ impl Player
 
 	/// Performs the logic for letting applications render their contribution to the scene.
 	fn redraw (
-		&self, device: &wgpu::Device, queue: &wgpu::Queue, eguiEncoder: &mut wgpu::CommandEncoder
+		&self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Make all global passes needed by the active camera
@@ -695,14 +690,27 @@ impl Player
 
 	pub fn pushContinuousRedrawRequest (&self)
 	{
-		let this = util::mutify(self); // we use interior mutability
-		if this.continousRedrawRequests < 1 {
-			this.prevFrameElapsed = this.startInstant.elapsed();
-			this.prevFrameDuration = time::Duration::from_secs(0);
+		// We have to use volatile writes to make sure the optimizer doesn't interfere with our hacky but (presumably)
+		// faster-than-RefCell interior mutability scheme
+		// ToDo: remove code smell
+		let this = util::mutify(self);
+		if this.continousRedrawRequests < 1
+		{
+			unsafe {
+				std::ptr::write_volatile(
+					&mut this.prevFrameElapsed as *mut time::Duration, this.startInstant.elapsed()
+				);
+				std::ptr::write_volatile(
+					&mut this.prevFrameDuration as *mut time::Duration, time::Duration::from_secs(0)
+				);
+			}
 			tracing::info!("Starting continuous redrawing");
 			this.egui.request_repaint();
 		}
-		this.continousRedrawRequests += 1;
+		unsafe {
+			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests+1)
+		}
+		tracing::info!("Continuous redraw requests: {}", this.continousRedrawRequests);
 	}
 
 	pub fn dropContinuousRedrawRequest (&self)
@@ -945,20 +953,6 @@ impl eframe::App for Player
 		});
 	}
 }
-
-/*impl ApplicationHandler<UserEvent> for Player
-{
-	fn about_to_wait (&mut self, _: &ActiveEventLoop)
-	{
-		if let Some(_) = self.context.as_ref() {
-			if self.redrawOnceOnWait {
-				self.redrawOnceOnWait = false;
-				tracing::debug!("Scheduling additional redraw");
-				self.postRedraw();
-			}
-		};
-	}
-}*/
 
 /// Helper object for interfacing the [`Player`] with egui_wgpu's draw callbacks.
 struct RenderManager<'player> {

@@ -60,7 +60,6 @@ pub struct OrbitInteractor
 	zNear: f32,
 	zFar: f32,
 	view: glm::Mat4,
-	roll: bool,
 
 	focusChange: Option<FocusChange>,
 	dirty: bool,
@@ -78,7 +77,7 @@ impl OrbitInteractor
 			zNear: 0.01,
 			zFar: 100.,
 			view: glm::Mat4::identity(),
-			/*dragLMB: false, dragMMB: false, dragRMB: false, */roll: false,
+			/*dragLMB: false, dragMMB: false, dragRMB: false, */
 			//lastMousePos: None,
 			focusChange: None,
 			dirty: true,
@@ -140,139 +139,50 @@ impl CameraInteractor for OrbitInteractor
 			}
 			self.dirty = true;
 		}
-		let updated = if self.dirty {
+		if self.dirty {
 			self.view = glm::look_at(&self.eye, &self.target, &self.up);
 			self.dirty = false;
 			true
 		}
-		else { false };
-		updated
+		else { false }
 	}
 
-	fn input (&mut self, event: &InputEvent, _: &Player) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome
 	{
-		match event {
-			InputEvent::Dragged(info) => {
-				let mut handled= false;
-				let mut redraw= false;
-				if info.button(egui::PointerButton::Primary) {
-					handled = true;
-					redraw = true;
-				}
-				if info.button(egui::PointerButton::Secondary) {
-					handled = true;
-				}
-				if info.button(egui::PointerButton::Middle) {
-				}
-				if handled {
-					EventOutcome::HandledExclusively(redraw)
-				} else {
-					EventOutcome::NotHandled
-				}
-			}
-
-			_ => EventOutcome::NotHandled
-		}
-		/*match event
+		match event
 		{
-			WindowEvent::ModifiersChanged(modifiers) => {
-				self.roll = modifiers.state().shift_key();
-				HandledDontClose(/* redraw */true)
-			},
-
-			WindowEvent::MouseInput {state, button, ..}
-			=> {
-				match *button
-				{
-					MouseButton::Left =>
-					{
-						self.dragLMB = *state == ElementState::Pressed;
-						if state.is_pressed()
-						{
-							let nowT = time::Instant::now();
-							if nowT - self.lmbDownT < Self::DBL_CLICK_TIMEOUT
-							{
-								self.lmbDownT = nowT - Self::DBL_CLICK_TIMEOUT;
-								let lastMousePos = self.lastMousePos.as_ref().unwrap();
-								let this = util::mutify(self);
-								player.unprojectPointAtSurfacePixel_async(
-									&glm::vec2(lastMousePos.x as u32, lastMousePos.y as u32),
-									move |point| {
-										if let Some(point) = point {
-											tracing::debug!("Double-click to new focus: {:?}", point);
-											this.focusChange = Some(FocusChange {
-												old: this.target, new: *point, t: 0.
-											});
-											player.pushContinuousRedrawRequest();
-										}
-									}
-								);
-								return HandledExclusively(/* redraw */false); // redrawing handled elsewhere
-							}
-							else {
-								self.lmbDownT = nowT;
-							}
-						}
-						HandledExclusively(/* redraw */false) // no changes to camera parameters yet, no redraw required
-					},
-					MouseButton::Middle => {
-						self.dragMMB = *state == ElementState::Pressed;
-						HandledExclusively(/* redraw */false)
-					},
-					MouseButton::Right => {
-						self.dragRMB = *state == ElementState::Pressed;
-						HandledExclusively(/* redraw */false)
-					},
-					_ => NotHandled // we didn't consume the event
-				}
-			},
-
-			WindowEvent::CursorMoved {position, ..}
+			InputEvent::Dragged(info)
 			=> {
 				// Preamble
-				let delta = self.processMouseMove(position);
+				let delta = glm::vec2(-info.direction.x, info.direction.y);
 				let dist = self.target - self.eye;
-
-				// Orbital motion
-				if self.dragLMB {
+				let mut handled= false;
+				if info.button(egui::PointerButton::Primary)
+				{
 					let fore = dist.normalize();
-					if self.roll {
+					if info.modifiers.shift {
 						self.up = glm::rotate_vec3(
-							&self.up, math::deg2rad!(delta.y*-1./3.), &fore
+							&self.up, math::deg2rad!(delta.y*-1./8.), &fore
 						);
 					}
 					else {
 						let mut right = glm::normalize(&glm::cross(&fore, &self.up));
 						right = glm::rotate_vec3(
-							&right, math::deg2rad!(delta.x*0.5), &self.up
+							&right, math::deg2rad!(delta.x*0.25), &self.up
 						);
 						self.eye = self.target - dist.norm()*glm::cross(&self.up, &right);
 						self.up = glm::rotate_vec3(
-							&self.up, math::deg2rad!(delta.y*-0.5), &right
+							&self.up, math::deg2rad!(delta.y*-0.25), &right
 						);
 						self.eye =    self.target
-						           - (self.target-self.eye).norm()*glm::cross(&self.up, &right);
+							- (self.target-self.eye).norm()*glm::cross(&self.up, &right);
 					}
 					self.dirty = true;
-					return HandledExclusively(/* redraw */true);
+					handled = true;
 				}
-
-				// Forward/backward motion
-				if self.dragMMB {
-					let fore = dist.norm()*delta.y*0.0078125 * dist.normalize();
-					self.target += fore;
-					self.eye += fore;
-					self.dirty = true;
-					if self.focusChange.is_some() {
-						self.focusChange = None;
-						player.dropContinuousRedrawRequest();
-					}
-					return HandledExclusively(/* redraw */true);
-				}
-
-				// Panning motion
-				if self.dragRMB {
-					let speed = dist.norm() * delta*0.00390625;
+				if info.button(egui::PointerButton::Secondary)
+				{
+					let speed = dist.norm() * delta*0.001953125;
 					let right = glm::normalize(&glm::cross(&dist, &self.up));
 					let diff = speed.x*right + speed.y*self.up;
 					self.target += diff;
@@ -282,33 +192,51 @@ impl CameraInteractor for OrbitInteractor
 						self.focusChange = None;
 						player.dropContinuousRedrawRequest();
 					}
-					return HandledExclusively(/* redraw */true);
+					handled = true;
 				}
-
-				// We didn't consume the event
-				NotHandled
-			},
-
-			WindowEvent::MouseWheel {delta, ..}
-			=> {
-				let toEye = self.eye - self.target;
-				match delta
-				{
-					MouseScrollDelta::LineDelta(_, y) => {
-						self.eye = self.target + toEye*(1.+y*-0.125);
-						self.dirty = true;
-						HandledExclusively(/* redraw */true)
-					},
-					MouseScrollDelta::PixelDelta(delta) => {
-						self.eye = self.target + toEye*(1.+(delta.y as f32)*(-1./1024.));
-						self.dirty = true;
-						HandledExclusively(/* redraw */true)
+				if info.button(egui::PointerButton::Middle) {
+					let fore = dist.norm()*delta.y*0.00390625 * dist.normalize();
+					self.target += fore;
+					self.eye += fore;
+					self.dirty = true;
+					if self.focusChange.is_some() {
+						self.focusChange = None;
+						player.dropContinuousRedrawRequest();
 					}
+					handled = true;
+				}
+				if handled {
+					EventOutcome::HandledExclusively(/* redraw */true)
+				} else {
+					EventOutcome::NotHandled
 				}
 			},
 
-			// We didn't consume the event
+			InputEvent::MouseWheel(amount) => {
+				let toEye = self.eye - self.target;
+				self.eye = self.target + toEye*(1.+amount*-1./256.);
+				self.dirty = true;
+				EventOutcome::HandledExclusively(/* redraw */true)
+			},
+
+			InputEvent::DoubleClick(info) => {
+				let this = util::mutify(self);
+				player.unprojectPointAtSurfacePixel_async(
+					info.position,
+					move |point| {
+						if let Some(point) = point {
+							tracing::debug!("Double-click to new focus: {:?}", point);
+							this.focusChange = Some(FocusChange {
+								old: this.target, new: *point, t: 0.
+							});
+							player.pushContinuousRedrawRequest();
+						}
+					}
+				);
+				EventOutcome::HandledExclusively(/* redraw */true)
+			},
+
 			_ => EventOutcome::NotHandled
-		}*/
+		}
 	}
 }
