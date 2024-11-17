@@ -18,7 +18,7 @@ use crate::player::*;
 //
 
 /// Collects all rendering setup provided by the *CGV-rs* [`Player`] for applications to use, including everything they
-/// need in order to interface with the managed [render pass](wgpu::RenderPass) setup.
+/// need in order to interface with the managed [render passes](GlobalPassInfo) over the scene.
 pub struct RenderSetup
 {
 	surfaceFormat: wgpu::TextureFormat,

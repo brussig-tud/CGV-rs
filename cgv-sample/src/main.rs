@@ -15,12 +15,12 @@
 //
 
 // Standard library
-/* Nothing here yet */
+use std::default::Default;
 
 // CGV re-imports
 use cgv::{wgpu, glm};
 
-// WGPU
+// WGPU API
 use wgpu::util::DeviceExt;
 
 // CGV Framework
@@ -129,7 +129,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, renderSetup: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
+	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Load example shader
@@ -161,26 +161,27 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		let tex = cgv::hal::Texture::fromBlob(
 			context, util::sourceBytes!("/res/tex/cgvCube.png"), None, Some("Example__TestTexture")
 		)?;
+		static texBindGroupLayoutEntries: [wgpu::BindGroupLayoutEntry; 2] = [
+			wgpu::BindGroupLayoutEntry {
+				binding: 0,
+				visibility: wgpu::ShaderStages::FRAGMENT,
+				ty: wgpu::BindingType::Texture {
+					multisampled: false,
+					view_dimension: wgpu::TextureViewDimension::D2,
+					sample_type: wgpu::TextureSampleType::Float { filterable: true },
+				},
+				count: None,
+			},
+			wgpu::BindGroupLayoutEntry {
+				binding: 1,
+				visibility: wgpu::ShaderStages::FRAGMENT,
+				ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+				count: None,
+			},
+		];
 		let texBindGroupLayout = context.device().create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
-				entries: &[
-					wgpu::BindGroupLayoutEntry {
-						binding: 0,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Texture {
-							multisampled: false,
-							view_dimension: wgpu::TextureViewDimension::D2,
-							sample_type: wgpu::TextureSampleType::Float { filterable: true },
-						},
-						count: None,
-					},
-					wgpu::BindGroupLayoutEntry {
-						binding: 1,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-						count: None,
-					},
-				],
+				entries: texBindGroupLayoutEntries.as_slice(),
 				label: Some("Example__TestBindGroupLayout"),
 			}
 		);
@@ -203,67 +204,16 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 
 		////
-		// Create pipeline
+		// Done!
 
-		let pipelineLayout =
-			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-				label: Some("Render Pipeline Layout"),
-				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &texBindGroupLayout],
-				push_constant_ranges: &[],
-			});
-
-		/*let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: Some("Render Pipeline"),
-			layout: Some(&pipelineLayout),
-			vertex: wgpu::VertexState {
-				module: &shader,
-				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
-				buffers: &[HermiteNode::layoutDesc()], // 2.
-				compilation_options: wgpu::PipelineCompilationOptions::default(),
-			},
-			fragment: Some(wgpu::FragmentState { // 3.
-				module: &shader,
-				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
-				targets: &[Some(wgpu::ColorTargetState { // 4.
-					format: renderSetup.surfaceFormat(),
-					blend: Some(wgpu::BlendState::REPLACE),
-					write_mask: wgpu::ColorWrites::ALL,
-				})],
-				compilation_options: wgpu::PipelineCompilationOptions::default(),
-			}),
-			primitive: wgpu::PrimitiveState {
-				topology: wgpu::PrimitiveTopology::TriangleStrip, // 1.
-				strip_index_format: None,
-				front_face: wgpu::FrontFace::Ccw, // 2.
-				cull_mode: Some(wgpu::Face::Back),
-				// Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-				polygon_mode: wgpu::PolygonMode::Fill,
-				// Requires Features::DEPTH_CLIP_CONTROL
-				unclipped_depth: false,
-				// Requires Features::CONSERVATIVE_RASTERIZATION
-				conservative: false,
-			},
-			depth_stencil: Some(wgpu::DepthStencilState {
-				format: renderSetup.depthStencilFormat(),
-				depth_write_enabled: true,
-				depth_compare: wgpu::CompareFunction::LessEqual,
-				stencil: Default::default(),
-				bias: Default::default(),
-			}),
-			multisample: wgpu::MultisampleState {
-				count: 1, // 2.
-				mask: !0, // 3.
-				alpha_to_coverage_enabled: false, // 4.
-			},
-			multiview: None, // 5.
-			cache: None, // 6.
-		});*/
-
+		// Construct the instance and put it in a box
 		Ok(Box::new(SampleApplication {
-			//pipeline,
+			shader,
+			texBindGroupLayout,
+			texBindGroup,
+			pipelines: Vec::new(),
 			vertexBuffer,
-			indexBuffer,
-			texBindGroup
+			indexBuffer
 		}))
 	}
 }
@@ -274,16 +224,72 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 #[derive(Debug)]
 pub struct SampleApplication {
-	//pipeline: wgpu::RenderPipeline,
+	shader: wgpu::ShaderModule,
+	texBindGroupLayout: wgpu::BindGroupLayout,
+	texBindGroup: wgpu::BindGroup,
+	pipelines: Vec<wgpu::RenderPipeline>,
 	vertexBuffer: wgpu::Buffer,
-	indexBuffer: wgpu::Buffer,
-	texBindGroup: wgpu::BindGroup
+	indexBuffer: wgpu::Buffer
+}
+impl SampleApplication
+{
+	/// Helper function: create the interfacing pipeline for the given render state.
+	fn createPipeline (
+		&self, context: &cgv::Context, renderState: &cgv::RenderState, renderSetup: &cgv::RenderSetup
+	) -> wgpu::RenderPipeline
+	{
+		let pipelineLayout =
+			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+				label: Some("Example Render Pipeline Layout"),
+				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &self.texBindGroupLayout],
+				push_constant_ranges: &[],
+			});
+
+		let cts = renderState.colorTargetState().clone();
+		let ds = renderState.depthStencilState().clone();
+		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+			label: Some("Example Render Pipeline"),
+			layout: Some(&pipelineLayout),
+			vertex: wgpu::VertexState {
+				module: &self.shader,
+				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
+				buffers: &[HermiteNode::layoutDesc()],
+				compilation_options: wgpu::PipelineCompilationOptions::default(),
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &self.shader,
+				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
+				targets: &[Some(cts)],
+				compilation_options: wgpu::PipelineCompilationOptions::default(),
+			}),
+			primitive: wgpu::PrimitiveState {
+				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				front_face: wgpu::FrontFace::Ccw,
+				cull_mode: None/*Some(wgpu::Face::Back)*/,
+				..Default::default()
+			},
+			depth_stencil: Some(ds),
+			multisample: wgpu::MultisampleState::default(),
+			multiview: None,
+			cache: None,
+		})
+	}
 }
 
 impl cgv::Application for SampleApplication
 {
-	fn recreatePipelines (&mut self, context: &cgv::Context, _: &cgv::Player)
-	{
+	fn recreatePipelines (
+		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
+		_: &cgv::Player
+	){
+		// Make space
+		self.pipelines.clear();
+		self.pipelines.reserve(globalPasses.len());
+
+		// Recreate pipelines
+		for (_, pass) in globalPasses.iter().enumerate() {
+			self.pipelines.push(self.createPipeline(context, pass.renderState, renderSetup));
+		}
 	}
 
 	fn input (&mut self, _: &cgv::InputEvent, _: &cgv::Player) -> cgv::EventOutcome {
@@ -291,42 +297,36 @@ impl cgv::Application for SampleApplication
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2, _: &cgv::Player) {}
+	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2, _: &cgv::Player) {
+		/* We don't have anything to adapt to a new main framebuffer size */
+	}
 
 	fn update (&mut self, _: &cgv::Context, _: &cgv::Player) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}
 
-	fn render (&mut self, context: &cgv::Context, renderState: &cgv::RenderState, _: &cgv::GlobalPass)
-		-> cgv::Result<()>
+	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
+		-> Option<Vec<wgpu::CommandBuffer>>
 	{
-		// Get a command encoder
-		let mut encoder = context.device().create_command_encoder(
-			&wgpu::CommandEncoderDescriptor{label: Some("SampleCommandEncoder")}
-		);
+		// We don't need any additional preparation.
+		None
+	}
 
-		/* create render pass */ {
-			/*let mut renderPass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-				label: Some("SampleRenderPass"),
-				color_attachments: &[renderState.getMainSurfaceColorAttachment()],
-				depth_stencil_attachment: renderState.getMainSurfaceDepthStencilAttachment(),
-				occlusion_query_set: None,
-				timestamp_writes: None,
-			});
-			//renderPass.set_pipeline(&self.pipeline);
-			renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-			renderPass.set_bind_group(1, &self.texBindGroup, &[]);
-			renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
-			renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-			renderPass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);*/
-		}
+	fn render (
+		&mut self, context: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		_: &cgv::GlobalPass
+	) -> Option<Vec<wgpu::CommandBuffer>>
+	{
+		renderPass.set_pipeline(&self.pipelines[0]);
+		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
+		renderPass.set_bind_group(1, &self.texBindGroup, &[]);
+		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
+		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
+		renderPass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 
-		// Submit
-		context.queue().submit([encoder.finish()]);
-
-		// Done!
-		Ok(())
+		// We don't need the Player to submit any custom command buffers for us
+		None
 	}
 }
 

@@ -148,10 +148,18 @@ pub enum GlobalPass
 	Custom(Box<dyn Any>)
 }
 
-pub struct GlobalPassDeclaration<'rs> {
+/// T.b.d.
+pub struct GlobalPassDeclaration<'info> {
+	pub info: GlobalPassInfo<'info>,
+	pub completionCallback: Option<Box<dyn FnMut(&Context, u32)>>
+}
+
+/// T.b.d.
+pub struct GlobalPassInfo<'rs> {
 	pub pass: GlobalPass,
 	pub renderState: &'rs RenderState,
-	pub completionCallback: Option<Box<dyn FnMut(&Context, u32)>>
+	pub clearColor: wgpu::Color,
+	pub depthClearValue: f32
 }
 
 
@@ -169,13 +177,20 @@ pub trait Application
 {
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
-	/// their pipelines accordingly.
+	/// their pipelines accordingly. The `Player`] guarantees that this will be called at least once before the
+	/// application is asked to render its contribution to the scene.
+	///
+	/// **ToDo:** Make the framework detect compatible changes and only notify for incompatible global pass changes
 	///
 	/// # Arguments
 	///
 	/// * `context` – The graphics context.
+	/// * `renderSetup` – The global render setup of the *CGV-rs* [`Player`].
+	/// * `globalPasses` – The list of global passes the application will need to render to.
 	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
-	fn recreatePipelines (&mut self, context: &Context, player: &Player);
+	fn recreatePipelines (
+		&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &[&GlobalPassInfo], _: &Player
+	);
 
 	/// Called when there is user input that can be processed.
 	///
@@ -210,14 +225,35 @@ pub trait Application
 	/// `true` when the application deems a scene redraw is required, `false` otherwise.
 	fn update (&mut self, context: &Context, player: &Player) -> bool;
 
-	/// Called when the [player](Player) needs the application to render its contents.
+	/// Called when the [player](Player) is about to ask the application to render its contribution to the scene within
+	/// a [global render pass](GlobalPassInfo).
 	///
 	/// # Arguments
 	///
 	/// * `context` – The graphics context for rendering.
 	/// * `renderState` – The render state for the ongoing global render pass over the scene.
 	/// * `globalPass` – Identifies the global render pass over the scene that spawned this call to `render`.
-	fn render (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass) -> Result<()>;
+	///
+	/// # Returns
+	///
+	/// `Some` array of command buffers containing any commands the application might need to perform before being able
+	/// to render, or `None` if no preparation is required.
+	fn prepareFrame (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass)
+		-> Option<Vec<wgpu::CommandBuffer>>;
+
+	/// Called when the [player](Player) needs the application to render its contents.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The graphics context for rendering.
+	/// * `renderState` – The render state for the ongoing global render pass over the scene.
+	/// * `renderPass` – The *WGPU* render pass to the internally managed framebuffer that the application can add
+	///                  draw calls to.
+	/// * `globalPass` – Identifies the global pass over the scene that the render pass is for.
+	fn render (
+		&mut self, context: &Context, renderState: &RenderState, managedRenderPass: &mut wgpu::RenderPass,
+		globalPass: &GlobalPass
+	) -> Option<Vec<wgpu::CommandBuffer>>;
 }
 
 
@@ -225,5 +261,16 @@ pub trait Application
 // ApplicationFactory
 
 pub trait ApplicationFactory {
+	/// Create an instance of the target application.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The graphics context.
+	/// * `renderSetup` – The global render setup of the *CGV-rs* [`Player`].
+	///
+	/// # Returns
+	///
+	/// A boxed instance of the application if successful, or some descriptive error detailing the failure if no
+	/// instance could be created.
 	fn create (&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
 }

@@ -32,7 +32,7 @@ pub struct MonoCamera<'own> {
 impl MonoCamera<'_>
 {
 	pub fn new (
-		context: &Context, resolution: glm::UVec2, colorFormat: wgpu::TextureFormat,
+		context: &Context, renderSetup: &RenderSetup, resolution: glm::UVec2, colorFormat: wgpu::TextureFormat,
 		depthStencilFormat: hal::DepthStencilFormat, name: Option<&str>
 	) -> Self
 	{
@@ -56,8 +56,12 @@ impl MonoCamera<'_>
 			name,
 			framebuffer: util::statify(&renderState.framebuffer),
 			globalPasses: vec![GlobalPassDeclaration {
-				pass: GlobalPass::Simple,
-				renderState: util::statify(&renderState),
+				info: GlobalPassInfo {
+					pass: GlobalPass::Simple,
+					renderState: util::statify(&renderState),
+					clearColor: *renderSetup.defaultClearColor(),
+					depthClearValue: renderSetup.defaultDepthClearValue(),
+				},
 				completionCallback: None,
 			}],
 			renderState

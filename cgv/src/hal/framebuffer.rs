@@ -185,7 +185,7 @@ impl Framebuffer
 	///
 	/// # Returns
 	///
-	/// `Some` reference to the depth/stencil texture if it exists, `None` otherwise.
+	/// `Some` reference to the depth/stencil texture if the framebuffer has one, `None` otherwise.
 	pub fn depthStencil (&self) -> Option<&hal::Texture> {
 		self.depthStencil.as_ref()
 	}

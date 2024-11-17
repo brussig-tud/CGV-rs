@@ -40,9 +40,7 @@ use eframe::epaint;
 
 // Local imports
 use crate::*;
-
-
-
+use crate::view::Camera;
 ///////
 //
 // Enums and structs
@@ -130,8 +128,8 @@ pub enum EventOutcome
 	NotHandled
 }
 
-/// Collects all bind group layouts available for interfacing with the managed [render pass](wgpu::RenderPass)
-/// setup of the *CGV-rs* [`Player`].
+/// Collects all bind group layouts available for interfacing with the managed [render passes](GlobalPassInfo) over the
+/// scene as set up by the *CGV-rs* [`Player`].
 pub struct ManagedBindGroupLayouts {
 	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
 	pub viewing: wgpu::BindGroupLayout
@@ -169,6 +167,7 @@ pub struct Player
 
 	camera: Box<dyn view::Camera>,
 	cameraInteractor: Box<dyn view::CameraInteractor>,
+	globalPasses: &'static [GlobalPassDeclaration<'static>],
 	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
@@ -189,6 +188,7 @@ impl Player
 	{
 		tracing::info!("Initializing Player...");
 
+		// Get necessary context handles from eframe
 		if cc.wgpu_render_state.is_none() {
 			return Err(anyhow!("eframe is not configured to use the WGPU backend"));
 		}
@@ -200,10 +200,6 @@ impl Player
 				fontId.size *= 1.;
 			}
 		});
-
-		// Launch main event loop. Most initialization is event-driven and will happen in there.
-		/*let eventLoop = EventLoop::<UserEvent>::with_user_event().build()?;
-		eventLoop.set_control_flow(ControlFlow::Wait);*/
 
 		// Create context
 		let context = Context::new(&context::WgpuSetup {
@@ -218,37 +214,35 @@ impl Player
 			wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.}, 1., wgpu::CompareFunction::Less
 		);
 
-		let mainFramebuffer = hal::FramebufferBuilder::withDims(&glm::vec2(1, 1))
-			.withLabel("CGV__MainFramebuffer")
-			.attachColor(wgpu::TextureFormat::Bgra8Unorm, Some(wgpu::TextureUsages::TEXTURE_BINDING))
-			.attachDepthStencil(hal::DepthStencilFormat::D32, Some(wgpu::TextureUsages::COPY_SRC))
-			.build(&context);
+		// Create stateful rendering components
+		let camera = Box::new(view::MonoCamera::new(
+			&context, &renderSetup, glm::vec2(2, 2), renderSetup.defaultColorFormat(),
+			renderSetup.defaultDepthStencilFormat().into(), Some("CGV__MainCamera")
+		));
+		let globalPasses = util::statify(&camera).declareGlobalPasses();
+		let viewportCompositor = ViewportCompositor::new(
+			&context, &renderSetup, camera.framebuffer().color0(),
+			Some("CGV__MainViewportCompositor")
+		);
 
-		tracing::info!("Startup complete.");
-
-		// Done, now construct
+		// Now construct
 		let mut player = Self {
-			/*eventLoopProxy: eventLoop.create_proxy(),
-			eventLoop: Some(eventLoop),*/
-
 			egui: cc.egui_ctx.clone(),
 			//redrawOnceOnWait: false,
 
 			themeSet: false,
 			activeSidePanel: 0,
 
-			prevFramebufferDims: Default::default(),
-
-			camera: Box::new(view::MonoCamera::new(
-				&context, glm::vec2(1, 1), renderSetup.defaultColorFormat(),
-				renderSetup.defaultDepthStencilFormat().into(), Some("CGV__MainCamera")
-			)),
-			cameraInteractor: Box::new(view::OrbitInteractor::new()),
-			viewportCompositor: ViewportCompositor::new(
-				&context, &renderSetup, mainFramebuffer.color0(), Some("CGV__MainViewportCompositor")
-			),
 			context,
 			renderSetup,
+
+			prevFramebufferDims: Default::default(),
+
+			globalPasses,
+			camera,
+			cameraInteractor: Box::new(view::OrbitInteractor::new()),
+
+			viewportCompositor,
 
 			applicationFactory: Some(applicationFactory),
 			activeApplication: None,
@@ -260,13 +254,26 @@ impl Player
 			prevFrameDuration: time::Duration::from_secs(0),
 		};
 
-		// Init applications
-		player.activeApplication = Some(
-			player.applicationFactory.take().unwrap().create(&player.context, &player.renderSetup)?
+		// Init application(s)
+		let mut activeApplication =
+			player.applicationFactory.take().unwrap().create(&player.context, &player.renderSetup)?;
+		activeApplication.recreatePipelines(
+			&player.context, &player.renderSetup,
+			Self::extractInfoFromGlobalPassDeclarations(player.globalPasses).as_slice(), &player
 		);
+		player.activeApplication = Some(activeApplication);
 
 		// Done!
+		tracing::info!("Startup complete.");
 		Ok(player)
+	}
+
+	fn extractInfoFromGlobalPassDeclarations<'gpd> (globalPassDeclarations: &'gpd [GlobalPassDeclaration])
+		-> Vec<&'gpd GlobalPassInfo<'gpd>>
+	{
+		let mut passInfos = Vec::with_capacity(globalPassDeclarations.len());
+		passInfos.extend(globalPassDeclarations.iter().map(|gpd| &gpd.info));
+		passInfos
 	}
 
 	#[cfg(not(target_arch="wasm32"))]
@@ -481,7 +488,7 @@ impl Player
 	fn dispatchTranslatedEvent (&mut self, event: &InputEvent) -> bool
 	{
 		// Create the 'static reference to self that we will pass to the various callback functions
-		let this = util::mutify(self);
+		let this = util::statify(self);
 
 		// Keep track of whether a full scene redraw is needed
 		let mut redraw = false;
@@ -554,57 +561,56 @@ impl Player
 		redraw
 	}
 
-	// Performs the actual redrawing logic
-	fn redraw (
+	/// Performs the logic for preparing applications for rendering the scene.
+	fn prepare (
 		&self, device: &wgpu::Device, queue: &wgpu::Queue, eguiEncoder: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
-		tracing::debug!("Redrawing");
-
-		// Determine the global passes we need to make
-		let passes = self.camera.declareGlobalPasses();
+		// Make all global passes needed by the active camera
+		let mut cmdBuffers = Vec::with_capacity(8);
 		let cameraName = self.camera.name();
-		for passNr in 0..passes.len()
+		for passNr in 0..self.globalPasses.len()
 		{
 			// Get actual pass information
-			let pass = &passes[passNr];
-			let renderState = util::mutify(pass.renderState);
-
-			// Update surface
-			//util::mutify(pass.renderState).beginGlobalPass(context);
-
-			// Clear surface
-			let passPrepCommands = device.create_command_encoder(
-				&wgpu::CommandEncoderDescriptor { label: Some("CGV__PrepareGlobalPassCommandEncoder") }
-			);/*
-			self.clearers[passNr].clear(
-				&mut passPrepCommands, &renderState.getMainSurfaceColorAttachment(),
-				&renderState.getMainSurfaceDepthStencilAttachment()
-			);*/
+			let pass = &self.globalPasses[passNr];
+			let renderState = util::mutify(pass.info.renderState);
+			tracing::debug!("Camera[{:?}]: Preparing global pass #{passNr} ({:?})", cameraName, pass.info.pass);
 
 			/* Update managed render state */ {
-			// Uniforms
-			// - viewing
-			let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
-			viewingUniforms.projection = * self.camera.projection(pass);
-			viewingUniforms.view = * self.camera.view(pass);
-			renderState.viewingUniforms.upload(&self.context);
-		};
+				// Uniforms
+				// - viewing
+				let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
+				viewingUniforms.projection = * self.camera.projection(pass);
+				viewingUniforms.view = * self.camera.view(pass);
+				renderState.viewingUniforms.upload(&self.context);
+			};
 
-			// Commit preparation work to GPU
-			queue.submit([passPrepCommands.finish()]);
-
-			let mut renderResult = Ok(());
-			if let Some(ref application) = self.activeApplication {
-				renderResult = util::mutify(application).render(&self.context, pass.renderState, &pass.pass);
+			// Prepare the active application (if any)
+			if let Some(application) = util::mutify(&self.activeApplication) {
+				if let Some(newCommands) = application.prepareFrame(
+					&self.context, pass.info.renderState, &pass.info.pass
+				){
+					cmdBuffers.extend(newCommands);
+				}
 			}
 
-			// Finish the pass
-			//renderState.endGlobalPass();
-			match &renderResult
+			// Prepare the other applications
+			self.applications.iter().fold(&mut cmdBuffers, |commands, app|
 			{
-				Ok(()) => {
-					tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.pass);
+					if let Some(newCommands) = util::mutify(app).prepareFrame(
+						&self.context, pass.info.renderState, &pass.info.pass
+					){
+						commands.extend(newCommands);
+					}
+					commands
+				}
+			);
+
+			// Finish the pass
+			/*match renderResult
+			{
+				Ok(_) => {
+					tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.info.pass);
 					if let Some(callback) = util::mutify(&pass.completionCallback) {
 						callback(&self.context, passNr as u32);
 					}
@@ -612,89 +618,70 @@ impl Player
 				Err(error) => {
 					tracing::error!(
 						"Camera[{:?}]: Global pass #{passNr} ({:?}) failed!\n\tReason: {:?}",
-						cameraName, pass.pass, error
+						cameraName, pass.info.pass, error
 					);
 				}
-			}
+			}*/
 		}
 
-		// We didn't use the egui-provided command encoder, so no command buffers to report
-		Vec::new()
+		// Done!
+		cmdBuffers
 	}
-	/*fn redraw (&mut self) -> Result<()>
+
+	/// Performs the logic for letting applications render their contribution to the scene.
+	fn redraw (
+		&self, device: &wgpu::Device, queue: &wgpu::Queue, eguiEncoder: &mut wgpu::CommandEncoder
+	) -> Vec<wgpu::CommandBuffer>
 	{
-		// Obtain context
-		let context = util::statify(self.context.as_ref().unwrap());
-
-		// Update the active camera
-		if self.cameraInteractor.update(util::statify(self)) {
-			self.camera.as_mut().unwrap().update(self.cameraInteractor.as_ref());
-		}
-
-		// Determine the global passes we need to make
-		let passes = self.camera.as_ref().unwrap().declareGlobalPasses();
-		let cameraName = self.camera.as_ref().unwrap().name();
-		for passNr in 0..passes.len()
+		// Make all global passes needed by the active camera
+		let mut cmdBuffers = Vec::with_capacity(8);
+		let mut cmdEncoder = self.context.device().create_command_encoder(&Default::default());
+		let cameraName = self.camera.name();
+		for passNr in 0..self.globalPasses.len()
 		{
 			// Get actual pass information
-			let pass = &passes[passNr];
-			let renderState = util::mutify(pass.renderState);
-
-			// Update surface
-			util::mutify(pass.renderState).beginGlobalPass(context);
-
-			// Clear surface
-			let mut passPrepCommands = context.device.create_command_encoder(
-				&wgpu::CommandEncoderDescriptor { label: Some("CGV__PrepareGlobalPassCommandEncoder") }
-			);
-			self.clearers[passNr].clear(
-				&mut passPrepCommands, &renderState.getMainSurfaceColorAttachment(),
-				&renderState.getMainSurfaceDepthStencilAttachment()
-			);
+			let pass = &self.globalPasses[passNr];
+			let renderState = util::mutify(pass.info.renderState);
 
 			/* Update managed render state */ {
 				// Uniforms
 				// - viewing
-				let camera = self.camera.as_ref().unwrap().as_ref();
-				renderState.viewingUniforms.data.projection = *camera.projection(pass);
-				renderState.viewingUniforms.data.view = *camera.view(pass);
-				renderState.viewingUniforms.upload(context);
+				let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
+				viewingUniforms.projection = * self.camera.projection(pass);
+				viewingUniforms.view = * self.camera.view(pass);
+				renderState.viewingUniforms.upload(&self.context);
 			};
 
-			// Commit preparation work to GPU
-			context.queue.submit([passPrepCommands.finish()]);
+			// Create the managed render pass for this global pass
+			let desc = wgpu::RenderPassDescriptor {
+				label: Some("CGV__ManagedSceneRenderPass"),
+				color_attachments: &[
+					renderState.getMainColorAttachment(Some(&pass.info.clearColor))
+				],
+				depth_stencil_attachment: renderState.getMainDepthStencilAttachment(Some(pass.info.depthClearValue)),
+				occlusion_query_set: None,
+				timestamp_writes: None,
+			};
+			let mut renderPass = cmdEncoder.begin_render_pass(&desc);
 
-			let mut renderResult = Ok(());
-			if let Some(application) = self.application.as_mut() {
-				renderResult = application.render(&context, pass.renderState, &pass.pass);
+			// Render the active application (if any)
+			if let Some(application) = util::mutify(&self.activeApplication) {
+				application.render(&self.context, pass.info.renderState, &mut renderPass, &pass.info.pass);
+			}
+
+			// Prepare the other applications
+			for app in util::mutify(&self.applications) {
+				app.render(&self.context, pass.info.renderState, &mut renderPass, &pass.info.pass);
 			}
 
 			// Finish the pass
-			renderState.endGlobalPass();
-			match &renderResult
-			{
-				Ok(()) => {
-					tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.pass);
-					if let Some(callback) = util::mutify(&pass.completionCallback) {
-						callback(context, passNr as u32);
-					}
-				}
-				Err(error) => {
-					tracing::error!(
-						"Camera[{:?}]: Global pass #{passNr} ({:?}) failed!\n\tReason: {:?}",
-						cameraName, pass.pass, error
-					);
-					return renderResult;
-				}
-			}
+			tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.info.pass);
 		}
 
-		// Render egui
-		self.renderEgui();
-
 		// Done!
-		Ok(())
-	}*/
+		cmdBuffers.push(cmdEncoder.finish());
+		cmdBuffers
+	}
 
 	#[inline(always)]
 	pub fn context (&self) -> &Context {
@@ -708,7 +695,7 @@ impl Player
 
 	pub fn pushContinuousRedrawRequest (&self)
 	{
-		let this = util::mutify(self);
+		let this = util::mutify(self); // we use interior mutability
 		if this.continousRedrawRequests < 1 {
 			this.prevFrameElapsed = this.startInstant.elapsed();
 			this.prevFrameDuration = time::Duration::from_secs(0);
@@ -720,7 +707,7 @@ impl Player
 
 	pub fn dropContinuousRedrawRequest (&self)
 	{
-		let this = util::mutify(self);
+		let this = util::mutify(self); // we use interior mutability
 		if this.continousRedrawRequests < 1 {
 			panic!("logic error - more continuous redraw requests dropped than were pushed");
 		}
@@ -961,302 +948,6 @@ impl eframe::App for Player
 
 /*impl ApplicationHandler<UserEvent> for Player
 {
-	fn resumed (&mut self, event_loop: &ActiveEventLoop)
-	{
-		if self.context.is_none() {
-			tracing::info!("Main loop created.")
-		}
-		else {
-			tracing::info!("Main loop resumed.");
-		}
-
-		let windowAttribs = Window::default_attributes();
-		let window = event_loop
-			.create_window(windowAttribs)
-			.expect("Couldn't create window.");
-
-		#[cfg(target_arch="wasm32")] {
-			use web_sys::Element;
-			use winit::platform::web::WindowExtWebSys;
-
-			web_sys::window()
-				.and_then(|win| win.document())
-				.and_then(|doc| {
-					self.canvas = Some(Element::from(window.canvas()?));
-					let canvas = self.canvas.as_ref().unwrap();
-					doc.body()?.append_child(&canvas).ok()?;
-					Some(())
-				})
-				.expect("Couldn't append canvas to document body.");
-		}
-
-		#[cfg(target_arch="wasm32")] {
-			let state_future = Context::new(window);
-			let eventLoopProxy = self.eventLoopProxy.clone();
-			let future = async move {
-				let state = state_future.await;
-				assert!(eventLoopProxy
-					.send_event(UserEvent::ContextReady(state))
-					.is_ok());
-			};
-			wasm_bindgen_futures::spawn_local(future);
-		}
-		#[cfg(not(target_arch="wasm32"))] {
-			let context = pollster::block_on(Context::new(window));
-			assert!(self
-				.eventLoopProxy
-				.send_event(UserEvent::ContextReady(context))
-				.is_ok());
-		}
-	}
-
-	/// The hook for all custom events.
-	fn user_event (&mut self, eventLoop: &ActiveEventLoop, event: UserEvent)
-	{
-		// Apply newly initialized state
-		match event
-		{
-			UserEvent::ContextReady(contextCreationResult)
-			=> match contextCreationResult {
-				Ok(context)
-				=> {
-					// Commit context
-					tracing::info!("Graphics context ready.");
-					self.context = Some(context);
-					let context = self.context.as_ref().unwrap();
-
-					// WASM, for some reason, needs a resize event for the main surface to become fully configured.
-					// Since we need to hook up the size of the canvas hosting the surface to the browser window anyway,
-					// this is a good opportunity for dispatching that initial resize.
-					#[cfg(target_arch="wasm32")]
-					self.canvas.as_ref().unwrap().set_attribute(
-						"style", "width:100% !important; height:100% !important"
-					).unwrap();
-
-					// On non-WASM on the other hand, the surface is correctly configured for the initial size. However,
-					// we do need to schedule a single redraw to not get garbage on the screen as the surface is
-					// displayed for the first time for some reason...
-					#[cfg(not(target_arch="wasm32"))] {
-						self.redrawOnceOnWait = true;
-					}
-
-					// Create render setup
-					self.renderSetup = Some(RenderSetup::new(context, context.config.format, DepthStencilFormat::D32));
-
-					// Create egui state
-					self.egui = Some(Egui::new(context));
-
-					// Initialize camera
-					// - create default camera
-					self.camera = Some({
-						#[allow(unused_mut)] // prevent the warning in WASM builds (we need mutability in non-WASM)
-						let mut camera = view::MonoCamera::new(
-							context, None, self.renderSetup.as_ref().unwrap(), Some("MainCamera")
-						);
-
-						// On non-WASM, we don't get an initial resize so we have to initialize the camera manually.
-						#[cfg(not(target_arch="wasm32"))] {
-							camera.resize(
-								context, &glm::vec2(context.size.width, context.size.height),
-								self.cameraInteractor.as_ref()
-							);
-						}
-						camera
-					});
-					/* - initialize global pass resources */ {
-						let passes =
-							util::statify(self.camera.as_ref().unwrap()).declareGlobalPasses();
-						for pass in passes {
-							let depthClearing =
-								if let Some(dsa) = &pass.renderState.depthStencilAttachment {
-									Some(ClearDepth { value: 1., attachment: dsa })
-								}
-								else { None };
-							self.clearers.push(clear::Clear::new(
-								context,
-								Some(&ClearColor {
-									value: self.renderSetup.as_ref().unwrap().defaultClearColor,
-									attachment: &pass.renderState.colorAttachment
-								}),
-								depthClearing.as_ref()
-							));
-						}
-					}
-
-					// Create the application
-					let appCreationResult = self.applicationFactory.take().unwrap().create(
-						context, self.renderSetup.as_ref().unwrap()
-					);
-					match appCreationResult {
-						Ok(application) => self.application = Some(application),
-						Err(error) => {
-							tracing::error!("Failed to create application: {:?}", error);
-							self.exit(eventLoop);
-						}
-					}
-				}
-				Err(error) => {
-					tracing::error!("Graphics context initialization failure: {:?}", error);
-					self.exit(eventLoop);
-				}
-			}
-		}
-	}
-
-	fn window_event (&mut self, eventLoop: &ActiveEventLoop, _: WindowId, event: WindowEvent)
-	{
-		// GUI gets very first dibs
-		if let Some(context) = &self.context {
-			let exclusive = context.eguiPlatform.captures_event(&event);
-			util::mutify(context).eguiPlatform.handle_event(&event);
-			if exclusive {
-				return;
-			}
-		}
-
-		match &event
-		{
-			// Main window resize
-			WindowEvent::Resized(newPhysicalSize)
-			=> {
-				if self.context.is_some() {
-					let newSize = glm::vec2(newPhysicalSize.width, newPhysicalSize.height);
-					self.withContextMut(|this, context| {
-						context.resize(*newPhysicalSize);
-						context.eguiScreenDesc.size_in_pixels = [newSize.x, newSize.y];
-						context.eguiPlatform.handle_event(&event);
-						this.camera.as_mut().unwrap().resize(context, &newSize, this.cameraInteractor.as_ref());
-						this.application.as_mut().unwrap().onResize(&newSize);
-					});
-				}
-				#[cfg(not(target_arch="wasm32"))] {
-					self.redrawOnceOnWait = true;
-				}
-			}
-
-			// Main window DPI change
-			WindowEvent::ScaleFactorChanged {scale_factor, ..}
-			=> if let Some(context) = &mut self.context {
-				context.eguiScreenDesc.pixels_per_point = *scale_factor as f32;
-			}
-
-			// Application close
-			WindowEvent::CloseRequested => self.exit(eventLoop),
-
-			// Main window redraw
-			WindowEvent::RedrawRequested
-			=> {
-				if self.context.is_some()
-				{
-					if !self.context().surfaceConfigured {
-						tracing::debug!("Surface not yet configured - skipping redraw!");
-						return;
-					}
-					tracing::debug!("Redrawing");
-
-					// Update main surface attachments to draw on them
-					let context = self.context.as_mut().unwrap();
-					match context.newFrame()
-					{
-						// All fine, we can draw
-						Ok(()) => {
-							// Advance egui
-							context.eguiPlatform.update_time(self.startInstant.elapsed().as_secs_f64());
-
-							// Perform actual redrawing inside Player implementation
-							if let Err(error) = self.redraw() {
-								tracing::error!("Error while redrawing: {:?}", error);
-							}
-
-							// Swap buffers
-							self.context.as_mut().unwrap().endFrame().present();
-						}
-
-						// Reconfigure the surface if it's lost or outdated
-						Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated)
-						=> {
-							let context = self.context();
-							context.resize(context.size)
-						}
-
-						// The system is out of memory, we should probably quit
-						Err(wgpu::SurfaceError::OutOfMemory) => {
-							tracing::error!("OutOfMemory");
-							eventLoop.exit();
-						}
-
-						// This happens when the frame takes too long to present
-						Err(wgpu::SurfaceError::Timeout) =>
-							{ tracing::warn!("Surface timeout") }
-					};
-
-					// Update frame stats
-					if self.continousRedrawRequests > 0 {
-						let elapsed = self.startInstant.elapsed();
-						self.prevFrameDuration = elapsed - self.prevFrameElapsed;
-						self.prevFrameElapsed = elapsed;
-						self.context.as_ref().unwrap().window().request_redraw();
-					}
-				}
-			},
-
-			// User interaction
-			  WindowEvent::KeyboardInput{..} | WindowEvent::MouseInput{..} | WindowEvent::CursorMoved{..}
-			| WindowEvent::MouseWheel{..} | WindowEvent::ModifiersChanged{..}
-			=> {
-				let player = util::statify(self);
-				if self.context.is_some()
-				{
-					// Camera first
-					match self.cameraInteractor.input(&event, player)
-					{
-						EventOutcome::HandledExclusively(redraw) => {
-							if redraw {
-								self.postRedraw();
-							}
-							return;
-						}
-						EventOutcome::HandledDontClose(redraw)
-						=> if redraw {
-							self.postRedraw()
-						}
-
-						EventOutcome::NotHandled => {}
-					}
-
-					// Finally, the application
-					if let Some(app) = self.application.as_mut()
-					{
-						match app.onInput(&event)
-						{
-							EventOutcome::HandledExclusively(redraw) => {
-								if redraw { self.postRedraw() }
-								return;
-							}
-							EventOutcome::HandledDontClose(redraw)
-							=> if redraw { self.postRedraw() }
-
-							EventOutcome::NotHandled => {}
-						}
-					}
-				}
-
-				// Exit on ESC
-				if let WindowEvent::KeyboardInput {
-					event: KeyEvent {
-						state: ElementState::Pressed,
-						physical_key: PhysicalKey::Code(KeyCode::Escape), ..
-					}, ..
-				} = event {
-					self.exit(eventLoop)
-				}
-			}
-
-			// We'll ignore this
-			_ => {}
-		}
-	}
-
 	fn about_to_wait (&mut self, _: &ActiveEventLoop)
 	{
 		if let Some(_) = self.context.as_ref() {
@@ -1269,6 +960,7 @@ impl eframe::App for Player
 	}
 }*/
 
+/// Helper object for interfacing the [`Player`] with egui_wgpu's draw callbacks.
 struct RenderManager<'player> {
 	redrawScene: bool,
 	player: &'player Player,
@@ -1281,6 +973,20 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		eguiEncoder: &mut wgpu::CommandEncoder, _: &mut egui_wgpu::CallbackResources
 	) -> Vec<wgpu::CommandBuffer>
 	{
+		// Only prepare the scene if requested
+		if self.redrawScene {
+			tracing::debug!("Redrawing");
+			self.player.prepare(device, queue, eguiEncoder)
+		} else {
+			Vec::new()
+		}
+	}
+
+	fn finish_prepare (
+		&self, device: &wgpu::Device, queue: &wgpu::Queue, eguiEncoder: &mut wgpu::CommandEncoder,
+		_: &mut egui_wgpu::CallbackResources
+	) -> Vec<wgpu::CommandBuffer>
+	{
 		// Only redraw the scene if requested
 		if self.redrawScene {
 			self.player.redraw(device, queue, eguiEncoder)
@@ -1289,20 +995,20 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		}
 	}
 
-	fn finish_prepare (
-		&self, _device: &wgpu::Device, _queue: &wgpu::Queue, _eguiEncoder: &mut wgpu::CommandEncoder,
-		_callbackResources: &mut egui_wgpu::CallbackResources
-	) -> Vec<wgpu::CommandBuffer>
-	{
-		// Nothing here yet
-		Vec::new()
-	}
-
 	fn paint (
 		&self, _info: epaint::PaintCallbackInfo, renderPass: &mut wgpu::RenderPass<'static>,
 		_callbackResources: &egui_wgpu::CallbackResources
 	){
-		// Composit rendering result onto egui viewport
+		// Composit current view of the scene onto egui viewport
 		self.viewportCompositor.composit(renderPass);
+
+		// Update frame stats
+		if self.player.continousRedrawRequests > 0 {
+			let player = util::mutify(self.player); // we use interior mutability
+			let elapsed = player.startInstant.elapsed();
+			player.prevFrameDuration = elapsed - player.prevFrameElapsed;
+			player.prevFrameElapsed = elapsed;
+			player.egui.request_repaint();
+		}
 	}
 }
