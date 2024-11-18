@@ -264,6 +264,7 @@ impl SampleApplication
 			}),
 			primitive: wgpu::PrimitiveState {
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				strip_index_format: Some(wgpu::IndexFormat::Uint32),
 				front_face: wgpu::FrontFace::Ccw,
 				cull_mode: Some(wgpu::Face::Back),
 				..Default::default()
