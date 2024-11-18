@@ -299,6 +299,7 @@ impl Player
 			hardware_acceleration: eframe::HardwareAcceleration::Required,
 			renderer: eframe::Renderer::Wgpu,
 			//run_and_return: false,
+			#[allow(unused_variables)] // in Windows builds, we're not using `elBuilder` in the next line
 			event_loop_builder: Some(Box::new(|elBuilder| {
 				// Conditional code for the two supported display protocols on *nix. Wayland takes precedence in case
 				// both protocols are enabled.
