@@ -155,7 +155,8 @@ pub struct GlobalPassDeclaration<'info> {
 }
 
 /// T.b.d.
-pub struct GlobalPassInfo<'rs> {
+pub struct GlobalPassInfo<'rs>
+{
 	pub pass: GlobalPass,
 	pub renderState: &'rs RenderState,
 	pub clearColor: wgpu::Color,
@@ -175,6 +176,13 @@ pub struct GlobalPassInfo<'rs> {
 /// An application that can be [run](Player::run) by a [`Player`].
 pub trait Application
 {
+	/// Report a short title for the application that can be displayed in the application tab bar of the [`Player`].
+	///
+	/// # Returns
+	///
+	/// A string slice containing a short descriptive title for the application.
+	fn title (&self) -> &str;
+
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
 	/// their pipelines accordingly. The `Player`] guarantees that this will be called at least once before the

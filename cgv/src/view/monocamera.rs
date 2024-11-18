@@ -102,7 +102,9 @@ impl Camera for MonoCamera<'_>
 		&self.framebuffer
 	}
 
-	fn name (&self) -> &str { &self.name }
+	fn name (&self) -> &str {
+		&self.name
+	}
 
 	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher>
 	{

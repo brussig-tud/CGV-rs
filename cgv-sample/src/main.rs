@@ -279,6 +279,10 @@ impl SampleApplication
 
 impl cgv::Application for SampleApplication
 {
+	fn title (&self) -> &str {
+		"Example App"
+	}
+
 	fn recreatePipelines (
 		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
 		_: &cgv::Player

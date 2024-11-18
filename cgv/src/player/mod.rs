@@ -161,7 +161,7 @@ pub struct ManagedBindGroupLayouts {
 pub struct Player
 {
 	themeSet: bool,
-	activeSidePanel: u32,
+	activeSidePanel: usize,
 
 	egui: egui::Context,
 	context: Context,
@@ -833,7 +833,7 @@ impl eframe::App for Player
 						}
 						if ui.button(match themePref {
 							egui::ThemePreference::Dark => "Theme 🌙",
-							egui::ThemePreference::Light => "Theme ☀",
+							egui::ThemePreference::Light => "Theme ☀", // ToDo: consider 💡
 							egui::ThemePreference::System => "Theme 💻"
 						}).clicked() {
 							ui.ctx().set_theme(match themePref {
@@ -845,8 +845,27 @@ impl eframe::App for Player
 					}
 					ui.separator();
 
-					// Application focus switcher
-					/* nothing here yet */
+					// Sidepanel (app) switcher
+					// - player settings
+					if ui.selectable_label(self.activeSidePanel==0, "Player").clicked() {
+						self.activeSidePanel = 0;
+					}
+					// - view settings
+					if ui.selectable_label(self.activeSidePanel==1, "View").clicked() {
+						self.activeSidePanel = 1;
+					}
+					// - applications
+					/*for (idx, app) in self.applications.iter().enumerate()
+					{
+						if ui.selectable_label(self.activeSidePanel==0, "Camera").clicked() {
+							self.activeSidePanel = 0;
+						}
+					}*/
+					if ui.selectable_label(
+						self.activeSidePanel==2, self.activeApplication.as_ref().unwrap().title()
+					).clicked() {
+						self.activeSidePanel = 2;
+					}
 				});
 			}));
 
@@ -867,21 +886,50 @@ impl eframe::App for Player
 						{
 							0 => {
 								// Player UI
-								ui.vertical(|ui| {
-									ui.label("<nothing here yet>");
-								});
+								ui.heading("Player");
+								ui.separator();
+								ui.label("<nothing here yet>");
 							},
 							1 => {
 								// Camera UI
-								ui.vertical(|ui| {
-									ui.label("<nothing here yet>")
-								});
+								ui.heading("View");
+								ui.separator();
+								egui::Grid::new("CGV__CameraUi")
+									.num_columns(2)
+									.spacing([40.0, 4.0])
+									.striped(true)
+									.show(ui, |ui| {
+										/* -- camera interactor selection -------------------------- */ {
+											let mut sel: usize = 0;
+											ui.label("Interactor");
+											egui::ComboBox::from_id_salt("CGV_view_inter")
+												.selected_text(self.cameraInteractor.title())
+												.show_ui(ui, |ui| {
+													ui.selectable_value(
+														&mut sel, 0, self.cameraInteractor.title()
+													);
+												});
+											ui.end_row();
+										}
+										/* -- active camera selection -------------------------- */ {
+											let mut sel: usize = 0;
+											ui.label("Active Camera");
+											egui::ComboBox::from_id_salt("CGV_view_act")
+												.selected_text(self.camera.name())
+												.show_ui(ui, |ui| {
+													ui.selectable_value(
+														&mut sel, 0, self.camera.name()
+													);
+												});
+											ui.end_row();
+										}
+									});
 							},
 							2 => {
 								// Application UI
-								ui.vertical(|ui| {
-									ui.label("<nothing here yet>")
-								});
+								ui.heading(self.activeApplication.as_ref().unwrap().title());
+								ui.separator();
+								ui.label("<nothing here yet>");
 							},
 							_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
 						}});

@@ -77,30 +77,18 @@ impl OrbitInteractor
 			zNear: 0.01,
 			zFar: 100.,
 			view: glm::Mat4::identity(),
-			/*dragLMB: false, dragMMB: false, dragRMB: false, */
-			//lastMousePos: None,
 			focusChange: None,
 			dirty: true,
-			//lmbDownT: time::Instant::now()-time::Duration::from_millis(1),
 		}
 	}
-
-	/*pub fn processMouseMove (&mut self, newPos: &dpi::PhysicalPosition<f64>) -> glm::Vec2
-	{
-		if let Some(oldPos) = self.lastMousePos {
-			let newPos = glm::Vec2::new(newPos.x as f32, newPos.y as f32);
-			self.lastMousePos = Some(newPos);
-			glm::vec2(oldPos.x - newPos.x, newPos.y - oldPos.y)
-		}
-		else {
-			self.lastMousePos = Some(glm::Vec2::new(newPos.x as f32, newPos.y as f32));
-			glm::Vec2::zeros()
-		}
-	}*/
 }
 
 impl CameraInteractor for OrbitInteractor
 {
+	fn title (&self) -> &str {
+		"Orbit"
+	}
+
 	fn projection (&self, viewportDims: glm::UVec2) -> glm::Mat4
 	{
 		let aspect = viewportDims.x as f32 / viewportDims.y as f32;

@@ -242,6 +242,13 @@ pub trait Camera
 /// A camera that can take input and start full scene render passes with its desired projection and view matrices.
 pub trait CameraInteractor
 {
+	/// Report a short title for the interactor that it will be selectable by.
+	///
+	/// # Returns
+	///
+	/// A string slice containing a short descriptive title for the interactor.
+	fn title (&self) -> &str;
+
 	/// Compute a projection matrix from internal state.
 	///
 	/// # Arguments
