@@ -6,8 +6,6 @@
 
 /// Submodule providing the [`RenderSetup`].
 mod rendersetup;
-
-use std::default::Default;
 pub use rendersetup::RenderSetup; // - re-export
 
 /// Submodule providing the [`ViewportCompositor`]
@@ -442,7 +440,8 @@ impl Player
 		Ok(())
 	}
 
-	fn prepareEvents<'ui> (&self, ui: &'ui egui::Ui, viewportResponse: &egui::Response) -> Vec<InputEvent<'ui>>
+	fn prepareEvents<'ui> (&self, ui: &'ui egui::Ui, viewportResponse: &egui::Response, highDpiScaleFactor: f32)
+		-> Vec<InputEvent<'ui>>
 	{
 		// Pre-allocate event list
 		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
@@ -476,7 +475,7 @@ impl Player
 
 		// Clicks
 		let pointerPos = viewportResponse.interact_pointer_pos().map(|pos_egui| {
-			let pos_egui = pos_egui - viewportResponse.rect.min;
+			let pos_egui = (pos_egui-viewportResponse.rect.min) * highDpiScaleFactor;
 			glm::vec2(pos_egui.x as u32, pos_egui.y as u32)
 		});
 		if let Some(pointerPos) = pointerPos
@@ -888,7 +887,8 @@ impl eframe::App for Player
 				{
 					ui.horizontal(|ui|
 					{
-						ui.vertical(|ui| {
+						ui.vertical(|ui|
+						{
 							let awidth = ui.available_size().x;
 							match self.activeSidePanel
 							{
@@ -997,7 +997,7 @@ impl eframe::App for Player
 			// (we can't do it in the .input() block further down as the egui context is locked there)
 			let (rect, response) =
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
-			let complexEvents = self.prepareEvents(ui, &response);
+			let complexEvents = self.prepareEvents(ui, &response, ctx.pixels_per_point());
 
 			// Actually process the events
 			if response.hovered() { ui.input(|state|
