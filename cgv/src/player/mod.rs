@@ -6,6 +6,8 @@
 
 /// Submodule providing the [`RenderSetup`].
 mod rendersetup;
+
+use std::default::Default;
 pub use rendersetup::RenderSetup; // - re-export
 
 /// Submodule providing the [`ViewportCompositor`]
@@ -166,7 +168,7 @@ pub struct Player
 	egui: egui::Context,
 	context: Context,
 	renderSetup: RenderSetup,
-	prevFramebufferDims: glm::UVec2,
+	prevFramebufferResolution: glm::UVec2,
 
 	camera: Box<dyn view::Camera>,
 	cameraInteractor: Box<dyn view::CameraInteractor>,
@@ -177,6 +179,7 @@ pub struct Player
 	activeApplication: Option<Box<dyn Application>>,
 	applications: Vec<Box<dyn Application>>,
 
+	pendingRedraw: bool,
 	continousRedrawRequests: u32,
 	startInstant: time::Instant,
 	prevFrameElapsed: time::Duration,
@@ -239,7 +242,7 @@ impl Player
 			context,
 			renderSetup,
 
-			prevFramebufferDims: Default::default(),
+			prevFramebufferResolution: glm::vec2(0u32, 0u32),
 
 			globalPasses,
 			camera,
@@ -251,6 +254,7 @@ impl Player
 			activeApplication: None,
 			applications: Vec::new(),
 
+			pendingRedraw: false,
 			continousRedrawRequests: 0,
 			startInstant: time::Instant::now(),
 			prevFrameElapsed: time::Duration::from_secs(0),
@@ -258,13 +262,15 @@ impl Player
 		};
 
 		// Init application(s)
-		let mut activeApplication =
-			player.applicationFactory.take().unwrap().create(&player.context, &player.renderSetup)?;
+		let mut activeApplication = player.applicationFactory.take().unwrap().create(
+			&player.context, &player.renderSetup
+		)?;
 		activeApplication.recreatePipelines(
 			&player.context, &player.renderSetup,
 			Self::extractInfoFromGlobalPassDeclarations(player.globalPasses).as_slice(), &player
 		);
 		player.activeApplication = Some(activeApplication);
+		player.activeSidePanel = 2;
 
 		// Done!
 		tracing::info!("Startup complete.");
@@ -882,57 +888,78 @@ impl eframe::App for Player
 				{
 					ui.horizontal(|ui|
 					{
-						ui.vertical(|ui| { match self.activeSidePanel
-						{
-							0 => {
-								// Player UI
-								ui.heading("Player");
-								ui.separator();
-								ui.label("<nothing here yet>");
-							},
-							1 => {
-								// Camera UI
-								ui.heading("View");
-								ui.separator();
-								egui::Grid::new("CGV__CameraUi")
-									.num_columns(2)
-									.spacing([40.0, 4.0])
-									.striped(true)
-									.show(ui, |ui| {
-										/* -- camera interactor selection -------------------------- */ {
-											let mut sel: usize = 0;
-											ui.label("Interactor");
-											egui::ComboBox::from_id_salt("CGV_view_inter")
-												.selected_text(self.cameraInteractor.title())
-												.show_ui(ui, |ui| {
-													ui.selectable_value(
-														&mut sel, 0, self.cameraInteractor.title()
-													);
-												});
-											ui.end_row();
-										}
-										/* -- active camera selection -------------------------- */ {
-											let mut sel: usize = 0;
-											ui.label("Active Camera");
-											egui::ComboBox::from_id_salt("CGV_view_act")
-												.selected_text(self.camera.name())
-												.show_ui(ui, |ui| {
-													ui.selectable_value(
-														&mut sel, 0, self.camera.name()
-													);
-												});
-											ui.end_row();
-										}
-									});
-							},
-							2 => {
-								// Application UI
-								ui.heading(self.activeApplication.as_ref().unwrap().title());
-								ui.separator();
-								ui.label("<nothing here yet>");
-							},
-							_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
-						}});
+						ui.vertical(|ui| {
+							let awidth = ui.available_size().x;
+							match self.activeSidePanel
+							{
+								0 => {
+									// Player UI
+									ui.centered_and_justified(|ui| ui.heading("▶ Player"));
+									ui.separator();
+									ui.label("<nothing here yet>");
+								},
+								1 => {
+									// Camera UI
+									ui.centered_and_justified(|ui| ui.heading("📷 View"));
+									ui.separator();
+									egui::Grid::new("CGV__CameraUi")
+										.num_columns(2)
+										.striped(true)
+										.show(ui, |ui| {
+											/* -- prelude: layouting calculations ---------------------- */
+											let cbwidth = 136f32;
+											let lminw = f32::max(
+												awidth - cbwidth - ui.spacing().item_spacing.x, 0.
+											);
+											/* -- camera interactor selection -------------------------- */ {
+												let mut sel: usize = 0;
+												ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),
+													|ui| {
+														ui.set_min_width(lminw);
+														ui.label("Interactor")
+													}
+												);
+												egui::ComboBox::from_id_salt("CGV_view_inter")
+													.selected_text(self.cameraInteractor.title())
+													.width(cbwidth)
+													.show_ui(ui, |ui| {
+														ui.selectable_value(
+															&mut sel, 0, self.cameraInteractor.title()
+														);
+													});
+												ui.end_row();
+											}
+											/* -- active camera selection -------------------------- */ {
+												let mut sel: usize = 0;
+												ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),
+													|ui| {
+														ui.set_min_width(lminw);
+														ui.label("Active Camera")
+													}
+												);
+												egui::ComboBox::from_id_salt("CGV_view_act")
+													.selected_text(self.camera.name())
+													.width(cbwidth)
+													.show_ui(ui, |ui| {
+														ui.selectable_value(
+															&mut sel, 0, self.camera.name()
+														);
+													});
+												ui.end_row();
+											}
+										});
+								},
+								2 => {
+									// Application UI
+									ui.centered_and_justified(|ui| ui.heading(
+										self.activeApplication.as_ref().unwrap().title()
+									));
+									ui.separator();
+									ui.label("<nothing here yet>");
+								},
+								_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
+							}
+						});
 					});
 					ui.allocate_space(ui.available_size());
 				});
@@ -954,13 +981,15 @@ impl eframe::App for Player
 
 			// Update framebuffer size
 			let availableSpace_egui = ui.available_size();
-			let availableSpace = glm::vec2(availableSpace_egui.x as u32, availableSpace_egui.y as u32);
-			if availableSpace != self.prevFramebufferDims && availableSpace.x > 0 && availableSpace.y > 0
-			{
-				self.camera.resize(&self.context, availableSpace, self.cameraInteractor.as_ref());
+			let fbResolution = {
+				let pixelsEgui = (availableSpace_egui*ctx.pixels_per_point()).ceil();
+				glm::vec2(pixelsEgui.x as u32, pixelsEgui.y as u32)
+			};
+			if fbResolution != self.prevFramebufferResolution && fbResolution.x > 0 && fbResolution.y > 0 {
+				self.camera.resize(&self.context, fbResolution, self.cameraInteractor.as_ref());
 				self.viewportCompositor.updateSource(&self.context, self.camera.framebuffer().color0());
-				self.prevFramebufferDims = availableSpace;
-				tracing::info!("Main framebuffer resized to {:?}", availableSpace);
+				self.prevFramebufferResolution = fbResolution;
+				tracing::info!("Main framebuffer resized to {:?}", fbResolution);
 				redrawScene = true; // we'll need to redraw the scene in addition to the UI
 			}
 
@@ -1000,11 +1029,12 @@ impl eframe::App for Player
 				self.camera.update(self.cameraInteractor.as_ref());
 				redrawScene |= true;
 			}
+			self.pendingRedraw |= redrawScene;
 
 			// Hand off remaining logic to render manager
 			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
 				rect, RenderManager {
-					redrawScene, player: &this,
+					/*redrawScene, */player: &this, // ToDo: investigate, see below
 					viewportCompositor: util::statify(&self.viewportCompositor)
 				}
 			));
@@ -1014,7 +1044,7 @@ impl eframe::App for Player
 
 /// Helper object for interfacing the [`Player`] with egui_wgpu's draw callbacks.
 struct RenderManager<'player> {
-	redrawScene: bool,
+	//redrawScene: bool, ToDo: investigate why we can't use this depending on the initial value of Playr.activeSidePanel
 	player: &'player Player,
 	viewportCompositor: &'player ViewportCompositor
 }
@@ -1026,7 +1056,7 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Only prepare the scene if requested
-		if self.redrawScene {
+		if self.player.pendingRedraw /* || self.redrawScene*/ { // ToDo: investigate, see above
 			tracing::debug!("Redrawing");
 			self.player.prepare(device, queue, eguiEncoder)
 		} else {
@@ -1040,19 +1070,23 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Only redraw the scene if requested
-		if self.redrawScene {
-			self.player.redraw(device, queue, eguiEncoder)
+		if self.player.pendingRedraw {
+			let cmdBuffers = self.player.redraw(device, queue, eguiEncoder);
+			unsafe { #[allow(invalid_reference_casting)] std::ptr::write_volatile(
+				&self.player.pendingRedraw as *const bool as *mut bool, false
+			)}
+			cmdBuffers
 		} else {
 			Vec::new()
 		}
 	}
 
 	fn paint (
-		&self, _info: epaint::PaintCallbackInfo, renderPass: &mut wgpu::RenderPass<'static>,
-		_callbackResources: &egui_wgpu::CallbackResources
+		&self, _: epaint::PaintCallbackInfo, eguiRenderPass: &mut wgpu::RenderPass<'static>,
+		_: &egui_wgpu::CallbackResources
 	){
 		// Composit current view of the scene onto egui viewport
-		self.viewportCompositor.composit(renderPass);
+		self.viewportCompositor.composit(eguiRenderPass);
 
 		// Update frame stats
 		if self.player.continousRedrawRequests > 0 {
