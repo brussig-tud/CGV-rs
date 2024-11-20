@@ -440,14 +440,12 @@ impl Player
 		Ok(())
 	}
 
-	fn prepareEvents<'ui> (&self, ui: &'ui egui::Ui, viewportResponse: &egui::Response, highDpiScaleFactor: f32)
-		-> Vec<InputEvent<'ui>>
+	fn prepareEvents<'is> (
+		&self, inputState: &'is egui::InputState, viewportResponse: &egui::Response, highDpiScaleFactor: f32
+	) -> Vec<InputEvent<'is>>
 	{
 		// Pre-allocate event list
 		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
-
-		// Retrieve relevant input state
-		let inputState = ui.input(|state| util::statify(state));
 
 		// Dragging action
 		if viewportResponse.dragged()
@@ -981,8 +979,9 @@ impl eframe::App for Player
 
 			// Update framebuffer size
 			let availableSpace_egui = ui.available_size();
+			let pxlsPerPoint = ctx.pixels_per_point();
 			let fbResolution = {
-				let pixelsEgui = (availableSpace_egui*ctx.pixels_per_point()).ceil();
+				let pixelsEgui = (availableSpace_egui*pxlsPerPoint).ceil();
 				glm::vec2(pixelsEgui.x as u32, pixelsEgui.y as u32)
 			};
 			if fbResolution != self.prevFramebufferResolution && fbResolution.x > 0 && fbResolution.y > 0 {
@@ -992,36 +991,15 @@ impl eframe::App for Player
 				tracing::info!("Main framebuffer resized to {:?}", fbResolution);
 				redrawScene = true; // we'll need to redraw the scene in addition to the UI
 			}
-
-			// Gather the complex (composed by egui) events that we want to expose to our own components
-			// (we can't do it in the .input() block further down as the egui context is locked there)
 			let (rect, response) =
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
-			let complexEvents = self.prepareEvents(ui, &response, ctx.pixels_per_point());
 
-			// Actually process the events
-			if response.hovered() { ui.input(|state|
-			{
-				// Remove panel border from the focus area
-				// ToDo: validate that we really do need that for consistent interaction with the viewport
-				let focused = if state.pointer.has_pointer() {
-					if let Some(latestPos) = &state.pointer.latest_pos() {
-						   latestPos.x > rect.min.x && latestPos.y > rect.min.y
-						&& latestPos.x < rect.max.x && latestPos.y < rect.max.y
-					}
-					else if let Some(latestInteract) = &state.pointer.interact_pos() {
-						   latestInteract.x > rect.min.x && latestInteract.y > rect.min.y
-						&& latestInteract.x < rect.max.x && latestInteract.y < rect.max.y
-					} else {
-						false
-					}
-				} else {
-					false
-				};
-				if focused {
-					redrawScene |= self.dispatchEvents(&state.events, &complexEvents);
-				}
-			})}
+			// Gather input
+			let inputState = ui.input(|state| util::statify(state));
+			let complexEvents = self.prepareEvents(inputState, &response, pxlsPerPoint);
+
+			// Dispatch all gathered events
+			redrawScene |= self.dispatchEvents(&inputState.events, &complexEvents);
 
 			// Update active camera interactor
 			let this = util::statify(self);
