@@ -24,28 +24,16 @@ pub use orbitinteractor::OrbitInteractor; // re-export
 
 // Local imports
 use crate::*;
-
-
-
+use crate::util::math;
 //////
 //
 // Enums
 //
 
-/// Convenience enum for informing [`Camera`] implementations whether they should manage their own framebuffer or render
-/// to a client-provided target.
-pub enum RenderTarget<'fb> {
-	/// An internally managed framebuffer of the specified dimensions and formats should be used.
-	Internal(glm::UVec2, wgpu::TextureFormat, hal::DepthStencilFormat),
-
-	/// Rendering should be performed into to the referenced framebuffer.
-	Provided(&'fb hal::Framebuffer)
-}
-
 /// Enum representing either a perspective or orthographic field-of-view in the vertical direction.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum FoV {
-	// The FoV represents a perspective opening angle
+	// The FoV represents a perspective opening angle, in radians
 	Perspective(f32),
 
 	// The FoV represents an orthographic extent
@@ -58,6 +46,40 @@ pub enum FoV {
 //
 // Classes
 //
+
+
+#[derive(Clone, Copy)]
+pub struct Intrinsics {
+	pub fovY: FoV,
+	pub aspect: f32,
+	pub f: f32,
+	pub zNear: f32,
+	pub zFar: f32
+}
+impl Intrinsics {
+	fn defaultWithAspect (aspect: f32) -> Self {
+		Self {
+			aspect, f: 2., zNear: 0.01, zFar: 100.,
+			fovY: FoV::Perspective(math::deg2rad!(60.)),
+		}
+	}
+}
+
+#[derive(Clone, Copy)]
+pub struct Extrinsics {
+	pub eye: glm::Vec3,
+	pub dir: glm::Vec3,
+	pub up: glm::Vec3,
+}
+impl Default for Extrinsics {
+	fn default () -> Self {
+		Self {
+			eye: glm::Vec3::zeros(),
+			dir: glm::vec3(0., 0., -1.),
+			up: glm::vec3(0., 1., 0.)
+		}
+	}
+}
 
 #[derive(Clone, Copy)]
 pub struct Viewport {
@@ -185,6 +207,12 @@ pub trait Camera
 	/// Get the view matrix that is effective at the given pixel coordinates.
 	fn viewAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
 
+	/// Borrow the current camera intrinsics.
+	fn intrinsics (&self) -> &Intrinsics;
+
+	/// Borrow the current camera extrinsics.
+	fn extrinsics (&self) -> &Extrinsics;
+
 	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
 	/// cameras which are *inactive* as far as the [`Player`] is concerned, resizing is the responsibility of the
@@ -198,16 +226,12 @@ pub trait Camera
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2, interactor: &dyn CameraInteractor);
 
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
-	/// transformation matrices for the current camera interactor or anything else it might need to
-	/// [declare the global passes over the scene](Camera::declareGlobalPasses) it needs. The framework guarantees that
-	/// the *active* camera will get this method called whenever the *active* [`CameraInteractor`] changes something
-	/// before being asked to declare any render passes for the current frame. For manually managed cameras which are
-	/// *inactive* as far as the [`Player`] is concerned, updating is the responsibility of the [`Application`].
-	///
-	/// # Arguments
-	///
-	/// * `interactor` – The camera interactor providing base intrinsic and extrinsic parameters to the camera.
-	fn update (&mut self, interactor: &dyn CameraInteractor);
+	/// transformation matrices or anything else it might need to provide [render state](RenderState) to the
+	/// [global passes over the scene](Camera::declareGlobalPasses) it declared. The framework guarantees that the
+	/// *active* camera will get this method called at least once before any rendering, and whenever the *active*
+	/// [`CameraInteractor`] changed something. For manually managed cameras which are *inactive* as far as the
+	/// [`Player`] is concerned, updating is the responsibility of the [`Application`].
+	fn update (&mut self, interactor: &dyn CameraInteractor) -> bool;
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
 	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];

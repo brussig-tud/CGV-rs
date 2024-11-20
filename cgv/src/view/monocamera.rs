@@ -26,7 +26,9 @@ pub struct MonoCamera<'own> {
 	name: String,
 	framebuffer: &'own hal::Framebuffer,
 	renderState: Box<RenderState>,
-	globalPasses: Vec<GlobalPassDeclaration<'own>>
+	globalPasses: Vec<GlobalPassDeclaration<'own>>,
+	intrinsics: Intrinsics,
+	extrinsics: Extrinsics
 }
 
 impl MonoCamera<'_>
@@ -64,7 +66,9 @@ impl MonoCamera<'_>
 				},
 				completionCallback: None,
 			}],
-			renderState
+			renderState,
+			intrinsics: Intrinsics::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
+			extrinsics: Default::default()
 		}
 	}
 }
@@ -85,14 +89,25 @@ impl Camera for MonoCamera<'_>
 		&self.renderState.viewingUniforms.borrowData().view
 	}
 
+	fn intrinsics (&self) -> &Intrinsics {
+		&self.intrinsics
+	}
+
+	fn extrinsics (&self) -> &Extrinsics {
+		&self.extrinsics
+	}
+
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2, interactor: &dyn CameraInteractor)
 	{
 		self.renderState.framebuffer.resize(context, viewportDims);
 		self.renderState.viewingUniforms.borrowData_mut().projection = interactor.projection(viewportDims);
 	}
 
-	fn update (&mut self, interactor: &dyn CameraInteractor) {
-		self.renderState.viewingUniforms.borrowData_mut().view = *interactor.view();
+	fn update (&mut self, interactor: &dyn CameraInteractor) -> bool {
+		let mats = self.renderState.viewingUniforms.borrowData_mut();
+		mats.projection = interactor.projection(self.renderState.framebuffer.dims());
+		mats.view = *interactor.view();
+		true
 	}
 
 	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration] {

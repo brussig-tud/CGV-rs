@@ -137,6 +137,34 @@ impl CameraInteractor for OrbitInteractor
 
 	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome
 	{
+		// Local helper to share zoom adjustment code across match arms
+		fn adjustZoom (this: &mut OrbitInteractor, amount: f32) {
+			let toEye = this.eye - this.target;
+			this.eye = this.target + toEye * (1. + amount*-1./256.);
+			this.dirty = true;
+		}
+		// Local helper to share FoV adjustment code across match arms
+		fn adjustFov (this: &mut OrbitInteractor, amount: f32)
+		{
+			if let FoV::Perspective(fov) = this.fov {
+				let newFov = f32::min(fov + math::deg2rad!(amount*0.125), 179.);
+				if newFov < math::deg2rad!(10.) {
+					this.fov = FoV::Orthographic(2.)
+				}
+				else {
+					this.fov = FoV::Perspective(newFov);
+				}
+				this.dirty = true;
+			}
+			else {
+				if amount > 0. {
+					this.fov = FoV::Perspective(math::deg2rad!(10. + amount*0.125));
+					this.dirty = true;
+				}
+			}
+		}
+
+		// Match on relevant events
 		match event
 		{
 			InputEvent::Dragged(info)
@@ -200,11 +228,19 @@ impl CameraInteractor for OrbitInteractor
 				}
 			},
 
-			InputEvent::MouseWheel(amount) => {
-				let toEye = self.eye - self.target;
-				self.eye = self.target + toEye*(1.+amount*-1./256.);
-				self.dirty = true;
-				EventOutcome::HandledExclusively(/* redraw */true)
+			InputEvent::MouseWheel(info)
+			=> {
+				if info.amount.y != 0. {
+					if info.modifiers.alt {
+						adjustFov(self, info.amount.y);
+					} else {
+						adjustZoom(self, info.amount.y)
+					}
+					EventOutcome::HandledExclusively(/* redraw */true)
+				}
+				else {
+					EventOutcome::NotHandled
+				}
 			},
 
 			InputEvent::DoubleClick(info) => {

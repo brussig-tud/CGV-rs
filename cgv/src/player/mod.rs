@@ -80,6 +80,16 @@ pub struct ClickInfo<'mods> {
 	pub position: glm::UVec2
 }
 
+/// Struct containing information about a mouse wheel event
+#[derive(Debug)]
+pub struct MouseWheelInfo<'mods> {
+	/// The amount of scrolling in logical screen points along each axis that the wheel movement(s) are equivalent to.
+	pub amount: glm::Vec2,
+
+	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
+	pub modifiers: &'mods egui::Modifiers
+}
+
 /// Struct containing information about a drag event.
 #[derive(Debug)]
 pub struct DragInfo<'mods> {
@@ -104,7 +114,7 @@ impl DragInfo<'_> {
 #[derive(Debug)]
 pub enum InputEvent<'mods>
 {
-	/// An event related to keyboard state. See [`KeyInfo`].
+	/// An event related to keyboard state.
 	Key(KeyInfo<'mods>),
 
 	/// A simple click or tap.
@@ -116,10 +126,10 @@ pub enum InputEvent<'mods>
 	/// A triple click or tap.
 	TripleClick(ClickInfo<'mods>),
 
-	/// A mouse wheel / scroll event. The wrapped value contains the amount in logical screen points.
-	MouseWheel(f32),
+	/// A mouse wheel / scroll event.
+	MouseWheel(MouseWheelInfo<'mods>),
 
-	/// A pre-processed drag motion (including touch screen swipes). See [`DragInfo`].
+	/// A pre-processed drag motion (including touch screen swipes).
 	Dragged(DragInfo<'mods>)
 }
 
@@ -460,7 +470,7 @@ impl Player
 							p.button_down(egui::PointerButton::Extra1), p.button_down(egui::PointerButton::Extra2)
 						]
 					},
-					modifiers: util::statify(&inputState.modifiers),
+					modifiers: &inputState.modifiers,
 					direction: glm::vec2(dm.x, dm.y)
 				}));
 			}
@@ -468,7 +478,10 @@ impl Player
 
 		// Mouse wheel
 		if inputState.smooth_scroll_delta.y.abs() > 0. {
-			preparedEvents.push(InputEvent::MouseWheel(inputState.smooth_scroll_delta.y));
+			preparedEvents.push(InputEvent::MouseWheel(MouseWheelInfo {
+				amount: glm::vec2(inputState.smooth_scroll_delta.x, inputState.smooth_scroll_delta.y),
+				modifiers: &inputState.modifiers
+			}));
 		}
 
 		// Clicks
@@ -975,7 +988,7 @@ impl eframe::App for Player
 		egui::CentralPanel::default().frame(frame).show(ctx, |ui|
 		{
 			// Keep track of reasons to do a scene redraw
-			let mut redrawScene = false;
+			let mut redrawScene = self.continousRedrawRequests > 0;
 
 			// Update framebuffer size
 			let availableSpace_egui = ui.available_size();
@@ -1005,7 +1018,7 @@ impl eframe::App for Player
 			let this = util::statify(self);
 			if self.cameraInteractor.update(this) {
 				self.camera.update(self.cameraInteractor.as_ref());
-				redrawScene |= true;
+				redrawScene = true;
 			}
 			self.pendingRedraw |= redrawScene;
 
