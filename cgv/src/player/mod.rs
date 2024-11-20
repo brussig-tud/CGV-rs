@@ -51,7 +51,7 @@ use crate::view::Camera;
 
 /// Struct containing information about a key event. Essentially replicates [`egui::Event::Key`].
 #[derive(Debug)]
-pub struct KeyInfo
+pub struct KeyInfo<'mods>
 {
 	/// The key code of the key the event relates to. See [`egui::Event::Key`] for details.
 	pub key: egui::Key,
@@ -64,7 +64,7 @@ pub struct KeyInfo
 	pub repeat: bool,
 
 	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
-	pub modifiers: egui::Modifiers
+	pub modifiers: &'mods egui::Modifiers
 }
 
 /// Struct containing information about a click.
@@ -105,7 +105,7 @@ impl DragInfo<'_> {
 pub enum InputEvent<'mods>
 {
 	/// An event related to keyboard state. See [`KeyInfo`].
-	Key(KeyInfo),
+	Key(KeyInfo<'mods>),
 
 	/// A simple click or tap.
 	Click(ClickInfo<'mods>),
@@ -560,7 +560,7 @@ impl Player
 				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers, ..}
 				=> {
 					Some(InputEvent::Key(KeyInfo {
-						key: *key, pressed: *pressed, repeat: *repeat, modifiers: *modifiers
+						key: *key, pressed: *pressed, repeat: *repeat, modifiers
 					}))
 				},
 				_ => None
