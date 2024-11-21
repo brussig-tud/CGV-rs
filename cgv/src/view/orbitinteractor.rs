@@ -138,13 +138,18 @@ impl CameraInteractor for OrbitInteractor
 	fn input (&mut self, event: &InputEvent, _camera: &dyn Camera, player: &'static Player) -> EventOutcome
 	{
 		// Local helper to share zoom adjustment code across match arms
-		fn adjustZoom (this: &mut OrbitInteractor, amount: f32) {
+		fn adjustZoom (extr: &mut Extrinsics, intr: &mut Intrinsics, amount: f32) {
+			let focus = extr.eye + extr.dir*intr.f;
+			intr.f = intr.f * (1. + amount*-1./256.);
+			extr.eye = focus - extr.dir*intr.f;
+		}
+		fn adjustZoom_old (this: &mut OrbitInteractor, amount: f32) {
 			let toEye = this.eye - this.target;
 			this.eye = this.target + toEye * (1. + amount*-1./256.);
 			this.dirty = true;
 		}
 		// Local helper to share FoV adjustment code across match arms
-		fn adjustFov (this: &mut OrbitInteractor, amount: f32)
+		fn adjustFov_old (this: &mut OrbitInteractor, amount: f32)
 		{
 			if let FoV::Perspective(fov) = this.fov {
 				let newFov = f32::min(fov + math::deg2rad!(amount*0.125), 179.);
@@ -232,9 +237,9 @@ impl CameraInteractor for OrbitInteractor
 			=> {
 				if info.amount.y != 0. {
 					if info.modifiers.alt {
-						adjustFov(self, info.amount.y);
+						adjustFov_old(self, info.amount.y);
 					} else {
-						adjustZoom(self, info.amount.y)
+						adjustZoom_old(self, info.amount.y)
 					}
 					EventOutcome::HandledExclusively(/* redraw */true)
 				}
