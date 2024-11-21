@@ -289,6 +289,7 @@ pub trait CameraInteractor
 	///
 	/// # Arguments
 	///
+	/// * `camera` – the camera which to interact with.
 	/// * `player` – Access to the CGV-rs player instance, useful e.g. to request or stop continous redraws when
 	///              animating the camera.
 	///
@@ -296,17 +297,18 @@ pub trait CameraInteractor
 	///
 	/// `true` if any update to the extrinsic or intrinsic camera parameters occured, `false` otherwise. This
 	/// information required to decide whether full scene redraws are necessary.
-	fn update (&mut self, player: &Player) -> bool;
+	fn update (&mut self, camera: &dyn Camera, player: &Player) -> bool;
 
 	/// Report a window event to the camera.
 	///
 	/// # Arguments
 	///
 	/// * `event` – The event that the camera should inspect and potentially act upon.
+	/// * `camera` – the camera which to interact with.
 	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to input.
 	///
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
+	fn input  (&mut self, event: &InputEvent, camera: &dyn Camera, player: &'static Player) -> EventOutcome;
 }

@@ -553,7 +553,7 @@ impl Player
 		}
 
 		// Finally, the active camera interactor
-		match self.cameraInteractor.input(&event, this)
+		match self.cameraInteractor.input(&event, self.camera.as_ref(), this)
 		{
 			// Event was handled
 			  EventOutcome::HandledExclusively(redrawRequested)
@@ -1016,7 +1016,7 @@ impl eframe::App for Player
 
 			// Update active camera interactor
 			let this = util::statify(self);
-			if self.cameraInteractor.update(this) {
+			if self.cameraInteractor.update(self.camera.as_ref(), this) {
 				self.camera.update(self.cameraInteractor.as_ref());
 				redrawScene = true;
 			}

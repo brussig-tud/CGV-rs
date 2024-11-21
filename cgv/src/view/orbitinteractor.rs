@@ -112,7 +112,7 @@ impl CameraInteractor for OrbitInteractor
 		&self.view
 	}
 
-	fn update (&mut self, player: &Player) -> bool
+	fn update (&mut self, _camera: &dyn Camera, player: &Player) -> bool
 	{
 		if let Some(focusChange) = &mut self.focusChange
 		{
@@ -135,7 +135,7 @@ impl CameraInteractor for OrbitInteractor
 		else { false }
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, _camera: &dyn Camera, player: &'static Player) -> EventOutcome
 	{
 		// Local helper to share zoom adjustment code across match arms
 		fn adjustZoom (this: &mut OrbitInteractor, amount: f32) {
