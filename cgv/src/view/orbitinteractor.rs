@@ -149,6 +149,23 @@ impl CameraInteractor for OrbitInteractor
 			this.dirty = true;
 		}
 		// Local helper to share FoV adjustment code across match arms
+		fn adjustFov (_extr: &mut Extrinsics, intr: &mut Intrinsics, amount: f32)
+		{
+			if let FoV::Perspective(fov) = intr.fovY {
+				let newFov = f32::min(fov + math::deg2rad!(amount*0.125), 179.);
+				if newFov < math::deg2rad!(10.) {
+					intr.fovY = FoV::Orthographic(2.)
+				}
+				else {
+					intr.fovY = FoV::Perspective(newFov);
+				}
+			}
+			else {
+				if amount > 0. {
+					intr.fovY = FoV::Perspective(math::deg2rad!(10. + amount*0.125));
+				}
+			}
+		}
 		fn adjustFov_old (this: &mut OrbitInteractor, amount: f32)
 		{
 			if let FoV::Perspective(fov) = this.fov {
