@@ -79,7 +79,7 @@ impl CameraInteractor for OrbitInteractor
 	{
 		if let Some(focusChange) = &mut self.focusChange
 		{
-			let extr = camera.extrinsics_mut();
+			let extr = &mut camera.parameters_mut().extrinsics;
 			focusChange.t = f32::min(focusChange.t + player.lastFrameTime()*2f32, 1f32);
 			let focusCur = math::smoothLerp3(&focusChange.old, &focusChange.new, focusChange.t);
 			let offset = focusCur - focusChange.prev;
@@ -205,8 +205,10 @@ impl CameraInteractor for OrbitInteractor
 
 			InputEvent::DoubleClick(info) => {
 				let this = util::mutify(self);
-				let extr = *camera.extrinsics();
-				let f = camera.intrinsics().f;
+				let (extr, f) = {
+					let params = camera.parameters();
+					(params.extrinsics.clone(), params.intrinsics.f)
+				};
 				player.unprojectPointAtSurfacePixel_async(
 					info.position,
 					move |point| {

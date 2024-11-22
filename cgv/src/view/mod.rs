@@ -4,6 +4,10 @@
 // Module definitions
 //
 
+/// The internal submodule of the CameraParameters implementation
+mod cameraparameters;
+pub use cameraparameters::{Intrinsics, Extrinsics, CameraParameters}; // re-export
+
 /// The internal submodule for the MonoCamera implementation
 mod monocamera;
 pub use monocamera::MonoCamera; // re-export
@@ -49,55 +53,6 @@ pub enum FoV {
 //
 // Classes
 //
-
-#[derive(Clone, Copy)]
-pub struct Intrinsics {
-	pub fovY: FoV,
-	pub aspect: f32,
-	pub f: f32,
-	pub zNear: f32,
-	pub zFar: f32
-}
-impl Intrinsics {
-	fn defaultWithAspect (aspect: f32) -> Self {
-		Self {
-			aspect, f: 1., zNear: 0.01, zFar: 100.,
-			fovY: FoV::Perspective(math::deg2rad!(60.)),
-		}
-	}
-}
-
-#[derive(Clone, Copy)]
-pub struct Extrinsics {
-	pub eye: glm::Vec3,
-	pub dir: glm::Vec3,
-	pub up: glm::Vec3,
-}
-impl Default for Extrinsics {
-	fn default () -> Self {
-		Self {
-			eye: glm::Vec3::zeros(),
-			dir: glm::vec3(0., 0., -1.),
-			up: glm::vec3(0., 1., 0.)
-		}
-	}
-}
-
-#[derive(Clone, Copy)]
-pub struct CameraParameters {
-	pub intrinsics: Intrinsics,
-	pub extrinsics: Extrinsics,
-}
-impl CameraParameters {
-	fn defaultWithAspect (aspect: f32) -> Self {
-		Self {
-			intrinsics: Intrinsics::defaultWithAspect(aspect),
-			extrinsics: Default::default()
-		}
-	}
-}
-
-
 
 #[derive(Clone, Copy)]
 pub struct Viewport {
@@ -225,20 +180,6 @@ pub trait Camera
 	/// Get the view matrix that is effective at the given pixel coordinates.
 	fn viewAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
 
-	/// Borrow the current camera intrinsics.
-	fn intrinsics (&self) -> &Intrinsics;
-
-	/// Borrow the current camera extrinsics.
-	fn extrinsics (&self) -> &Extrinsics;
-
-	/// Mutably borrow the current camera intrinsics. Implementations should assume that their intrinsics will have
-	/// changed when the borrow expires and take appropriate measures to mark their internal state as dirty.
-	fn intrinsics_mut (&mut self) -> &mut Intrinsics;
-
-	/// Mutably borrow the current camera extrinsics. Implementations should assume that their extrinsics will have
-	/// changed when the borrow expires and take appropriate measures to mark their internal state as dirty
-	fn extrinsics_mut (&mut self) -> &mut Extrinsics;
-
 	/// Borrow the current camera parameters.
 	fn parameters (&self) -> &CameraParameters;
 
@@ -354,7 +295,6 @@ pub fn transformClipspaceOGL2WGPU (oglProjection: &glm::Mat4) -> glm::Mat4
 		0.0, 0.0, 0.5, 0.5,
 		0.0, 0.0, 0.0, 1.0,
 	);
-
 	// ToDo: investigate while any attempt to boil this down to individual component updates failed so far
 	CLIPSPACE_TRANSFORM_OGL2WGPU  *  *oglProjection
 }

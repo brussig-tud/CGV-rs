@@ -976,6 +976,18 @@ impl eframe::App for Player
 												ui.end_row();
 											}
 										});
+									ui.add_space(6.);
+									egui::CollapsingHeader::new("Interactor settings")
+										.id_salt("CGV_view_inter_s")
+										.show(ui, |ui| {
+											ui.label("<nothing here yet>");
+										});
+									egui::CollapsingHeader::new("Active camera settings")
+										.id_salt("CGV_view_act_s")
+										.show(ui, |ui| {
+											ui.label("<nothing here yet>");
+										});
+									//self.camera.parameters().sidepanel(ui);
 								},
 								2 => {
 									// Application UI
