@@ -283,6 +283,14 @@ impl cgv::Application for SampleApplication
 		"Example App"
 	}
 
+	fn preInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()> {
+		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
+		let cam = player.activeCamera_mut().parameters_mut();
+		cam.intrinsics.f = 2.;
+		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
+		Ok(())
+	}
+
 	fn recreatePipelines (
 		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
 		_: &cgv::Player
@@ -295,6 +303,11 @@ impl cgv::Application for SampleApplication
 		for (_, pass) in globalPasses.iter().enumerate() {
 			self.pipelines.push(self.createPipeline(context, pass.renderState, renderSetup));
 		}
+	}
+
+	fn postInit (&mut self, _: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
+		// We don't have any post-initialization to do
+		Ok(())
 	}
 
 	fn input (&mut self, _: &cgv::InputEvent, _: &cgv::Player) -> cgv::EventOutcome {
@@ -329,11 +342,16 @@ impl cgv::Application for SampleApplication
 		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
 		renderPass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
-
-		// We don't need the Player to submit any custom command buffers for us
-		None
+		None // we don't need the Player to submit any custom command buffers for us
 	}
 }
+
+
+
+//////
+//
+// Functions
+//
 
 /// The application entry point.
 pub fn main() -> cgv::Result<()> {

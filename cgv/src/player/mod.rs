@@ -273,10 +273,12 @@ impl Player
 		let mut activeApplication = player.applicationFactory.take().unwrap().create(
 			&player.context, &player.renderSetup
 		)?;
+		activeApplication.preInit(player.context(), &player)?;
 		activeApplication.recreatePipelines(
 			&player.context, &player.renderSetup,
 			Self::extractInfoFromGlobalPassDeclarations(player.globalPasses).as_slice(), &player
 		);
+		activeApplication.postInit(player.context(), &player)?;
 		player.activeApplication = Some(activeApplication);
 		player.activeSidePanel = 2;
 
@@ -553,7 +555,7 @@ impl Player
 		}
 
 		// Finally, the active camera interactor
-		match self.cameraInteractor.input(&event, self.camera.as_ref(), this)
+		match self.cameraInteractor.input(&event, util::mutify(self.camera.as_mut()), this)
 		{
 			// Event was handled
 			  EventOutcome::HandledExclusively(redrawRequested)
@@ -570,12 +572,11 @@ impl Player
 		let translatedEvents =  events.iter().filter_map(|event| {
 			match event
 			{
-				egui::Event::Key {key, /*physical_key, */pressed, repeat, modifiers, ..}
-				=> {
-					Some(InputEvent::Key(KeyInfo {
-						key: *key, pressed: *pressed, repeat: *repeat, modifiers
-					}))
-				},
+				egui::Event::Key {
+					key, /*physical_key, */pressed, repeat, modifiers, ..
+				}
+				=> Some(InputEvent::Key(KeyInfo { key: *key, pressed: *pressed, repeat: *repeat, modifiers })),
+
 				_ => None
 			}
 		});
@@ -659,8 +660,8 @@ impl Player
 				// Uniforms
 				// - viewing
 				let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
-				viewingUniforms.projection = * self.camera.projection(pass);
-				viewingUniforms.view = * self.camera.view(pass);
+				viewingUniforms.projection = *self.camera.projection(pass);
+				viewingUniforms.view = *self.camera.view(pass);
 				renderState.viewingUniforms.upload(&self.context);
 			};
 
@@ -765,6 +766,14 @@ impl Player
 	pub fn exit (&self, eguiContext: &egui::Context) {
 		tracing::info!("Exiting...");
 		eguiContext.send_viewport_cmd(egui::ViewportCommand::Close);
+	}
+
+	pub fn activeCamera (&self) -> &dyn Camera {
+		self.camera.as_ref()
+	}
+
+	pub fn activeCamera_mut (&self) -> &mut dyn Camera {
+		util::mutify(self.camera.as_ref()) // we use interior mutability
 	}
 
 	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
@@ -998,7 +1007,7 @@ impl eframe::App for Player
 				glm::vec2(pixelsEgui.x as u32, pixelsEgui.y as u32)
 			};
 			if fbResolution != self.prevFramebufferResolution && fbResolution.x > 0 && fbResolution.y > 0 {
-				self.camera.resize(&self.context, fbResolution, self.cameraInteractor.as_ref());
+				self.camera.resize(&self.context, fbResolution);
 				self.viewportCompositor.updateSource(&self.context, self.camera.framebuffer().color0());
 				self.prevFramebufferResolution = fbResolution;
 				tracing::info!("Main framebuffer resized to {:?}", fbResolution);
@@ -1014,15 +1023,15 @@ impl eframe::App for Player
 			// Dispatch all gathered events
 			redrawScene |= self.dispatchEvents(&inputState.events, &complexEvents);
 
-			// Update active camera interactor
+			// Update camera interactor
 			let this = util::statify(self);
-			if self.cameraInteractor.update(self.camera.as_ref(), this) {
-				self.camera.update(self.cameraInteractor.as_ref());
+			self.cameraInteractor.update(self.camera.as_mut(), this);
+			if self.camera.update() {
 				redrawScene = true;
 			}
-			self.pendingRedraw |= redrawScene;
 
 			// Hand off remaining logic to render manager
+			self.pendingRedraw |= redrawScene;
 			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
 				rect, RenderManager {
 					/*redrawScene, */player: &this, // ToDo: investigate, see below

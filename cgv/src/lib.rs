@@ -183,6 +183,18 @@ pub trait Application
 	/// A string slice containing a short descriptive title for the application.
 	fn title (&self) -> &str;
 
+	/// Called once on creation of the application, before it's asked to create its pipelines.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The graphics context.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
+	///
+	/// # Returns
+	///
+	/// `Ok` if successful, or some descriptive error detailing the failure if not.
+	fn preInit (&mut self, context: &Context, player: &Player) -> Result<()>;
+
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
 	/// their pipelines accordingly. The `Player`] guarantees that this will be called at least once before the
@@ -199,6 +211,18 @@ pub trait Application
 	fn recreatePipelines (
 		&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &[&GlobalPassInfo], _: &Player
 	);
+
+	/// Called once on creation of the application, after it was asked to create its pipelines.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The graphics context.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
+	///
+	/// # Returns
+	///
+	/// `Ok` if successful, or some descriptive error detailing the failure if not.
+	fn postInit (&mut self, context: &Context, player: &Player) -> Result<()>;
 
 	/// Called when there is user input that can be processed.
 	///

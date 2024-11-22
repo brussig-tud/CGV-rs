@@ -114,8 +114,7 @@ pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
 ///
 /// A mutable `'static` reference to the data that the input reference pointed to.
 #[inline(always)]
-pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T
-{
+pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T {
 	#[allow(invalid_reference_casting)]
 	unsafe { &mut *((reference as *const T) as *mut T) }
 }
@@ -130,9 +129,9 @@ pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T
 ///
 /// A `'static` reference to the same data the input [`RefMut`](std::cell::Ref) references.
 #[inline(always)]
-fn refify<T> (reference: std::cell::Ref<T>) -> &'static T { unsafe {
-	&*(reference.deref() as *const T)
-}}
+fn refify<T> (reference: std::cell::Ref<T>) -> &'static T {
+	unsafe { &*(reference.deref() as *const T) }
+}
 
 /// Turns a [`RefMut`](std::cell::RefMut) into an actual (primitive) mutable reference.
 ///
@@ -144,10 +143,10 @@ fn refify<T> (reference: std::cell::Ref<T>) -> &'static T { unsafe {
 ///
 /// A mutable `'static` reference to the same data the input [`RefMut`](std::cell::RefMut) references.
 #[inline(always)]
-fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T { unsafe {
+fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
 	let mut refMut = reference;
-	&mut *(refMut.deref_mut() as *mut T)
-}}
+	unsafe { &mut *(refMut.deref_mut() as *mut T) }
+}
 
 /// If the given option contains a string or string slice, returns an option containing the concatenation of the two
 /// inputs.

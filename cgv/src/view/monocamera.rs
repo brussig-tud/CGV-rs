@@ -27,8 +27,8 @@ pub struct MonoCamera<'own> {
 	framebuffer: &'own hal::Framebuffer,
 	renderState: Box<RenderState>,
 	globalPasses: Vec<GlobalPassDeclaration<'own>>,
-	intrinsics: Intrinsics,
-	extrinsics: Extrinsics
+	parameters: CameraParameters,
+	dirty: bool
 }
 
 impl MonoCamera<'_>
@@ -67,8 +67,8 @@ impl MonoCamera<'_>
 				completionCallback: None,
 			}],
 			renderState,
-			intrinsics: Intrinsics::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
-			extrinsics: Default::default()
+			parameters: CameraParameters::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
+			dirty: true
 		}
 	}
 }
@@ -90,24 +90,71 @@ impl Camera for MonoCamera<'_>
 	}
 
 	fn intrinsics (&self) -> &Intrinsics {
-		&self.intrinsics
+		&self.parameters.intrinsics
 	}
 
 	fn extrinsics (&self) -> &Extrinsics {
-		&self.extrinsics
+		&self.parameters.extrinsics
 	}
 
-	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2, interactor: &dyn CameraInteractor)
+	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2)
 	{
 		self.renderState.framebuffer.resize(context, viewportDims);
-		self.renderState.viewingUniforms.borrowData_mut().projection = interactor.projection(viewportDims);
+		self.parameters.intrinsics.aspect = viewportDims.x as f32 / viewportDims.y as f32;
+		self.dirty = true;
 	}
 
-	fn update (&mut self, interactor: &dyn CameraInteractor) -> bool {
-		let mats = self.renderState.viewingUniforms.borrowData_mut();
-		mats.projection = interactor.projection(self.renderState.framebuffer.dims());
-		mats.view = *interactor.view();
-		true
+	fn intrinsics_mut (&mut self) -> &mut Intrinsics {
+		self.dirty = true;
+		&mut self.parameters.intrinsics
+	}
+
+	fn extrinsics_mut (&mut self) -> &mut Extrinsics {
+		self.dirty = true;
+		&mut self.parameters.extrinsics
+	}
+
+	fn parameters (&self) -> &CameraParameters {
+		&self.parameters
+	}
+
+	fn parameters_mut (&mut self) -> &mut CameraParameters {
+		self.dirty = true;
+		&mut self.parameters
+	}
+
+	fn update (&mut self) -> bool
+	{
+		if self.dirty
+		{
+			let mats = self.renderState.viewingUniforms.borrowData_mut();
+			mats.projection = match self.parameters.intrinsics.fovY
+			{
+				FoV::Perspective(fovY) => transformClipspaceOGL2WGPU(&glm::perspective(
+					self.parameters.intrinsics.aspect, fovY, self.parameters.intrinsics.zNear,
+					self.parameters.intrinsics.zFar
+				)),
+
+				FoV::Orthographic(height)
+				=> {
+					let halfHeight = height * 0.5;
+					let halfWidth = halfHeight * self.parameters.intrinsics.aspect;
+					transformClipspaceOGL2WGPU(&glm::ortho(
+						-halfWidth, halfWidth, -halfHeight, halfHeight, self.parameters.intrinsics.zNear,
+						self.parameters.intrinsics.zFar
+					))
+				}
+			};
+			mats.view = glm::look_at(
+				&self.parameters.extrinsics.eye,
+				&(self.parameters.extrinsics.eye + self.parameters.extrinsics.dir*self.parameters.intrinsics.f),
+				&self.parameters.extrinsics.up
+			);
+			true
+		}
+		else {
+			false
+		}
 	}
 
 	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration] {

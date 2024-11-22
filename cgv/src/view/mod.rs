@@ -25,6 +25,9 @@ pub use orbitinteractor::OrbitInteractor; // re-export
 // Local imports
 use crate::*;
 use crate::util::math;
+
+
+
 //////
 //
 // Enums
@@ -47,7 +50,6 @@ pub enum FoV {
 // Classes
 //
 
-
 #[derive(Clone, Copy)]
 pub struct Intrinsics {
 	pub fovY: FoV,
@@ -59,7 +61,7 @@ pub struct Intrinsics {
 impl Intrinsics {
 	fn defaultWithAspect (aspect: f32) -> Self {
 		Self {
-			aspect, f: 2., zNear: 0.01, zFar: 100.,
+			aspect, f: 1., zNear: 0.01, zFar: 100.,
 			fovY: FoV::Perspective(math::deg2rad!(60.)),
 		}
 	}
@@ -80,6 +82,22 @@ impl Default for Extrinsics {
 		}
 	}
 }
+
+#[derive(Clone, Copy)]
+pub struct CameraParameters {
+	pub intrinsics: Intrinsics,
+	pub extrinsics: Extrinsics,
+}
+impl CameraParameters {
+	fn defaultWithAspect (aspect: f32) -> Self {
+		Self {
+			intrinsics: Intrinsics::defaultWithAspect(aspect),
+			extrinsics: Default::default()
+		}
+	}
+}
+
+
 
 #[derive(Clone, Copy)]
 pub struct Viewport {
@@ -213,6 +231,21 @@ pub trait Camera
 	/// Borrow the current camera extrinsics.
 	fn extrinsics (&self) -> &Extrinsics;
 
+	/// Mutably borrow the current camera intrinsics. Implementations should assume that their intrinsics will have
+	/// changed when the borrow expires and take appropriate measures to mark their internal state as dirty.
+	fn intrinsics_mut (&mut self) -> &mut Intrinsics;
+
+	/// Mutably borrow the current camera extrinsics. Implementations should assume that their extrinsics will have
+	/// changed when the borrow expires and take appropriate measures to mark their internal state as dirty
+	fn extrinsics_mut (&mut self) -> &mut Extrinsics;
+
+	/// Borrow the current camera parameters.
+	fn parameters (&self) -> &CameraParameters;
+
+	/// Mutably borrow the current camera parameters. Implementations should assume that their camera parameters will
+	/// have changed when the borrow expires and take appropriate measures to mark their internal state as dirty.
+	fn parameters_mut (&mut self) -> &mut CameraParameters;
+
 	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
 	/// cameras which are *inactive* as far as the [`Player`] is concerned, resizing is the responsibility of the
@@ -222,16 +255,14 @@ pub trait Camera
 	///
 	/// * `context` – The graphics context.
 	/// * `viewportDims` – The dimensions of the viewport the camera should produce images for.
-	/// * `interactor` – The currently active camera interactor.
-	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2, interactor: &dyn CameraInteractor);
+	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2);
 
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
 	/// transformation matrices or anything else it might need to provide [render state](RenderState) to the
 	/// [global passes over the scene](Camera::declareGlobalPasses) it declared. The framework guarantees that the
-	/// *active* camera will get this method called at least once before any rendering, and whenever the *active*
-	/// [`CameraInteractor`] changed something. For manually managed cameras which are *inactive* as far as the
-	/// [`Player`] is concerned, updating is the responsibility of the [`Application`].
-	fn update (&mut self, interactor: &dyn CameraInteractor) -> bool;
+	/// *active* camera will get this method called at least once before any rendering. For manually managed cameras
+	/// which are *inactive* as far as the [`Player`] is concerned, the [`Application`] is responsible for updating.
+	fn update (&mut self) -> bool;
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
 	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];
@@ -273,31 +304,15 @@ pub trait CameraInteractor
 	/// A string slice containing a short descriptive title for the interactor.
 	fn title (&self) -> &str;
 
-	/// Compute a projection matrix from internal state.
+	/// Indicates that the camera interactor should perform any calculations needed to prepare the passed-in camera for
+	/// rendering the next frame.
 	///
 	/// # Arguments
 	///
-	/// * `viewportDims` – The dimensions of the viewport the matrix should project to.
-	fn projection (&self, viewportDims: glm::UVec2) -> glm::Mat4;
-
-	/// Borrow a reference to the view matrix for the current internal state of the interactor.
-	fn view (&self) -> &glm::Mat4;
-
-	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. compute
-	/// transformation matrices from higher-level parameters etc. This is guaranteed to be called at least once before
-	/// the interactor is asked to calculate any matrices.
-	///
-	/// # Arguments
-	///
-	/// * `camera` – the camera which to interact with.
-	/// * `player` – Access to the CGV-rs player instance, useful e.g. to request or stop continous redraws when
+	/// * `camera` – the camera to interact with.
+	/// * `player` – Access to the CGV-rs player instance, useful e.g. to request or stop continuous redraws when
 	///              animating the camera.
-	///
-	/// # Returns
-	///
-	/// `true` if any update to the extrinsic or intrinsic camera parameters occured, `false` otherwise. This
-	/// information required to decide whether full scene redraws are necessary.
-	fn update (&mut self, camera: &dyn Camera, player: &Player) -> bool;
+	fn update (&mut self, camera: &mut dyn Camera, player: &Player);
 
 	/// Report a window event to the camera.
 	///
@@ -310,5 +325,36 @@ pub trait CameraInteractor
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input  (&mut self, event: &InputEvent, camera: &dyn Camera, player: &'static Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome;
+}
+
+
+
+//////
+//
+// Functions
+//
+
+/// Efficiently add a transformation to the passed in (right-handed) projection matrix that transforms *OpenGL* clip
+/// space ($z=-1..1$) into *WebGPU* clip space ($z=0..1$).
+///
+/// # Arguments
+///
+/// * `oglProjection` – Mutable reference to the projection matrix that should receive the added transformation.
+///
+/// # Returns
+///
+/// A mutable reference to the same matrix that was referenced via `oglProjection`, with the transformation from
+/// *OpenGL* clip space to *WebGPU* clip space applied.
+pub fn transformClipspaceOGL2WGPU (oglProjection: &glm::Mat4) -> glm::Mat4
+{
+	pub const CLIPSPACE_TRANSFORM_OGL2WGPU: glm::Mat4 = glm::Mat4::new(
+		1.0, 0.0, 0.0, 0.0,
+		0.0, 1.0, 0.0, 0.0,
+		0.0, 0.0, 0.5, 0.5,
+		0.0, 0.0, 0.0, 1.0,
+	);
+
+	// ToDo: investigate while any attempt to boil this down to individual component updates failed so far
+	CLIPSPACE_TRANSFORM_OGL2WGPU  *  *oglProjection
 }
