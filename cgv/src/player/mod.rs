@@ -46,6 +46,18 @@ use crate::view::Camera;
 
 ///////
 //
+// Constants
+//
+
+// For consistent labeling of UI theme-related stuff
+const LIGHT_ICON: &str = "☀"; // ToDo: consider 💡
+const DARK_ICON: &str = "🌙";
+const SYSTEM_ICON: &str = "💻";
+
+
+
+///////
+//
 // Enums and structs
 //
 
@@ -170,7 +182,6 @@ pub struct ManagedBindGroupLayouts {
 /// The central application host class.
 pub struct Player
 {
-	themeSet: bool,
 	activeSidePanel: usize,
 
 	egui: egui::Context,
@@ -242,9 +253,6 @@ impl Player
 		// Now construct
 		let mut player = Self {
 			egui: cc.egui_ctx.clone(),
-			//redrawOnceOnWait: false,
-
-			themeSet: false,
 			activeSidePanel: 0,
 
 			context,
@@ -851,22 +859,22 @@ impl eframe::App for Player
 					ui.separator();
 
 					/* Dark/Light mode toggle */ {
-						let mut themePref = ui.ctx().options(|opt| opt.theme_preference);
-						if !self.themeSet && themePref == egui::ThemePreference::System {
-							if ui.ctx().style().visuals.dark_mode { themePref = egui::ThemePreference::Dark; }
-							else { themePref = egui::ThemePreference::Light; }
-						}
-						if ui.button(match themePref {
-							egui::ThemePreference::Dark => "Theme 🌙",
-							egui::ThemePreference::Light => "Theme ☀", // ToDo: consider 💡
-							egui::ThemePreference::System => "Theme 💻"
-						}).clicked() {
-							ui.ctx().set_theme(match themePref {
-								egui::ThemePreference::System => egui::ThemePreference::Dark,
-								egui::ThemePreference::Dark => egui::ThemePreference::Light,
-								egui::ThemePreference::Light => { self.themeSet = true; egui::ThemePreference::System }
-							});
-						};
+						let menuIcon = if ui.ctx().style().visuals.dark_mode {DARK_ICON} else {LIGHT_ICON};
+						ui.menu_button(menuIcon, |ui| {
+							ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+							if ui.add(egui::Button::new(format!("{LIGHT_ICON} Light"))).clicked() {
+								ui.ctx().set_theme(egui::ThemePreference::Light);
+								ui.close_menu();
+							}
+							else if ui.add(egui::Button::new(format!("{DARK_ICON} Dark"))).clicked() {
+								ui.ctx().set_theme(egui::ThemePreference::Dark);
+								ui.close_menu();
+							}
+							else if ui.add(egui::Button::new(format!("{SYSTEM_ICON} System"))).clicked() {
+								ui.ctx().set_theme(egui::ThemePreference::System);
+								ui.close_menu();
+							}
+						});
 					}
 					ui.separator();
 
