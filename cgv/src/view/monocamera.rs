@@ -89,29 +89,11 @@ impl Camera for MonoCamera<'_>
 		&self.renderState.viewingUniforms.borrowData().view
 	}
 
-	fn intrinsics (&self) -> &Intrinsics {
-		&self.parameters.intrinsics
-	}
-
-	fn extrinsics (&self) -> &Extrinsics {
-		&self.parameters.extrinsics
-	}
-
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2)
 	{
 		self.renderState.framebuffer.resize(context, viewportDims);
 		self.parameters.intrinsics.aspect = viewportDims.x as f32 / viewportDims.y as f32;
 		self.dirty = true;
-	}
-
-	fn intrinsics_mut (&mut self) -> &mut Intrinsics {
-		self.dirty = true;
-		&mut self.parameters.intrinsics
-	}
-
-	fn extrinsics_mut (&mut self) -> &mut Extrinsics {
-		self.dirty = true;
-		&mut self.parameters.extrinsics
 	}
 
 	fn parameters (&self) -> &CameraParameters {
@@ -150,6 +132,7 @@ impl Camera for MonoCamera<'_>
 				&(self.parameters.extrinsics.eye + self.parameters.extrinsics.dir*self.parameters.intrinsics.f),
 				&self.parameters.extrinsics.up
 			);
+			self.dirty = false;
 			true
 		}
 		else {
