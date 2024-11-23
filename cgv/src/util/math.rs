@@ -38,7 +38,7 @@ macro_rules! deg2rad { ($deg:expr) => {$deg * 3.1415926535897932384626433832795/
 /// # Returns
 ///
 /// The given angle in degrees.
-macro_rules! rad2deg { ($rad:expr) => {$rad * 180./3.1415926535897932384626433832795.} }
+macro_rules! rad2deg { ($rad:expr) => {$rad * 180./3.1415926535897932384626433832795} }
 #[allow(unused_imports)] pub(crate) use rad2deg;
 
 

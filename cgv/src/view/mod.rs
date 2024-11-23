@@ -40,11 +40,23 @@ use crate::util::math;
 /// Enum representing either a perspective or orthographic field-of-view in the vertical direction.
 #[derive(Clone, Copy, Debug)]
 pub enum FoV {
-	// The FoV represents a perspective opening angle, in radians
+	/// The FoV represents a perspective opening angle, in radians
 	Perspective(f32),
 
-	// The FoV represents an orthographic extent
+	/// The FoV represents an orthographic extent.
 	Orthographic(f32)
+}
+impl FoV
+{
+	/// Check if the current variant is [`Perspective`](FoV::Perspective).
+	pub fn isPerspective (&self) -> bool {
+		if let FoV::Perspective(_) = self { true } else { false }
+	}
+
+	/// Check if the current variant is [`Orthographic`](FoV::Orthographic).
+	pub fn isOrthographic (&self) -> bool {
+		if let FoV::Orthographic(_) = self { true } else { false }
+	}
 }
 
 

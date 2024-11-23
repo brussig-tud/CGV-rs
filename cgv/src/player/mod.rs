@@ -40,7 +40,7 @@ use eframe::epaint;
 
 // Local imports
 use crate::*;
-use crate::view::Camera;
+use crate::view::{Camera, CameraInteractor, CameraParameters};
 
 
 
@@ -189,8 +189,8 @@ pub struct Player
 	renderSetup: RenderSetup,
 	prevFramebufferResolution: glm::UVec2,
 
-	camera: Box<dyn view::Camera>,
-	cameraInteractor: Box<dyn view::CameraInteractor>,
+	camera: Box<dyn Camera>,
+	cameraInteractor: Box<dyn CameraInteractor>,
 	globalPasses: &'static [GlobalPassDeclaration<'static>],
 	viewportCompositor: ViewportCompositor,
 
@@ -878,7 +878,7 @@ impl eframe::App for Player
 					}
 					ui.separator();
 
-					// Sidepanel (app) switcher
+					// App switcher
 					// - player settings
 					if ui.selectable_label(self.activeSidePanel==0, "Player").clicked() {
 						self.activeSidePanel = 0;
@@ -935,7 +935,7 @@ impl eframe::App for Player
 										.striped(true)
 										.show(ui, |ui| {
 											/* -- prelude: layouting calculations ---------------------- */
-											let cbwidth = 136f32;
+											let cbwidth = f32::max(136f32, awidth*1./2.);
 											let lminw = f32::max(
 												awidth - cbwidth - ui.spacing().item_spacing.x, 0.
 											);
@@ -985,9 +985,8 @@ impl eframe::App for Player
 									egui::CollapsingHeader::new("Active camera settings")
 										.id_salt("CGV_view_act_s")
 										.show(ui, |ui| {
-											ui.label("<nothing here yet>");
+											CameraParameters::ui(self.camera.as_mut(), ui);
 										});
-									//self.camera.parameters().sidepanel(ui);
 								},
 								2 => {
 									// Application UI
