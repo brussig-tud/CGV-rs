@@ -12,7 +12,7 @@ use egui;
 
 // Local imports
 use crate::*;
-use crate::util::math::{deg2rad, rad2deg};
+use crate::util::math;
 use crate::view::*;
 
 
@@ -123,7 +123,7 @@ impl CameraParameters
 				if ortho != params_orig.intrinsics.fovY.isOrthographic() {
 					params.intrinsics.fovY = match params_orig.intrinsics.fovY {
 						FoV::Perspective(_) => FoV::Orthographic(4.),
-						FoV::Orthographic(_) => FoV::Perspective(deg2rad!(60.))
+						FoV::Orthographic(_) => FoV::Perspective(math::deg2rad!(60.))
 					};
 					changed = true;
 				}
@@ -136,7 +136,7 @@ impl CameraParameters
 				match params.intrinsics.fovY
 				{
 					FoV::Perspective(old) => {
-						let old = rad2deg!(old);
+						let old = math::rad2deg!(old);
 						let mut new = old;
 						ui.add(
 							egui::Slider::new(&mut new, 1f32..=179.)
@@ -144,7 +144,7 @@ impl CameraParameters
 								.clamping(egui::SliderClamping::Never)
 						);
 						if new != old {
-							params.intrinsics.fovY = FoV::Perspective(deg2rad!(new));
+							params.intrinsics.fovY = FoV::Perspective(math::deg2rad!(new));
 							changed = true;
 						}
 					},

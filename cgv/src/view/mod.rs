@@ -28,7 +28,6 @@ pub use orbitinteractor::OrbitInteractor; // re-export
 
 // Local imports
 use crate::*;
-use crate::util::math;
 
 
 
@@ -307,6 +306,7 @@ pub fn transformClipspaceOGL2WGPU (oglProjection: &glm::Mat4) -> glm::Mat4
 		0.0, 0.0, 0.5, 0.5,
 		0.0, 0.0, 0.0, 1.0,
 	);
-	// ToDo: investigate while any attempt to boil this down to individual component updates failed so far
+
+	// ToDo: investigate why any attempt to boil this down to individual component updates failed so far
 	CLIPSPACE_TRANSFORM_OGL2WGPU  *  *oglProjection
 }
