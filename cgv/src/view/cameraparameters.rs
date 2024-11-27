@@ -31,11 +31,24 @@ pub struct Intrinsics {
 	pub zFar: f32
 }
 impl Intrinsics {
-	fn defaultWithAspect (aspect: f32) -> Self {
-		Self {
-			aspect, f: 1., zNear: 0.01, zFar: 100.,
-			fovY: FoV::Perspective(math::deg2rad!(60.)),
-		}
+	fn defaultWithAspect (aspect: f32) -> Self { Self {
+		aspect, f: 1., zNear: 0.01, zFar: 100.,
+		fovY: FoV::Perspective(math::deg2rad!(60.)),
+	}}
+
+	pub fn frustumDiameterAtFocus (fov: f32, f: f32) -> f32 {
+		let h05 = f * f32::tan(0.5*fov);
+		h05+h05
+	}
+
+	pub fn angleForFrustumDiameterAndFocus (diameter: f32, f: f32) -> f32 {
+		let theta = f32::atan(0.5*diameter / f);
+		theta+theta
+	}
+
+	pub fn focusDistForFrustumDiameterAndFov (diameter: f32, fov: f32) -> f32 {
+		let f = f32::tan(0.5*fov)/(0.5*diameter);
+		f
 	}
 }
 
@@ -122,8 +135,12 @@ impl CameraParameters
 				// - handle changes
 				if ortho != params_orig.intrinsics.fovY.isOrthographic() {
 					params.intrinsics.fovY = match params_orig.intrinsics.fovY {
-						FoV::Perspective(_) => FoV::Orthographic(4.),
-						FoV::Orthographic(_) => FoV::Perspective(math::deg2rad!(60.))
+						FoV::Perspective(fovY)
+						=> FoV::Orthographic(Intrinsics::frustumDiameterAtFocus(fovY, params_orig.intrinsics.f)),
+
+						FoV::Orthographic(height) => FoV::Perspective(
+							Intrinsics::angleForFrustumDiameterAndFocus(height, params_orig.intrinsics.f)
+						)
 					};
 					changed = true;
 				}

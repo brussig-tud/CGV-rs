@@ -101,20 +101,25 @@ impl CameraInteractor for OrbitInteractor
 			extr.eye = focus - extr.dir*intr.f;
 		}
 		// Local helper to share FoV adjustment code across match arms
-		fn adjustFov (_extr: &mut Extrinsics, intr: &mut Intrinsics, amount: f32)
+		fn adjustFov (extr: &mut Extrinsics, intr: &mut Intrinsics, amount: f32)
 		{
+			const ORTHO_THRESHOLD: f32 = 15.;
 			if let FoV::Perspective(fov) = intr.fovY {
+				let dia = Intrinsics::frustumDiameterAtFocus(fov, intr.f);
 				let newFov = f32::min(fov + math::deg2rad!(amount*0.125), 179.);
-				if newFov < math::deg2rad!(10.) {
-					intr.fovY = FoV::Orthographic(2.)
+				if newFov < math::deg2rad!(ORTHO_THRESHOLD) {
+					intr.fovY = FoV::Orthographic(dia)
 				}
 				else {
+					let focusOld = extr.eye + extr.dir*intr.f;
 					intr.fovY = FoV::Perspective(newFov);
+					intr.f = Intrinsics::focusDistForFrustumDiameterAndFov(dia, newFov);
+					extr.eye = focusOld - extr.dir*intr.f;
 				}
 			}
 			else {
 				if amount > 0. {
-					intr.fovY = FoV::Perspective(math::deg2rad!(10. + amount*0.125));
+					intr.fovY = FoV::Perspective(math::deg2rad!(ORTHO_THRESHOLD + amount*0.125));
 				}
 			}
 		}
