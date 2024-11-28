@@ -57,6 +57,20 @@ impl FoV
 		if let FoV::Orthographic(_) = self { true } else { false }
 	}
 }
+impl PartialEq for FoV {
+	fn eq (&self, other: &Self) -> bool
+	{
+		if let FoV::Perspective(fov_self) = self && let FoV::Perspective(fov_other) = other {
+			fov_self == fov_other
+		}
+		else if let FoV::Orthographic(h_self) = self && let FoV::Orthographic(h_other) = other {
+			h_self == h_other
+		}
+		else {
+			false
+		}
+	}
+}
 
 
 

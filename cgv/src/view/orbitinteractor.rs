@@ -94,36 +94,6 @@ impl CameraInteractor for OrbitInteractor
 
 	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome
 	{
-		// Local helper to share zoom adjustment code across match arms
-		fn adjustZoom (extr: &mut Extrinsics, intr: &mut Intrinsics, amount: f32) {
-			let focus = extr.eye + extr.dir*intr.f;
-			intr.f = intr.f * (1. + amount*-1./256.);
-			extr.eye = focus - extr.dir*intr.f;
-		}
-		// Local helper to share FoV adjustment code across match arms
-		fn adjustFov (extr: &mut Extrinsics, intr: &mut Intrinsics, amount: f32)
-		{
-			const ORTHO_THRESHOLD: f32 = 15.;
-			if let FoV::Perspective(fov) = intr.fovY {
-				let dia = Intrinsics::frustumDiameterAtFocus(fov, intr.f);
-				let newFov = f32::min(fov + math::deg2rad!(amount*0.125), 179.);
-				if newFov < math::deg2rad!(ORTHO_THRESHOLD) {
-					intr.fovY = FoV::Orthographic(dia)
-				}
-				else {
-					let focusOld = extr.eye + extr.dir*intr.f;
-					intr.fovY = FoV::Perspective(newFov);
-					intr.f = Intrinsics::focusDistForFrustumDiameterAndFov(dia, newFov);
-					extr.eye = focusOld - extr.dir*intr.f;
-				}
-			}
-			else {
-				if amount > 0. {
-					intr.fovY = FoV::Perspective(math::deg2rad!(ORTHO_THRESHOLD + amount*0.125));
-				}
-			}
-		}
-
 		// Match on relevant events
 		match event
 		{
@@ -195,11 +165,11 @@ impl CameraInteractor for OrbitInteractor
 			=> {
 				if info.amount.y != 0. {
 					if info.modifiers.alt {
-						let p = camera.parameters_mut();
-						adjustFov(&mut p.extrinsics, &mut p.intrinsics, info.amount.y);
+						let params = camera.parameters_mut();
+						params.adjustFovBy(info.amount.y, math::deg2rad!(5.));
 					} else {
-						let p = camera.parameters_mut();
-						adjustZoom(&mut p.extrinsics, &mut p.intrinsics, info.amount.y);
+						let params = camera.parameters_mut();
+						params.adjustZoom(info.amount.y);
 					}
 					EventOutcome::HandledExclusively(/* redraw */true)
 				}

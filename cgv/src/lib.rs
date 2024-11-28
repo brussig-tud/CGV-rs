@@ -7,11 +7,12 @@
 // No point allowing unstable features if we still get warnings
 #![allow(incomplete_features)]
 
-// Required for util::Phony
-#![feature(generic_const_exprs)]
-
 // Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
 #![allow(non_snake_case)]
+
+// Experimental language features
+#![feature(let_chains)]          // required for view::FoV
+#![feature(generic_const_exprs)] // required for util::Phony
 
 
 
@@ -155,8 +156,7 @@ pub struct GlobalPassDeclaration<'info> {
 }
 
 /// T.b.d.
-pub struct GlobalPassInfo<'rs>
-{
+pub struct GlobalPassInfo<'rs> {
 	pub pass: GlobalPass,
 	pub renderState: &'rs RenderState,
 	pub clearColor: wgpu::Color,

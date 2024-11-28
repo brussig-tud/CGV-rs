@@ -315,7 +315,7 @@ impl Player
 		// Run the event loop
 		//self.eventLoop.take().unwrap().run_app(&mut self)?;
 		let options = eframe::NativeOptions {
-			viewport: egui::ViewportBuilder::default().with_inner_size([1152., 720.]),
+			viewport: egui::ViewportBuilder::default().with_inner_size([1216., 800.]),
 			vsync: false,
 			multisampling: 0,
 			//depth_buffer: 0,
@@ -908,7 +908,7 @@ impl eframe::App for Player
 
 		egui::SidePanel::right("CGV__sidePanel")
 			.resizable(true)
-			.default_width(256.)
+			.default_width(320.)
 			.show(ctx, |ui|
 			{
 				egui::ScrollArea::both().show(ui, |ui|
@@ -935,7 +935,7 @@ impl eframe::App for Player
 										.striped(true)
 										.show(ui, |ui| {
 											/* -- prelude: layouting calculations ---------------------- */
-											let cbwidth = f32::max(136f32, awidth*1./2.);
+											let cbwidth = f32::max(192f32, awidth*1./2.);
 											let lminw = f32::max(
 												awidth - cbwidth - ui.spacing().item_spacing.x, 0.
 											);
