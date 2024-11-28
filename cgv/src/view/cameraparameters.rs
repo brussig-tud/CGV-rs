@@ -385,7 +385,7 @@ impl CameraParameters
 				let tmp = fov;
 				if ui.add(egui::Slider::new(&mut fov, 5f32..=179.)
 					.drag_value_speed(0.03125*tmp as f64)
-					.clamping(egui::SliderClamping::Never)
+					.clamping(egui::SliderClamping::Always)
 				).changed() {
 					params.adjustFovTo(math::deg2rad!(fov), math::deg2rad!(5.));
 					changed = true;
