@@ -7,9 +7,13 @@
 // Standard library
 /* Nothing here yet */
 
+// Egui library
+use egui;
+
 // Local imports
 use crate::*;
-use {view::*, util::math};
+use view::*;
+use util::math;
 
 
 
@@ -37,36 +41,18 @@ struct FocusChange {
 // OrbitCamera
 
 /// A camera interactor for orbital movement around a focal point.
-pub struct OrbitInteractor
-{
-	/*eye: glm::Vec3,
-	target: glm::Vec3,
-	up: glm::Vec3,
-	fov: FoV,
-	zNear: f32,
-	zFar: f32,
-	view: glm::Mat4,*/
-
-	focusChange: Option<FocusChange>,
-	//dirty: bool,
+pub struct OrbitInteractor {
+	dragSensitivity: f32,
+	fixUp: Option<glm::Vec3>,
+	focusChange: Option<FocusChange>
 }
 
-impl OrbitInteractor
-{
-	pub fn new () -> Self
-	{
-		OrbitInteractor {
-			/*eye: glm::Vec3::new(0., 0., 2.),
-			target: glm::Vec3::zeros(),
-			up: glm::Vec3::new(0., 1., 0.),
-			fov: FoV::Perspective(math::deg2rad!(60.)),
-			zNear: 0.01,
-			zFar: 100.,
-			view: glm::Mat4::identity(),*/
-			focusChange: None,
-			//dirty: true,
-		}
-	}
+impl OrbitInteractor {
+	pub fn new () -> Self { Self {
+		dragSensitivity: 1./3.,
+		fixUp: None,
+		focusChange: None
+	}}
 }
 
 impl CameraInteractor for OrbitInteractor
@@ -106,20 +92,33 @@ impl CameraInteractor for OrbitInteractor
 					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
 					// as the camera WILL recalculate internal state after a mutable borrow
 					let p = camera.parameters_mut();
-					if info.modifiers.shift {
+					if info.modifiers.shift && self.fixUp.is_none() {
 						p.extrinsics.up = glm::rotate_vec3(
-							&p.extrinsics.up, math::deg2rad!(delta.y*-1./4.), &p.extrinsics.dir
+							&p.extrinsics.up, math::deg2rad!(delta.y*-0.75*self.dragSensitivity),
+							&p.extrinsics.dir
 						);
+					}
+					else if let Some(upAxis) = &self.fixUp {
+						let target = p.extrinsics.eye + p.intrinsics.f*p.extrinsics.dir;
+						let mut newDir = glm::rotate_vec3(
+							&p.extrinsics.dir, math::deg2rad!(delta.x*self.dragSensitivity), &upAxis
+						);
+						let right = glm::normalize(&glm::cross(&newDir, &upAxis));
+						newDir = glm::rotate_vec3(
+							&newDir, math::deg2rad!(delta.y*-self.dragSensitivity), &right
+						);
+						p.extrinsics.dir = newDir;
+						p.extrinsics.up = glm::cross(&right, &p.extrinsics.dir);
+						p.extrinsics.eye = target - p.intrinsics.f*p.extrinsics.dir;
 					}
 					else {
 						let target = p.extrinsics.eye + p.intrinsics.f*p.extrinsics.dir;
 						let mut right = glm::normalize(&glm::cross(&p.extrinsics.dir, &p.extrinsics.up));
 						right = glm::rotate_vec3(
-							&right, math::deg2rad!(delta.x*1./3.), &p.extrinsics.up
+							&right, math::deg2rad!(delta.x*self.dragSensitivity), &p.extrinsics.up
 						);
-						p.extrinsics.eye = target - p.intrinsics.f*glm::cross(&p.extrinsics.up, &right);
 						p.extrinsics.up = glm::rotate_vec3(
-							&p.extrinsics.up, math::deg2rad!(delta.y*-1./3.), &right
+							&p.extrinsics.up, math::deg2rad!(delta.y*-self.dragSensitivity), &right
 						);
 						p.extrinsics.dir = glm::cross(&p.extrinsics.up, &right);
 						p.extrinsics.eye = target - p.intrinsics.f*p.extrinsics.dir;
@@ -200,6 +199,54 @@ impl CameraInteractor for OrbitInteractor
 
 			_ => EventOutcome::NotHandled
 		}
+	}
+
+	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui)
+	{
+		// Layouting calculations
+		let awidth = ui.available_width();
+		let rhswidth = f32::max(192f32, awidth*1./2.);
+		let lhsminw = f32::max(awidth-rhswidth - ui.spacing().item_spacing.x, 0.);
+
+		// UI for compound settings
+		ui.vertical(|ui| {
+			ui.spacing_mut().slider_width = rhswidth-56.;
+			//ui.label(egui::RichText::new("Compounds").underline());
+			egui::Grid::new("CGV__orbint").num_columns(2).striped(true).show(ui, |ui| {
+				/* -- Fix up direction ---------------------------------------------- */
+				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+					ui.set_min_width(lhsminw);
+					ui.label("orbit")
+				});
+				let mut fix = self.fixUp.is_some();
+				if ui.add(egui::Checkbox::new(&mut fix, "fix up direction")).changed() {
+					self.fixUp = fix.then_some(assignedCamera.parameters().extrinsics.up);
+				};
+				ui.end_row();
+				/* -- Reset up direction -------------------------------------------- */
+				ui.allocate_exact_size(egui::vec2(1., 1.), egui::Sense::hover());
+				if ui.add(egui::Button::new("reset up direction")).clicked() {
+					let fixedUp = glm::vec3(0., 1., 0.);
+					let params = assignedCamera.parameters_mut();
+					let right = params.extrinsics.dir.cross(&fixedUp);
+					params.extrinsics.up = right.cross(&params.extrinsics.dir);
+					if let Some(upAxis) = &mut self.fixUp {
+						*upAxis = fixedUp;
+					}
+				};
+				ui.end_row();
+				/* -- Drag sensitivity ---------------------------------------------- */
+				// - define UI
+				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+					ui.set_min_width(lhsminw);
+					ui.label("drag sensitivity")
+				});
+				ui.add(egui::Slider::new(&mut self.dragSensitivity, 0.031225..=2.)
+					.clamping(egui::SliderClamping::Always)
+				);
+				ui.end_row();
+			})
+		});
 	}
 }
 

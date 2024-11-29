@@ -289,7 +289,7 @@ impl CameraParameters
 		self.extrinsics.eye = focus - self.extrinsics.dir*self.intrinsics.f;
 	}
 
-	pub fn adjustFovTo (&mut self, newFov: f32, orthoThreshold: f32)
+	pub fn adjustForTargetFov (&mut self, newFov: f32, orthoThreshold: f32)
 	{
 		if let FoV::Perspective(fov) = self.intrinsics.fovY
 		{
@@ -317,7 +317,7 @@ impl CameraParameters
 		if let FoV::Perspective(fov) = self.intrinsics.fovY
 		{
 			let dia = Intrinsics::frustumDiameterAtFocus(fov, self.intrinsics.f);
-			let newFov = f32::min(fov + math::deg2rad!(amount*0.125), 179.);
+			let newFov = f32::min(fov + math::deg2rad!(amount*0.125), math::deg2rad!(179.));
 			if newFov <= orthoThreshold {
 				self.intrinsics.fovY = FoV::Orthographic(dia)
 			}
@@ -387,7 +387,7 @@ impl CameraParameters
 					.drag_value_speed(0.03125*tmp as f64)
 					.clamping(egui::SliderClamping::Always)
 				).changed() {
-					params.adjustFovTo(math::deg2rad!(fov), math::deg2rad!(5.));
+					params.adjustForTargetFov(math::deg2rad!(fov), math::deg2rad!(5.));
 					changed = true;
 				};
 				ui.end_row();

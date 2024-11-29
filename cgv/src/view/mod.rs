@@ -26,6 +26,9 @@ pub use orbitinteractor::OrbitInteractor; // re-export
 // Standard library
 /* Nothing here yet */
 
+// Egui library
+use egui;
+
 // Local imports
 use crate::*;
 
@@ -292,6 +295,8 @@ pub trait CameraInteractor
 	///
 	/// The [outcome](EventOutcome) of the event processing.
 	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome;
+
+	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
 }
 
 

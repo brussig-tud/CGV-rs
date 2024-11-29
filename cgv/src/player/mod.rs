@@ -980,7 +980,7 @@ impl eframe::App for Player
 									egui::CollapsingHeader::new("Interactor settings")
 										.id_salt("CGV_view_inter_s")
 										.show(ui, |ui| {
-											ui.label("<nothing here yet>");
+											self.cameraInteractor.ui(self.camera.as_mut(), ui);
 										});
 									egui::CollapsingHeader::new("Active camera settings")
 										.id_salt("CGV_view_act_s")
