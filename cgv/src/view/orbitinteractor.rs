@@ -229,7 +229,7 @@ impl CameraInteractor for OrbitInteractor
 					let fixedUp = glm::vec3(0., 1., 0.);
 					let params = assignedCamera.parameters_mut();
 					let right = params.extrinsics.dir.cross(&fixedUp);
-					params.extrinsics.up = right.cross(&params.extrinsics.dir);
+					params.extrinsics.up = right.cross(&params.extrinsics.dir).normalize();
 					if let Some(upAxis) = &mut self.fixUp {
 						*upAxis = fixedUp;
 					}

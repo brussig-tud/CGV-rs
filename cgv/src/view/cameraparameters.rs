@@ -134,14 +134,14 @@ impl Intrinsics
 					ui.label("zNear")
 				});
 				let tmp = self.zNear;
-				ui.add(egui::Slider::new(&mut self.zNear, 0.0001..=f32::min(10., self.zFar))
+				ui.add(egui::Slider::new(&mut self.zNear, 0.0001..=f32::min(10., self.zFar-0.001))
 					.logarithmic(true)
 					.drag_value_speed(0.03125*tmp as f64)
 					.clamping(egui::SliderClamping::Never)
 				);
 				ui.end_row();
 				// - sanitize
-				self.zNear = f32::max(self.zNear, 0.);
+				self.zNear = f32::clamp(self.zNear, 0., self.zFar-0.001);
 				/* -- zFar --------------------------------------------------------- */
 				// - define UI
 				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -149,14 +149,14 @@ impl Intrinsics
 					ui.label("zFar")
 				});
 				let tmp = self.zFar;
-				ui.add(egui::Slider::new(&mut self.zFar, 0.001..=f32::max(self.zNear, 1024.))
+				ui.add(egui::Slider::new(&mut self.zFar, f32::max(self.zNear+0.001, 0.001)..=1024.)
 					.logarithmic(true)
 					.drag_value_speed(0.03125*tmp as f64)
 					.clamping(egui::SliderClamping::Never)
 				);
 				ui.end_row();
 				// - sanitize
-				self.zFar = f32::max(self.zFar, 0.);
+				self.zFar = f32::max(self.zFar, self.zNear+0.001);
 			});
 		});
 	}
