@@ -189,13 +189,13 @@ pub struct Player
 	renderSetup: RenderSetup,
 	prevFramebufferResolution: glm::UVec2,
 
+	viewportCompositor: ViewportCompositor,
+
 	camera: Box<dyn Camera>,
 	globalPasses: &'static [GlobalPassDeclaration<'static>],
 
 	cameraInteractors: Vec<Box<dyn CameraInteractor>>,
 	activeCameraInteractor: usize,
-
-	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
 	activeApplication: Option<Box<dyn Application>>,
@@ -246,7 +246,7 @@ impl Player
 		// Create stateful rendering components
 		let camera = Box::new(view::MonoCamera::new(
 			&context, &renderSetup, glm::vec2(2, 2), renderSetup.defaultColorFormat(),
-			renderSetup.defaultDepthStencilFormat().into(), Some("CGV__MainCamera")
+			renderSetup.defaultDepthStencilFormat().into(), Some("MonoCamera0")
 		));
 		let globalPasses = util::statify(&camera).declareGlobalPasses();
 		let viewportCompositor = ViewportCompositor::new(
@@ -266,9 +266,7 @@ impl Player
 			camera,
 			globalPasses,
 
-			cameraInteractors: vec![
-				Box::new(view::OrbitInteractor::new()), Box::new(view::WASDInteractor::new())
-			],
+			cameraInteractors: vec![Box::new(view::OrbitInteractor::new()), Box::new(view::WASDInteractor::new())],
 			activeCameraInteractor: 0,
 
 			viewportCompositor,

@@ -44,25 +44,28 @@ struct FocusChange {
 pub struct WASDInteractor {
 	dragSensitivity: f32,
 	movementSpeedFactor: f32,
+	slowFactor: f32,
 	referenceUp: glm::Vec3,
 	focusChange: Option<FocusChange>,
-	pressedW: bool,
-	pressedA: bool,
-	pressedS: bool,
-	pressedD: bool
+	pressedW: bool, pressedA: bool, pressedS: bool, pressedD: bool, pressedQ: bool, pressedE: bool,
+	slow: bool
 }
 
-impl WASDInteractor {
+impl WASDInteractor
+{
 	pub fn new () -> Self { Self {
 		dragSensitivity: 1./3.,
 		movementSpeedFactor: 1.,
+		slowFactor: 0.25,
 		referenceUp: glm::vec3(0., 1., 0.),
 		focusChange: None,
-		pressedW: false,
-		pressedA: false,
-		pressedS: false,
-		pressedD: false,
+		pressedW: false, pressedA: false, pressedS: false, pressedD: false, pressedQ: false, pressedE: false,
+		slow: false
 	}}
+
+	fn anyMovementKeyPressed (&self) -> bool {
+		self.pressedW || self.pressedA || self.pressedS || self.pressedD || self.pressedQ || self.pressedE
+	}
 }
 
 impl CameraInteractor for WASDInteractor
@@ -73,35 +76,41 @@ impl CameraInteractor for WASDInteractor
 
 	fn update (&mut self, camera: &mut dyn Camera, player: &Player)
 	{
-		if self.pressedW {
-			// We only borrow the camera parameters inside a scope where we're sure we'll be changing
-			// something, as the camera usually recalculates internal state after a mutable borrow
-			let params = camera.parameters_mut();
-			params.extrinsics.eye +=
-				params.extrinsics.dir * self.movementSpeedFactor*params.intrinsics.f*player.lastFrameTime();
+		/// Local helper to calculate the actual movement speed
+		#[inline(always)]
+		fn moveFactor (this: &WASDInteractor) -> f32 {
+			if this.slow { this.slowFactor * this.movementSpeedFactor } else { this.movementSpeedFactor }
 		}
-		if self.pressedA {
-			// We only borrow the camera parameters inside a scope where we're sure we'll be changing
-			// something, as the camera usually recalculates internal state after a mutable borrow
+
+		// We only borrow the camera parameters inside a scope where we're sure we'll be changing
+		// something, as the camera usually recalculates internal state after a mutable borrow
+		if self.anyMovementKeyPressed() {
 			let params = camera.parameters_mut();
-			let right = params.extrinsics.dir.cross(&params.extrinsics.up).normalize();
-			params.extrinsics.eye -=
-				right * self.movementSpeedFactor*params.intrinsics.f*player.lastFrameTime();
-		}
-		if self.pressedS {
-			// We only borrow the camera parameters inside a scope where we're sure we'll be changing
-			// something, as the camera usually recalculates internal state after a mutable borrow
-			let params = camera.parameters_mut();
-			params.extrinsics.eye -=
-				params.extrinsics.dir * self.movementSpeedFactor*params.intrinsics.f*player.lastFrameTime();
-		}
-		if self.pressedD {
-			// We only borrow the camera parameters inside a scope where we're sure we'll be changing
-			// something, as the camera usually recalculates internal state after a mutable borrow
-			let params = camera.parameters_mut();
-			let right = params.extrinsics.dir.cross(&params.extrinsics.up).normalize();
-			params.extrinsics.eye +=
-				right * self.movementSpeedFactor*params.intrinsics.f*player.lastFrameTime();
+			if self.pressedW {
+				params.extrinsics.eye +=
+					params.extrinsics.dir * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			}
+			if self.pressedA {
+				let right = params.extrinsics.dir.cross(&params.extrinsics.up).normalize();
+				params.extrinsics.eye -= right * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			}
+			if self.pressedS {
+				params.extrinsics.eye -=
+					params.extrinsics.dir * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			}
+			if self.pressedD {
+				let right = params.extrinsics.dir.cross(&params.extrinsics.up).normalize();
+				params.extrinsics.eye += right * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			}
+			if self.pressedQ {
+				params.extrinsics.eye -=
+					params.extrinsics.up * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			}
+			if self.pressedE {
+				params.extrinsics.eye +=
+					params.extrinsics.up * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			}
+			//player.postRedraw();
 		}
 		else if let Some(focusChange) = &mut self.focusChange
 		{
@@ -171,8 +180,32 @@ impl CameraInteractor for WASDInteractor
 						}
 						EventOutcome::HandledExclusively(/* redraw */true)
 					},
+					egui::Key::Q => {
+						if info.pressed {
+							self.pressedQ = true;
+							player.pushContinuousRedrawRequest();
+						}
+						else {
+							self.pressedQ = false;
+							player.dropContinuousRedrawRequest();
+						}
+						EventOutcome::HandledExclusively(/* redraw */true)
+					},
+					egui::Key::E => {
+						if info.pressed {
+							self.pressedE = true;
+							player.pushContinuousRedrawRequest();
+						}
+						else {
+							self.pressedE = false;
+							player.dropContinuousRedrawRequest();
+						}
+						EventOutcome::HandledExclusively(/* redraw */true)
+					},
 
-					_ => EventOutcome::NotHandled
+					_ => {
+						EventOutcome::NotHandled
+					}
 				}}
 				else {
 					EventOutcome::NotHandled
@@ -181,31 +214,33 @@ impl CameraInteractor for WASDInteractor
 
 			InputEvent::Dragged(info)
 			=> {
-				if info.button(egui::PointerButton::Secondary)
+				let delta = glm::vec2(-info.direction.x, info.direction.y);
+				if info.button(egui::PointerButton::Primary) && info.modifiers.shift
 				{
-					let delta = glm::vec2(-info.direction.x, info.direction.y);
 					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
 					// as the camera usually recalculates internal state after a mutable borrow
 					let p = camera.parameters_mut();
-					if info.modifiers.shift {
-						self.referenceUp = glm::rotate_vec3(
-							&p.extrinsics.up, math::deg2rad!(delta.y*-0.75*self.dragSensitivity),
-							&p.extrinsics.dir
-						);
-						p.extrinsics.up = self.referenceUp;
-					}
-					else
-					{
-						let mut newDir = glm::rotate_vec3(
-							&p.extrinsics.dir, math::deg2rad!(delta.x*self.dragSensitivity), &self.referenceUp
-						);
-						let right = glm::normalize(&glm::cross(&newDir, &self.referenceUp));
-						newDir = glm::rotate_vec3(
-							&newDir, math::deg2rad!(delta.y*-self.dragSensitivity), &right
-						);
-						p.extrinsics.dir = newDir;
-						p.extrinsics.up = glm::cross(&right, &p.extrinsics.dir);
-					}
+					self.referenceUp = glm::rotate_vec3(
+						&p.extrinsics.up, math::deg2rad!(delta.y*-0.75*self.dragSensitivity),
+						&p.extrinsics.dir
+					);
+					p.extrinsics.up = self.referenceUp;
+					EventOutcome::HandledExclusively(/* redraw */true)
+				}
+				else if info.button(egui::PointerButton::Secondary)
+				{
+					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
+					// as the camera usually recalculates internal state after a mutable borrow
+					let p = camera.parameters_mut();
+					let mut newDir = glm::rotate_vec3(
+						&p.extrinsics.dir, math::deg2rad!(delta.x*self.dragSensitivity), &self.referenceUp
+					);
+					let right = glm::normalize(&glm::cross(&newDir, &self.referenceUp));
+					newDir = glm::rotate_vec3(
+						&newDir, math::deg2rad!(delta.y*-self.dragSensitivity), &right
+					);
+					p.extrinsics.dir = newDir;
+					p.extrinsics.up = glm::cross(&right, &p.extrinsics.dir);
 					EventOutcome::HandledExclusively(/* redraw */true)
 				}
 				else {
@@ -288,6 +323,16 @@ impl CameraInteractor for WASDInteractor
 					.clamping(egui::SliderClamping::Never)
 				);
 				self.movementSpeedFactor = self.movementSpeedFactor.max(0.03125); // sanitize
+				ui.end_row();
+				/* -- Slow movement modifier ---------------------------------------- */
+				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+					ui.set_min_width(lhsminw);
+					ui.label("slow-key mod.")
+				});
+				ui.add(egui::Slider::new(&mut self.slowFactor, 0.03125..=0.75)
+					.clamping(egui::SliderClamping::Never)
+				);
+				self.slowFactor = self.slowFactor.max(0.03125); // sanitize
 				ui.end_row();
 				/* -- Drag sensitivity ---------------------------------------------- */
 				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

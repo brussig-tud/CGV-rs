@@ -14,6 +14,10 @@ use std::ops::{Deref, DerefMut};
 // Module definitions
 //
 
+/// Submodule providing some useful datastructures
+#[cfg(not(feature="buildScriptUsage"))]
+pub mod ds;
+
 /// Submodule providing unsafe utilities
 #[cfg(not(feature="buildScriptUsage"))]
 pub mod notsafe;
