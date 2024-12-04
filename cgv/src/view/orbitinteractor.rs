@@ -90,7 +90,7 @@ impl CameraInteractor for OrbitInteractor
 				if info.button(egui::PointerButton::Primary)
 				{
 					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
-					// as the camera WILL recalculate internal state after a mutable borrow
+					// as the camera usually recalculates internal state after a mutable borrow
 					let p = camera.parameters_mut();
 					if info.modifiers.shift && self.fixUp.is_none() {
 						p.extrinsics.up = glm::rotate_vec3(
@@ -98,7 +98,8 @@ impl CameraInteractor for OrbitInteractor
 							&p.extrinsics.dir
 						);
 					}
-					else if let Some(upAxis) = &self.fixUp {
+					else if let Some(upAxis) = &self.fixUp
+					{
 						let target = p.extrinsics.eye + p.intrinsics.f*p.extrinsics.dir;
 						let mut newDir = glm::rotate_vec3(
 							&p.extrinsics.dir, math::deg2rad!(delta.x*self.dragSensitivity), &upAxis
@@ -128,7 +129,7 @@ impl CameraInteractor for OrbitInteractor
 				if info.button(egui::PointerButton::Secondary)
 				{
 					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
-					// as the camera WILL recalculate internal state after a mutable borrow
+					// as the camera usually recalculates internal state after a mutable borrow
 					let p = camera.parameters_mut();
 					let speed = p.intrinsics.f * delta*1./512.;
 					let right = &glm::cross(&p.extrinsics.dir, &p.extrinsics.up);
@@ -143,7 +144,7 @@ impl CameraInteractor for OrbitInteractor
 				if info.button(egui::PointerButton::Middle)
 				{
 					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
-					// as the camera WILL recalculate internal state after a mutable borrow
+					// as the camera usually recalculates internal state after a mutable borrow
 					let p = camera.parameters_mut();
 					let movement = p.intrinsics.f*delta.y*1./256. * p.extrinsics.dir;
 					p.extrinsics.eye += movement;
@@ -183,17 +184,14 @@ impl CameraInteractor for OrbitInteractor
 					let params = camera.parameters();
 					(params.extrinsics.clone(), params.intrinsics.f)
 				};
-				player.unprojectPointAtSurfacePixel_async(
-					info.position,
-					move |point| {
-						if let Some(point) = point {
-							tracing::debug!("Double-click to new focus: {:?}", point);
-							let old = extr.eye + f*extr.dir;
-							this.focusChange = Some(FocusChange {old, new: *point, prev: old, t: 0., player});
-							player.pushContinuousRedrawRequest();
-						}
+				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
+					if let Some(point) = point {
+						tracing::debug!("Double-click to new focus: {:?}", point);
+						let old = extr.eye + f*extr.dir;
+						this.focusChange = Some(FocusChange {old, new: *point, prev: old, t: 0., player});
+						player.pushContinuousRedrawRequest();
 					}
-				);
+				});
 				EventOutcome::HandledExclusively(/* redraw */true)
 			},
 
@@ -241,7 +239,7 @@ impl CameraInteractor for OrbitInteractor
 					ui.set_min_width(lhsminw);
 					ui.label("drag sensitivity")
 				});
-				ui.add(egui::Slider::new(&mut self.dragSensitivity, 0.031225..=2.)
+				ui.add(egui::Slider::new(&mut self.dragSensitivity, 0.03125..=2.)
 					.clamping(egui::SliderClamping::Always)
 				);
 				ui.end_row();

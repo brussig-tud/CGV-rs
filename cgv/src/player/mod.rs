@@ -190,8 +190,11 @@ pub struct Player
 	prevFramebufferResolution: glm::UVec2,
 
 	camera: Box<dyn Camera>,
-	cameraInteractor: Box<dyn CameraInteractor>,
 	globalPasses: &'static [GlobalPassDeclaration<'static>],
+
+	cameraInteractors: Vec<Box<dyn CameraInteractor>>,
+	activeCameraInteractor: usize,
+
 	viewportCompositor: ViewportCompositor,
 
 	applicationFactory: Option<Box<dyn ApplicationFactory>>,
@@ -260,9 +263,13 @@ impl Player
 
 			prevFramebufferResolution: glm::vec2(0u32, 0u32),
 
-			globalPasses,
 			camera,
-			cameraInteractor: Box::new(view::OrbitInteractor::new()),
+			globalPasses,
+
+			cameraInteractors: vec![
+				Box::new(view::OrbitInteractor::new()), Box::new(view::WASDInteractor::new())
+			],
+			activeCameraInteractor: 0,
 
 			viewportCompositor,
 
@@ -309,11 +316,7 @@ impl Player
 		// Log that we have begun the startup process
 		tracing::info!("Starting up...");
 
-		// Set the application factory
-		//self.applicationFactory = Some(Box::new(applicationFactory));
-
 		// Run the event loop
-		//self.eventLoop.take().unwrap().run_app(&mut self)?;
 		let options = eframe::NativeOptions {
 			viewport: egui::ViewportBuilder::default().with_inner_size([1216., 800.]),
 			vsync: false,
@@ -563,8 +566,9 @@ impl Player
 		}
 
 		// Finally, the active camera interactor
-		match self.cameraInteractor.input(&event, util::mutify(self.camera.as_mut()), this)
-		{
+		match self.cameraInteractors[self.activeCameraInteractor].input(
+			&event, util::mutify(self.camera.as_mut()), this
+		){
 			// Event was handled
 			  EventOutcome::HandledExclusively(redrawRequested)
 			| EventOutcome::HandledDontClose(redrawRequested) => redraw | redrawRequested,
@@ -940,7 +944,6 @@ impl eframe::App for Player
 												awidth - cbwidth - ui.spacing().item_spacing.x, 0.
 											);
 											/* -- camera interactor selection -------------------------- */ {
-												let mut sel: usize = 0;
 												ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),
 													|ui| {
 														ui.set_min_width(lminw);
@@ -948,12 +951,18 @@ impl eframe::App for Player
 													}
 												);
 												egui::ComboBox::from_id_salt("CGV_view_inter")
-													.selected_text(self.cameraInteractor.title())
+													.selected_text(
+														self.cameraInteractors[self.activeCameraInteractor].title()
+													)
 													.width(cbwidth)
 													.show_ui(ui, |ui| {
-														ui.selectable_value(
-															&mut sel, 0, self.cameraInteractor.title()
-														);
+														for (i, ci) in
+															self.cameraInteractors.iter().enumerate()
+														{
+															ui.selectable_value(
+																&mut self.activeCameraInteractor, i, ci.title()
+															);
+														}
 													});
 												ui.end_row();
 											}
@@ -980,7 +989,8 @@ impl eframe::App for Player
 									egui::CollapsingHeader::new("Interactor settings")
 										.id_salt("CGV_view_inter_s")
 										.show(ui, |ui| {
-											self.cameraInteractor.ui(self.camera.as_mut(), ui);
+											self.cameraInteractors[self.activeCameraInteractor]
+											.ui(self.camera.as_mut(), ui);
 										});
 									egui::CollapsingHeader::new("Active camera settings")
 										.id_salt("CGV_view_act_s")
@@ -1044,7 +1054,7 @@ impl eframe::App for Player
 
 			// Update camera interactor
 			let this = util::statify(self);
-			self.cameraInteractor.update(self.camera.as_mut(), this);
+			self.cameraInteractors[self.activeCameraInteractor].update(self.camera.as_mut(), this);
 			if self.camera.update() {
 				redrawScene = true;
 			}

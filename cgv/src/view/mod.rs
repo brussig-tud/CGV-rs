@@ -12,9 +12,13 @@ pub use cameraparameters::{Intrinsics, Extrinsics, CameraParameters}; // re-expo
 mod monocamera;
 pub use monocamera::MonoCamera; // re-export
 
-/// The internal submodule for the OrbitCamera implementation
+/// The internal submodule for the OrbitInteractor implementation
 mod orbitinteractor;
 pub use orbitinteractor::OrbitInteractor; // re-export
+
+/// The internal submodule for the WASDInteractor implementation
+mod wasdinteractor;
+pub use wasdinteractor::WASDInteractor; // re-export
 
 
 
