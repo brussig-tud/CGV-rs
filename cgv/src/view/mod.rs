@@ -86,6 +86,65 @@ impl PartialEq for FoV {
 // Classes
 //
 
+/// A helper object for managing animated camera focus changes.
+struct FocusChange {
+	camDir: glm::Vec3,
+	pub oldEye: glm::Vec3,
+	pub newEye: glm::Vec3,
+	pub oldF: f32,
+	pub newF: f32,
+	pub t: f32,
+	pub speed: f32
+}
+impl FocusChange
+{
+	/// Create a focus change manager that will adjust the camera positioning and focus from the given start camera
+	/// parameters. Before it can be used to animate a transition to a new focus point, that focus point must be set
+	/// via [`setNewFocus`](Self::setNewFocus).
+	///
+	/// # Arguments
+	///
+	/// * `cameraParameters` – The camera parameters representing the current state before the transition.
+	/// * `timespan` – The time, in seconds, that the transition to the new focus should take.
+	///
+	/// # Returns
+	///
+	/// A new `FocusChange` instance initialized for the given parameters.
+	pub fn new (cameraParameters: &CameraParameters, timespan: f32) -> Self { Self {
+		camDir: cameraParameters.extrinsics.dir, oldEye: cameraParameters.extrinsics.eye, newEye: glm::Vec3::default(),
+		oldF: cameraParameters.intrinsics.f, newF: f32::default(), t: 0., speed: 1./timespan
+	}}
+
+	/// Set the desired focus point to animate onto. Must be called before the first call to [`update`].
+	///
+	/// # Arguments
+	///
+	/// * `newFocus` – The desired new focus point.
+	pub fn setNewFocus (&mut self, newFocus: &glm::Vec3) {
+		let proj = (self.oldEye - newFocus).dot(&self.camDir);
+		self.newEye = newFocus + proj*self.camDir;
+		self.newF = (newFocus - self.newEye).norm();
+	}
+
+	/// Update the focus transition for the given change in time, manipulating the provided camera parameters.
+	///
+	/// # Arguments
+	///
+	/// * `dt` – The time passed since the previous update, in seconds.
+	/// * `cameraParameters` – The camera parameters to update.
+	///
+	/// # Returns
+	///
+	/// `true` if the transition is complete, `false` otherwise.
+	pub fn update (&mut self, dt: f32, cameraParameters: &mut CameraParameters) -> bool
+	{
+		self.t = f32::min(self.t + self.speed*dt, 1f32);
+		cameraParameters.extrinsics.eye = util::math::smoothLerp3(&self.oldEye, &self.newEye, self.t);
+		cameraParameters.intrinsics.f = util::math::smoothLerp(self.oldF, self.newF, self.t);
+		cameraParameters.extrinsics.eye == self.newEye
+	}
+}
+
 #[derive(Clone, Copy)]
 pub struct Viewport {
 	pub min: glm::UVec2,

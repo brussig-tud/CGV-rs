@@ -65,10 +65,20 @@ pub fn alignToFactor<T: Copy + Rem<Output=T> + Add<Output=T> + Sub<Output=T>> (n
 /// Generic cubic polynomial for C1-smooth interpolation.
 pub fn smoothstep (t_linear: f32) -> f32 {
 	let t2 = t_linear*t_linear;
-	glm::clamp_scalar(-2f32*t2*t_linear + 3f32*t2, 0f32, 1f32)
+	glm::clamp_scalar(-2.*t2*t_linear + 3.*t2, 0., 1.)
 }
 
-/// Generic C1-smooth cubic interpolation.
+/// Generic C1-smooth cubic interpolation for scalars.
+pub fn smoothLerp (v1: f32, v2: f32, t_linear: f32) -> f32 {
+	glm::mix_scalar(v1, v2, smoothstep(t_linear))
+}
+
+/// C1-smooth cubic interpolation for 2D vectors.
+pub fn smoothLerp2 (v1: &glm::Vec2, v2: &glm::Vec2, t_linear: f32) -> glm::Vec2 {
+	glm::mix(v1, v2, smoothstep(t_linear))
+}
+
+/// C1-smooth cubic interpolation for 3D vectors.
 pub fn smoothLerp3 (v1: &glm::Vec3, v2: &glm::Vec3, t_linear: f32) -> glm::Vec3 {
 	glm::mix(v1, v2, smoothstep(t_linear))
 }

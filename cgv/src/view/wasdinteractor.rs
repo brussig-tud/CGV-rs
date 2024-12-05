@@ -22,12 +22,28 @@ use util::math;
 // Structs
 //
 
-struct FocusChange {
-	pub old: glm::Vec3,
-	pub new: glm::Vec3,
-	pub prev: glm::Vec3,
-	pub t: f32,
-	pub player: &'static Player
+/// Helper enum to keep track of transient state required for multi-frame camera movements
+enum ContinousRedrawing {
+	Idle,
+	WASD(&'static Player),
+	FocusChange{focusChange: FocusChange, player: &'static Player},
+}
+impl ContinousRedrawing
+{
+	#[inline(always)]
+	fn idle (&self) -> bool {
+		if let ContinousRedrawing::Idle = self {true} else {false}
+	}
+
+	#[inline(always)]
+	fn notChangingFocus (&self) -> bool {
+		if let ContinousRedrawing::FocusChange {..} = self {false} else {true}
+	}
+
+	#[inline(always)]
+	fn notMovingWASD (&self) -> bool {
+		if let ContinousRedrawing::WASD(_) = self {false} else {true}
+	}
 }
 
 
@@ -46,25 +62,38 @@ pub struct WASDInteractor {
 	movementSpeedFactor: f32,
 	slowFactor: f32,
 	referenceUp: glm::Vec3,
-	focusChange: Option<FocusChange>,
-	pressedW: bool, pressedA: bool, pressedS: bool, pressedD: bool, pressedQ: bool, pressedE: bool,
-	slow: bool
+	moving: [bool; 6],
+	slow: bool,
+	continousRedrawing: ContinousRedrawing
 }
 
 impl WASDInteractor
 {
+	const FORE: usize = 0;
+	const LEFT: usize = 1;
+	const BACK: usize = 2;
+	const RIGHT: usize = 3;
+	const DOWN: usize = 4;
+	const UP: usize = 5;
+
 	pub fn new () -> Self { Self {
 		dragSensitivity: 1./3.,
 		movementSpeedFactor: 1.,
 		slowFactor: 0.25,
 		referenceUp: glm::vec3(0., 1., 0.),
-		focusChange: None,
-		pressedW: false, pressedA: false, pressedS: false, pressedD: false, pressedQ: false, pressedE: false,
-		slow: false
+		moving: [false; 6],
+		slow: false,
+		continousRedrawing: ContinousRedrawing::Idle
 	}}
 
+	#[inline(always)]
 	fn anyMovementKeyPressed (&self) -> bool {
-		self.pressedW || self.pressedA || self.pressedS || self.pressedD || self.pressedQ || self.pressedE
+		self.moving.iter().any(|state| *state)
+	}
+
+	#[inline(always)]
+	fn noMovementKeyPressed (&self) -> bool {
+		self.moving.iter().all(|state| !state)
 	}
 }
 
@@ -77,8 +106,7 @@ impl CameraInteractor for WASDInteractor
 	fn update (&mut self, camera: &mut dyn Camera, player: &Player)
 	{
 		/// Local helper to calculate the actual movement speed
-		#[inline(always)]
-		fn moveFactor (this: &WASDInteractor) -> f32 {
+		#[inline(always)] fn moveFactor (this: &WASDInteractor) -> f32 {
 			if this.slow { this.slowFactor * this.movementSpeedFactor } else { this.movementSpeedFactor }
 		}
 
@@ -86,139 +114,111 @@ impl CameraInteractor for WASDInteractor
 		// something, as the camera usually recalculates internal state after a mutable borrow
 		if self.anyMovementKeyPressed() {
 			let params = camera.parameters_mut();
-			if self.pressedW {
-				params.extrinsics.eye +=
-					params.extrinsics.dir * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			let moveDist = player.lastFrameTime()*moveFactor(self)*params.intrinsics.f;
+			if self.moving[Self::FORE] {
+				params.extrinsics.eye += params.extrinsics.dir * moveDist;
 			}
-			if self.pressedA {
-				let right = params.extrinsics.dir.cross(&params.extrinsics.up).normalize();
-				params.extrinsics.eye -= right * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			if self.moving[Self::LEFT] {
+				let right = params.extrinsics.dir.cross(&params.extrinsics.up);
+				params.extrinsics.eye -= right * moveDist;
 			}
-			if self.pressedS {
-				params.extrinsics.eye -=
-					params.extrinsics.dir * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			if self.moving[Self::BACK] {
+				params.extrinsics.eye -= params.extrinsics.dir * moveDist;
 			}
-			if self.pressedD {
-				let right = params.extrinsics.dir.cross(&params.extrinsics.up).normalize();
-				params.extrinsics.eye += right * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			if self.moving[Self::RIGHT] {
+				let right = params.extrinsics.dir.cross(&params.extrinsics.up);
+				params.extrinsics.eye += right * moveDist;
 			}
-			if self.pressedQ {
-				params.extrinsics.eye -=
-					params.extrinsics.up * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			if self.moving[Self::DOWN] {
+				params.extrinsics.eye -= params.extrinsics.up * moveDist;
 			}
-			if self.pressedE {
-				params.extrinsics.eye +=
-					params.extrinsics.up * moveFactor(self) * params.intrinsics.f * player.lastFrameTime();
+			if self.moving[Self::UP] {
+				params.extrinsics.eye += params.extrinsics.up * moveDist;
 			}
-			//player.postRedraw();
 		}
-		else if let Some(focusChange) = &mut self.focusChange
+		else if let ContinousRedrawing::FocusChange{focusChange, player}
+			= &mut self.continousRedrawing
 		{
-			let extr = &mut camera.parameters_mut().extrinsics;
-			focusChange.t = f32::min(focusChange.t + player.lastFrameTime()*2f32, 1f32);
-			let focusCur = math::smoothLerp3(&focusChange.old, &focusChange.new, focusChange.t);
-			let offset = focusCur - focusChange.prev;
-			focusChange.prev = focusCur;
-			extr.eye += offset;
-			if focusCur == focusChange.new {
-				self.focusChange = None;
+			if focusChange.update(player.lastFrameTime(), camera.parameters_mut()) {
 				player.dropContinuousRedrawRequest();
+				self.continousRedrawing = ContinousRedrawing::Idle;
 			}
 		}
 	}
 
 	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome
 	{
+		// Helper function for setting the movement key flags
+		fn updateKeyFlag (this: &mut WASDInteractor, directionId: usize, pressed: bool, player: &'static Player) -> bool
+		{
+			if pressed {
+				this.moving[directionId] = true;
+				if this.continousRedrawing.idle() {
+					player.pushContinuousRedrawRequest();
+					this.continousRedrawing = ContinousRedrawing::WASD(player);
+				}
+				false // we're in continous redraw anyways
+			}
+			else {
+				this.moving[directionId] = false;
+				if this.noMovementKeyPressed() {
+					this.continousRedrawing = ContinousRedrawing::Idle;
+					player.dropContinuousRedrawRequest();
+				}
+				false // we just stopped continuous redrawing, but we won't redraw one last time
+			}
+		}
+
 		// Match on relevant events
 		match event
 		{
 			InputEvent::Key(info)
 			=> {
+				// Handle slow modifier
+				let noMoveOutcome = if self.slow != info.modifiers.shift {
+					EventOutcome::HandledDontClose(false)
+				} else {
+					EventOutcome::NotHandled
+				};
+				self.slow = info.modifiers.shift;
+
+				// React to movement keys
 				if !info.repeat { match info.key
 				{
-					egui::Key::W => {
-						if info.pressed {
-							self.pressedW = true;
-							player.pushContinuousRedrawRequest();
-						}
-						else {
-							self.pressedW = false;
-							player.dropContinuousRedrawRequest();
-						}
-						EventOutcome::HandledExclusively(/* redraw */true)
-					},
-					egui::Key::A => {
-						if info.pressed {
-							self.pressedA = true;
-							player.pushContinuousRedrawRequest();
-						}
-						else {
-							self.pressedA = false;
-							player.dropContinuousRedrawRequest();
-						}
-						EventOutcome::HandledExclusively(/* redraw */true)
-					},
-					egui::Key::S => {
-						if info.pressed {
-							self.pressedS = true;
-							player.pushContinuousRedrawRequest();
-						}
-						else {
-							self.pressedS = false;
-							player.dropContinuousRedrawRequest();
-						}
-						EventOutcome::HandledExclusively(/* redraw */true)
-					},
-					egui::Key::D => {
-						if info.pressed {
-							self.pressedD = true;
-							player.pushContinuousRedrawRequest();
-						}
-						else {
-							self.pressedD = false;
-							player.dropContinuousRedrawRequest();
-						}
-						EventOutcome::HandledExclusively(/* redraw */true)
-					},
-					egui::Key::Q => {
-						if info.pressed {
-							self.pressedQ = true;
-							player.pushContinuousRedrawRequest();
-						}
-						else {
-							self.pressedQ = false;
-							player.dropContinuousRedrawRequest();
-						}
-						EventOutcome::HandledExclusively(/* redraw */true)
-					},
-					egui::Key::E => {
-						if info.pressed {
-							self.pressedE = true;
-							player.pushContinuousRedrawRequest();
-						}
-						else {
-							self.pressedE = false;
-							player.dropContinuousRedrawRequest();
-						}
-						EventOutcome::HandledExclusively(/* redraw */true)
-					},
+					egui::Key::W
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::FORE, info.pressed, player)),
 
-					_ => {
-						EventOutcome::NotHandled
-					}
+					egui::Key::A
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::LEFT, info.pressed, player)),
+
+					egui::Key::S
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::BACK, info.pressed, player)),
+
+					egui::Key::D
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::RIGHT, info.pressed, player)),
+
+					egui::Key::Q
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::DOWN, info.pressed, player)),
+
+					egui::Key::E
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::UP, info.pressed, player)),
+
+					_ => noMoveOutcome
 				}}
 				else {
-					EventOutcome::NotHandled
+					noMoveOutcome
 				}
 			},
 
 			InputEvent::Dragged(info)
 			=> {
+				// Adapt dragged delta
 				let delta = glm::vec2(-info.direction.x, info.direction.y);
+
+				// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
+				// as the camera usually recalculates internal state after a mutable borrow
 				if info.button(egui::PointerButton::Primary) && info.modifiers.shift
 				{
-					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
-					// as the camera usually recalculates internal state after a mutable borrow
 					let p = camera.parameters_mut();
 					self.referenceUp = glm::rotate_vec3(
 						&p.extrinsics.up, math::deg2rad!(delta.y*-0.75*self.dragSensitivity),
@@ -229,8 +229,6 @@ impl CameraInteractor for WASDInteractor
 				}
 				else if info.button(egui::PointerButton::Secondary)
 				{
-					// We only borrow the camera parameters inside a scope where we're sure we'll be changing something,
-					// as the camera usually recalculates internal state after a mutable borrow
 					let p = camera.parameters_mut();
 					let mut newDir = glm::rotate_vec3(
 						&p.extrinsics.dir, math::deg2rad!(delta.x*self.dragSensitivity), &self.referenceUp
@@ -270,20 +268,26 @@ impl CameraInteractor for WASDInteractor
 			},
 
 			InputEvent::DoubleClick(info) => {
-				let this = util::mutify(self);
-				let (extr, f) = {
-					let params = camera.parameters();
-					(params.extrinsics.clone(), params.intrinsics.f)
-				};
-				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
-					if let Some(point) = point {
-						tracing::debug!("Double-click to new focus: {:?}", point);
-						let old = extr.eye + f*extr.dir;
-						this.focusChange = Some(FocusChange {old, new: *point, prev: old, t: 0., player});
-						player.pushContinuousRedrawRequest();
-					}
-				});
-				EventOutcome::HandledExclusively(/* redraw */true)
+				if self.continousRedrawing.notMovingWASD()
+				{
+					let this = util::mutify(self);
+					let mut focusChange = FocusChange::new(camera.parameters(), 0.5);
+					player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
+						if let Some(point) = point {
+							tracing::debug!("Double-click to new focus: {:?}", point);
+							if this.continousRedrawing.notChangingFocus() {
+								// Re-use the ongoing continuous redraw request if a focus change was in progress before
+								player.pushContinuousRedrawRequest();
+							}
+							focusChange.setNewFocus(point);
+							this.continousRedrawing = ContinousRedrawing::FocusChange{focusChange, player};
+						}
+					});
+					EventOutcome::HandledExclusively(/* redraw */true)
+				}
+				else {
+					EventOutcome::NotHandled
+				}
 			},
 
 			_ => EventOutcome::NotHandled
@@ -324,10 +328,10 @@ impl CameraInteractor for WASDInteractor
 				);
 				self.movementSpeedFactor = self.movementSpeedFactor.max(0.03125); // sanitize
 				ui.end_row();
-				/* -- Slow movement modifier ---------------------------------------- */
+				/* -- Slow movement multiplier -------------------------------------- */
 				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
 					ui.set_min_width(lhsminw);
-					ui.label("slow-key mod.")
+					ui.label("slow-key mult.")
 				});
 				ui.add(egui::Slider::new(&mut self.slowFactor, 0.03125..=0.75)
 					.clamping(egui::SliderClamping::Never)
@@ -351,8 +355,10 @@ impl CameraInteractor for WASDInteractor
 impl Drop for WASDInteractor {
 	fn drop (&mut self) {
 		// Make sure we let go of our continuous redraw request
-		if let Some(focusChange) = &self.focusChange {
-			focusChange.player.dropContinuousRedrawRequest();
+		match self.continousRedrawing {
+			ContinousRedrawing::WASD(player) => player.dropContinuousRedrawRequest(),
+			ContinousRedrawing::FocusChange{player, .. } => player.dropContinuousRedrawRequest(),
+			ContinousRedrawing::Idle => {}
 		}
 	}
 }
