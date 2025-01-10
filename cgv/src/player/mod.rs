@@ -352,9 +352,9 @@ impl Player
 						#[cfg(all(not(target_os="windows"),not(target_os="macos")))]
 							backends: wgpu::Backends::VULKAN,
 						#[cfg(target_os="windows")]
-							supported_backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
+							backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
 						#[cfg(target_os="macos")]
-							supported_backends: wgpu::Backends::METAL,
+							backends: wgpu::Backends::METAL,
 						..Default::default()
 					},
 					power_preference: wgpu::PowerPreference::HighPerformance,
