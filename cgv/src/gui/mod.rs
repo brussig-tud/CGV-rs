@@ -5,7 +5,7 @@
 //
 
 /// Submodule providing pseudo-atomic controls for somewhat more complex datatypes
-pub mod controls;
+pub mod control;
 
 /// Submodule providing custom "smart" layouts
-pub mod layouts;
+pub mod layout;

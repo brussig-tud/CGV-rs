@@ -363,7 +363,7 @@ impl cgv::Application for SampleApplication
 		let guiState = util::mutify(&self.guiState);
 
 		// Add the standard "smart" 2-column control grid
-		let mut gui = cgv::gui::layouts::ControlTable::withUi(ui, "CgvExample");
+		let mut gui = cgv::gui::layout::ControlTable::withUi(ui, "CgvExample");
 		gui.add(
 			|ui, _| ui.label("check"),
 			|ui, _| ui.add(egui::Checkbox::new(&mut guiState.dummy_bool, "dummy bool"))
