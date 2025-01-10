@@ -331,26 +331,31 @@ impl Player
 				#[cfg(all(not(target_os="windows"),not(target_os="macos")))] {
 					// - Wayland (either just Wayland or both)
 					#[cfg(all(feature="wayland"))]
-					elBuilder.with_wayland();
+						elBuilder.with_wayland();
 					// - just X11
 					#[cfg(all(feature="x11",not(feature="wayland")))]
-					elBuilder.with_x11();
+						elBuilder.with_x11();
 					// - neither - invalid configuration!
 					#[cfg(all(not(feature="wayland"),not(feature="x11")))]
-					compile_error!("Must enable one of `x11` or `wayland` for Unix builds!");
+						compile_error!("Must enable one of `x11` or `wayland` for Unix builds!");
 				}
 			})),
 			//centered: false,
 			wgpu_options: egui_wgpu::WgpuConfiguration {
 				//present_mode: Default::default(),
 				//desired_maximum_frame_latency: None,
-				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew {
-					#[cfg(all(not(target_os="windows"),not(target_os="macos")))]
-					supported_backends: wgpu::Backends::VULKAN,
-					#[cfg(target_os="windows")]
-					supported_backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
-					#[cfg(target_os="macos")]
-					supported_backends: wgpu::Backends::METAL,
+				//native_adapter_selector: None,
+				//trace_path: None,
+				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew( egui_wgpu::WgpuSetupCreateNew {
+					instance_descriptor: wgpu::InstanceDescriptor {
+						#[cfg(all(not(target_os="windows"),not(target_os="macos")))]
+							backends: wgpu::Backends::VULKAN,
+						#[cfg(target_os="windows")]
+							supported_backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
+						#[cfg(target_os="macos")]
+							supported_backends: wgpu::Backends::METAL,
+						..Default::default()
+					},
 					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
@@ -359,7 +364,8 @@ impl Player
 						//memory_hints: Default::default(),
 						..Default::default()
 					}),
-				},
+					..Default::default()
+				}),
 				..Default::default()
 			},
 			//persist_window: false,
@@ -397,8 +403,11 @@ impl Player
 			wgpu_options: egui_wgpu::WgpuConfiguration {
 				//present_mode: Default::default(),
 				//desired_maximum_frame_latency: None,
-				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew {
-					supported_backends: wgpu::Backends::BROWSER_WEBGPU,
+				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew( egui_wgpu::WgpuSetupCreateNew {
+					instance_descriptor: wgpu::InstanceDescriptor {
+						backends: wgpu::Backends::BROWSER_WEBGPU,
+						..Default::default()
+					},
 					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
@@ -407,7 +416,8 @@ impl Player
 						//memory_hints: Default::default(),
 						..Default::default()
 					}),
-				},
+					..Default::default()
+				}),
 				..Default::default()
 			},
 			dithering: true,
