@@ -382,7 +382,7 @@ pub trait CameraInteractor
 /// *OpenGL* clip space to *WebGPU* clip space applied.
 pub fn transformClipspaceOGL2WGPU (oglProjection: &glm::Mat4) -> glm::Mat4
 {
-	pub const CLIPSPACE_TRANSFORM_OGL2WGPU: glm::Mat4 = glm::Mat4::new(
+	const CLIPSPACE_TRANSFORM_OGL2WGPU: glm::Mat4 = glm::Mat4::new(
 		1.0, 0.0, 0.0, 0.0,
 		0.0, 1.0, 0.0, 0.0,
 		0.0, 0.0, 0.5, 0.5,

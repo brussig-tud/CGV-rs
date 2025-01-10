@@ -58,6 +58,7 @@ pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
 pub use eframe::wgpu as wgpu;
+pub use eframe::egui as egui;
 
 
 
@@ -90,6 +91,7 @@ fn initTracingProxy () {
 	initTracing()
 }
 
+// Encapsulate common init tasks for the tracing crate
 fn initTracing ()
 {
 	// Set up logging
@@ -196,7 +198,7 @@ pub trait Application
 	/// # Returns
 	///
 	/// `Ok` if successful, or some descriptive error detailing the failure if not.
-	fn preInit (&mut self, context: &Context, player: &Player) -> Result<()>;
+	fn preInit (&mut self, context: &Context, player: &'static Player) -> Result<()>;
 
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
@@ -212,7 +214,7 @@ pub trait Application
 	/// * `globalPasses` – The list of global passes the application will need to render to.
 	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
 	fn recreatePipelines (
-		&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &[&GlobalPassInfo], _: &Player
+		&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &[&GlobalPassInfo], _: &'static Player
 	);
 
 	/// Called once on creation of the application, after it was asked to create its pipelines.
@@ -225,7 +227,7 @@ pub trait Application
 	/// # Returns
 	///
 	/// `Ok` if successful, or some descriptive error detailing the failure if not.
-	fn postInit (&mut self, context: &Context, player: &Player) -> Result<()>;
+	fn postInit (&mut self, context: &Context, player: &'static Player) -> Result<()>;
 
 	/// Called when there is user input that can be processed.
 	///
@@ -237,7 +239,7 @@ pub trait Application
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
 
 	/// Called when the main framebuffer was resized.
 	///
@@ -246,7 +248,7 @@ pub trait Application
 	/// * `context` – The graphics context, useful e.g. to re-create resources when they're affected by the resize.
 	/// * `newSize` – The new main framebuffer size, in pixels.
 	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to resizing.
-	fn resize (&mut self, context: &Context, newSize: glm::UVec2, player: &Player);
+	fn resize (&mut self, context: &Context, newSize: glm::UVec2, player: &'static Player);
 
 	/// Called when the [player](Player) wants to prepare a new frame for rendering.
 	///
@@ -258,7 +260,7 @@ pub trait Application
 	/// # Returns
 	///
 	/// `true` when the application deems a scene redraw is required, `false` otherwise.
-	fn update (&mut self, context: &Context, player: &Player) -> bool;
+	fn update (&mut self, context: &Context, player: &'static Player) -> bool;
 
 	/// Called when the [player](Player) is about to ask the application to render its contribution to the scene within
 	/// a [global render pass](GlobalPassInfo).
@@ -289,13 +291,22 @@ pub trait Application
 		&mut self, context: &Context, renderState: &RenderState, managedRenderPass: &mut wgpu::RenderPass,
 		globalPass: &GlobalPass
 	) -> Option<Vec<wgpu::CommandBuffer>>;
+
+	/// Called when the [player](Player) needs the application to define its graphical UI.
+	///
+	/// # Arguments
+	///
+	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved operations.
+	fn ui (&mut self, ui: &mut egui::Ui, player: &'static Player);
 }
 
 
 ////
 // ApplicationFactory
 
-pub trait ApplicationFactory {
+pub trait ApplicationFactory
+{
 	/// Create an instance of the target application.
 	///
 	/// # Arguments

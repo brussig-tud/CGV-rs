@@ -281,17 +281,18 @@ impl Player
 			prevFrameElapsed: time::Duration::from_secs(0),
 			prevFrameDuration: time::Duration::from_secs(0),
 		};
+		let player_ref = util::statify(&player);
 
 		// Init application(s)
 		let mut activeApplication = player.applicationFactory.take().unwrap().create(
 			&player.context, &player.renderSetup
 		)?;
-		activeApplication.preInit(player.context(), &player)?;
+		activeApplication.preInit(player.context(), player_ref)?;
 		activeApplication.recreatePipelines(
 			&player.context, &player.renderSetup,
-			Self::extractInfoFromGlobalPassDeclarations(player.globalPasses).as_slice(), &player
+			Self::extractInfoFromGlobalPassDeclarations(player.globalPasses).as_slice(), player_ref
 		);
-		activeApplication.postInit(player.context(), &player)?;
+		activeApplication.postInit(player.context(), player_ref)?;
 		player.activeApplication = Some(activeApplication);
 		player.activeSidePanel = 2;
 
@@ -1012,7 +1013,8 @@ impl eframe::App for Player
 										self.activeApplication.as_ref().unwrap().title()
 									));
 									ui.separator();
-									ui.label("<nothing here yet>");
+									let this = util::statify(self);
+									self.activeApplication.as_mut().unwrap().ui(ui, this);
 								},
 								_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
 							}

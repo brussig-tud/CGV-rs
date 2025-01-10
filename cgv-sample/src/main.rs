@@ -18,7 +18,7 @@
 use std::default::Default;
 
 // CGV re-imports
-use cgv::{wgpu, glm};
+use cgv::{wgpu, glm, egui};
 
 // WGPU API
 use wgpu::util::DeviceExt;
@@ -216,7 +216,8 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			texBindGroup,
 			pipelines: Vec::new(),
 			vertexBuffer,
-			indexBuffer
+			indexBuffer,
+			guiState: Default::default()
 		}))
 	}
 }
@@ -225,14 +226,25 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 ////
 // SampleApplicaton
 
+#[derive(Default,Debug)]
+struct GuiState {
+	pub dummy_bool: bool,
+	pub dummy_float: f32
+}
+
 #[derive(Debug)]
-pub struct SampleApplication {
+struct SampleApplication
+{
+	// Rendering related
 	shader: wgpu::ShaderModule,
 	texBindGroupLayout: wgpu::BindGroupLayout,
 	texBindGroup: wgpu::BindGroup,
 	pipelines: Vec<wgpu::RenderPipeline>,
 	vertexBuffer: wgpu::Buffer,
-	indexBuffer: wgpu::Buffer
+	indexBuffer: wgpu::Buffer,
+
+	// GUI-controllable state
+	guiState: GuiState
 }
 impl SampleApplication
 {
@@ -343,6 +355,28 @@ impl cgv::Application for SampleApplication
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
 		renderPass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 		None // we don't need the Player to submit any custom command buffers for us
+	}
+
+	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
+	{
+		// Make sure we can capture our guiState member struct in the layout callbacks
+		let guiState = util::mutify(&self.guiState);
+
+		// Add the standard "smart" 2-column control grid
+		let mut gui = cgv::gui::layouts::ControlTable::withUi(ui, "CgvExample");
+		gui.add(
+			|ui, _| ui.label("check"),
+			|ui, _| ui.add(egui::Checkbox::new(&mut guiState.dummy_bool, "dummy bool"))
+		);
+		gui.add(
+			|ui, _| ui.label("dummy f32"),
+			|ui, _| ui.add(
+				egui::Slider::new(&mut guiState.dummy_float, 0.1..=100.)
+					.logarithmic(true)
+					.clamping(egui::SliderClamping::Always)
+			)
+		);
+		gui.show();
 	}
 }
 
