@@ -1,16 +1,6 @@
 
 //////
 //
-// Imports
-//
-
-// Standard library
-use std::ops::{Deref, DerefMut};
-
-
-
-//////
-//
 // Module definitions
 //
 
@@ -29,9 +19,15 @@ pub mod math;
 /// Submodule providing operations on file system paths.
 pub mod path;
 
-/// Submodule providing various reusable UI widgets
-#[cfg(not(feature="buildScriptUsage"))]
-pub mod widgets;
+
+
+//////
+//
+// Imports
+//
+
+// Standard library
+use std::ops::{Deref, DerefMut};
 
 
 

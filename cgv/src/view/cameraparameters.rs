@@ -204,14 +204,14 @@ impl Extrinsics
 					ui.set_min_width(lhsMinWidth);
 					ui.label("eye point")
 				});
-				util::widgets::vec3_sized(ui, &mut self.eye, rhsWidth);
+				gui::controls::vec3_sized(ui, &mut self.eye, rhsWidth);
 				ui.end_row();
 				/* -- dir ----------------------------------------------------------- */
 				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
 					ui.set_min_width(lhsMinWidth);
 					ui.label("direction")
 				});
-				if util::widgets::vec3_sized(ui, &mut self.dir, rhsWidth) {
+				if gui::controls::vec3_sized(ui, &mut self.dir, rhsWidth) {
 					if self.dir.norm_squared() == 0. {
 						self.dir.z = -1.;
 					}
@@ -226,7 +226,7 @@ impl Extrinsics
 					ui.set_min_width(lhsMinWidth);
 					ui.label("up direction")
 				});
-				if util::widgets::vec3_sized(ui, &mut self.up, rhsWidth) {
+				if gui::controls::vec3_sized(ui, &mut self.up, rhsWidth) {
 					if self.up.norm_squared() == 0. {
 						self.up.y = 1.;
 					}

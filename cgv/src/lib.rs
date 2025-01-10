@@ -39,6 +39,9 @@ pub mod hal;
 /// The module containing all viewing functionality.
 pub mod view;
 
+/// The module providing various reusable UI components
+pub mod gui;
+
 /// The module containing utilities used throughout (i.e. not specific to any other module).
 #[allow(unused)]         // some of our utils are mainly useful for clients
 pub mod util;

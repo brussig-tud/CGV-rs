@@ -13,9 +13,6 @@ use egui;
 // GLM library
 use glm;
 
-// Local imports
-use crate::*;
-
 
 
 //////
