@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* Nothing here yet */
+/* nothing here yet */
 
 // Egui library
 use egui;
@@ -17,10 +17,13 @@ use egui;
 // Structs
 //
 
+////
+// ControlTable
+
 /// Holds a pair of widgets making up a row in a [`ControlTable`].
-struct ControlTableRow {
-	lhs: Option<Box<dyn FnOnce(&mut egui::Ui, f32) -> egui::Response>>,
-	rhs: Box<dyn FnOnce(&mut egui::Ui, f32) -> egui::Response>
+struct ControlTableRow<'captures> {
+	lhs: Option<Box<dyn FnOnce(&mut egui::Ui, f32) + 'captures>>,
+	rhs: Box<dyn FnOnce(&mut egui::Ui, f32) + 'captures>
 }
 
 /// A smart 2-column grid layout that uses the assumption that it will contain a list of controls, with a descriptive
@@ -29,12 +32,11 @@ struct ControlTableRow {
 ///
 /// Widgets are provided via Closures taking the active *egui* [UI object](egui::Ui) as well as an `f32` indicating the
 /// ideal width of any widget added to the grid cell (see example), which users are free to ignore.
-pub struct ControlTable
-{
+pub struct ControlTable<'captures> {
 	minRhsWidth: f32,
-	controls: Vec<ControlTableRow>
+	controls: Vec<ControlTableRow<'captures>>
 }
-impl ControlTable
+impl<'captures> ControlTable<'captures>
 {
 	/// Create a `ControlTable` with the specified minimum width for the right-hand side. If there is not enough
 	/// available space to accommodate a right-hand side of that size, the whole layouted region will get a horizontal
@@ -55,11 +57,29 @@ impl ControlTable
 	/// * `label` – The descriptive text to be displayed on the left-hand side,
 	/// * `control` – The actual control widget to be displayed on the right-hand side.
 	pub fn add (
-		&mut self, label: impl AsRef<str> + 'static, control: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static
+		&mut self, label: impl AsRef<str> + 'captures,
+		control: impl FnOnce(&mut egui::Ui, f32) + 'captures
 	){
 		self.controls.push(ControlTableRow {
-			lhs: Some(Box::new(move |ui, _| ui.label(label.as_ref()))),
+			lhs: Some(Box::new(move |ui, _| {ui.label(label.as_ref());} )),
 			rhs: Box::new(control)
+		});
+	}
+
+	/// Add a labeled control to the table, where the control response is not being evaluated further and can thus be
+	/// conveniently omitted by the caller.
+	///
+	/// # Arguments
+	///
+	/// * `label` – The descriptive text to be displayed on the left-hand side,
+	/// * `control` – The actual control widget to be displayed on the right-hand side.
+	pub fn addWithoutResponse (
+		&mut self, label: impl AsRef<str> + 'captures,
+		control: impl FnOnce(&mut egui::Ui, f32) -> egui::Response + 'captures
+	){
+		self.controls.push(ControlTableRow {
+			lhs: Some(Box::new(move |ui, _| { ui.label(label.as_ref()); })),
+			rhs: Box::new(move |ui, idealWidth| { control(ui, idealWidth); })
 		});
 	}
 
@@ -69,9 +89,24 @@ impl ControlTable
 	///
 	/// * `control` – The actual control widget to be displayed on the right-hand side.
 	pub fn addWithoutLabel (
-		&mut self, control: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static
+		&mut self, control: impl FnOnce(&mut egui::Ui, f32) + 'captures
 	){
 		self.controls.push(ControlTableRow{ lhs: None,  rhs: Box::new(control) });
+	}
+
+	/// Add control without a left-hand side label to the table, where the control response from the right-hand side
+	/// widget is not being evaluated further and can thus be conveniently omitted by the caller.
+	///
+	/// # Arguments
+	///
+	/// * `control` – The actual control widget to be displayed on the right-hand side.
+	pub fn addWithoutLabelAndResponse (
+		&mut self, control: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'captures
+	){
+		self.controls.push(ControlTableRow {
+			lhs: None,
+			rhs: Box::new(move |ui, idealWidth| { control(ui, idealWidth); })
+		});
 	}
 
 	/// Add a control to the table, with a user-provided widget on the left-hand side.
@@ -82,10 +117,13 @@ impl ControlTable
 	/// * `rhs` – Contents on the right-hand side (typically the actual control widget).
 	pub fn addCustom (
 		&mut self,
-		lhs: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static,
-		rhs: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static
+		lhs: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'captures,
+		rhs: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'captures
 	){
-		self.controls.push(ControlTableRow{ lhs: Some(Box::new(lhs)), rhs: Box::new(rhs) });
+		self.controls.push(ControlTableRow{
+			lhs: Some(Box::new(move |ui, idealWidth| { lhs(ui, idealWidth); })),
+			rhs: Box::new(move |ui, idealWidth| { rhs(ui, idealWidth); })
+		});
 	}
 
 	/// Render the layouted GUI on the provided *egui* UI object.
@@ -108,7 +146,7 @@ impl ControlTable
 				if let Some(lhs) = control.lhs {
 					ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
 						ui.set_min_width(lhsMinWidth);
-						(lhs)(ui, lhsMinWidth);
+						lhs(ui, lhsMinWidth);
 					});
 				}
 				(control.rhs)(ui, rhsWidth);
@@ -117,7 +155,8 @@ impl ControlTable
 		});
 	}
 }
-impl Default for ControlTable {
+
+impl Default for ControlTable<'_> {
 	/// Create a `ControlTable` with the default minimum size of 192 units for the right-hand side containing the actual
 	/// controls.
 	fn default () -> Self {

@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* Nothing here yet */
+/* nothing here yet */
 
 // Egui library
 use egui;
@@ -52,124 +52,89 @@ impl Intrinsics
 		(0.5*diameter)/f32::tan(0.5*fov)
 	}
 
-	pub fn uiWithSizes (&mut self, lhsMinWidth: f32, rhsWidth: f32, ui: &mut egui::Ui)
-	{
-		// Create UI
-		ui.vertical(|ui| {
-			ui.spacing_mut().slider_width = rhsWidth - 56.;
-			ui.label(egui::RichText::new("Intrinsics").underline());
-			let mut ortho = self.fovY.isOrthographic();
-			egui::Grid::new("CGV__cam_intr").num_columns(2).striped(true).show(ui, |ui| {
-				/* -- perspective/orthographic -------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("projection");
-				});
-				ui.add(egui::Checkbox::new(&mut ortho, "orthographic"));
-				ui.end_row();
-				// - sanitize
-				if ortho != self.fovY.isOrthographic() {
-					self.fovY = match self.fovY {
-						FoV::Perspective(fovY)
-						=> FoV::Orthographic(Intrinsics::frustumDiameterAtFocus(fovY, self.f)),
-
-						FoV::Orthographic(height) => FoV::Perspective(
-							Intrinsics::angleForFrustumDiameterAndFocus(height, self.f)
-						)
-					};
-				}
-				/* -- FoV ----------------------------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("FoV (Y)")
-				});
-				match self.fovY
-				{
-					FoV::Perspective(old) => {
-						let old = math::rad2deg!(old);
-						let mut new = old;
-						ui.add(egui::Slider::new(&mut new, 1f32..=179.)
-							.drag_value_speed(0.03125*old as f64)
-							.clamping(egui::SliderClamping::Never)
-						);
-						if new != old {
-							self.fovY = FoV::Perspective(math::deg2rad!(new));
-						}
-					},
-					FoV::Orthographic(old) => {
-						let mut new = old;
-						ui.add(egui::Slider::new(&mut new, 0.1..=100.)
-							.logarithmic(true)
-							.drag_value_speed(0.03125*old as f64)
-							.clamping(egui::SliderClamping::Never)
-						);
-						if new != old {
-							self.fovY = FoV::Orthographic(new);
-						}
-					}
-				}
-				ui.end_row();
-				// - sanitize
-				self.f = f32::max(self.f, 0.);
-				/* -- f ------------------------------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("focus distance")
-				});
-				let tmp = self.f;
-				ui.add(egui::Slider::new(&mut self.f, self.zNear..=self.zFar)
-					.drag_value_speed(0.03125*tmp as f64)
-					.clamping(egui::SliderClamping::Never)
-				);
-				ui.end_row();
-				// - sanitize
-				self.f = f32::max(self.f, 0.);
-				/* -- zNear --------------------------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("zNear")
-				});
-				let tmp = self.zNear;
-				ui.add(egui::Slider::new(&mut self.zNear, 0.0001..=f32::min(10., self.zFar-0.001))
-					.logarithmic(true)
-					.drag_value_speed(0.03125*tmp as f64)
-					.clamping(egui::SliderClamping::Never)
-				);
-				ui.end_row();
-				// - sanitize
-				self.zNear = f32::clamp(self.zNear, 0., self.zFar-0.001);
-				/* -- zFar --------------------------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("zFar")
-				});
-				let tmp = self.zFar;
-				ui.add(egui::Slider::new(&mut self.zFar, f32::max(self.zNear+0.001, 0.001)..=1024.)
-					.logarithmic(true)
-					.drag_value_speed(0.03125*tmp as f64)
-					.clamping(egui::SliderClamping::Never)
-				);
-				ui.end_row();
-				// - sanitize
-				self.zFar = f32::max(self.zFar, self.zNear+0.001);
-			});
-		});
-	}
-
 	pub fn ui (&mut self, ui: &mut egui::Ui)
 	{
-		// Layouting calculations
-		let awidth = ui.available_width();
-		let rhswidth = f32::max(192f32, awidth*1./2.);
-		let lhsminw = f32::max(awidth - rhswidth - ui.spacing().item_spacing.x, 0.);
+		// Header
+		ui.label(egui::RichText::new("Intrinsics").underline());
 
-		// Create UI
-		self.uiWithSizes(lhsminw, rhswidth, ui);
+		// UI section contents
+		let mut gui = gui::layout::ControlTable::default();
+		// - perspective/orthographic
+		let mut ortho = self.fovY.isOrthographic();
+		gui.addWithoutResponse("projection", |ui, _| ui.add(
+			egui::Checkbox::new(&mut ortho, "orthographic")
+		));
+		// - FoV
+		gui.add("FoV (Y)", |ui, _| match self.fovY {
+			FoV::Perspective(old) => {
+				let old = math::rad2deg!(old);
+				let mut new = old;
+				ui.add(egui::Slider::new(&mut new, 1f32..=179.)
+					.drag_value_speed(0.03125*old as f64)
+					.clamping(egui::SliderClamping::Never)
+				);
+				if new != old {
+					self.fovY = FoV::Perspective(math::deg2rad!(new));
+				}
+			},
+			FoV::Orthographic(old) => {
+				let mut new = old;
+				ui.add(egui::Slider::new(&mut new, 0.1..=100.)
+					.logarithmic(true)
+					.drag_value_speed(0.03125*old as f64)
+					.clamping(egui::SliderClamping::Never)
+				);
+				if new != old {
+					self.fovY = FoV::Orthographic(new);
+				}
+			}
+		});
+		// - f
+		let tmp = self.f;
+		let slider = egui::Slider::new(&mut self.f, self.zNear..=self.zFar)
+			.drag_value_speed(0.03125*tmp as f64)
+			.clamping(egui::SliderClamping::Never);
+		gui.add("focus distance", |ui, _| {
+			ui.add(slider);
+		});
+		// - zNear
+		let zNear_old = self.zNear;
+		let slider = egui::Slider::new(&mut self.zNear, 0.0001..=f32::min(10., self.zFar-0.001))
+			.logarithmic(true)
+			.drag_value_speed(0.03125*tmp as f64)
+			.clamping(egui::SliderClamping::Never);
+		gui.add("zNear", |ui, _| {
+			ui.add(slider);
+		});
+		// - zFar
+		let tmp = self.zFar;
+		let slider = egui::Slider::new(&mut self.zFar, f32::max(zNear_old+0.001, 0.001)..=1024.)
+			.logarithmic(true)
+			.drag_value_speed(0.03125*tmp as f64)
+			.clamping(egui::SliderClamping::Never);
+		gui.add("zFar", |ui, _| {
+			ui.add(slider);
+		});
+		// - render
+		gui.show(ui, "CGV__cam_intr");
+
+		// Post process - we can't handle this inside the responses because of Rust's aliasing rules (`fovY`, `f`,
+		// `zNear` and `zFar` are all affected by several controls, thus we would have to hold mutable references to
+		// them in several closures)
+		// ToDo: Explore design options for directly addressing this
+		if ortho != self.fovY.isOrthographic() {
+			self.fovY = match self.fovY {
+				FoV::Perspective(fovY)
+				=> FoV::Orthographic(Intrinsics::frustumDiameterAtFocus(fovY, self.f)),
+
+				FoV::Orthographic(height) => FoV::Perspective(
+					Intrinsics::angleForFrustumDiameterAndFocus(height, self.f)
+				)
+			};
+		}
+		self.f = f32::max(self.f, 0.);
+		self.zNear = f32::clamp(self.zNear, 0., self.zFar-0.001);
+		self.zFar = f32::max(self.zFar, self.zNear+0.001);
 	}
 }
 impl PartialEq for Intrinsics
@@ -193,62 +158,58 @@ pub struct Extrinsics {
 }
 impl Extrinsics
 {
-	pub fn uiWithSizes (&mut self, lhsMinWidth: f32, #[allow(unused_variables)]rhsWidth: f32, ui: &mut egui::Ui)
+	pub fn ui (&mut self, ui: &mut egui::Ui)
 	{
-		// Create UI
-		ui.vertical(|ui| {
+		ui.vertical(|ui|
+		{
+			// Header
 			ui.label(egui::RichText::new("Extrinsics").underline());
-			egui::Grid::new("CGV__cam_extr").num_columns(4).striped(true).show(ui, |ui| {
-				/* -- eye ----------------------------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("eye point")
-				});
-				gui::control::vec3_sized(ui, &mut self.eye, rhsWidth);
-				ui.end_row();
-				/* -- dir ----------------------------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("direction")
-				});
-				if gui::control::vec3_sized(ui, &mut self.dir, rhsWidth) {
-					if self.dir.norm_squared() == 0. {
+
+			// UI section contents
+			let mut gui = gui::layout::ControlTable::default();
+			// - eye
+			gui.add("eye point",
+				|ui, idealSize| { gui::control::vec3_sized(ui, &mut self.eye, idealSize); }
+			);
+			// - dir
+			let mut dirChanged = false;
+			gui.add("direction",
+				|ui, idealSize| if gui::control::vec3_sized(ui, &mut self.dir, idealSize) {
+					if self.dir.norm_squared() < 0.00001 {
 						self.dir.z = -1.;
 					}
 					else {
 						self.dir.normalize_mut();
 					}
-					self.up = glm::cross(&self.dir, &self.up).cross(&self.dir).normalize();
-				};
-				ui.end_row();
-				/* -- up ------------------------------------------------------------ */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsMinWidth);
-					ui.label("up direction")
-				});
-				if gui::control::vec3_sized(ui, &mut self.up, rhsWidth) {
-					if self.up.norm_squared() == 0. {
+					dirChanged = true;
+				}
+			);
+			// - up
+			let mut upChanged = false;
+			gui.add("up direction",
+				|ui, idealSize| if gui::control::vec3_sized(ui, &mut self.up, idealSize) {
+					if self.up.norm_squared() < 0.00001 {
 						self.up.y = 1.;
 					}
 					else {
 						self.up.normalize_mut();
 					}
-					self.dir = glm::cross(&self.up, &self.dir).cross(&self.up).normalize();
+					upChanged = true;
 				}
-				ui.end_row();
-			});
+			);
+			// - render
+			gui.show(ui, "CGV__cam_extr");
+
+			// Post process - we can't handle this inside the responses because of Rust's aliasing rules (`up` and `dir`
+			// are affected by both controls, thus we would have to hold mutable references to both in both closures)
+			// ToDo: Explore design options for directly addressing this
+			if upChanged {
+				self.up = glm::cross(&self.dir, &self.up).cross(&self.dir).normalize();
+			}
+			if dirChanged {
+				self.dir = glm::cross(&self.up, &self.dir).cross(&self.up).normalize();
+			}
 		});
-	}
-
-	pub fn ui (&mut self, ui: &mut egui::Ui)
-	{
-		// Layouting calculations
-		let awidth = ui.available_width();
-		let rhswidth = f32::max(192f32, awidth*1./2.);
-		let lhsminw = f32::max(awidth - rhswidth - ui.spacing().item_spacing.x, 0.);
-
-		// Create UI
-		self.uiWithSizes(lhsminw, rhswidth, ui);
 	}
 }
 impl Default for Extrinsics {
@@ -338,68 +299,63 @@ impl CameraParameters
 
 	pub fn ui (camera: &mut dyn Camera, ui: &mut egui::Ui)
 	{
+		// Confguration constants parameters
+		const FOV_ORTHO_THRESHOLD: f32 = 5.;
+
 		// Track camera parameters wrt. to current values
 		let params_orig = camera.parameters();
 		let mut params = params_orig.clone();
 		let mut changed = false;
 
-		// Layouting calculations
-		let awidth = ui.available_width();
-		let rhswidth = f32::max(192f32, awidth*1./2.);
-		let lhsminw = f32::max(awidth-rhswidth - ui.spacing().item_spacing.x, 0.);
-
 		// UI for compound settings
-		ui.vertical(|ui| {
-			ui.spacing_mut().slider_width = rhswidth-56.;
+		ui.vertical(|ui|
+		{
+			// Header
 			ui.label(egui::RichText::new("Compounds").underline());
-			egui::Grid::new("CGV__cam_cmpd").num_columns(2).striped(true).show(ui, |ui| {
-				/* -- Zoom (affects f, eye) ----------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("zoom")
-				});
-				ui.add(
+
+			// UI section contents
+			let mut compoundsUi = gui::layout::ControlTable::default();
+			/* -- zoom (affects f, eye) ----------------------------------------- */
+			compoundsUi.add("zoom",
+				|ui, _| if ui.add(
 					egui::Slider::new(&mut params.intrinsics.f, params.intrinsics.zNear..=params.intrinsics.zFar)
 						.drag_value_speed(0.03125*params_orig.intrinsics.f as f64)
 						.clamping(egui::SliderClamping::Never)
-				);
-				ui.end_row();
-				// - handle changes
-				params.intrinsics.f = f32::max(params.intrinsics.f, 0.);
-				if params.intrinsics.f != params_orig.intrinsics.f {
-					let focus =
-						params.extrinsics.eye + params.extrinsics.dir*params_orig.intrinsics.f;
+				).changed() {
+					let focus = params.extrinsics.eye + params.extrinsics.dir*params_orig.intrinsics.f;
 					params.extrinsics.eye = focus - params.extrinsics.dir*params.intrinsics.f;
 					changed = true;
 				}
-				/* -- Vertigo (affects f, fov, eye) --------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("vertigo")
-				});
-				let mut fov = if let FoV::Perspective(fov) = params.intrinsics.fovY {
-					math::rad2deg!(fov)
-				} else { 5. };
-				let tmp = fov;
-				if ui.add(egui::Slider::new(&mut fov, 5f32..=179.)
-					.drag_value_speed(0.03125*tmp as f64)
+			);
+			/* -- vertigo (affects f, fov, eye) --------------------------------- */
+			let mut fov = if let FoV::Perspective(fov) = params.intrinsics.fovY { math::rad2deg!(fov) }
+			              else                                                        { FOV_ORTHO_THRESHOLD };
+			let fov_old = fov;
+			compoundsUi.addWithoutResponse("vertigo", |ui, _| ui.add(
+				egui::Slider::new(&mut fov, 5f32..=179.)
+					.drag_value_speed(0.03125*fov_old as f64)
 					.clamping(egui::SliderClamping::Always)
-				).changed() {
-					params.adjustForTargetFov(math::deg2rad!(fov), math::deg2rad!(5.));
-					changed = true;
-				};
-				ui.end_row();
-			});
+			));
+			/* -- render -------------------------------------------------------- */
+			compoundsUi.show(ui, "CGV__cam_cmpd");
+
+			// Handle vertigo changes, which we don't do in a response because the closures would then violate Rust's
+			// aliasing rules for our `params` variable (as mostly the same fields are affected by the vertigo slider)
+			// ToDo: Explore design options for directly addressing this
+			if fov != fov_old {
+				params.adjustForTargetFov(
+					math::deg2rad!(fov), math::deg2rad!(FOV_ORTHO_THRESHOLD)
+				);
+				changed = true;
+			}
 		});
 
 		// UI for intrinsics
-		params.intrinsics.uiWithSizes(lhsminw, rhswidth, ui);
+		params.intrinsics.ui(ui);
 		changed |= params.intrinsics != params_orig.intrinsics;
 
 		// UI for extrinsics
-		params.extrinsics.uiWithSizes(lhsminw, rhswidth, ui);
+		params.extrinsics.ui(ui);
 		changed |= params.extrinsics != params_orig.extrinsics;
 
 		// Apply changes

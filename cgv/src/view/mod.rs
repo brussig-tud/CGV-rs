@@ -28,7 +28,7 @@ pub use wasdinteractor::WASDInteractor; // re-export
 //
 
 // Standard library
-/* Nothing here yet */
+/* nothing here yet */
 
 // Egui library
 use egui;

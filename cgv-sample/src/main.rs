@@ -359,24 +359,21 @@ impl cgv::Application for SampleApplication
 
 	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
 	{
-		// Make sure we can capture our guiState member struct in the layout callbacks
-		let guiState = util::mutify(&self.guiState);
-
-		// Add the standard 2-column control grid
-		let mut gui = cgv::gui::layout::ControlTable::default();
-		gui.add(
+		// Add the standard 2-column layout control grid
+		let mut ctrlTable = cgv::gui::layout::ControlTable::default();
+		ctrlTable.addWithoutResponse(
 			"check",
-			|ui, _| ui.add(egui::Checkbox::new(&mut guiState.dummy_bool, "dummy bool"))
+			|ui, _| ui.add(egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool"))
 		);
-		gui.add(
+		ctrlTable.addWithoutResponse(
 			"dummy f32",
 			|ui, _| ui.add(
-				egui::Slider::new(&mut guiState.dummy_float, 0.1..=100.)
+				egui::Slider::new(&mut self.guiState.dummy_float, 0.1..=100.)
 					.logarithmic(true)
 					.clamping(egui::SliderClamping::Always)
 			)
 		);
-		gui.show(ui, "CgvExample");
+		ctrlTable.show(ui, "CgvExample");
 	}
 }
 

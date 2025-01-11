@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* Nothing here yet */
+/* nothing here yet */
 
 // Egui library
 use egui;
