@@ -10,9 +10,6 @@
 // Egui library
 use egui;
 
-// Local imports
-use crate::util;
-
 
 
 //////
@@ -22,85 +19,108 @@ use crate::util;
 
 /// Holds a pair of widgets making up a row in a [`ControlTable`].
 struct ControlTableRow {
-	lhs: Box<dyn FnOnce(&mut egui::Ui, f32) -> egui::Response>,
+	lhs: Option<Box<dyn FnOnce(&mut egui::Ui, f32) -> egui::Response>>,
 	rhs: Box<dyn FnOnce(&mut egui::Ui, f32) -> egui::Response>
 }
 
 /// A smart 2-column grid layout that uses the assumption that it will contain a list of controls, with a descriptive
 /// label on the left and the control on the right, to efficiently make use of the available space while maintaining a
 /// clean and tidy look.
-pub struct ControlTable<'ui, 'id_salt>
+///
+/// Widgets are provided via Closures taking the active *egui* [UI object](egui::Ui) as well as an `f32` indicating the
+/// ideal width of any widget added to the grid cell (see example), which users are free to ignore.
+pub struct ControlTable
 {
-	ui: &'ui egui::Ui,
-	id_salt: &'id_salt str,
-
-	rhsWidth: f32,
-	lhsMinWidth: f32,
+	minRhsWidth: f32,
 	controls: Vec<ControlTableRow>
 }
-impl<'ui, 'id_salt> ControlTable<'ui, 'id_salt>
+impl ControlTable
 {
-	/// Create a `ControlTable` that will operate on the given *egui* UI object, specifying a minimum width that the
-	/// right-hand side will never be smaller than. If there is not enough available space to accommodate a right-hand
-	/// side of that size, then the whole layouted region will get a horizontal scroll bar.
+	/// Create a `ControlTable` with the specified minimum width for the right-hand side. If there is not enough
+	/// available space to accommodate a right-hand side of that size, the whole layouted region will get a horizontal
+	/// scroll bar.
 	///
 	/// # Arguments
 	///
-	/// * `ui` – The *egui* UI object the contents of the `ControlTable` should appear on.
-	/// * `id_salt` – A name that *egui* can use as salt for a hash that uniquely identifies the GUI region occupied by
-	///               the layout.
 	/// * `minRhsWidth` – The desired minimum width that the right-hand-side of the control table will never be smaller
 	///                   than.
-	pub fn withUiAndMinRhsWidth (ui: &'ui mut egui::Ui, id_salt: &'id_salt str, minRhsWidth: f32) -> Self {
-		let availableWidth = ui.available_width();
-		let rhsWidth = f32::max(minRhsWidth, availableWidth*1./2.);
-		let controls = Vec::<ControlTableRow>::with_capacity(16);
-		Self {
-			ui, id_salt, rhsWidth, controls,
-			lhsMinWidth: f32::max(availableWidth-rhsWidth - ui.spacing().item_spacing.x, 0.)
-		}
+	pub fn withMinRhsWidth (minRhsWidth: f32) -> Self {
+		Self{minRhsWidth,  controls: Vec::<ControlTableRow>::with_capacity(16)}
 	}
 
-	/// Create a `ControlTable` that will operate on the given *egui* UI object. The minimum size of the control column
-	/// will be 192 units.
+	/// Add a labeled control to the table.
 	///
 	/// # Arguments
 	///
-	/// * `ui` – The *egui* UI object the contents of the `ControlTable` should appear on.
-	/// * `id_salt` – A name that *egui* can use as salt for a hash that uniquely identifies the GUI region occupied by
-	///               the layout.
-	pub fn withUi (ui: &'ui mut egui::Ui, id_salt: &'id_salt str) -> Self {
-		Self::withUiAndMinRhsWidth(ui, id_salt, 192f32)
+	/// * `label` – The descriptive text to be displayed on the left-hand side,
+	/// * `control` – The actual control widget to be displayed on the right-hand side.
+	pub fn add (
+		&mut self, label: impl AsRef<str> + 'static, control: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static
+	){
+		self.controls.push(ControlTableRow {
+			lhs: Some(Box::new(move |ui, _| ui.label(label.as_ref()))),
+			rhs: Box::new(control)
+		});
 	}
 
-	/// Add a control to the Table.
+	/// Add control without a left-hand side label to the table.
+	///
+	/// # Arguments
+	///
+	/// * `control` – The actual control widget to be displayed on the right-hand side.
+	pub fn addWithoutLabel (
+		&mut self, control: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static
+	){
+		self.controls.push(ControlTableRow{ lhs: None,  rhs: Box::new(control) });
+	}
+
+	/// Add a control to the table, with a user-provided widget on the left-hand side.
 	///
 	/// # Arguments
 	///
 	/// * `lhs` – Contents on the left-hand side (typically a label describing the control).
 	/// * `rhs` – Contents on the right-hand side (typically the actual control widget).
-	pub fn add (
+	pub fn addCustom (
 		&mut self,
 		lhs: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static,
 		rhs: impl FnOnce(&mut egui::Ui, f32)->egui::Response + 'static
 	){
-		self.controls.push(ControlTableRow { lhs: Box::new(lhs), rhs: Box::new(rhs) });
+		self.controls.push(ControlTableRow{ lhs: Some(Box::new(lhs)), rhs: Box::new(rhs) });
 	}
 
-	/// Render the layouted GUI.
-	pub fn show (self)
+	/// Render the layouted GUI on the provided *egui* UI object.
+	///
+	/// # Arguments
+	///
+	/// * `ui` – The *egui* UI object the contents of the `ControlTable` should appear for.
+	/// * `idSalt` – A name that *egui* can use as salt for a hash that uniquely identifies the GUI region occupied by
+	///              the layout.
+	pub fn show (self, ui: &mut egui::Ui, idSalt: impl AsRef<str>)
 	{
-		egui::Grid::new(self.id_salt).num_columns(2).striped(true).show(util::mutify(self.ui), |ui|
+		let availableWidth = ui.available_width();
+		let rhsWidth = f32::max(self.minRhsWidth, availableWidth*1./2.);
+		let lhsMinWidth = f32::max(availableWidth-rhsWidth - ui.spacing().item_spacing.x, 0.);
+		egui::Grid::new(idSalt.as_ref()).num_columns(2).striped(true).show(ui, move |ui|
 		{
+			ui.spacing_mut().slider_width = rhsWidth-56.;
 			for control in self.controls
 			{
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(self.lhsMinWidth);
-					(control.lhs)(ui, self.lhsMinWidth);
-				});
-				(control.rhs)(ui, self.rhsWidth);
+				if let Some(lhs) = control.lhs {
+					ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+						ui.set_min_width(lhsMinWidth);
+						(lhs)(ui, lhsMinWidth);
+					});
+				}
+				(control.rhs)(ui, rhsWidth);
 				ui.end_row();
 			}
 		});
+	}
+}
+impl Default for ControlTable {
+	/// Create a `ControlTable` with the default minimum size of 192 units for the right-hand side containing the actual
+	/// controls.
+	fn default () -> Self {
+		Self::withMinRhsWidth(192.)
 	}
 }
