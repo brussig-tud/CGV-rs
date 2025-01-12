@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* nothing here yet */
+use std::cell::RefCell;
 
 // Egui library
 use egui;
@@ -304,8 +304,13 @@ impl CameraParameters
 
 		// Track camera parameters wrt. to current values
 		let params_orig = camera.parameters();
-		let mut params = params_orig.clone();
-		let mut changed = false;
+
+		// Put mutable state into RefCell to convince the compiler that our multiple mutable references in the closures
+		// below are indeed unproblematic
+		struct State { params: CameraParameters, changed: bool }
+		let state = RefCell::new(State {
+			params: params_orig.clone(), changed: false,
+		});
 
 		// UI for compound settings
 		ui.vertical(|ui|
@@ -317,50 +322,53 @@ impl CameraParameters
 			let mut compoundsUi = gui::layout::ControlTable::default();
 			/* -- zoom (affects f, eye) ----------------------------------------- */
 			compoundsUi.add("zoom",
-				|ui, _| if ui.add(
-					egui::Slider::new(&mut params.intrinsics.f, params.intrinsics.zNear..=params.intrinsics.zFar)
-						.drag_value_speed(0.03125*params_orig.intrinsics.f as f64)
-						.clamping(egui::SliderClamping::Never)
-				).changed() {
-					let focus = params.extrinsics.eye + params.extrinsics.dir*params_orig.intrinsics.f;
-					params.extrinsics.eye = focus - params.extrinsics.dir*params.intrinsics.f;
-					changed = true;
+				|ui, _| {
+					let mut state = state.borrow_mut();
+					if ui.add(
+						egui::Slider::new(&mut state.params.intrinsics.f, params_orig.intrinsics.zNear..=params_orig.intrinsics.zFar)
+							.drag_value_speed(0.03125*params_orig.intrinsics.f as f64)
+							.clamping(egui::SliderClamping::Never)
+					).changed() {
+						let focus = state.params.extrinsics.eye + state.params.extrinsics.dir*params_orig.intrinsics.f;
+						state.params.extrinsics.eye = focus - state.params.extrinsics.dir*state.params.intrinsics.f;
+						state.changed = true;
+					}
 				}
 			);
 			/* -- vertigo (affects f, fov, eye) --------------------------------- */
-			let mut fov = if let FoV::Perspective(fov) = params.intrinsics.fovY { math::rad2deg!(fov) }
-			              else                                                        { FOV_ORTHO_THRESHOLD };
+			let mut fov =
+				if let FoV::Perspective(fov) = state.borrow_mut().params.intrinsics.fovY { math::rad2deg!(fov) }
+				  else                                                                         { FOV_ORTHO_THRESHOLD };
 			let fov_old = fov;
-			compoundsUi.addWithoutResponse("vertigo", |ui, _| ui.add(
-				egui::Slider::new(&mut fov, 5f32..=179.)
-					.drag_value_speed(0.03125*fov_old as f64)
-					.clamping(egui::SliderClamping::Always)
-			));
+			compoundsUi.add("vertigo", |ui, _| {
+				let mut state = state.borrow_mut();
+				if ui.add(
+					egui::Slider::new(&mut fov, 5f32..=179.)
+						.drag_value_speed(0.03125*fov_old as f64)
+						.clamping(egui::SliderClamping::Always)
+				).changed() {
+					state.params.adjustForTargetFov(
+						math::deg2rad!(fov), math::deg2rad!(FOV_ORTHO_THRESHOLD)
+					);
+					state.changed = true;
+				}
+			});
 			/* -- render -------------------------------------------------------- */
 			compoundsUi.show(ui, "CGV__cam_cmpd");
-
-			// Handle vertigo changes, which we don't do in a response because the closures would then violate Rust's
-			// aliasing rules for our `params` variable (as mostly the same fields are affected by the vertigo slider)
-			// ToDo: Explore design options for directly addressing this
-			if fov != fov_old {
-				params.adjustForTargetFov(
-					math::deg2rad!(fov), math::deg2rad!(FOV_ORTHO_THRESHOLD)
-				);
-				changed = true;
-			}
 		});
 
 		// UI for intrinsics
-		params.intrinsics.ui(ui);
-		changed |= params.intrinsics != params_orig.intrinsics;
+		let mut state = state.borrow_mut();
+		state.params.intrinsics.ui(ui);
+		state.changed |= state.params.intrinsics != params_orig.intrinsics;
 
 		// UI for extrinsics
-		params.extrinsics.ui(ui);
-		changed |= params.extrinsics != params_orig.extrinsics;
+		state.params.extrinsics.ui(ui);
+		state.changed |= state.params.extrinsics != params_orig.extrinsics;
 
 		// Apply changes
-		if changed {
-			*camera.parameters_mut() = params;
+		if state.changed {
+			*camera.parameters_mut() = state.params;
 		}
 	}
 }
