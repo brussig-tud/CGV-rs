@@ -299,7 +299,7 @@ impl CameraParameters
 
 	pub fn ui (camera: &mut dyn Camera, ui: &mut egui::Ui)
 	{
-		// Confguration constants parameters
+		// Configuration constants parameters
 		const FOV_ORTHO_THRESHOLD: f32 = 5.;
 
 		// Track camera parameters wrt. to current values
