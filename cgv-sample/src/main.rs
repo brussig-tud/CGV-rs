@@ -141,6 +141,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				usage: wgpu::BufferUsages::VERTEX,
 			}
 		);
+
 		let indexBuffer = context.device().create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
 				label: Some("Example__HermiteIndices"),
@@ -259,7 +260,6 @@ impl SampleApplication
 				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &self.texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
-
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Example__RenderPipeline"),
 			layout: Some(&pipelineLayout),
@@ -361,18 +361,18 @@ impl cgv::Application for SampleApplication
 	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
 	{
 		// Add the standard 2-column layout control grid
-		let controlTable = cgv::gui::layout::ControlTableLayouter::new(ui);
-		controlTable.layout(ui, "CgvExample", |controlTable|
-		{
-			controlTable.add("check", |ui, _| ui.add(
-				egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool")
-			));
-			controlTable.add("dummy f32", |ui, _| ui.add(
-				egui::Slider::new(&mut self.guiState.dummy_float, 0.1..=100.)
-					.logarithmic(true)
-					.clamping(egui::SliderClamping::Always)
-			));
-		});
+		cgv::gui::layout::ControlTableLayouter::new(ui).layout(
+			ui, "CgvExample", |controlTable| {
+				controlTable.add("check", |ui, _| ui.add(
+					egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool")
+				));
+				controlTable.add("dummy f32", |ui, _| ui.add(
+					egui::Slider::new(&mut self.guiState.dummy_float, 0.1..=100.)
+						.logarithmic(true)
+						.clamping(egui::SliderClamping::Always)
+				));
+			}
+		);
 	}
 }
 
