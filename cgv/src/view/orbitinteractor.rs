@@ -122,7 +122,7 @@ impl CameraInteractor for OrbitInteractor
 				if info.button(egui::PointerButton::Secondary)
 				{
 					let p = camera.parameters_mut();
-					let speed = p.intrinsics.f * delta*1./512.;
+					let speed = p.intrinsics.f * delta*1./192.*self.dragSensitivity;
 					let right = &glm::cross(&p.extrinsics.dir, &p.extrinsics.up);
 					let diff = speed.x*right + speed.y*p.extrinsics.up;
 					p.extrinsics.eye += diff;
@@ -135,7 +135,7 @@ impl CameraInteractor for OrbitInteractor
 				if info.button(egui::PointerButton::Middle)
 				{
 					let p = camera.parameters_mut();
-					let movement = p.intrinsics.f*delta.y*1./256. * p.extrinsics.dir;
+					let movement = p.intrinsics.f*delta.y*1./96.*self.dragSensitivity * p.extrinsics.dir;
 					p.extrinsics.eye += movement;
 					if self.focusChange.is_some() {
 						self.focusChange = None;
@@ -187,49 +187,35 @@ impl CameraInteractor for OrbitInteractor
 
 	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui)
 	{
-		// Layouting calculations
-		let awidth = ui.available_width();
-		let rhswidth = f32::max(192f32, awidth*1./2.);
-		let lhsminw = f32::max(awidth-rhswidth - ui.spacing().item_spacing.x, 0.);
+		// Put the UI inside a standard ControlTable
+		gui::layout::ControlTableLayouter::new(ui).layout(ui, "CGV__orbint", |orbitUi|
+		{
+			// fixUp
+			let mut fix = self.fixUp.is_some();
+			if orbitUi.add("orbit", |ui, _|
+				ui.add(egui::Checkbox::new(&mut fix, "fix up direction"))
+			).changed() {
+				self.fixUp = fix.then_some(assignedCamera.parameters().extrinsics.up);
+			}
 
-		// UI for compound settings
-		ui.vertical(|ui| {
-			ui.spacing_mut().slider_width = rhswidth-56.;
-			//ui.label(egui::RichText::new("Compounds").underline());
-			egui::Grid::new("CGV__orbint").num_columns(2).striped(true).show(ui, |ui| {
-				/* -- Fix up direction ---------------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("orbit")
-				});
-				let mut fix = self.fixUp.is_some();
-				if ui.add(egui::Checkbox::new(&mut fix, "fix up direction")).changed() {
-					self.fixUp = fix.then_some(assignedCamera.parameters().extrinsics.up);
+			// Action: reset up direction
+			if orbitUi.add("", |ui, _| ui.add(
+				egui::Button::new("reset up direction")
+			)).clicked() {
+				let fixedUp = glm::vec3(0., 1., 0.);
+				let params = assignedCamera.parameters_mut();
+				let right = params.extrinsics.dir.cross(&fixedUp);
+				params.extrinsics.up = right.cross(&params.extrinsics.dir).normalize();
+				if let Some(upAxis) = &mut self.fixUp {
+					*upAxis = fixedUp;
 				};
-				ui.end_row();
-				/* -- Reset up direction -------------------------------------------- */
-				ui.allocate_exact_size(egui::vec2(1., 1.), egui::Sense::hover());
-				if ui.add(egui::Button::new("reset up direction")).clicked() {
-					let fixedUp = glm::vec3(0., 1., 0.);
-					let params = assignedCamera.parameters_mut();
-					let right = params.extrinsics.dir.cross(&fixedUp);
-					params.extrinsics.up = right.cross(&params.extrinsics.dir).normalize();
-					if let Some(upAxis) = &mut self.fixUp {
-						*upAxis = fixedUp;
-					}
-				};
-				ui.end_row();
-				/* -- Drag sensitivity ---------------------------------------------- */
-				// - define UI
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("drag sensitivity")
-				});
-				ui.add(egui::Slider::new(&mut self.dragSensitivity, 0.03125..=2.)
+			}
+
+			// dragSensitivity
+			orbitUi.add("drag sensitivity", |ui, _| ui.add(
+				egui::Slider::new(&mut self.dragSensitivity, 0.03125..=2.)
 					.clamping(egui::SliderClamping::Always)
-				);
-				ui.end_row();
-			})
+			));
 		});
 	}
 }

@@ -259,6 +259,7 @@ impl SampleApplication
 				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &self.texBindGroupLayout],
 				push_constant_ranges: &[],
 			});
+
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Example__RenderPipeline"),
 			layout: Some(&pipelineLayout),
@@ -360,20 +361,18 @@ impl cgv::Application for SampleApplication
 	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
 	{
 		// Add the standard 2-column layout control grid
-		let mut ctrlTable = cgv::gui::layout::ControlTable::default();
-		ctrlTable.addWithoutResponse(
-			"check",
-			|ui, _| ui.add(egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool"))
-		);
-		ctrlTable.addWithoutResponse(
-			"dummy f32",
-			|ui, _| ui.add(
+		let controlTable = cgv::gui::layout::ControlTableLayouter::new(ui);
+		controlTable.layout(ui, "CgvExample", |controlTable|
+		{
+			controlTable.add("check", |ui, _| ui.add(
+				egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool")
+			));
+			controlTable.add("dummy f32", |ui, _| ui.add(
 				egui::Slider::new(&mut self.guiState.dummy_float, 0.1..=100.)
 					.logarithmic(true)
 					.clamping(egui::SliderClamping::Always)
-			)
-		);
-		ctrlTable.show(ui, "CgvExample");
+			));
+		});
 	}
 }
 

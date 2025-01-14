@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::cell::RefCell;
+/* nothing here yet */
 
 // Egui library
 use egui;
@@ -14,6 +14,17 @@ use egui;
 use crate::*;
 use crate::util::math;
 use crate::view::*;
+
+
+
+//////
+//
+// Module-wide constants
+//
+
+/// The threshold angle, in degrees, at which the auto-generated camera parameter GUIs will switch between orthogonal
+/// and perspective projections.
+const FOV_ORTHO_THRESHOLD: f32 = 5.;
 
 
 
@@ -52,89 +63,90 @@ impl Intrinsics
 		(0.5*diameter)/f32::tan(0.5*fov)
 	}
 
-	pub fn ui (&mut self, ui: &mut egui::Ui)
+	pub fn ui (&mut self, ui: &mut egui::Ui) {
+		// Create ControlTable layouter and delegate the actual work
+		self.uiWithLayouter(ui, &gui::layout::ControlTableLayouter::new(ui));
+	}
+
+	pub fn uiWithLayouter (&mut self, ui: &mut egui::Ui, layouter: &gui::layout::ControlTableLayouter)
 	{
 		// Header
 		ui.label(egui::RichText::new("Intrinsics").underline());
 
-		// UI section contents
-		let mut gui = gui::layout::ControlTable::default();
-		// - perspective/orthographic
-		let mut ortho = self.fovY.isOrthographic();
-		gui.addWithoutResponse("projection", |ui, _| ui.add(
-			egui::Checkbox::new(&mut ortho, "orthographic")
-		));
-		// - FoV
-		gui.add("FoV (Y)", |ui, _| match self.fovY {
-			FoV::Perspective(old) => {
-				let old = math::rad2deg!(old);
-				let mut new = old;
-				ui.add(egui::Slider::new(&mut new, 1f32..=179.)
-					.drag_value_speed(0.03125*old as f64)
-					.clamping(egui::SliderClamping::Never)
-				);
-				if new != old {
-					self.fovY = FoV::Perspective(math::deg2rad!(new));
-				}
-			},
-			FoV::Orthographic(old) => {
-				let mut new = old;
-				ui.add(egui::Slider::new(&mut new, 0.1..=100.)
-					.logarithmic(true)
-					.drag_value_speed(0.03125*old as f64)
-					.clamping(egui::SliderClamping::Never)
-				);
-				if new != old {
-					self.fovY = FoV::Orthographic(new);
-				}
+		// Define the GUI elements
+		layouter.layout(ui, "CGV__cam_intr", |intrinsicsUi|
+		{
+			// Perspective/orthographic
+			let mut ortho = self.fovY.isOrthographic();
+			if intrinsicsUi.add("projection", |ui, _| ui.add(
+				egui::Checkbox::new(&mut ortho, "orthographic")
+			)).changed() {
+				self.fovY = match self.fovY
+				{
+					FoV::Perspective(fovY)
+					=> FoV::Orthographic(Intrinsics::frustumDiameterAtFocus(fovY, self.f)),
+
+					FoV::Orthographic(height) => FoV::Perspective(
+						Intrinsics::angleForFrustumDiameterAndFocus(height, self.f)
+					)
+				};
 			}
-		});
-		// - f
-		let tmp = self.f;
-		let slider = egui::Slider::new(&mut self.f, self.zNear..=self.zFar)
-			.drag_value_speed(0.03125*tmp as f64)
-			.clamping(egui::SliderClamping::Never);
-		gui.add("focus distance", |ui, _| {
-			ui.add(slider);
-		});
-		// - zNear
-		let zNear_old = self.zNear;
-		let slider = egui::Slider::new(&mut self.zNear, 0.0001..=f32::min(10., self.zFar-0.001))
-			.logarithmic(true)
-			.drag_value_speed(0.03125*tmp as f64)
-			.clamping(egui::SliderClamping::Never);
-		gui.add("zNear", |ui, _| {
-			ui.add(slider);
-		});
-		// - zFar
-		let tmp = self.zFar;
-		let slider = egui::Slider::new(&mut self.zFar, f32::max(zNear_old+0.001, 0.001)..=1024.)
-			.logarithmic(true)
-			.drag_value_speed(0.03125*tmp as f64)
-			.clamping(egui::SliderClamping::Never);
-		gui.add("zFar", |ui, _| {
-			ui.add(slider);
-		});
-		// - render
-		gui.show(ui, "CGV__cam_intr");
 
-		// Post process - we can't handle this inside the responses because of Rust's aliasing rules (`fovY`, `f`,
-		// `zNear` and `zFar` are all affected by several controls, thus we would have to hold mutable references to
-		// them in several closures)
-		// ToDo: Explore design options for directly addressing this
-		if ortho != self.fovY.isOrthographic() {
-			self.fovY = match self.fovY {
-				FoV::Perspective(fovY)
-				=> FoV::Orthographic(Intrinsics::frustumDiameterAtFocus(fovY, self.f)),
+			// fovY
+			intrinsicsUi.add("FoV (Y)", |ui, _| match self.fovY {
+				FoV::Perspective(old) => {
+					let mut angle = math::rad2deg!(old);
+					let response = ui.add(egui::Slider::new(&mut angle, 1f32..=179.)
+						.drag_value_speed(0.03125*old as f64)
+						.clamping(egui::SliderClamping::Never)
+					);
+					if response.changed() {
+						self.fovY = FoV::Perspective(math::deg2rad!(angle));
+					};
+					response
+				},
+				FoV::Orthographic(old) => {
+					let mut height = old;
+					let response = ui.add(egui::Slider::new(&mut height, 0.1..=100.)
+						.logarithmic(true)
+						.drag_value_speed(0.03125*old as f64)
+						.clamping(egui::SliderClamping::Never)
+					);
+					if response.changed() {
+						self.fovY = FoV::Orthographic(height);
+					};
+					response
+				}
+			});
 
-				FoV::Orthographic(height) => FoV::Perspective(
-					Intrinsics::angleForFrustumDiameterAndFocus(height, self.f)
-				)
-			};
-		}
-		self.f = f32::max(self.f, 0.);
-		self.zNear = f32::clamp(self.zNear, 0., self.zFar-0.001);
-		self.zFar = f32::max(self.zFar, self.zNear+0.001);
+			// f
+			let tmp = self.f;
+			if intrinsicsUi.add("focus distance", |ui, _| ui.add(
+				egui::Slider::new(&mut self.f, self.zNear..=self.zFar)
+					.drag_value_speed(0.03125*tmp as f64)
+					.clamping(egui::SliderClamping::Never)
+			)).changed() {
+				self.f = f32::max(self.f, 0.);
+			}
+
+			// zNear
+			let tmp = self.zNear;
+			intrinsicsUi.add("zNear", |ui, _| ui.add(
+				egui::Slider::new(&mut self.zNear, 0.0001..=self.zFar-0.0001)
+					.logarithmic(true)
+					.drag_value_speed(0.03125*tmp as f64)
+					.clamping(egui::SliderClamping::Always)
+			));
+
+			// zFar
+			let tmp = self.zFar;
+			intrinsicsUi.add("zFar", |ui, _| ui.add(
+				egui::Slider::new(&mut self.zFar, self.zNear+0.0001..=1024.)
+					.logarithmic(true)
+					.drag_value_speed(0.03125*tmp as f64)
+					.clamping(egui::SliderClamping::Always)
+			));
+		});
 	}
 }
 impl PartialEq for Intrinsics
@@ -158,55 +170,44 @@ pub struct Extrinsics {
 }
 impl Extrinsics
 {
-	pub fn ui (&mut self, ui: &mut egui::Ui)
+
+	pub fn ui (&mut self, ui: &mut egui::Ui) {
+		// Create ControlTable layouter and delegate the actual work
+		self.uiWithLayouter(ui, &gui::layout::ControlTableLayouter::new(ui));
+	}
+
+	pub fn uiWithLayouter (&mut self, ui: &mut egui::Ui, layouter: &gui::layout::ControlTableLayouter)
 	{
-		ui.vertical(|ui|
+		// Header
+		ui.label(egui::RichText::new("Extrinsics").underline());
+
+		// Define the GUI elements
+		layouter.layout(ui, "CGV__cam_extr", |extrinsicsUi|
 		{
-			// Header
-			ui.label(egui::RichText::new("Extrinsics").underline());
+			// eye
+			extrinsicsUi.add("eye point", |ui, idealSize|
+				gui::control::vec3_sized(ui, &mut self.eye, idealSize)
+			);
 
-			// UI section contents
-			let mut gui = gui::layout::ControlTable::default();
-			// - eye
-			gui.add("eye point",
-				|ui, idealSize| { gui::control::vec3_sized(ui, &mut self.eye, idealSize); }
-			);
-			// - dir
-			let mut dirChanged = false;
-			gui.add("direction",
-				|ui, idealSize| if gui::control::vec3_sized(ui, &mut self.dir, idealSize) {
-					if self.dir.norm_squared() < 0.00001 {
-						self.dir.z = -1.;
-					}
-					else {
-						self.dir.normalize_mut();
-					}
-					dirChanged = true;
+			// dir
+			if extrinsicsUi.add("direction", |ui, idealSize|
+				gui::control::vec3_sized(ui, &mut self.dir, idealSize)
+			){
+				if self.dir.norm_squared() < 0.00001 {
+					self.dir.z = -1.;
 				}
-			);
-			// - up
-			let mut upChanged = false;
-			gui.add("up direction",
-				|ui, idealSize| if gui::control::vec3_sized(ui, &mut self.up, idealSize) {
-					if self.up.norm_squared() < 0.00001 {
-						self.up.y = 1.;
-					}
-					else {
-						self.up.normalize_mut();
-					}
-					upChanged = true;
-				}
-			);
-			// - render
-			gui.show(ui, "CGV__cam_extr");
-
-			// Post process - we can't handle this inside the responses because of Rust's aliasing rules (`up` and `dir`
-			// are affected by both controls, thus we would have to hold mutable references to both in both closures)
-			// ToDo: Explore design options for directly addressing this
-			if upChanged {
+				self.dir.normalize_mut();
 				self.up = glm::cross(&self.dir, &self.up).cross(&self.dir).normalize();
 			}
-			if dirChanged {
+
+			// up
+			if extrinsicsUi.add("up direction", |ui, idealSize|
+				gui::control::vec3_sized(ui, &mut self.up, idealSize)
+			){
+				if self.up.norm_squared() < 0.00001 {
+					self.up.y = 1.;
+				}
+				self.up.normalize_mut();
 				self.dir = glm::cross(&self.up, &self.dir).cross(&self.up).normalize();
 			}
 		});
@@ -299,76 +300,65 @@ impl CameraParameters
 
 	pub fn ui (camera: &mut dyn Camera, ui: &mut egui::Ui)
 	{
-		// Configuration constants parameters
-		const FOV_ORTHO_THRESHOLD: f32 = 5.;
-
-		// Track camera parameters wrt. to current values
+		// Track changes to camera parameters
 		let params_orig = camera.parameters();
-
-		// Put mutable state into RefCell to convince the compiler that our multiple mutable references in the closures
-		// below are indeed unproblematic
-		struct State { params: CameraParameters, changed: bool }
-		let state = RefCell::new(State {
-			params: params_orig.clone(), changed: false,
-		});
+		let mut params = params_orig.clone();
+		let mut changed = false;
 
 		// UI for compound settings
+		let controlTable =
 		ui.vertical(|ui|
 		{
 			// Header
 			ui.label(egui::RichText::new("Compounds").underline());
 
 			// UI section contents
-			let mut compoundsUi = gui::layout::ControlTable::default();
-			/* -- zoom (affects f, eye) ----------------------------------------- */
-			compoundsUi.add("zoom",
-				|ui, _| {
-					let mut state = state.borrow_mut();
+			let controlTable = gui::layout::ControlTableLayouter::new(ui);
+			controlTable.layout(ui, "CGV__cam_cmpd", |compoundsUi| {
+				/* -- zoom (affects f, eye) ----------------------------------------- */
+				compoundsUi.add("zoom", |ui, _| {
 					if ui.add(
-						egui::Slider::new(&mut state.params.intrinsics.f, params_orig.intrinsics.zNear..=params_orig.intrinsics.zFar)
-							.drag_value_speed(0.03125*params_orig.intrinsics.f as f64)
-							.clamping(egui::SliderClamping::Never)
+						egui::Slider::new(
+							&mut params.intrinsics.f, params_orig.intrinsics.zNear..=params_orig.intrinsics.zFar
+						)
+						.drag_value_speed(0.03125 * params_orig.intrinsics.f as f64)
+						.clamping(egui::SliderClamping::Never)
 					).changed() {
-						let focus = state.params.extrinsics.eye + state.params.extrinsics.dir*params_orig.intrinsics.f;
-						state.params.extrinsics.eye = focus - state.params.extrinsics.dir*state.params.intrinsics.f;
-						state.changed = true;
+						let focus = params.extrinsics.eye + params.extrinsics.dir*params_orig.intrinsics.f;
+						params.extrinsics.eye = focus - params.extrinsics.dir*params.intrinsics.f;
+						changed = true;
 					}
-				}
-			);
-			/* -- vertigo (affects f, fov, eye) --------------------------------- */
-			let mut fov =
-				if let FoV::Perspective(fov) = state.borrow_mut().params.intrinsics.fovY { math::rad2deg!(fov) }
-				  else                                                                         { FOV_ORTHO_THRESHOLD };
-			let fov_old = fov;
-			compoundsUi.add("vertigo", |ui, _| {
-				let mut state = state.borrow_mut();
-				if ui.add(
-					egui::Slider::new(&mut fov, 5f32..=179.)
+				});
+				/* -- vertigo (affects f, fov, eye) --------------------------------- */
+				let mut fov = if let FoV::Perspective(fov) = params.intrinsics.fovY { math::rad2deg!(fov) }
+				                     else                                                      { FOV_ORTHO_THRESHOLD };
+				let fov_old = fov;
+				compoundsUi.add("vertigo", |ui, _| {
+					if ui.add(egui::Slider::new(&mut fov, 5f32..=179.)
 						.drag_value_speed(0.03125*fov_old as f64)
 						.clamping(egui::SliderClamping::Always)
-				).changed() {
-					state.params.adjustForTargetFov(
-						math::deg2rad!(fov), math::deg2rad!(FOV_ORTHO_THRESHOLD)
-					);
-					state.changed = true;
-				}
+					).changed() {
+						params.adjustForTargetFov(
+							math::deg2rad!(fov), math::deg2rad!(FOV_ORTHO_THRESHOLD)
+						);
+						changed = true;
+					}
+				});
 			});
-			/* -- render -------------------------------------------------------- */
-			compoundsUi.show(ui, "CGV__cam_cmpd");
-		});
+			controlTable
+		}).inner;
 
 		// UI for intrinsics
-		let mut state = state.borrow_mut();
-		state.params.intrinsics.ui(ui);
-		state.changed |= state.params.intrinsics != params_orig.intrinsics;
+		params.intrinsics.uiWithLayouter(ui, &controlTable);
+		changed |= params.intrinsics != params_orig.intrinsics;
 
 		// UI for extrinsics
-		state.params.extrinsics.ui(ui);
-		state.changed |= state.params.extrinsics != params_orig.extrinsics;
+		params.extrinsics.uiWithLayouter(ui, &controlTable);
+		changed |= params.extrinsics != params_orig.extrinsics;
 
 		// Apply changes
-		if state.changed {
-			*camera.parameters_mut() = state.params;
+		if changed {
+			*camera.parameters_mut() = params;
 		}
 	}
 }

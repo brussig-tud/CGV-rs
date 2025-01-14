@@ -930,7 +930,6 @@ impl eframe::App for Player
 					{
 						ui.vertical(|ui|
 						{
-							let awidth = ui.available_size().x;
 							match self.activeSidePanel
 							{
 								0 => {
@@ -939,31 +938,24 @@ impl eframe::App for Player
 									ui.separator();
 									ui.label("<nothing here yet>");
 								},
+
 								1 => {
 									// Camera UI
 									ui.centered_and_justified(|ui| ui.heading("📷 View"));
 									ui.separator();
-									egui::Grid::new("CGV__CameraUi")
-										.num_columns(2)
-										.striped(true)
-										.show(ui, |ui| {
-											/* -- prelude: layouting calculations ---------------------- */
-											let cbwidth = f32::max(192f32, awidth*1./2.);
-											let lminw = f32::max(
-												awidth - cbwidth - ui.spacing().item_spacing.x, 0.
-											);
-											/* -- camera interactor selection -------------------------- */ {
-												ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),
-													|ui| {
-														ui.set_min_width(lminw);
-														ui.label("Interactor")
-													}
-												);
+
+									// Active camera and interactor selection
+									gui::layout::ControlTableLayouter::new(ui).layout(
+										ui, "CGV__CameraUi",
+										|cameraUi|
+										{
+											// activeCameraInteractor
+											cameraUi.add("Interactor", |ui, idealSize|
 												egui::ComboBox::from_id_salt("CGV_view_inter")
 													.selected_text(
 														self.cameraInteractors[self.activeCameraInteractor].title()
 													)
-													.width(cbwidth)
+													.width(idealSize)
 													.show_ui(ui, |ui| {
 														for (i, ci) in
 															self.cameraInteractors.iter().enumerate()
@@ -972,28 +964,25 @@ impl eframe::App for Player
 																&mut self.activeCameraInteractor, i, ci.title()
 															);
 														}
-													});
-												ui.end_row();
-											}
-											/* -- active camera selection -------------------------- */ {
-												let mut sel: usize = 0;
-												ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),
-													|ui| {
-														ui.set_min_width(lminw);
-														ui.label("Active Camera")
-													}
-												);
+													})
+											);
+
+											// activeCamera
+											let mut sel: usize = 0; // dummy, remove once camera management is done
+											cameraUi.add("Active Camera", |ui, idealSize|
 												egui::ComboBox::from_id_salt("CGV_view_act")
 													.selected_text(self.camera.name())
-													.width(cbwidth)
+													.width(idealSize)
 													.show_ui(ui, |ui| {
 														ui.selectable_value(
 															&mut sel, 0, self.camera.name()
 														);
-													});
-												ui.end_row();
-											}
-										});
+													})
+											);
+										}
+									);
+
+									// Settings from active camera and interactor
 									ui.add_space(6.);
 									egui::CollapsingHeader::new("Interactor settings")
 										.id_salt("CGV_view_inter_s")
@@ -1007,6 +996,7 @@ impl eframe::App for Player
 											CameraParameters::ui(self.camera.as_mut(), ui);
 										});
 								},
+
 								2 => {
 									// Application UI
 									ui.centered_and_justified(|ui| ui.heading(
@@ -1016,6 +1006,7 @@ impl eframe::App for Player
 									let this = util::statify(self);
 									self.activeApplication.as_mut().unwrap().ui(ui, this);
 								},
+
 								_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
 							}
 						});

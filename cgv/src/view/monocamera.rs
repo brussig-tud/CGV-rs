@@ -89,8 +89,7 @@ impl Camera for MonoCamera<'_>
 		&self.renderState.viewingUniforms.borrowData().view
 	}
 
-	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2)
-	{
+	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
 		self.renderState.framebuffer.resize(context, viewportDims);
 		self.parameters.intrinsics.aspect = viewportDims.x as f32 / viewportDims.y as f32;
 		self.dirty = true;

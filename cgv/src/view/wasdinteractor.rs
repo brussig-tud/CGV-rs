@@ -296,58 +296,38 @@ impl CameraInteractor for WASDInteractor
 
 	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui)
 	{
-		// Layouting calculations
-		let awidth = ui.available_width();
-		let rhswidth = f32::max(192f32, awidth*1./2.);
-		let lhsminw = f32::max(awidth-rhswidth - ui.spacing().item_spacing.x, 0.);
+		// Put the UI inside a standard ControlTable
+		gui::layout::ControlTableLayouter::new(ui).layout(ui, "CGV__wasdint", |wasdUi|
+		{
+			// Action: reset up direction
+			if wasdUi.add("orientation", |ui, _| ui.add(
+				egui::Button::new("reset up direction")
+			)).clicked() {
+				self.referenceUp = glm::vec3(0., 1., 0.);
+				let params = assignedCamera.parameters_mut();
+				let right = params.extrinsics.dir.cross(&self.referenceUp);
+				params.extrinsics.up = right.cross(&params.extrinsics.dir).normalize();
+			}
 
-		// UI for compound settings
-		ui.vertical(|ui| {
-			ui.spacing_mut().slider_width = rhswidth-56.;
-			//ui.label(egui::RichText::new("Compounds").underline());
-			egui::Grid::new("CGV__orbint").num_columns(2).striped(true).show(ui, |ui| {
-				/* -- Fix up direction ---------------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("orientation")
-				});
-				if ui.add(egui::Button::new("reset up direction")).clicked() {
-					self.referenceUp = glm::vec3(0., 1., 0.);
-					let params = assignedCamera.parameters_mut();
-					let right = params.extrinsics.dir.cross(&self.referenceUp);
-					params.extrinsics.up = right.cross(&params.extrinsics.dir).normalize();
-				};
-				ui.end_row();
-				/* -- Movement speed factor ----------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("speed mult.")
-				});
-				ui.add(egui::Slider::new(&mut self.movementSpeedFactor, 0.03125..=4.)
+			// movementSpeedFactor
+			wasdUi.add("speed mult.", |ui, _| ui.add(
+				egui::Slider::new(&mut self.movementSpeedFactor, 0.03125..=4.)
 					.clamping(egui::SliderClamping::Never)
-				);
-				self.movementSpeedFactor = self.movementSpeedFactor.max(0.03125); // sanitize
-				ui.end_row();
-				/* -- Slow movement multiplier -------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("slow-key mult.")
-				});
-				ui.add(egui::Slider::new(&mut self.slowFactor, 0.03125..=0.75)
+			));
+			self.movementSpeedFactor = self.movementSpeedFactor.max(0.03125); // sanitize
+
+			// slowFactor
+			wasdUi.add("slow-key mult.", |ui, _| ui.add(
+				egui::Slider::new(&mut self.slowFactor, 0.03125..=0.75)
 					.clamping(egui::SliderClamping::Never)
-				);
-				self.slowFactor = self.slowFactor.max(0.03125); // sanitize
-				ui.end_row();
-				/* -- Drag sensitivity ---------------------------------------------- */
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					ui.set_min_width(lhsminw);
-					ui.label("drag sensitivity")
-				});
-				ui.add(egui::Slider::new(&mut self.dragSensitivity, 0.03125..=2.)
+			));
+			self.slowFactor = self.slowFactor.max(0.03125); // sanitize
+
+			// dragSensitivity
+			wasdUi.add("drag sensitivity", |ui, _| ui.add(
+				egui::Slider::new(&mut self.dragSensitivity, 0.03125..=2.)
 					.clamping(egui::SliderClamping::Always)
-				);
-				ui.end_row();
-			})
+			));
 		});
 	}
 }
