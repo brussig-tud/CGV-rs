@@ -16,7 +16,7 @@
 
 /// Submodule providing the [`Texture`](texture::Texture) facilities
 mod texture;
-pub use texture::{Texture, TextureSize, ReadBackTexels}; // re-export
+pub use texture::{Texture, TextureSize, ReadBackTexels, AlphaUsage, numBytesFromFormat, hasAlpha}; // re-export
 
 /// Submodule providing the [`Framebuffer`](texture::Framebuffer) facilities
 mod framebuffer;

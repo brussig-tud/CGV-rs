@@ -39,6 +39,12 @@ pub enum ReadBackTexels<'a> {
 	F32(&'a [f32])
 }
 
+/// Indicates the correct usage of texture alpha values for blending
+#[derive(Debug,Clone,Copy)]
+pub enum AlphaUsage {
+	DontCare, Straight, PreMultiplied
+}
+
 
 
 //////
@@ -51,6 +57,9 @@ pub enum ReadBackTexels<'a> {
 pub struct Texture {
 	/// The name (if any) of the texture object.
 	pub name: Option<String>,
+
+	/// How to interpret the alpha channel (if any) when blending.
+	pub alphaUsage: AlphaUsage,
 
 	/// The device texture object.
 	pub texture: Box<wgpu::Texture>,
@@ -79,7 +88,7 @@ pub struct Texture {
 
 impl Texture
 {
-	/// Create the texture from the given blob, uploading using the given queue on the given device.
+	/// Create the texture from the given blob.
 	///
 	/// # Arguments
 	///
@@ -95,7 +104,7 @@ impl Texture
 		Self::fromImage(context, &img, specialUsageFlags, label)
 	}
 
-	/// Create the texture from the given image, uploading using the given queue on the given device.
+	/// Create the texture from the given image.
 	///
 	/// # Arguments
 	///
@@ -210,8 +219,8 @@ impl Texture
 
 		// Done!
 		Ok(Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), texture,
-			name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler,
+			alphaUsage: AlphaUsage::DontCare, view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+			texture, name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
 		})
 	}
 
@@ -222,11 +231,12 @@ impl Texture
 	/// * `context` – The *CGV-rs* context under which to create the texture.
 	/// * `dims` – The desired dimensions in terms of width and height.
 	/// * `format` – The desired format of the texture.
+	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `usageFlags` – The set of [texture usages](wgpu::TextureUsages) the texture is intended for.
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn createEmptyTexture(
-		context: &Context, dims: glm::UVec2, format: wgpu::TextureFormat, usageFlags: wgpu::TextureUsages,
-		label: Option<&str>
+		context: &Context, dims: glm::UVec2, format: wgpu::TextureFormat, alphaUsage: AlphaUsage,
+		usageFlags: wgpu::TextureUsages, label: Option<&str>
 	) -> Self
 	{
 		// Store name in owned memory
@@ -305,8 +315,8 @@ impl Texture
 
 		// Done!
 		Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), texture,
-			name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
+			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), alphaUsage,
+			texture, name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
 		}
 	}
 
@@ -409,8 +419,8 @@ impl Texture
 
 		// Done!
 		Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), texture,
-			name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
+			alphaUsage: AlphaUsage::DontCare, view: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+			texture, name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
 		}
 	}
 
@@ -503,14 +513,30 @@ impl Texture
 /// Returns the number of bytes per texel for the given texture format.
 pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> usize
 {
-	match format {
-		wgpu::TextureFormat::Depth16Unorm => 2,
+	use wgpu::TextureFormat::*;
+	match format
+	{
+		Depth16Unorm => 2,
 
-		  wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb
-		| wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-		| wgpu::TextureFormat::Depth24PlusStencil8 | wgpu::TextureFormat::Depth32Float
+		Rgba8Unorm | Rgba8UnormSrgb | Bgra8Unorm | Bgra8UnormSrgb | Depth24PlusStencil8 | Depth32Float
 		=> 4,
 
-		_ => panic!("Unsupported texture format: {:?}", format)
+		_ => panic!("Unsupported or unimplemented texture format: {:?}", format)
+	}
+}
+
+/// Returns whether the given texture format has an alpha channel.
+pub fn hasAlpha (format: wgpu::TextureFormat) -> bool
+{
+	use wgpu::TextureFormat::*;
+	match format
+	{
+		Depth16Unorm | Depth24Plus | Depth24PlusStencil8 | Depth32Float | Depth32FloatStencil8
+		=> false,
+
+		Rgba8Unorm | Rgba8UnormSrgb | Bgra8Unorm | Bgra8UnormSrgb
+		=> true,
+
+		_ => panic!("Unsupported or unimplemented texture format: {:?}", format)
 	}
 }

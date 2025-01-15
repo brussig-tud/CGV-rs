@@ -163,18 +163,36 @@ pub fn defaultColorTargetState (colorTex: &hal::Texture) -> wgpu::ColorTargetSta
 {
 	wgpu::ColorTargetState {
 		format: colorTex.descriptor.format,
-		blend: None/*Some(wgpu::BlendState {
-			color: wgpu::BlendComponent::REPLACE/*wgpu::BlendComponent {
-				src_factor: BlendFactor::One,
-				dst_factor: BlendFactor::OneMinusSrcAlpha,
-				operation: BlendOperation::Add,
-			}*/,
-			alpha: wgpu::BlendComponent::REPLACE/*wgpu::BlendComponent {
-				src_factor: BlendFactor::One,
-				dst_factor: BlendFactor::OneMinusSrcAlpha,
-				operation: BlendOperation::Add,
-			}*/
-		})*/,
+		blend: if hal::hasAlpha(colorTex.descriptor.format) {
+			match colorTex.alphaUsage {
+				hal::AlphaUsage::DontCare => None,
+				hal::AlphaUsage::Straight => Some(wgpu::BlendState {
+					color: wgpu::BlendComponent {
+						src_factor: wgpu::BlendFactor::SrcAlpha,
+						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+						operation: wgpu::BlendOperation::Add,
+					},
+					alpha: wgpu::BlendComponent {
+						src_factor: wgpu::BlendFactor::One,
+						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+						operation: wgpu::BlendOperation::Add,
+					}
+				}),
+				hal::AlphaUsage::PreMultiplied => Some(wgpu::BlendState {
+					color: wgpu::BlendComponent {
+						src_factor: wgpu::BlendFactor::One,
+						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+						operation: wgpu::BlendOperation::Add,
+					},
+					alpha: wgpu::BlendComponent {
+						src_factor: wgpu::BlendFactor::One,
+						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+						operation: wgpu::BlendOperation::Add,
+					}
+				})
+			}
+		}
+		else { None },
 		write_mask: Default::default(),
 	}
 }

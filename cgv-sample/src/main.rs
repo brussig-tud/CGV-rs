@@ -313,7 +313,7 @@ impl cgv::Application for SampleApplication
 		self.pipelines.reserve(globalPasses.len());
 
 		// Recreate pipelines
-		for (_, pass) in globalPasses.iter().enumerate() {
+		for pass in globalPasses {
 			self.pipelines.push(self.createPipeline(context, pass.renderState, renderSetup));
 		}
 	}

@@ -46,6 +46,12 @@ var source: texture_2d<f32>;
 @group(0) @binding(1)
 var smpler: sampler;
 
+// Shader entry point: premultiplied
+@fragment
+fn fs_premultiplied (in: VertexOutput) -> @location(0) vec4f {
+	return vec4f(textureSample(source, smpler, in.uv));
+}
+
 // Shader entry point: non-premultiplied
 @fragment
 fn fs_non_premultiplied (in: VertexOutput) -> @location(0) vec4f {

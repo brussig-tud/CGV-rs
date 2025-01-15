@@ -10,6 +10,7 @@ pub use std::borrow::Borrow;
 
 // Local imports
 use crate::*;
+use hal::texture;
 
 
 
@@ -153,12 +154,12 @@ impl Framebuffer
 		for slot in 0..self.color.len() {
 			let old = &self.color[slot];
 			self.color[slot] = hal::Texture::createEmptyTexture(
-				context, newDims, old.descriptor.format, old.descriptor.usage, old.name.as_deref()
+				context, newDims, old.descriptor.format, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
 			);
 		}
 		if let Some(old) = &self.depthStencil {
 			self.depthStencil = Some(hal::Texture::createEmptyTexture(
-				context, newDims, old.descriptor.format, old.descriptor.usage, old.name.as_deref()
+				context, newDims, old.descriptor.format, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
 			));
 		}
 	}
@@ -253,7 +254,7 @@ impl<'label> FramebufferBuilder<'label>
 					unsafe { unreachable_unchecked(); }
 				};
 			color.push(hal::Texture::createEmptyTexture(
-				context, self.dims, format, usages,
+				context, self.dims, format, texture::AlphaUsage::DontCare, usages,
 				util::concatIfSome(&self.label, &format!("_colorAttachment{slot}")).as_deref()
 			));
 		}
@@ -300,8 +301,7 @@ pub fn decodeDepthU32 (_value: u32) -> f32 {
 /// t.b.d.
 pub fn decodeDepth (location: usize, texels: hal::ReadBackTexels) -> f32
 {
-	match texels
-	{
+	match texels {
 		hal::ReadBackTexels::U16(texels) => decodeDepthU16(texels[location]),
 		hal::ReadBackTexels::U32(texels) => decodeDepthU32(texels[location]),
 		hal::ReadBackTexels::F32(texels) => texels[location],
