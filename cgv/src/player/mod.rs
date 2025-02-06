@@ -230,11 +230,7 @@ impl Player
 		});
 
 		// Create context
-		let context = Context::new(&context::WgpuSetup {
-			adapter: &eguiRs.adapter,
-			device: &eguiRs.device,
-			queue: &eguiRs.queue
-		});
+		let context = Context::new(eguiRs);
 
 		// Log render setup
 		let renderSetup = RenderSetup::new(

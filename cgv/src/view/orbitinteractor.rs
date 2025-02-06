@@ -23,9 +23,9 @@ use util::math;
 //
 
 /// Small helper struct for storing stuff we need when animation focus changes
-struct FocusChangeContext<'pl> {
+struct FocusChangeContext<'player> {
 	pub fc: view::FocusChange,
-	pub player: &'pl Player
+	pub player: &'player Player
 }
 
 

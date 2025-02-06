@@ -76,11 +76,11 @@ pub struct Texture {
 	/// The buffer object for readback operations in case the texture usage allows for that
 	pub readbackBuffer: Option<Box<wgpu::Buffer>>,
 
-	/// The ImageCopyTexture-compatible view on the texture in case readback is enabled
-	pub readbackView_tex: Option<wgpu::ImageCopyTexture<'static>>,
+	/// The TexelCopyTextureInfo-compatible view on the texture in case readback is enabled
+	pub readbackView_tex: Option<wgpu::TexelCopyTextureInfo<'static>>,
 
-	/// The ImageCopyTexture-compatible view on the texture in case readback is enabled
-	pub readbackView_buf: Option<wgpu::ImageCopyBuffer<'static>>,
+	/// The TexelCopyBufferInfo-compatible view on the texture in case readback is enabled
+	pub readbackView_buf: Option<wgpu::TexelCopyBufferInfo<'static>>,
 
 	// Cached size (wihtout mipmap levels) in bytes.
 	pub size: TextureSize
@@ -146,14 +146,14 @@ impl Texture
 
 		// Upload to GPU
 		context.queue().write_texture(
-			wgpu::ImageCopyTexture {
+			wgpu::TexelCopyTextureInfo {
 				aspect: wgpu::TextureAspect::All,
 				texture: &texture,
 				mip_level: 0,
 				origin: wgpu::Origin3d::ZERO,
 			},
 			&image.to_rgba8(),
-			wgpu::ImageDataLayout {
+			wgpu::TexelCopyBufferLayout {
 				offset: 0,
 				bytes_per_row: Some(4 * size.width),
 				rows_per_image: Some(size.height),
@@ -195,7 +195,7 @@ impl Texture
 			_ => None
 		};
 		let readbackView_tex = match &readbackBuffer {
-			Some(_) => Some(wgpu::ImageCopyTexture {
+			Some(_) => Some(wgpu::TexelCopyTextureInfo {
 				texture: util::statify(texture.as_ref()),
 				mip_level: 0,
 				origin: Default::default(),
@@ -204,9 +204,9 @@ impl Texture
 			_ => None
 		};
 		let readbackView_buf = match &readbackBuffer {
-			Some(buffer) => Some(wgpu::ImageCopyBuffer {
+			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
 				buffer: util::statify(buffer.as_ref()),
-				layout: wgpu::ImageDataLayout {
+				layout: wgpu::TexelCopyBufferLayout {
 					bytes_per_row: Some(util::math::alignToFactor(
 						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
 						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
@@ -291,7 +291,7 @@ impl Texture
 			}))
 		);
 		let readbackView_tex = match &readbackBuffer {
-			Some(_) => Some(wgpu::ImageCopyTexture {
+			Some(_) => Some(wgpu::TexelCopyTextureInfo {
 				texture: util::statify(texture.as_ref()),
 				mip_level: 0,
 				origin: Default::default(),
@@ -300,9 +300,9 @@ impl Texture
 			_ => None
 		};
 		let readbackView_buf = match &readbackBuffer {
-			Some(buffer) => Some(wgpu::ImageCopyBuffer {
+			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
 				buffer: util::statify(buffer.as_ref()),
-				layout: wgpu::ImageDataLayout {
+				layout: wgpu::TexelCopyBufferLayout {
 					bytes_per_row: Some(alignToFactor(
 						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
 						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
@@ -395,7 +395,7 @@ impl Texture
 			_ => None
 		};
 		let readbackView_tex = match &readbackBuffer {
-			Some(_) => Some(wgpu::ImageCopyTexture {
+			Some(_) => Some(wgpu::TexelCopyTextureInfo {
 				texture: util::statify(texture.as_ref()),
 				mip_level: 0,
 				origin: Default::default(),
@@ -404,9 +404,9 @@ impl Texture
 			_ => None
 		};
 		let readbackView_buf = match &readbackBuffer {
-			Some(buffer) => Some(wgpu::ImageCopyBuffer {
+			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
 				buffer: util::statify(buffer.as_ref()),
-				layout: wgpu::ImageDataLayout {
+				layout: wgpu::TexelCopyBufferLayout {
 					bytes_per_row: Some(alignToFactor(
 						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
 						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT

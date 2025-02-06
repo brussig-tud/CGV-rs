@@ -5,24 +5,13 @@
 //
 
 // Standard library
-use std::sync::Arc;
+/* nothing here yet */
+
+// Egui library and framework
+use eframe::egui_wgpu;
 
 // WGPU API
 use crate::wgpu;
-
-
-
-//////
-//
-// Structs and enums
-//
-
-// Used to pass the *egui_wgpu* setup into the [`Context`] constructor.
-pub(crate) struct WgpuSetup<'a> {
-	pub adapter: &'a Arc<wgpu::Adapter>,
-	pub device: &'a Arc<wgpu::Device>,
-	pub queue: &'a Arc<wgpu::Queue>
-}
 
 
 
@@ -33,17 +22,17 @@ pub(crate) struct WgpuSetup<'a> {
 
 /// The CGV-rs rendering context storing all global graphics state.
 pub struct Context {
-	adapter: Arc<wgpu::Adapter>,
-	device: Arc<wgpu::Device>,
-	queue: Arc<wgpu::Queue>
+	adapter: wgpu::Adapter,
+	device: wgpu::Device,
+	queue: wgpu::Queue
 }
 impl Context
 {
 	// Creating some of the wgpu types requires async code
-	pub(crate) fn new (wgpuSetup: &WgpuSetup) -> Self { Self {
-		adapter: wgpuSetup.adapter.clone(),
-		device: wgpuSetup.device.clone(),
-		queue: wgpuSetup.queue.clone()
+	pub(crate) fn new (eguiRS: &egui_wgpu::RenderState) -> Self { Self {
+		adapter: eguiRS.adapter.clone(), // WGPU HAL objects are internally
+		device: eguiRS.device.clone(),   // reference counted, so cloning just
+		queue: eguiRS.queue.clone()      // creates and owns a new reference
 	}}
 
 	/// Reference the *WGPU* instance.
