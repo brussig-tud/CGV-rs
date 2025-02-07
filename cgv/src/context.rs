@@ -20,7 +20,7 @@ use crate::wgpu;
 // Classes
 //
 
-/// The CGV-rs rendering context storing all global graphics state.
+/// The CGV-rs graphics context providing access to all global *WGPU* HAL objects.
 pub struct Context {
 	adapter: wgpu::Adapter,
 	device: wgpu::Device,
@@ -28,11 +28,20 @@ pub struct Context {
 }
 impl Context
 {
-	// Creating some of the wgpu types requires async code
+	/// Create a context for the given *egui_wgpu* `RenderState`.
+	///
+	/// # Arguments
+	///
+	/// * `eguiRS` – An *egui_wgpu* `RenderState` providing the [`wgpu::Adapter`], [`wgpu::Device`] and
+	///              [`wgpu::Queue`] to be used in the context.
+	///
+	/// # Returns
+	///
+	/// A new graphics context owning references to the *WGPU* HAL objects the *egui_wgpu* `RenderState` provided.
 	pub(crate) fn new (eguiRS: &egui_wgpu::RenderState) -> Self { Self {
 		adapter: eguiRS.adapter.clone(), // WGPU HAL objects are internally
 		device: eguiRS.device.clone(),   // reference counted, so cloning just
-		queue: eguiRS.queue.clone()      // creates and owns a new reference
+		queue: eguiRS.queue.clone()      // creates a new owned reference
 	}}
 
 	/// Reference the *WGPU* instance.
