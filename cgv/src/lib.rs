@@ -36,6 +36,9 @@ pub use renderstate::RenderState; // re-export
 /// The parent module of all GPU abstractions.
 pub mod hal;
 
+/// The module providing implementations for various common gpu compute tasks.
+pub mod gpu;
+
 /// The module containing all viewing functionality.
 pub mod view;
 
