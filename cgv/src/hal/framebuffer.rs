@@ -151,15 +151,16 @@ impl Framebuffer
 	pub fn resize (&mut self, context: &Context, newDims: glm::UVec2)
 	{
 		self.dims = newDims;
+		let newDims = glm::vec3(newDims.x, newDims.y, 1);
 		for slot in 0..self.color.len() {
 			let old = &self.color[slot];
 			self.color[slot] = hal::Texture::createEmptyTexture(
-				context, newDims, old.descriptor.format, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
+				context, newDims, old.descriptor.format, 1, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
 			);
 		}
 		if let Some(old) = &self.depthStencil {
 			self.depthStencil = Some(hal::Texture::createEmptyTexture(
-				context, newDims, old.descriptor.format, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
+				context, newDims, old.descriptor.format, 1, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
 			));
 		}
 	}
@@ -254,8 +255,8 @@ impl<'label> FramebufferBuilder<'label>
 					unsafe { unreachable_unchecked(); }
 				};
 			color.push(hal::Texture::createEmptyTexture(
-				context, self.dims, format, texture::AlphaUsage::DontCare, usages,
-				util::concatIfSome(&self.label, &format!("_colorAttachment{slot}")).as_deref()
+				context, glm::vec3(self.dims.x, self.dims.y, 1), format, 1, texture::AlphaUsage::DontCare,
+				usages, util::concatIfSome(&self.label, &format!("_colorAttachment{slot}")).as_deref()
 			));
 		}
 

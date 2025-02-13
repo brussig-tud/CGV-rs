@@ -35,6 +35,13 @@ pub trait MipmapShaderFilter {
 // Classes
 //
 
+pub struct BoxFilter;
+impl MipmapShaderFilter for BoxFilter {
+	fn provideShader(&self) {
+		todo!()
+	}
+}
+
 /// An implementation of a mipmap generator that applies a given [shader-based filter](MipmapShaderFilter) to the texels
 /// in a compute shader.
 pub struct ComputeShaderMipMapAlgorithm<'filter, Filter: MipmapShaderFilter+'filter> {

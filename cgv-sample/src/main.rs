@@ -162,7 +162,8 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(
-			context, util::sourceBytes!("/res/tex/cgvCube.png"), None, Some("Example__TestTexture")
+			context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
+			cgv::hal::NO_MIPMAPS, Some("Example__TestTexture")
 		)?;
 		#[allow(non_upper_case_globals)]
 		static texBindGroupLayoutEntries: [wgpu::BindGroupLayoutEntry; 2] = [
