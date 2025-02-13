@@ -154,12 +154,12 @@ impl Framebuffer
 		let newDims = glm::vec3(newDims.x, newDims.y, 1);
 		for slot in 0..self.color.len() {
 			let old = &self.color[slot];
-			self.color[slot] = hal::Texture::createEmptyTexture(
+			self.color[slot] = hal::Texture::createEmpty(
 				context, newDims, old.descriptor.format, 1, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
 			);
 		}
 		if let Some(old) = &self.depthStencil {
-			self.depthStencil = Some(hal::Texture::createEmptyTexture(
+			self.depthStencil = Some(hal::Texture::createEmpty(
 				context, newDims, old.descriptor.format, 1, old.alphaUsage, old.descriptor.usage, old.name.as_deref()
 			));
 		}
@@ -221,7 +221,8 @@ impl<'label> FramebufferBuilder<'label>
 	}
 
 	/// Add a color attachment of the given format, with the given additional usages.
-	pub fn attachColor (&mut self, format: wgpu::TextureFormat, additionalUsages: Option<wgpu::TextureUsages>) -> &mut Self
+	pub fn attachColor (&mut self, format: wgpu::TextureFormat, additionalUsages: Option<wgpu::TextureUsages>)
+	-> &mut Self
 	{
 		self.color.push(TextureCreationParams::Color {
 			format, usages: if let Some(additionalUsages) = additionalUsages {
@@ -254,7 +255,7 @@ impl<'label> FramebufferBuilder<'label>
 				} else {
 					unsafe { unreachable_unchecked(); }
 				};
-			color.push(hal::Texture::createEmptyTexture(
+			color.push(hal::Texture::createEmpty(
 				context, glm::vec3(self.dims.x, self.dims.y, 1), format, 1, texture::AlphaUsage::DontCare,
 				usages, util::concatIfSome(&self.label, &format!("_colorAttachment{slot}")).as_deref()
 			));
@@ -270,7 +271,7 @@ impl<'label> FramebufferBuilder<'label>
 				} else {
 					unsafe { unreachable_unchecked(); }
 				};
-			hal::Texture::createDepthStencilTexture(
+			hal::Texture::createDepthStencil(
 				context, self.dims, *format, *additionalUsages,
 				util::concatIfSome(&self.label, "_depthStencilAttachment").as_deref()
 			)
@@ -291,12 +292,12 @@ impl<'label> FramebufferBuilder<'label>
 
 /// t.b.d.
 pub fn decodeDepthU16 (_value: u16) -> f32 {
-	unimplemented!("internal representation of 16-bit integer depth is as of yet unknown");
+	todo!("internal representation of 16-bit integer depth is as of yet unknown");
 }
 
 /// t.b.d.
 pub fn decodeDepthU32 (_value: u32) -> f32 {
-	unimplemented!("internal representation of 24-bit integer depth with or without stencil is as of yet unknown");
+	todo!("internal representation of 24-bit integer depth with or without stencil is as of yet unknown");
 }
 
 /// t.b.d.
