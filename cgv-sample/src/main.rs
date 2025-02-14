@@ -163,10 +163,11 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(
 			context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
-			cgv::hal::NO_MIPMAPS, Some("Example__TestTexture")
+			Some((
+				context, &cgv::gpu::mipmap::ComputeShaderGenerator::new(&cgv::gpu::mipmap::BoxFilter{})
+		     ))/*cgv::hal::NO_MIPMAPS*/, Some("Example__TestTexture")
 		)?;
-		#[allow(non_upper_case_globals)]
-		static texBindGroupLayoutEntries: [wgpu::BindGroupLayoutEntry; 2] = [
+		static TEX_BINDGROUP_LAYOUT_ENTRIES: [wgpu::BindGroupLayoutEntry; 2] = [
 			wgpu::BindGroupLayoutEntry {
 				binding: 0,
 				visibility: wgpu::ShaderStages::FRAGMENT,
@@ -186,7 +187,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		];
 		let texBindGroupLayout = context.device().create_bind_group_layout(
 			&wgpu::BindGroupLayoutDescriptor {
-				entries: texBindGroupLayoutEntries.as_slice(),
+				entries: TEX_BINDGROUP_LAYOUT_ENTRIES.as_slice(),
 				label: Some("Example__TestBindGroupLayout"),
 			}
 		);
@@ -196,7 +197,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				entries: &[
 					wgpu::BindGroupEntry {
 						binding: 0,
-						resource: wgpu::BindingResource::TextureView(&tex.view),
+						resource: wgpu::BindingResource::TextureView(&tex.view()),
 					},
 					wgpu::BindGroupEntry {
 						binding: 1,

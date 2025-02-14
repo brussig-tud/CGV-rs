@@ -25,9 +25,17 @@ use util::math::alignToFactor;
 //
 
 /// Encapsulates the logical and real GPU-side physical size (including padding for alignment) of a texture
+#[derive(Copy, Clone)]
 pub struct TextureSize {
 	pub logical: usize,
 	pub actual: usize
+}
+
+/// Encapsulates per-mip level data that [`Texture`] needs to store.
+pub struct MipLevel<'labels> {
+	pub size: TextureSize,
+	pub desc: wgpu::TextureViewDescriptor<'labels>,
+	pub view: wgpu::TextureView,
 }
 
 /// Encapsulates the slice of texels provided during [texture readback](Texture::readback).
@@ -60,9 +68,12 @@ pub const NO_MIPMAPS: Option<NoopMipmapGenerator> = None;
 /// serve as the type parameter of [`NO_MIPMAPS`]'s `Option` type, such that automatic type inference is possible when
 /// calling [`Texture::fromImage`] and related functions with mipmap generation disabled.
 pub struct NoopMipmapGenerator;
-impl gpu::mipmap::MipmapGenerator for NoopMipmapGenerator {
-	fn perform(&self, _: &mut hal::Texture) {
+impl gpu::mipmap::Generator for NoopMipmapGenerator {
+	fn perform(&self, _: &Context, _: &mut hal::Texture) {
 		panic!("Attempting to use NoopMipmapGenerator for actual mipmap generation!")
+	}
+	fn requiredTextureUsages() -> wgpu::TextureUsages {
+		wgpu::TextureUsages::empty()
 	}
 }
 
@@ -73,17 +84,18 @@ pub struct Texture {
 	/// The name (if any) of the texture object.
 	pub name: Option<String>,
 
-	/// How to interpret the alpha channel (if any) when blending.
-	pub alphaUsage: AlphaUsage,
-
 	/// The device texture object.
 	pub texture: Box<wgpu::Texture>,
 
 	/// The descriptor used to create the [texture object](texture).
 	pub descriptor: wgpu::TextureDescriptor<'static>,
 
-	/// The texture view for interfacing with the texture object.
-	pub view: wgpu::TextureView,
+	/// How to interpret the alpha channel (if any) when blending.
+	pub alphaUsage: AlphaUsage,
+
+	/// The texture views for interfacing with the individual mipmap levels of the texture object. If you just want to
+	/// access the level-0 mipmap (original image), you can use the convenience method [`Texture::view`].
+	pub mipLevels: Vec<MipLevel<'static>>,
 
 	/// The sampler for the texture. TODO: Remove from texture object and make context have a sampler library instead
 	pub sampler: wgpu::Sampler,
@@ -96,9 +108,6 @@ pub struct Texture {
 
 	/// The TexelCopyBufferInfo-compatible view on the texture in case readback is enabled
 	pub readbackView_buf: Option<wgpu::TexelCopyBufferInfo<'static>>,
-
-	// Cached size (wihtout mipmap levels) in bytes.
-	pub size: TextureSize
 }
 
 impl Texture
@@ -110,12 +119,14 @@ impl Texture
 	/// * `context` – The *CGV-rs* context under which to create the texture.
 	/// * `dims` – The desired dimensions in terms of width, height and depth (or layers).
 	/// * `format` – The desired format of the texture.
-	/// * `mipLevels` – How many mipmap levels to allocate for the texture.
+	/// * `numMipLevels` – How many mipmap levels to create for the texture. Setting this to zero or a value greater
+	///    than the number calculated by [`numMipLevels`] for the given `dims` will result in undefined behavior.
+	///    **TODO: take explicit chain of miplevel descriptors instead**
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `usageFlags` – The set of [texture usages](wgpu::TextureUsages) the texture is intended for.
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	pub fn createEmpty (
-		context: &Context, dims: glm::UVec3, format: wgpu::TextureFormat, mipLevels: u32, alphaUsage: AlphaUsage,
+		context: &Context, dims: glm::UVec3, format: wgpu::TextureFormat, numMipLevels: u32, alphaUsage: AlphaUsage,
 		usageFlags: wgpu::TextureUsages, label: Option<&str>
 	) -> Self
 	{
@@ -127,9 +138,10 @@ impl Texture
 			None
 		};
 
+		// Create texture object
 		let descriptor = wgpu::TextureDescriptor {
 			format,	label, size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: dims.z},
-			mip_level_count: mipLevels,
+			mip_level_count: numMipLevels,
 			sample_count: 1,
 			dimension: textureDimensionsFromVec(&dims),
 			usage: usageFlags,
@@ -137,6 +149,7 @@ impl Texture
 		};
 		let texture = Box::new(context.device().create_texture(&descriptor));
 
+		// Create default sampler – TODO: Remove from texture object and make context have a sampler library instead
 		let sampler = context.device().create_sampler(
 			&wgpu::SamplerDescriptor { // 4.
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -149,16 +162,40 @@ impl Texture
 			}
 		);
 
-		let size = {
-			let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * descriptor.size.width as usize;
-			let heightTimesDepth = (descriptor.size.height * descriptor.size.depth_or_array_layers) as usize;
-			TextureSize {
-				logical: logicalBytesPerRow * heightTimesDepth,
-				actual: heightTimesDepth * alignToFactor(
-					logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize
+		// Create views on the texture surfaces of each mip level
+		let mut mipLevels = Vec::with_capacity(numMipLevels as usize);
+		for lvl in 0..numMipLevels
+		{
+			let mipDims = {
+				let pow = f32::powi(0.5, lvl as i32);
+				glm::vec3(
+					(f32::floor(dims.x as f32 * pow) as u32).max(1),
+					(f32::floor(dims.y as f32 * pow) as u32).max(1),
+					(f32::floor(dims.z as f32 * pow) as u32).max(1),
 				)
-			}
-		};
+			};
+			let size = {
+				let logicalBytesPerRow = numBytesFromFormat(descriptor.format) * mipDims.x as usize;
+				let heightTimesDepth = (mipDims.y * mipDims.z) as usize;
+				TextureSize {
+					logical: logicalBytesPerRow * heightTimesDepth,
+					actual: heightTimesDepth * alignToFactor(
+						logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize
+					)
+				}
+			};
+			let desc = wgpu::TextureViewDescriptor {
+				//format: None,
+				//dimension: None,
+				//usage: None,
+				base_mip_level: lvl,
+				//mip_level_count: Some(1),
+				..Default::default()
+			};
+			let view = texture.create_view(&desc);
+			mipLevels.push(MipLevel { size, desc, view });
+		}
+		let size = &mipLevels[0].size;
 		let readbackBuffer = usageFlags.contains(wgpu::TextureUsages::COPY_SRC).then(||
 			Box::new(context.device().create_buffer( &wgpu::BufferDescriptor {
 				label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
@@ -192,8 +229,8 @@ impl Texture
 
 		// Done!
 		Self {
-			view: texture.create_view(&wgpu::TextureViewDescriptor::default()), alphaUsage,
-			texture, name, size, readbackBuffer, readbackView_tex, readbackView_buf, descriptor, sampler
+			name, texture, descriptor, alphaUsage, mipLevels, readbackBuffer, readbackView_tex, readbackView_buf,
+			sampler
 		}
 	}
 
@@ -205,7 +242,9 @@ impl Texture
 	/// * `blob` – The memory slice containing the raw bytes making up the image.
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
-	///    required usages for creating a texture from host-data.
+	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::COPY_DST`]).
+	///    Note that making use of automatic `mipmapGeneration` may enforce additional usages depending on the chosen
+	///    [`gpu::mipmap::MipmapGenerator`].
 	/// * `mipmapGeneration` – If automatic mipmap generation is desired, which [`gpu::mipmap::MipmapGenerator`] to use.
 	///    If no mipmaps should be generated, the constant [`NO_MIPMAPS`] can be specified, which avoids having to
 	///    explicitly annotate the `MipmapGenerator` type parameter for the method call.
@@ -216,9 +255,9 @@ impl Texture
 	/// The fully constructed texture object containing the image encoded in the blob (and its mipmaps if requested) if
 	/// the bytes could be successfully interpreted as such, or an [`image::ImageError`] if there were problems
 	/// extracting the image data from the blob.
-	pub fn fromBlob<MipmapGenerator: gpu::mipmap::MipmapGenerator> (
+	pub fn fromBlob<MipmapGenerator: gpu::mipmap::Generator> (
 		context: &Context, blob: &[u8], alphaUsage: AlphaUsage, specialUsageFlags: Option<wgpu::TextureUsages>,
-		mipmapGeneration: Option<MipmapGenerator>, label: Option<&str>
+		mipmapGeneration: Option<(&Context, &MipmapGenerator)>, label: Option<&str>
 	) -> Result<Self> {
 		let img = image::load_from_memory(blob)?;
 		Ok(Self::fromImage(context, &img, alphaUsage, specialUsageFlags, mipmapGeneration, label))
@@ -233,6 +272,8 @@ impl Texture
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
 	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::COPY_DST`]).
+	///    Note that making use of automatic `mipmapGeneration` may enforce additional usages depending on the chosen
+	///    [`gpu::mipmap::MipmapGenerator`].
 	/// * `mipmapGeneration` – If automatic mipmap generation is desired, which [`gpu::mipmap::MipmapGenerator`] to use.
 	///    If no mipmaps should be generated, the constant [`NO_MIPMAPS`] can be specified, which avoids having to
 	///    explicitly annotate the `MipmapGenerator` type parameter for the method call.
@@ -241,9 +282,10 @@ impl Texture
 	/// # Returns
 	///
 	/// The fully constructed texture object containing the image (and its mipmaps if requested).
-	pub fn fromImage<MipmapGenerator: gpu::mipmap::MipmapGenerator> (
+	pub fn fromImage<MipmapGenerator: gpu::mipmap::Generator> (
 		context: &Context, image: &image::DynamicImage, alphaUsage: AlphaUsage,
-		specialUsageFlags: Option<wgpu::TextureUsages>, mipmapGeneration: Option<MipmapGenerator>, label: Option<&str>
+		specialUsageFlags: Option<wgpu::TextureUsages>, mipmapGeneration: Option<(&Context, &MipmapGenerator)>,
+		label: Option<&str>
 	) -> Self
 	{
 		// Compile usage flags
@@ -251,7 +293,9 @@ impl Texture
 			wgpu::TextureUsages::COPY_DST | usages
 		} else {
 			wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
-		};
+		} | mipmapGeneration.map_or(
+			wgpu::TextureUsages::empty(), |_| MipmapGenerator::requiredTextureUsages()
+		);
 
 		// Infer texture parameters from image meta information
 		let (dims, size) = {
@@ -347,27 +391,28 @@ impl Texture
 		texture
 	}
 
-	/// The logical size of the uncompressed texture (excluding mipmap levels) in bytes.
-	pub fn size (&self) -> usize { self.size.logical }
+	/// Return a view for the level-0 mipmap (i.e. the original-resolution version).
+	pub fn view (&self) -> &wgpu::TextureView {
+		&self.mipLevels[0].view
+	}
+
+	/// Return the sizing information of the level-0 mipmap (i.e. for the original resolution).
+	pub fn size (&self) -> &TextureSize { &self.mipLevels[0].size }
 
 	pub fn dims (&self) -> glm::UVec3 {
-		let size = &self.descriptor.size;
-		glm::vec3(size.width, size.height, size.depth_or_array_layers)
+		glm::vec3(self.descriptor.size.width, self.descriptor.size.height, self.descriptor.size.depth_or_array_layers)
 	}
 
 	pub fn dimsWH (&self) -> glm::UVec2 {
-		let size = &self.descriptor.size;
-		glm::vec2(size.width, size.height)
+		glm::vec2(self.descriptor.size.width, self.descriptor.size.height)
 	}
 
 	pub fn dimsWD (&self) -> glm::UVec2 {
-		let size = &self.descriptor.size;
-		glm::vec2(size.width, size.depth_or_array_layers)
+		glm::vec2(self.descriptor.size.width, self.descriptor.size.depth_or_array_layers)
 	}
 
 	pub fn dimsHD (&self) -> glm::UVec2 {
-		let size = &self.descriptor.size;
-		glm::vec2(size.height, size.depth_or_array_layers)
+		glm::vec2(self.descriptor.size.height, self.descriptor.size.depth_or_array_layers)
 	}
 
 	pub fn readbackAsync<'map, Closure: FnOnce(ReadBackTexels<'map>, usize) + wgpu::WasmNotSend + 'static> (
@@ -384,7 +429,7 @@ impl Texture
 		let dims = self.dimsWH();
 		let this = util::statify(self);
 		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
-		buf.slice(0..self.size.actual as u64).map_async(
+		buf.slice(0..self.size().actual as u64).map_async(
 			wgpu::MapMode::Read, move |result| {
 				if result.is_ok()
 				{
@@ -393,19 +438,19 @@ impl Texture
 					let rowStride;
 					let readbackInfo = match this.descriptor.format {
 						wgpu::TextureFormat::Depth16Unorm => {
-							rowStride = this.size.actual / (dims.y as usize * size_of::<u16>());
+							rowStride = this.size().actual / (dims.y as usize * size_of::<u16>());
 							ReadBackTexels::U16(unsafe { std::slice::from_raw_parts(
 								bytes.as_ptr() as *const u16, bytes.len() / size_of::<u16>()
 							)})
 						},
 						wgpu::TextureFormat::Depth24PlusStencil8 => {
-							rowStride = this.size.actual / (dims.y as usize * size_of::<u32>());
+							rowStride = this.size().actual / (dims.y as usize * size_of::<u32>());
 							ReadBackTexels::U32(unsafe { std::slice::from_raw_parts(
 								bytes.as_ptr() as *const u32, bytes.len() / size_of::<u32>()
 							)})
 						},
 						wgpu::TextureFormat::Depth32Float => {
-							rowStride = this.size.actual / (dims.y as usize * size_of::<f32>());
+							rowStride = this.size().actual / (dims.y as usize * size_of::<f32>());
 							ReadBackTexels::F32(unsafe { std::slice::from_raw_parts(
 								bytes.as_ptr() as *const f32, bytes.len() / size_of::<f32>()
 							)})
@@ -481,24 +526,19 @@ pub fn textureDimensionsFromVec (dims: &glm::UVec3) -> wgpu::TextureDimension
 
 /// Computes the number of mip levels in a full mip image chain for the given texture resolution.
 pub fn numMipLevels (resolution: &glm::UVec3) -> u32 {
-	let levels_x = f32::floor(f32::log2(resolution.x as f32)) as u32;
-	let levels_y = f32::floor(f32::log2(resolution.y as f32)) as u32;
-	let levels_z = f32::floor(f32::log2(resolution.z as f32)) as u32;
-	u32::max(levels_x, u32::max(levels_y, levels_z))
+	u32::max(numMipLevels1D(resolution.x), u32::max(numMipLevels1D(resolution.y), numMipLevels1D(resolution.z)))
 }
 
 /// Computes the number of mip levels in a full mip image chain for the given 2D texture resolution.
 #[allow(dead_code)]
 #[inline(always)]
 pub fn numMipLevels2D (resolution: &glm::UVec2) -> u32 {
-	let levels_x = f32::floor(f32::log2(resolution.x as f32)) as u32;
-	let levels_y = f32::floor(f32::log2(resolution.y as f32)) as u32;
-	u32::max(levels_x, levels_y)
+	u32::max(numMipLevels1D(resolution.x), numMipLevels1D(resolution.y))
 }
 
 /// Computes the number of mip levels in a full mip image chain for the given 1D texture resolution.
 #[allow(dead_code)]
 #[inline(always)]
 pub fn numMipLevels1D (resolution: u32) -> u32 {
-	f32::floor(f32::log2(resolution as f32)) as u32
+	f32::floor(f32::log2(resolution as f32)) as u32 + 1
 }

@@ -81,7 +81,7 @@ impl ViewportCompositor
 			entries: &[
 				wgpu::BindGroupEntry {
 					binding: 0,
-					resource: wgpu::BindingResource::TextureView(&source.view),
+					resource: wgpu::BindingResource::TextureView(&source.view()),
 				},
 				wgpu::BindGroupEntry {
 					binding: 1,
@@ -138,7 +138,7 @@ impl ViewportCompositor
 			entries: &[
 				wgpu::BindGroupEntry {
 					binding: 0,
-					resource: wgpu::BindingResource::TextureView(&source.view),
+					resource: wgpu::BindingResource::TextureView(&source.view()),
 				},
 				wgpu::BindGroupEntry {
 					binding: 1,

@@ -113,7 +113,7 @@ impl RenderState
 	pub fn getMainColorAttachment (&self, clear: Option<&wgpu::Color>) -> Option<wgpu::RenderPassColorAttachment>
 	{
 		Some(wgpu::RenderPassColorAttachment {
-			view: &self.framebuffer.color0().view,
+			view: &self.framebuffer.color0().view(),
 			resolve_target: None,
 			ops: wgpu::Operations {
 				load: if let Some(color) = clear {
@@ -129,7 +129,7 @@ impl RenderState
 	pub fn getMainDepthStencilAttachment (&self, clear: Option<f32>) -> Option<wgpu::RenderPassDepthStencilAttachment>
 	{
 		self.framebuffer.depthStencil().map(|depthStencilTex| wgpu::RenderPassDepthStencilAttachment {
-			view: &depthStencilTex.view,
+			view: &depthStencilTex.view(),
 			depth_ops: Some(wgpu::Operations {
 				load: if let Some(value) = clear {
 					wgpu::LoadOp::Clear(value)
