@@ -16,9 +16,7 @@ use image::GenericImageView;
 // Local imports
 use crate::*;
 use util::math::alignToFactor;
-
-
-
+use crate::wgpu::CommandEncoder;
 //////
 //
 // Structs and enums
@@ -68,10 +66,28 @@ pub const NO_MIPMAPS: Option<NoopMipmapGenerator> = None;
 /// serve as the type parameter of [`NO_MIPMAPS`]'s `Option` type, such that automatic type inference is possible when
 /// calling [`Texture::fromImage`] and related functions with mipmap generation disabled.
 pub struct NoopMipmapGenerator;
-impl gpu::mipmap::Generator for NoopMipmapGenerator {
-	fn perform(&self, _: &Context, _: &mut hal::Texture) {
-		panic!("Attempting to use NoopMipmapGenerator for actual mipmap generation!")
+impl gpu::mipmap::Generator for NoopMipmapGenerator
+{
+	fn uniqueId () -> u64 {
+		u64::MAX
 	}
+
+	fn ensureShaderModule (_: &Context) -> Option<wgpu::ShaderModule> {
+		None
+	}
+
+	fn createPass (_: &mut wgpu::CommandEncoder) -> gpu::Pass {
+		panic!("The NoopMipmapGenerator is a dummy and cannot create any actual GPU passes!");
+	}
+
+	fn perform<'encoder> (&self, _: &Context, _: &mut gpu::Pass<'encoder>, _: &mut hal::Texture) {
+		panic!("Attempting to use NoopMipmapGenerator for actual mipmap generation!");
+	}
+
+	fn performWithEncoder (&self, _: &Context, _: &mut CommandEncoder, _: &mut Texture) {
+		panic!("Attempting to use NoopMipmapGenerator for actual mipmap generation!");
+	}
+
 	fn requiredTextureUsages() -> wgpu::TextureUsages {
 		wgpu::TextureUsages::empty()
 	}
@@ -186,10 +202,10 @@ impl Texture
 			};
 			let desc = wgpu::TextureViewDescriptor {
 				//format: None,
-				//dimension: None,
+				dimension: Some(textureViewDimensionsEquiv(descriptor.dimension)),
 				//usage: None,
 				base_mip_level: lvl,
-				//mip_level_count: Some(1),
+				//mip_level_count: Some(1), // TODO: Find out what this actually does and if need to observe it somehow
 				..Default::default()
 			};
 			let view = texture.create_view(&desc);
@@ -253,11 +269,11 @@ impl Texture
 	/// # Returns
 	///
 	/// The fully constructed texture object containing the image encoded in the blob (and its mipmaps if requested) if
-	/// the bytes could be successfully interpreted as such, or an [`image::ImageError`] if there were problems
-	/// extracting the image data from the blob.
+	/// the bytes could be successfully interpreted as such, or some [`image::ImageError`] if there were problems
+	/// decoding the blob into an image.
 	pub fn fromBlob<MipmapGenerator: gpu::mipmap::Generator> (
 		context: &Context, blob: &[u8], alphaUsage: AlphaUsage, specialUsageFlags: Option<wgpu::TextureUsages>,
-		mipmapGeneration: Option<(&Context, &MipmapGenerator)>, label: Option<&str>
+		mipmapGeneration: Option<&MipmapGenerator>, label: Option<&str>
 	) -> Result<Self> {
 		let img = image::load_from_memory(blob)?;
 		Ok(Self::fromImage(context, &img, alphaUsage, specialUsageFlags, mipmapGeneration, label))
@@ -284,7 +300,7 @@ impl Texture
 	/// The fully constructed texture object containing the image (and its mipmaps if requested).
 	pub fn fromImage<MipmapGenerator: gpu::mipmap::Generator> (
 		context: &Context, image: &image::DynamicImage, alphaUsage: AlphaUsage,
-		specialUsageFlags: Option<wgpu::TextureUsages>, mipmapGeneration: Option<(&Context, &MipmapGenerator)>,
+		specialUsageFlags: Option<wgpu::TextureUsages>, mipmapGeneration: Option<&MipmapGenerator>,
 		label: Option<&str>
 	) -> Self
 	{
@@ -338,6 +354,11 @@ impl Texture
 			size,
 		);
 		context.queue().submit([]); // make sure the texture transfer starts immediately
+
+		/*// Generate mipmaps if requested
+		if let Some(generator) = mipmapGeneration {
+			generator.performAdhoc(context, &mut texture);
+		}*/
 
 		// Done!
 		texture
@@ -477,6 +498,15 @@ impl Texture
 //
 // Functions
 //
+
+/// Convert a TextureDimension into its most immediate textureViewDimension equivalent (ignoring e.g. cube maps).
+pub fn textureViewDimensionsEquiv (dimension: wgpu::TextureDimension) -> wgpu::TextureViewDimension {
+	match dimension {
+		wgpu::TextureDimension::D1 => wgpu::TextureViewDimension::D1,
+		wgpu::TextureDimension::D2 => wgpu::TextureViewDimension::D2,
+		wgpu::TextureDimension::D3 => wgpu::TextureViewDimension::D3
+	}
+}
 
 /// Returns the number of bytes per texel for the given texture format.
 pub fn numBytesFromFormat (format: wgpu::TextureFormat) -> usize

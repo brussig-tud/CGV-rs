@@ -163,9 +163,8 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(
 			context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
-			Some((
-				context, &cgv::gpu::mipmap::ComputeShaderGenerator::new(&cgv::gpu::mipmap::BoxFilter{})
-		     ))/*cgv::hal::NO_MIPMAPS*/, Some("Example__TestTexture")
+			Some(&cgv::gpu::mipmap::ComputeShaderGenerator::new(&cgv::gpu::mipmap::BoxFilter{}))/*cgv::hal::NO_MIPMAPS*/,
+			Some("Example__TestTexture")
 		)?;
 		static TEX_BINDGROUP_LAYOUT_ENTRIES: [wgpu::BindGroupLayoutEntry; 2] = [
 			wgpu::BindGroupLayoutEntry {

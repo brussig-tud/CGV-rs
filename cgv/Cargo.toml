@@ -14,6 +14,8 @@ tracing = "*"
 tracing-subscriber = {version = "*", features = ["env-filter"]}
 cfg-if = "*"
 ctor = "*"
+arrayvec = "*"
+dashmap = "*"
 web-time = "*"
 winit = "*"
 egui = {git="https://github.com/emilk/egui.git", default-features=true, features=["color-hex", "rayon"]}

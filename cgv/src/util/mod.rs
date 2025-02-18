@@ -19,6 +19,9 @@ pub mod math;
 /// Submodule providing operations on file system paths.
 pub mod path;
 
+/// Submodule providing unique entity generators (IDs etc.)
+pub mod unique;
+
 
 
 //////
