@@ -18,7 +18,10 @@
 mod texture;
 // - re-exports
 pub use texture::{Texture, TextureSize, ReadBackTexels, AlphaUsage, NO_MIPMAPS};
-pub use texture::{numBytesFromFormat, hasAlpha};
+pub use texture::{
+	numBytesFromFormat, hasAlpha, textureDimensionsFromVec, defaultMipmapping, numMipLevels, numMipLevels2D,
+	numMipLevels1D
+};
 
 /// Submodule providing the [`Framebuffer`](texture::Framebuffer) facilities
 mod framebuffer;

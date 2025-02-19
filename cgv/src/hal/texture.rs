@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* nothing here yet */
+use std::sync::LazyLock;
 
 // WGPU API
 use crate::wgpu;
@@ -54,9 +54,14 @@ pub enum AlphaUsage {
 	DontCare, Straight, PreMultiplied
 }
 
-/// A `None` constant for the `Option` type used in [`Texture::fromImage`] and related methods.
-#[allow(private_interfaces)]
-pub const NO_MIPMAPS: Option<NoopMipmapGenerator> = None;
+/// The default mipmap generator that will be referenced by [`defaultMipmapping()`].
+static DEFAULT_MIPMAP_GENERATOR: LazyLock<
+	gpu::mipmap::ComputeShaderGenerator<gpu::mipmap::BoxFilter>
+> = LazyLock::new(|| gpu::mipmap::ComputeShaderGenerator::new(&gpu::mipmap::BoxFilter{}));
+
+/// A `None` constant for the `Option` type used in [`Texture::fromImage()`] and related methods. For a reasonable default
+/// choice of `Some` [mipmap generator](gpu::mipmap::Generator), use [`defaultMipmapping()`].
+pub const NO_MIPMAPS: Option<&NoopMipmapGenerator> = None;
 
 
 
@@ -271,8 +276,7 @@ impl Texture
 	///    Note that making use of automatic `mipmapGeneration` may enforce additional usages depending on the chosen
 	///    [`gpu::mipmap::MipmapGenerator`].
 	/// * `mipmapGeneration` – If automatic mipmap generation is desired, which [`gpu::mipmap::MipmapGenerator`] to use.
-	///    If no mipmaps should be generated, the constant [`NO_MIPMAPS`] can be specified, which avoids having to
-	///    explicitly annotate the `MipmapGenerator` type parameter for the method call.
+	       #[doc=include_str!("_doc/_texture_defaultMipmapping.md")]
 	/// * `label` – An optional name to internally label the GPU-side texture object with.
 	///
 	/// # Returns
@@ -300,8 +304,7 @@ impl Texture
 	///    Note that making use of automatic `mipmapGeneration` may enforce additional usages depending on the chosen
 	///    [`gpu::mipmap::MipmapGenerator`].
 	/// * `mipmapGeneration` – If automatic mipmap generation is desired, which [`gpu::mipmap::MipmapGenerator`] to use.
-	///    If no mipmaps should be generated, the constant [`NO_MIPMAPS`] can be specified, which avoids having to
-	///    explicitly annotate the `MipmapGenerator` type parameter for the method call.
+	       #[doc=include_str!("_doc/_texture_defaultMipmapping.md")]
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	///
 	/// # Returns
@@ -562,6 +565,15 @@ pub fn textureDimensionsFromVec (dims: &glm::UVec3) -> wgpu::TextureDimension
 	else {
 		wgpu::TextureDimension::D3
 	}
+}
+
+/// References a reasonable, conservative default choice of `Some` [mipmap generator](gpu::mipmap::Generator) for use
+/// with the corresponding `Option` of [`Texture::fromImage()`] and related methods. Currently, this is a compute
+/// shader-based box filter.
+///
+/// To indicate that no mipmapping should be done at all, use the `None` constant [`NO_MIPMAPS`].
+pub fn defaultMipmapping () -> Option<&'static gpu::mipmap::ComputeShaderGenerator<'static, gpu::mipmap::BoxFilter>> {
+	Some(&DEFAULT_MIPMAP_GENERATOR)
 }
 
 /// Computes the number of mip levels in a full mip image chain for the given texture resolution.
