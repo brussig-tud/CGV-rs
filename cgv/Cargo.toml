@@ -18,11 +18,11 @@ arrayvec = "*"
 dashmap = "*"
 web-time = "*"
 winit = "*"
-egui = {git="https://github.com/emilk/egui.git", default-features=true, features=["color-hex", "rayon"]}
-egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
+egui = {version="*", default-features=true, features=["color-hex", "rayon"]}
+egui_extras = {version="*", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
-eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
+eframe = {version="*", default-features=false, features=[
 	"default_fonts", "wayland", "wgpu", "x11"
 ]}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
@@ -34,10 +34,10 @@ alum = "*"
 console_error_panic_hook = "*"
 tracing-wasm = "*"
 wasm-bindgen-futures = "*"
-getrandom = {version = "*", default-features=true, features=["js"]}
+getrandom = {version="*", default-features=true, features=["js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
 #wgpu = {version="*", default-features=false, features=["webgpu"]}
-egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
+egui-wgpu = {version="*", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}
 
