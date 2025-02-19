@@ -144,7 +144,7 @@ pub trait Generator
 			// - pipeline
 			let pipeline = context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
 				module: &shader,
-				entry_point: Some("kernel_genMipmap"),
+				entry_point: Some("kernel"),
 				layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 					bind_group_layouts: &[&bindGroupLayout],
 					push_constant_ranges: &[],
@@ -257,7 +257,7 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		let mut bindGroups = ArrayVec::<_, 32>::new();
 		for lvl in 1..numMipLevels
 		{
-			bindGroups.push(context.device().create_bind_group(
+			bindGroups.push((texture.mipLevels[lvl].dims, context.device().create_bind_group(
 				&wgpu::BindGroupDescriptor {
 					layout: &pi.bindGroupLayout,
 					entries: &[
@@ -272,7 +272,7 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 					],
 					label: None
 				}
-			));
+			)));
 		}
 
 		// Record compute pass
@@ -280,9 +280,11 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		let pass = pass.refCompute();
 		// - record compute calls
 		pass.set_pipeline(&pi.pipeline);
-		for bindGroup in bindGroups {
-			pass.set_bind_group(0, &bindGroup, &[]);
-			pass.dispatch_workgroups(1, 1, 1);
+		for (ref dims, ref bindGroup) in bindGroups {
+			pass.set_bind_group(0, bindGroup, &[]);
+			let workgroupsX = (dims.x + 8 - 1) / 8;
+			let workgroupsY = (dims.y + 8 - 1) / 8;
+			pass.dispatch_workgroups(workgroupsX, workgroupsY, 1);
 		}
 	}
 

@@ -16,7 +16,9 @@ use image::GenericImageView;
 // Local imports
 use crate::*;
 use util::math::alignToFactor;
-use crate::wgpu::CommandEncoder;
+
+
+
 //////
 //
 // Structs and enums
@@ -31,6 +33,7 @@ pub struct TextureSize {
 
 /// Encapsulates per-mip level data that [`Texture`] needs to store.
 pub struct MipLevel<'labels> {
+	pub dims: glm::UVec3,
 	pub size: TextureSize,
 	pub desc: wgpu::TextureViewDescriptor<'labels>,
 	pub view: wgpu::TextureView,
@@ -84,7 +87,7 @@ impl gpu::mipmap::Generator for NoopMipmapGenerator
 		panic!("Attempting to use NoopMipmapGenerator for actual mipmap generation!");
 	}
 
-	fn performWithEncoder (&self, _: &Context, _: &mut CommandEncoder, _: &mut Texture) {
+	fn performWithEncoder (&self, _: &Context, _: &mut wgpu::CommandEncoder, _: &mut Texture) {
 		panic!("Attempting to use NoopMipmapGenerator for actual mipmap generation!");
 	}
 
@@ -108,6 +111,9 @@ pub struct Texture {
 
 	/// How to interpret the alpha channel (if any) when blending.
 	pub alphaUsage: AlphaUsage,
+
+	/// The view on the whole texture, including mipmaps if there are any.
+	pub view: wgpu::TextureView,
 
 	/// The texture views for interfacing with the individual mipmap levels of the texture object. If you just want to
 	/// access the level-0 mipmap (original image), you can use the convenience method [`Texture::view`].
@@ -178,6 +184,9 @@ impl Texture
 			}
 		);
 
+		// Create main view on the texture
+		let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
 		// Create views on the texture surfaces of each mip level
 		let mut mipLevels = Vec::with_capacity(numMipLevels as usize);
 		for lvl in 0..numMipLevels
@@ -205,15 +214,15 @@ impl Texture
 				dimension: Some(textureViewDimensionsEquiv(descriptor.dimension)),
 				//usage: None,
 				base_mip_level: lvl,
-				//mip_level_count: Some(1), // TODO: Find out what this actually does and if need to observe it somehow
+				mip_level_count: Some(1),
 				..Default::default()
 			};
 			let view = texture.create_view(&desc);
-			mipLevels.push(MipLevel { size, desc, view });
+			mipLevels.push(MipLevel { dims: mipDims, size, desc, view });
 		}
 		let size = &mipLevels[0].size;
 		let readbackBuffer = usageFlags.contains(wgpu::TextureUsages::COPY_SRC).then(||
-			Box::new(context.device().create_buffer( &wgpu::BufferDescriptor {
+			Box::new(context.device().create_buffer(&wgpu::BufferDescriptor {
 				label: util::concatIfSome(&label, "_readbackBuf").as_deref(),
 				size: size.actual as u64,
 				usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -245,7 +254,7 @@ impl Texture
 
 		// Done!
 		Self {
-			name, texture, descriptor, alphaUsage, mipLevels, readbackBuffer, readbackView_tex, readbackView_buf,
+			name, texture, descriptor, alphaUsage, view, mipLevels, readbackBuffer, readbackView_tex, readbackView_buf,
 			sampler
 		}
 	}
@@ -355,10 +364,10 @@ impl Texture
 		);
 		context.queue().submit([]); // make sure the texture transfer starts immediately
 
-		/*// Generate mipmaps if requested
+		// Generate mipmaps if requested
 		if let Some(generator) = mipmapGeneration {
 			generator.performAdhoc(context, &mut texture);
-		}*/
+		}
 
 		// Done!
 		texture
@@ -414,7 +423,7 @@ impl Texture
 
 	/// Return a view for the level-0 mipmap (i.e. the original-resolution version).
 	pub fn view (&self) -> &wgpu::TextureView {
-		&self.mipLevels[0].view
+		&self.view
 	}
 
 	/// Return the sizing information of the level-0 mipmap (i.e. for the original resolution).
