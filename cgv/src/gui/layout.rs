@@ -45,10 +45,10 @@ pub struct ControlTable<'ui>
 	/// Reference to the *egui* UI object the control table is adding its contents to.
 	ui: &'ui mut egui::Ui,
 
-	#[doc = include_str!("_doc/ControlTable_lhsWidth.md")]
+	#[doc=include_str!("_doc/ControlTable_lhsWidth.md")]
 	lhsWidth: f32,
 
-	#[doc = include_str!("_doc/ControlTable_rhsWidth.md")]
+	#[doc=include_str!("_doc/ControlTable_rhsWidth.md")]
 	rhsWidth: f32
 }
 impl<'ui> ControlTable<'ui>
@@ -116,10 +116,10 @@ impl<'ui> ControlTable<'ui>
 /// change. This is typically the case for vertical parent layouts, or all subregions of the same level in a hierarchy
 /// spawned by vertically stacking [collapsible regions](egui::CollapsingHeader).
 pub struct ControlTableLayouter {
-	#[doc = include_str!("_doc/ControlTable_lhsWidth.md")]
+	#[doc=include_str!("_doc/ControlTable_lhsWidth.md")]
 	rhsWidth: f32,
 
-	#[doc = include_str!("_doc/ControlTable_rhsWidth.md")]
+	#[doc=include_str!("_doc/ControlTable_rhsWidth.md")]
 	lhsWidth: f32
 }
 impl ControlTableLayouter
