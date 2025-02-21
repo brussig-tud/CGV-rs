@@ -54,7 +54,7 @@ impl SamplerDescriptor {
 impl Eq for SamplerDescriptor {}
 impl Hash for SamplerDescriptor {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		let bytes = util::slicify(self);
+		let bytes: &[usize] = util::slicifyInto(self);
 		bytes.hash(state);
 	}
 }

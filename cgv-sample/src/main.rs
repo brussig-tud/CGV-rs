@@ -34,7 +34,7 @@ use cgv::util;
 // Statics
 //
 
-const NODES: &[HermiteNode] = &[
+const NODES: &[HermiteNode; 8] = &[
 	HermiteNode {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
@@ -78,7 +78,7 @@ const NODES: &[HermiteNode] = &[
 	}
 ];
 
-const INDICES: &[u32] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5, 4, 7, 6];
+const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5, 4, 7, 6];
 
 
 

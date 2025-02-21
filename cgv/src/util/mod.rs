@@ -92,9 +92,27 @@ pub use sourceBytes;
 ///
 /// # Returns
 ///
-/// A `'static` slice of `u8` over the bytes in memory of the provided data.
-pub fn slicify<T: ?Sized> (data: &T) -> &'static [u8] {
+/// A slice of `u8` over the bytes in memory of the provided data.
+pub fn slicify<T: ?Sized> (data: &T) -> &[u8] {
 	unsafe { std::slice::from_raw_parts(data as *const T as *const u8, size_of_val(data)) }
+}
+
+/// Converts any kind of data that can have its size known at compile or at runtime into a slice of elements of generic
+/// type `E`.
+///
+/// # Arguments
+///
+/// * `data` – The data to slicify.
+///
+/// # Returns
+///
+/// A slice of `E` over the bytes in memory of the provided data.
+pub fn slicifyInto<T: Sized, E> (data: &T) -> &[E] {
+	let remainder = const { size_of::<T>() }  %  const { size_of::<E>() };
+	assert_eq!(remainder,   0);
+	unsafe { std::slice::from_raw_parts(
+		data as *const T as *const E,    const { size_of::<T>() }  /  const { size_of::<E>() })
+	}
 }
 
 /// Decorates the given reference with a `'static` lifetime.
