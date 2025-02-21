@@ -124,8 +124,8 @@ pub struct Texture {
 	/// access the level-0 mipmap (original image), you can use the convenience method [`Texture::view`].
 	pub mipLevels: Vec<MipLevel<'static>>,
 
-	/// The sampler for the texture. TODO: Remove from texture object and make context have a sampler library instead
-	pub sampler: wgpu::Sampler,
+	/// Reference to the (internally managed by the creating [`Context`]) default sampler for this texture.
+	pub sampler: &'static wgpu::Sampler,
 
 	/// The buffer object for readback operations in case the texture usage allows for that
 	pub readbackBuffer: Option<Box<wgpu::Buffer>>,
@@ -176,9 +176,9 @@ impl Texture
 		};
 		let texture = Box::new(context.device().create_texture(&descriptor));
 
-		// Create default sampler – TODO: Remove from texture object and make context have a sampler library instead
-		let sampler = context.device().create_sampler(
-			&wgpu::SamplerDescriptor { // 4.
+		// Obtain default sampler reference
+		let sampler = context.obtainSampler(
+			&wgpu::SamplerDescriptor {
 				address_mode_u: wgpu::AddressMode::ClampToEdge,
 				address_mode_v: wgpu::AddressMode::ClampToEdge,
 				address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -338,8 +338,8 @@ impl Texture
 		let mut texture = Self::createEmpty(
 			context, dims, wgpu::TextureFormat::Rgba8Unorm, mipmapLevels, alphaUsage, usageFlags, label
 		);
-		// - overwrite sampler - TODO: Remove once proper facilities are in place
-		texture.sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
+		// - overwrite default sampler with anisotropic filtering
+		texture.sampler = context.obtainSampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::Repeat,
 			address_mode_v: wgpu::AddressMode::Repeat,
 			address_mode_w: wgpu::AddressMode::Repeat,
@@ -409,8 +409,8 @@ impl Texture
 			context, glm::vec3(dims.x, dims.y, 1), format.into(), 1, AlphaUsage::DontCare, usageFlags,
 			label
 		);
-		// - overwrite sampler - TODO: Remove once proper facilities are in place
-		texture.sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
+		// - overwrite default sampler with the default depth-buffer sampler
+		texture.sampler = context.obtainSampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::ClampToEdge,
 			address_mode_v: wgpu::AddressMode::ClampToEdge,
 			address_mode_w: wgpu::AddressMode::ClampToEdge,
