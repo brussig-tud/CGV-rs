@@ -104,7 +104,7 @@ pub struct UncheckedRef<T> {
 }
 impl<T> UncheckedRef<T>
 {
-	/// Create the unsafe reference from the given safe reference.
+	/// Create the unchecked reference from the given safe reference.
 	///
 	/// # Arguments
 	///

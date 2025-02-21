@@ -58,7 +58,8 @@ impl BuildHasher for U64Hasher {
 
 /// The database of cached compute pipeline configurations
 static COMPUTE_PIPELINE_CACHE: LazyLock<DashMap<
-	(wgpu::TextureFormat, wgpu::TextureViewDimension, u64), ComputePipelineInfo
+	(wgpu::TextureFormat, wgpu::TextureViewDimension, u64),
+	Box<ComputePipelineInfo> // TODO: Try without boxing the `ComputePipelineInfo` once we have sufficiently many to test
 >> = LazyLock::new(|| {
 	DashMap::with_capacity(8)
 });
@@ -102,8 +103,14 @@ pub trait Generator
 		let pipelineInfo = COMPUTE_PIPELINE_CACHE.get(&query);
 		if let Some(pipelineInfo) = pipelineInfo {
 			// We already have a suitable pipeline for this combination
-			let pipelineInfo = util::notsafe::UncheckedRef::new(pipelineInfo.value());
-			unsafe {pipelineInfo.as_ref()}
+			let pipelineInfo = util::notsafe::UncheckedRef::new(
+				pipelineInfo.value().as_ref()
+			);
+			unsafe {
+				// Safety: - COMPUTE_PIPELINE_CACHE is static, so it may report 'static references
+				//         - the values are boxed, so their addresses never change even when iterators are invalidated
+				pipelineInfo.as_ref()
+			}
 		}
 		else
 		{
@@ -154,12 +161,15 @@ pub trait Generator
 				cache: None,
 				label: Some("CGV__gpu_mipmapGenComputePipeline"),
 			});
-			let pipelineInfo = ComputePipelineInfo { bindGroupLayout, pipeline };
-			COMPUTE_PIPELINE_CACHE.insert(query, pipelineInfo);
-			let pipelineInfo = util::notsafe::UncheckedRef::new(
-				COMPUTE_PIPELINE_CACHE.get(&query).unwrap().value()
+			let pipelineInfo = Box::new(ComputePipelineInfo { bindGroupLayout, pipeline });
+			let pipelineInfo_unchecked = util::notsafe::UncheckedRef::new(
+				pipelineInfo.as_ref()
 			);
-			unsafe {pipelineInfo.as_ref()}
+			COMPUTE_PIPELINE_CACHE.insert(query, pipelineInfo);
+			unsafe {
+				// Safety: - the values are boxed, so their addresses never change, even when we move the newly
+				//           constructed items into the cache
+				pipelineInfo_unchecked.as_ref()}
 		}
 	}
 
