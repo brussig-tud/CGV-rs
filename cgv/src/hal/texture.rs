@@ -569,9 +569,9 @@ pub fn textureDimensionsFromVec (dims: &glm::UVec3) -> wgpu::TextureDimension
 
 /// References a reasonable, conservative default choice of `Some` [mipmap generator](gpu::mipmap::Generator) for use
 /// with the corresponding `Option` of [`Texture::fromImage()`] and related methods. Currently, this is a compute
-/// shader-based box filter.
+/// shader-based poly-phase box filter.
 ///
-/// To indicate that no mipmapping should be done at all, use the `None` constant [`NO_MIPMAPS`].
+/// To indicate that no mipmapping should be done at all, use the `None` constant [`NO_MIPMAPS`] instead.
 pub fn defaultMipmapping () -> Option<&'static gpu::mipmap::ComputeShaderGenerator<'static, gpu::mipmap::BoxFilter>> {
 	Some(&DEFAULT_MIPMAP_GENERATOR)
 }
