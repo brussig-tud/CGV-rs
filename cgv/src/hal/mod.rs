@@ -14,7 +14,17 @@
 // Module definitions
 //
 
-/// Submodule providing the [`Texture`](texture::Texture) facilities
+/// Submodule providing the [`Framebuffer`](texture::Framebuffer) facilities.
+mod framebuffer;
+// - re-exports
+pub use framebuffer::{Framebuffer, FramebufferBuilder, DynamicFramebuffer, DepthStencilFormat};
+pub use framebuffer::{decodeDepth, decodeDepthU16, decodeDepthU32};
+
+/// Submodule providing the [`ShaderProgram`](shaderprog::ShaderProgram) facilities.
+mod shaderprog;
+pub use shaderprog::ShaderProgram;
+
+/// Submodule providing the [`Texture`](texture::Texture) facilities.
 mod texture;
 // - re-exports
 pub use texture::{Texture, TextureSize, ReadBackTexels, AlphaUsage, NO_MIPMAPS};
@@ -23,12 +33,6 @@ pub use texture::{
 	numMipLevels1D
 };
 
-/// Submodule providing the [`Framebuffer`](texture::Framebuffer) facilities
-mod framebuffer;
-// - re-exports
-pub use framebuffer::{Framebuffer, FramebufferBuilder, DynamicFramebuffer, DepthStencilFormat};
-pub use framebuffer::{decodeDepth, decodeDepthU16, decodeDepthU32};
-
-/// Submodule providing the [`UniformGroup`](uniformgroup::UniformGroup) facilities
+/// Submodule providing the [`UniformGroup`](uniformgroup::UniformGroup) facilities.
 mod uniformgroup;
 pub use uniformgroup::UniformGroup; // re-export
