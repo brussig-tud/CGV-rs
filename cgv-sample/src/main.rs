@@ -199,7 +199,18 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 					},
 					wgpu::BindGroupEntry {
 						binding: 1,
-						resource: wgpu::BindingResource::Sampler(&tex.sampler),
+						resource: wgpu::BindingResource::Sampler(context.refSampler(
+							&wgpu::SamplerDescriptor {
+								address_mode_u: wgpu::AddressMode::Repeat,
+								address_mode_v: wgpu::AddressMode::Repeat,
+								address_mode_w: wgpu::AddressMode::Repeat,
+								mag_filter: wgpu::FilterMode::Linear,
+								min_filter: wgpu::FilterMode::Linear,
+								mipmap_filter: wgpu::FilterMode::Linear,
+								anisotropy_clamp: 16,
+								..Default::default()
+							}
+						)),
 					}
 				],
 				label: Some("Example__TestBindGroup"),
@@ -338,8 +349,7 @@ impl cgv::Application for SampleApplication
 	}
 
 	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
-		-> Option<Vec<wgpu::CommandBuffer>>
-	{
+	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
 	}
@@ -362,7 +372,9 @@ impl cgv::Application for SampleApplication
 	{
 		// Add the standard 2-column layout control grid
 		cgv::gui::layout::ControlTableLayouter::new(ui).layout(
-			ui, "CgvExample", |controlTable| {
+			ui, "CgvExample",
+			|controlTable|
+			{
 				controlTable.add("check", |ui, _| ui.add(
 					egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool")
 				));

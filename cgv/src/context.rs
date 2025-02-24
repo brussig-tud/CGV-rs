@@ -110,9 +110,10 @@ impl Context
 	#[inline(always)]
 	pub fn queue (&self) -> &wgpu::Queue { &self.queue }
 
-	/// Obtain a reference to a sampler with the given configuration. Note that the `label` property of the provided
-	/// *WGPU* sampler descriptor is ignored.
-	pub fn obtainSampler<'context> (&self, config: &wgpu::SamplerDescriptor<'_>) -> &'context wgpu::Sampler
+	/// Obtain a reference to a sampler with the given configuration. Note that the *WGPU* `label` property of the
+	/// provided `config` is ignored, as that would run counter the principle of having at most one sampler per
+	/// functionally distinct configuration.
+	pub fn refSampler<'context> (&self, config: &wgpu::SamplerDescriptor<'_>) -> &'context wgpu::Sampler
 	{
 		// Obtain query descriptor
 		let queryDesc = SamplerDescriptor::fromWgpuSamplerDescriptor(config);
