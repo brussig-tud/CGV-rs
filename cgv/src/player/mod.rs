@@ -351,6 +351,8 @@ impl Player
 							backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
 						#[cfg(target_os="macos")]
 							backends: wgpu::Backends::METAL,
+						#[cfg(debug_assertions)]
+							flags: wgpu::InstanceFlags::DEBUG,
 						..Default::default()
 					},
 					power_preference: wgpu::PowerPreference::HighPerformance,
