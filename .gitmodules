@@ -1,0 +1,3 @@
+[submodule "3rd/slang"]
+	path = 3rd/slang
+	url = ../../shader-slang/slang.git
