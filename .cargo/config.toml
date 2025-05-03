@@ -1,0 +1,2 @@
+[env]
+SLANG_DIR = {value = "3rd/slang", relative=true, force=false}

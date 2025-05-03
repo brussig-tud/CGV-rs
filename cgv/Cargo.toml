@@ -41,6 +41,9 @@ egui-wgpu = {version="*", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}
 
+[build-dependencies]
+cmake = "*"
+
 [features]
 default = ["wayland", "x11"]
 buildScriptUsage = []
