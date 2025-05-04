@@ -38,6 +38,9 @@ use egui;
 use eframe::egui_wgpu;
 use eframe::epaint;
 
+// Slang library
+use slang;
+
 // Local imports
 use crate::*;
 use crate::view::{Camera, CameraInteractor, CameraParameters};
@@ -189,6 +192,8 @@ pub struct Player
 	renderSetup: RenderSetup,
 	prevFramebufferResolution: glm::UVec2,
 
+	slang_ctx: slang::GlobalSession,
+
 	viewportCompositor: ViewportCompositor,
 
 	camera: Box<dyn Camera>,
@@ -256,6 +261,8 @@ impl Player
 
 			context,
 			renderSetup,
+
+			slang_ctx: slang::GlobalSession::new().unwrap(),
 
 			prevFramebufferResolution: glm::vec2(0u32, 0u32),
 

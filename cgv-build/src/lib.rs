@@ -22,7 +22,7 @@
 //
 
 // CGV-rs util modules
-mod util {
+pub mod util {
 	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/mod.rs"));
 }
 

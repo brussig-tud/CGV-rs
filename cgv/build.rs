@@ -10,6 +10,10 @@ use std::env;
 // CMake crate
 use cmake;
 
+// Local imports
+use cgv_build;
+use cgv_build::util;
+
 
 
 //////
@@ -17,7 +21,7 @@ use cmake;
 // Functions
 //
 
-/// Custom build steps – builds native dependencies and handles all additional steps that might be required to make them
+/// Custom build steps – build native dependencies and handle all additional steps that might be required to make them
 /// work for WASM builds.
 fn main ()
 {
@@ -31,13 +35,13 @@ fn main ()
 
 		// Native Slang build
 		_ => {
-			println!(
-				"cargo::warning={}",
-				"Building Slang compiler and reflection library. This can take several minutes the first time."
+			let slang_install_path = util::path::normalizeToAnchor(
+				std::path::Path::new(env::var("CARGO_MANIFEST_DIR").unwrap().as_str()),
+				std::path::Path::new("../target/slang-install")
 			);
 			let _dst = cmake::Config::new("../3rd/slang")
-				.profile(if cfg!(debug_assertions) { "Debug" } else { "Release" })
-				.build_target("slangc")
+				.profile(/*if cfg!(debug_assertions) { "Debug" } else { */"Release"/* }*/)
+				.define("CMAKE_INSTALL_PREFIX", slang_install_path)
 				.build();
 		}
 	}

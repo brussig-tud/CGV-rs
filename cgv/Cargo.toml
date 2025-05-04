@@ -29,6 +29,7 @@ image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
 nalgebra-glm = "*"
 alum = "*"
+slang = {git = "https://github.com/FloatyMonkey/slang-rs.git"}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
@@ -43,6 +44,7 @@ egui-wgpu = {version="*", default-features=false, features=[
 
 [build-dependencies]
 cmake = "*"
+cgv-build = {path="../cgv-build"}
 
 [features]
 default = ["wayland", "x11"]
