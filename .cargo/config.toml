@@ -1,2 +1,0 @@
-[env]
-SLANG_DIR = {value = "target/slang-install", relative=true, force=false}
