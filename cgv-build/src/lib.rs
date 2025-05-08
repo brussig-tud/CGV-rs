@@ -18,6 +18,17 @@
 
 //////
 //
+// Module definitions
+//
+
+// The module implementing the Player
+mod setup;
+pub use setup::Setup; // re-export
+
+
+
+//////
+//
 // Includes
 //
 
@@ -34,10 +45,10 @@ pub mod util {
 //
 
 // Standard library
-use std::{env, fs};
+use std::{env, fs, path::{Path, PathBuf}};
 
 // Anyhow library
-pub use anyhow::{Context, Result};
+pub use anyhow::{Context, Result, anyhow};
 
 // Cargo Metadata parsing library
 use cargo_metadata::MetadataCommand;
@@ -56,7 +67,7 @@ pub struct WebDeployment {
 	packageName: String,
 	niceName: String,
 	shortNiceName: String,
-	faviconSourceDir: std::path::PathBuf
+	faviconSourceDir: PathBuf
 }
 
 
@@ -69,7 +80,7 @@ pub struct WebDeploymentBuilder
 {
 	niceName: Option<String>,
 	shortNiceName: Option<String>,
-	faviconSourceDir: Option<std::path::PathBuf>
+	faviconSourceDir: Option<PathBuf>
 }
 
 impl WebDeploymentBuilder
@@ -82,7 +93,7 @@ impl WebDeploymentBuilder
 		self.shortNiceName = Some(shortNiceName);
 		self
 	}
-	pub fn faviconSourceDir (&mut self, faviconSourceDir: std::path::PathBuf) -> &mut Self {
+	pub fn faviconSourceDir (&mut self, faviconSourceDir: PathBuf) -> &mut Self {
 		self.faviconSourceDir = Some(faviconSourceDir);
 		self
 	}
@@ -120,8 +131,25 @@ impl WebDeploymentBuilder
 // Functions
 //
 
+/// Report the filename used for storing [Setup](build setups)..
+pub fn getSetupFilename () -> &'static str {
+	"_CGV_BUILD_SETUP"
+}
+
+/// Apply the CGV build setup which will have been stored in the current *target* directory when building the *CGV-rs*
+/// crate.
+pub fn applyBuildSetup () -> Result<()> {
+	let setupFilename = getCargoTargetDir()?.join(getSetupFilename());
+	println!("cargo::rerun-if-changed={}", setupFilename.display());
+	if setupFilename.exists() {
+		let setup = Setup::fromFile(setupFilename)?;
+		setup.apply();
+	}
+	Ok(())
+}
+
 /// Internal utility for recursively copying entire directory trees
-pub fn copyRecursively<PathRef: AsRef<std::path::Path>> (source: PathRef, dest: PathRef) -> Result<()>
+pub fn copyRecursively<PathRef: AsRef<Path>> (source: PathRef, dest: PathRef) -> Result<()>
 {
 	fs::create_dir_all(&dest)?;
 	for entry in fs::read_dir(source)?
@@ -137,40 +165,72 @@ pub fn copyRecursively<PathRef: AsRef<std::path::Path>> (source: PathRef, dest: 
 	Ok(())
 }
 
+/// Find the path to the *target* directory of the current Cargo invocation, based on the provided `out_dir` path.
+/// Adapted from the following issue: https://github.com/rust-lang/cargo/issues/9661#issuecomment-1722358176
+///
+/// # Arguments
+///
+/// * `outDir` – A directory, typically the *Cargo*-assigned `$OUT_DIR` of a running build script, that is known to be
+///              inside the directory structure of the *target* directory.
+pub fn getCargoTargetDirFromOutDir (outDir: &Path) -> Result<PathBuf>
+{
+	let profile = env::var("PROFILE")?;
+	let mut targetDir = None;
+	let mut subPath = outDir;
+	while let Some(parent) = subPath.parent() {
+		if parent.ends_with(&profile) {
+			targetDir = Some(parent);
+			break;
+		}
+		subPath = parent;
+	}
+	targetDir.map(|p| p.to_path_buf()).ok_or_else(
+		|| anyhow!("Could not find target directory for profile '{}'", profile)
+	)
+}
+
+/// Find the path to the *target* directory of the current Cargo invocation.
+/// Adapted from the following issue: https://github.com/rust-lang/cargo/issues/9661#issuecomment-1722358176
+pub fn getCargoTargetDir () -> Result<PathBuf> {
+	getCargoTargetDirFromOutDir(
+		Path::new(env::var("OUT_DIR").or(Err(anyhow!("No $OUT_DIR received from Cargo")))?.as_str())
+	)
+}
+
 /// Retrieve the base path of the CGV crate.
-pub fn cgvBuildCrateDirectory() -> &'static std::path::Path {
-	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
-		|| env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>().unwrap()
+pub fn cgvBuildCrateDirectory () -> &'static Path {
+	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+		|| env!("CARGO_MANIFEST_DIR").parse::<PathBuf>().unwrap()
 	);
 	PATH.as_path()
 }
 
 /// Retrieve the path to the favicon resources
-pub fn webResourcesDirFavicon () -> &'static std::path::Path {
-	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
+pub fn webResourcesDirFavicon () -> &'static Path {
+	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web/favicon")
 	);
 	PATH.as_path()
 }
 
 /// Retrieve the path to the `index.html` template for web deployments.
-pub fn templateFileIndexHtml () -> &'static std::path::Path {
-	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
+pub fn templateFileIndexHtml () -> &'static Path {
+	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web/index.html")
 	);
 	PATH.as_path()
 }
 
 /// Retrieve the path to the `site.webmanifest` template for web deployments.
-pub fn templateFileSiteWebmanifest () -> &'static std::path::Path {
-	static PATH: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(
+pub fn templateFileSiteWebmanifest () -> &'static Path {
+	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web/site.webmanifest")
 	);
 	PATH.as_path()
 }
 
 /// Process the given template file for the provided [`WebDeployment`].
-pub fn instantiateTemplate (filepath: &std::path::Path, webDeployment: &WebDeployment) -> Result<String>
+pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> Result<String>
 {
 	let template = fs::read_to_string(filepath)?;
 	let instantiated =
@@ -184,7 +244,7 @@ pub fn instantiateTemplate (filepath: &std::path::Path, webDeployment: &WebDeplo
 }
 
 /// Deploy a CGV-rs WASM application to the given directory.
-pub fn deployCgvApplication (outputPath: &std::path::Path, webDeployment: WebDeployment)
+pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment)
 	-> Result<()>
 {
 	// Instantiate templates
@@ -224,7 +284,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 	}
 
 	// Get other relevant general cargo properties
-	let manifestPath = env::var("CARGO_MANIFEST_DIR").unwrap().parse::<std::path::PathBuf>()?;
+	let manifestPath = env::var("CARGO_MANIFEST_DIR").unwrap().parse::<PathBuf>()?;
 	let pkgName = env::var("CARGO_PKG_NAME")?;
 
 
@@ -232,12 +292,12 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 	// Gather metadata
 
 	// First, parse output path
-	let outputPath = outputPath.parse::<std::path::PathBuf>()?;
+	let outputPath = outputPath.parse::<PathBuf>()?;
 
 	// Inject re-run decision dependencies
 	for dep in changeCheckedFilesOrDirs {
 		let dep_absPath = util::path::normalizeToAnchor(
-			&manifestPath, &dep.parse::<std::path::PathBuf>()?
+			&manifestPath, &dep.parse::<PathBuf>()?
 		);
 		println!("cargo::rerun-if-changed={}", dep_absPath.as_os_str().to_str().unwrap());
 	}

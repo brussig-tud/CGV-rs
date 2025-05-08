@@ -29,7 +29,7 @@ image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
 nalgebra-glm = "*"
 alum = "*"
-slang = {git="https://github.com/brussig-tud/slang-rs.git"} # https://github.com/ProjectKML/slang-rs.git
+slang = {git="https://github.com/brussig-tud/slang-rs.git", features=["copy_libs"]}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
@@ -42,8 +42,12 @@ egui-wgpu = {version="*", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}
 
+[build-dependencies]
+cgv-build = {path="../cgv-build"}
+
 [features]
 default = ["wayland", "x11"]
 buildScriptUsage = []
 wayland = ["eframe/wayland"]
 x11 = ["eframe/x11"]
+copy_libs = ["slang/copy_libs"]
