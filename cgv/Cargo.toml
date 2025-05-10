@@ -34,7 +34,7 @@ slang = {git="https://github.com/brussig-tud/slang-rs.git", features=["copy_libs
 console_error_panic_hook = "*"
 tracing-wasm = "*"
 wasm-bindgen-futures = "*"
-getrandom = {version="*", default-features=true, features=["js"]}
+getrandom = {version="0.3.3", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
 #wgpu = {version="*", default-features=false, features=["webgpu"]}
 egui-wgpu = {version="*", default-features=false, features=[
