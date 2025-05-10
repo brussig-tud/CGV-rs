@@ -11,7 +11,6 @@
 #![allow(non_snake_case)]
 
 // Experimental language features
-#![feature(let_chains)]          // required for view::FoV
 #![feature(generic_const_exprs)] // required for util::Phony
 
 

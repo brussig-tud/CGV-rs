@@ -21,7 +21,7 @@ use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 /// A `'static` reference to some object of the specified type. Must not be dereferenced.
 #[inline(always)]
 pub const unsafe fn defaultRef<T> () -> &'static T {
-	&*(1usize as *const T)
+	unsafe { &*(1usize as *const T) }
 }
 
 /// Perform a shallow memory copy for copy-assigning from one value of type `T` to another. Can be used for copying
@@ -33,7 +33,7 @@ pub const unsafe fn defaultRef<T> () -> &'static T {
 /// * `source` – A reference to the source object that holds the to-be-copied memory contents.
 #[inline(always)]
 pub unsafe fn copyAssign<T: Sized> (target: &mut T, source: &T) {
-	std::ptr::copy_nonoverlapping(source as *const T, target as *mut T, 1);
+	unsafe { std::ptr::copy_nonoverlapping(source as *const T, target as *mut T, 1); }
 }
 
 
@@ -145,7 +145,7 @@ impl<T> UncheckedRef<T>
 	/// A reference to the object with `'static` lifetime.
 	#[inline(always)]
 	pub unsafe fn as_ref (&self) -> &'static T {
-		&*self.ptr
+		unsafe { &*self.ptr }
 	}
 
 	/// Mutable access to the reference.
@@ -155,6 +155,6 @@ impl<T> UncheckedRef<T>
 	/// A mutable reference to the object with `'static` lifetime.
 	#[inline(always)]
 	pub unsafe fn as_mut (&mut self) -> &'static mut T {
-		&mut *self.ptr
+		unsafe { &mut *self.ptr }
 	}
 }
