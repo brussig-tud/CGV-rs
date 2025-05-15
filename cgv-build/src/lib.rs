@@ -21,9 +21,12 @@
 // Module definitions
 //
 
-// The module implementing the Player
+// The module implementing the build setup facilities
 mod setup;
 pub use setup::Setup; // re-export
+
+// The module providing all kinds of assorted utilities
+mod build_util;
 
 
 
@@ -34,7 +37,13 @@ pub use setup::Setup; // re-export
 
 // CGV-rs util modules
 pub mod util {
+	// Include cgv::util
 	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/mod.rs"));
+
+	// Integrate our locally defined utils
+	pub use crate::build_util::{
+		downloadToFile, downloadAndExtract, dependOnDownloadedFile, dependOnDownloadedDirectory, zip
+	};
 }
 
 

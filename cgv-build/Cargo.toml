@@ -10,6 +10,9 @@ crate-type = ["rlib"]
 [dependencies]
 cargo_metadata = "*"
 anyhow = "*"
+reqwest = {version="*", features=["blocking"]}
+zip-extract = "*"
+bytes = "*"
 
 [features]
 default = ["buildScriptUsage"]

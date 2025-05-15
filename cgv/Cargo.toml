@@ -28,7 +28,9 @@ image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
 nalgebra-glm = "*"
 alum = "*"
-slang = {git="https://github.com/brussig-tud/slang-rs.git", features=["copy_libs"]}
+slang = {git="https://github.com/brussig-tud/slang-rs.git", features=[
+	"copy_libs", "download_slang_binaries", "build_slang_from_source"
+]}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
