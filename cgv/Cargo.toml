@@ -22,7 +22,7 @@ egui_extras = {version="*", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
 eframe = {version="*", default-features=false, features=[
-	"default_fonts", "wayland", "wgpu", "x11"
+	"default_fonts", "wayland", "x11", "wgpu"
 ]}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"

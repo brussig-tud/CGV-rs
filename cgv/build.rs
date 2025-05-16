@@ -19,10 +19,18 @@
 fn main() -> cgv_build::Result<()>
 {
 	////
-	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
+	// Preamble
 
-	// Find current target directory
-	let targetDir = cgv_build::getCargoTargetDir()?;
+	// Get source directory
+	let cgvSrcDir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+
+	// Find current out- and target directories
+	let outDir = cgv_build::getCargoOutDir();
+	let targetDir = cgv_build::getCargoTargetDirFromOutDir(outDir.as_path())?;
+
+
+	////
+	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 
 	// Linker flag in case we have the `copy_libs` feature
 	if std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
@@ -36,6 +44,20 @@ fn main() -> cgv_build::Result<()>
 		// build setup file
 		std::fs::remove_file(targetDir.join("_CGV_BUILD_SETUP")).ok();
 	}
+
+	////
+	// Compile our shaders
+
+	// slangc hello-world.slang -profile glsl_450 -target spirv -o hello-world.spv -entry computeMain
+	/*std::process::Command::new("slangc")
+		.current_dir(cgvSrcDir)
+		.args([
+			"./shader/player/viewport.slang", "-profile", "glsl_460", "-target", "spirv",
+			"-o", outDir.join("viewport.spv").to_str().unwrap(),
+			"-entry", "computeMain"
+		])
+		.output()
+		.expect("compileShaderProgram: `slangc` invocation failed");*/
 
 	// Done!
 	Ok(())

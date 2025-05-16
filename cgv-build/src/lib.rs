@@ -174,7 +174,17 @@ pub fn copyRecursively<PathRef: AsRef<Path>> (source: PathRef, dest: PathRef) ->
 	Ok(())
 }
 
-/// Find the path to the *target* directory of the current Cargo invocation, based on the provided `out_dir` path.
+/// Create a `PathBuf` containing the `$OUT_DIR` path of the current *Cargo* invocation.
+///
+/// # Panics
+///
+/// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
+/// information.
+pub fn getCargoOutDir () -> PathBuf {
+	std::env::var("OUT_DIR").map(std::path::PathBuf::from).expect("`$OUT_DIR` should point to a valid path")
+}
+
+/// Find the path to the *target* directory of the current *Cargo* invocation, based on the provided `outDir` path.
 /// Adapted from the following issue: https://github.com/rust-lang/cargo/issues/9661#issuecomment-1722358176
 ///
 /// # Arguments
@@ -198,7 +208,7 @@ pub fn getCargoTargetDirFromOutDir (outDir: &Path) -> Result<PathBuf>
 	)
 }
 
-/// Find the path to the *target* directory of the current Cargo invocation.
+/// Find the path to the *target* directory of the current *Cargo* invocation.
 /// Adapted from the following issue: https://github.com/rust-lang/cargo/issues/9661#issuecomment-1722358176
 pub fn getCargoTargetDir () -> Result<PathBuf> {
 	getCargoTargetDirFromOutDir(
@@ -277,9 +287,9 @@ pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment)
 ///
 /// * `outputPath` – The path to deploy to.
 /// * `changeCheckedFilesOrPaths` – This function is injecting a new file system location that will be monitored for
-///                                 changes into the Cargo `build.rs` re-run decision logic. Therefore, as per cargo
+///                                 changes into the *Cargo* `build.rs` re-run decision logic. Therefore, as per *Cargo*
 ///                                 monitoring rules, the calling build script must make explicit any locations it would
-///                                 normally depend on being monitored automatically by Cargo. It can do so here if it
+///                                 normally depend on being monitored automatically by *Cargo*. It can do so here if it
 ///                                 doesn't already do it elsewhere (passing in an empty slice is perfectly OK).
 pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> Result<()>
 {
@@ -292,7 +302,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 		return Ok(());
 	}
 
-	// Get other relevant general cargo properties
+	// Get other relevant general Cargo properties
 	let manifestPath = env::var("CARGO_MANIFEST_DIR").unwrap().parse::<PathBuf>()?;
 	let pkgName = env::var("CARGO_PKG_NAME")?;
 
