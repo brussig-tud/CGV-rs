@@ -21,6 +21,7 @@ egui = {version="*", default-features=true, features=["color-hex", "rayon"]}
 egui_extras = {version="*", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
+wgpu = {version="*", features=["spirv"] }
 eframe = {version="*", default-features=false, features=[
 	"default_fonts", "wayland", "x11", "wgpu"
 ]}
@@ -28,9 +29,6 @@ image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
 nalgebra-glm = "*"
 alum = "*"
-slang = {git="https://github.com/brussig-tud/slang-rs.git", features=[
-	"copy_libs", "download_slang_binaries", "build_slang_from_source"
-]}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
@@ -38,12 +36,15 @@ tracing-wasm = "*"
 wasm-bindgen-futures = "*"
 getrandom = {version="0.3.3", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
-#wgpu = {version="*", default-features=false, features=["webgpu"]}
+#wgpu = {version="*", default-features=false, features=["webgpu", "spirv"]}
 egui-wgpu = {version="*", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}
 
 [build-dependencies]
+slang = {git="https://github.com/brussig-tud/slang-rs.git", features=[
+	"copy_libs", "download_slang_binaries", "build_slang_from_source"
+]}
 cgv-build = {path="../cgv-build"}
 
 [features]

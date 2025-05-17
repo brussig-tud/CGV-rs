@@ -35,10 +35,13 @@ impl ViewportCompositor
 	{
 		let name = name.map(String::from);
 
-		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+		/*let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: util::concatIfSome(&name, "_shaderModule").as_deref(),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
-		});
+		});*/
+		let desc = wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/viewport.spv"));
+		//desc.label = util::concatIfSome(&name, "_shaderModule").as_deref();
+		let shader = context.device().create_shader_module(desc);
 
 		// ToDo: introduce a sampler library and put this there
 		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
@@ -107,7 +110,7 @@ impl ViewportCompositor
 			},
 			fragment: Some(wgpu::FragmentState {
 				module: &shader,
-				entry_point: Some("fs_non_premultiplied"),
+				entry_point: Some("fragmentMain"),//Some("fs_non_premultiplied"),
 				targets: &[Some(wgpu::ColorTargetState {
 					format: renderSetup.surfaceFormat(),
 					blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
