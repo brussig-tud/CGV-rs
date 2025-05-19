@@ -42,7 +42,7 @@ pub mod util {
 
 	// Integrate our locally defined utils
 	pub use crate::build_util::{
-		downloadToFile, downloadAndExtract, dependOnDownloadedFile, dependOnDownloadedDirectory, zip
+		downloadToFile, downloadAndExtract, dependOnDownloadedFile, dependOnDownloadedDirectory, checkProcessOutput
 	};
 }
 
@@ -147,7 +147,8 @@ pub fn getSetupFilename () -> &'static str {
 
 /// Apply the CGV build setup which will have been stored in the current *target* directory when building the *CGV-rs*
 /// crate.
-pub fn applyBuildSetup () -> Result<()> {
+pub fn applyBuildSetup () -> Result<()>
+{
 	let setupFilename = getCargoTargetDir()?.join(getSetupFilename());
 	println!("cargo::rerun-if-changed={}", setupFilename.display());
 	if setupFilename.exists() {

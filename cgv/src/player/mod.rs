@@ -358,7 +358,7 @@ impl Player
 					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
-						//required_features: Default::default(),
+						required_features: wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
 						//required_limits: Default::default(),
 						//memory_hints: Default::default(),
 						..Default::default()

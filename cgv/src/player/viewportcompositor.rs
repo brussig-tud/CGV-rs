@@ -39,9 +39,19 @@ impl ViewportCompositor
 			label: util::concatIfSome(&name, "_shaderModule").as_deref(),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
 		});*/
-		let desc = wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/viewport.spv"));
-		//desc.label = util::concatIfSome(&name, "_shaderModule").as_deref();
-		let shader = context.device().create_shader_module(desc);
+		let shader;
+		#[cfg(target_arch="wasm32")] {
+			shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
+				source: wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/viewport.spv")).source,
+			});
+		};
+		#[cfg(not(target_arch="wasm32"))] {
+			shader = unsafe { context.device().create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
+				source: wgpu::include_spirv_raw!(concat!(env!("OUT_DIR"), "/viewport.spv")).source,
+			})};
+		};
 
 		// ToDo: introduce a sampler library and put this there
 		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
@@ -104,7 +114,7 @@ impl ViewportCompositor
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
 				module: &shader,
-				entry_point: None,
+				entry_point: Some("vertexMain"),
 				buffers: &[],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
