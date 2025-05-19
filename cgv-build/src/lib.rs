@@ -224,6 +224,11 @@ pub fn cgvBuildCrateDirectory () -> &'static Path {
 	PATH.as_path()
 }
 
+/// Detect whether a build is targeting WASM.
+pub fn isWasm () -> Result<bool> {
+	Ok(env::var("CARGO_CFG_TARGET_ARCH")? == "wasm32")
+}
+
 /// Retrieve the path to the favicon resources
 pub fn webResourcesDirFavicon () -> &'static Path {
 	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
@@ -297,8 +302,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 	// Preamble
 
 	// Don't do anything if we're not building for WASM
-	let targetArch = env::var("CARGO_CFG_TARGET_ARCH")?;
-	if targetArch != "wasm32" {
+	if !isWasm()? {
 		return Ok(());
 	}
 

@@ -67,6 +67,15 @@ fn main() -> cgv_build::Result<()>
 	////
 	// Preamble
 
+	// Launch VS Code LLDB debugger if it is installed and attach to the build script
+	/*let url = format!(
+		"vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}", std::process::id()
+	);
+	if let Ok(result) = std::process::Command::new("code").arg("--open-url").arg(url).output()
+	    && result.status.success() {
+		std::thread::sleep(std::time::Duration::from_secs(4)); // <- give debugger time to attach
+	}*/
+
 	// Get source directory
 	let cgvSrcDir = std::env::var("CARGO_MANIFEST_DIR").map(std::path::PathBuf::from)?;
 
@@ -79,7 +88,7 @@ fn main() -> cgv_build::Result<()>
 	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 
 	// Linker flag in case we have the `copy_libs` feature
-	if std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
+	if !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
 		let data = "ADDITIONAL_LINKER_ARGS=-Wl,-rpath=$ORIGIN";
 		std::fs::write(targetDir.join("_CGV_BUILD_SETUP"), data).or(
 			Err(cgv_build::anyhow!("Could not write build setup file"))
