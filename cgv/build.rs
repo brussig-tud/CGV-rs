@@ -42,7 +42,7 @@ fn main() -> cgv_build::Result<()>
 	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 
 	// Linker flag in case we have the `copy_libs` feature
-	if !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
+	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
 		let data = "ADDITIONAL_LINKER_ARGS=-Wl,-rpath=$ORIGIN";
 		std::fs::write(targetDir.join("_CGV_BUILD_SETUP"), data).or(
 			Err(cgv_build::anyhow!("Could not write build setup file"))

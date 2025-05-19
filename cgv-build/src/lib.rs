@@ -230,6 +230,16 @@ pub fn isWasm () -> Result<bool> {
 	Ok(env::var("CARGO_CFG_TARGET_ARCH")? == "wasm32")
 }
 
+/// Detect whether a build is targeting Windows.
+pub fn isWindows () -> Result<bool> {
+	Ok(env::var("CARGO_CFG_TARGET_OS")? == "windows")
+}
+
+/// Detect whether a build is targeting Windows.
+pub fn isMac () -> Result<bool> {
+	Ok(env::var("CARGO_CFG_TARGET_OS")? == "macos")
+}
+
 /// Retrieve the path to the favicon resources
 pub fn webResourcesDirFavicon () -> &'static Path {
 	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
