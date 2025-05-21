@@ -21,11 +21,15 @@
 // Module definitions
 //
 
-// The module implementing the build setup facilities
+/// The module implementing the build setup facilities.
 mod setup;
 pub use setup::Setup; // re-export
 
-// The module providing all kinds of assorted utilities
+/// The module implementing the shader packaging facilities.
+pub mod shader;
+
+/// The module providing all kinds of additional assorted utilities specific to building (will get inserted verbatim
+/// into the exported [`util`] module).
 mod build_util;
 
 
