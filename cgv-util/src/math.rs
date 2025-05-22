@@ -8,7 +8,7 @@
 use std::ops::*;
 
 // GLM library
-use glm;
+use nalgebra_glm as glm;
 
 
 
@@ -26,8 +26,9 @@ use glm;
 /// # Returns
 ///
 /// The given angle in radians.
+#[macro_export]
 macro_rules! deg2rad { ($deg:expr) => {$deg * 3.1415926535897932384626433832795/180.} }
-#[allow(unused_imports)] pub(crate) use deg2rad;
+pub use deg2rad;
 
 /// Converts (for constant inputs at compile time) an angle given in radians into degrees.
 ///
@@ -38,8 +39,9 @@ macro_rules! deg2rad { ($deg:expr) => {$deg * 3.1415926535897932384626433832795/
 /// # Returns
 ///
 /// The given angle in degrees.
+#[macro_export]
 macro_rules! rad2deg { ($rad:expr) => {$rad * 180./3.1415926535897932384626433832795} }
-#[allow(unused_imports)] pub(crate) use rad2deg;
+pub use rad2deg;
 
 
 

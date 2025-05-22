@@ -4,15 +4,11 @@
 // Language config
 //
 
-// Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
+// Eff this convention.
 #![allow(non_snake_case)]
 
 // And this one... the macros are there for clients! Why should the library have to use every single one? WTF...
 #![allow(unused_macros)]
-
-// We're pasting whole modules from the cgv crate in here, including many things we don't actually need, due to the
-// utterly stupid way Rust build scripts work, so we don't have a choice about this one
-#![allow(dead_code)]
 
 
 
@@ -32,17 +28,10 @@ pub mod shader;
 /// into the exported [`util`] module).
 mod build_util;
 
-
-
-//////
-//
-// Includes
-//
-
-// CGV-rs util modules
+/// The compound utilities module
 pub mod util {
-	// Include cgv::util
-	include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../cgv/src/util/mod.rs"));
+	// Integrate the regular CGV-rs utils
+	pub use cgv_util::*;
 
 	// Integrate our locally defined utils
 	pub use crate::build_util::{

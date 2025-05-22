@@ -1,6 +1,6 @@
 
 [workspace]
-members = ["cgv", "cgv-build", "cgv-sample"]
+members = ["cgv", "cgv-build", "cgv-sample", "cgv-util"]
 default-members = ["cgv", "cgv-sample"]
 resolver = "2"
 

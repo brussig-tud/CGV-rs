@@ -1,0 +1,7 @@
+[package]
+name = "cgv-util"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nalgebra-glm = "*"

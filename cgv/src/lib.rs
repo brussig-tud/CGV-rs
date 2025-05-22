@@ -4,10 +4,10 @@
 // Language config
 //
 
-// No point allowing unstable features if we still get warnings
+// No point allowing unstable features if we still get warnings.
 #![allow(incomplete_features)]
 
-// Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
+// Eff this convention.
 #![allow(non_snake_case)]
 
 // Experimental language features
@@ -44,10 +44,6 @@ pub mod view;
 /// The module providing various reusable UI components
 pub mod gui;
 
-/// The module containing utilities used throughout (i.e. not specific to any other module).
-#[allow(unused)]         // some of our utils are mainly useful for clients
-pub mod util;
-
 /// Make sure we can access glm functionality as such
 pub extern crate nalgebra_glm as glm;
 
@@ -78,6 +74,9 @@ use ctor;
 
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+// CGV utils
+pub use cgv_util as util; // re-export
 
 
 
