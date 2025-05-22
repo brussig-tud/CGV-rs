@@ -1,0 +1,15 @@
+[package]
+name = "cgv-shader"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+slang = {git="https://github.com/brussig-tud/slang-rs.git", features=[
+    "copy_libs", "download_slang_binaries", "build_slang_from_source"
+]}
+anyhow = "*"
+cgv-util = {path="../cgv-util"}
+
+[features]
+default = []
+copy_libs = ["slang/copy_libs"]

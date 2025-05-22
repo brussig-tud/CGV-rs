@@ -22,7 +22,7 @@ mod setup;
 pub use setup::Setup; // re-export
 
 /// The module implementing the shader packaging facilities.
-pub mod shader;
+pub use cgv_shader as shader;
 
 /// The module providing all kinds of additional assorted utilities specific to building (will get inserted verbatim
 /// into the exported [`util`] module).
@@ -168,14 +168,32 @@ pub fn copyRecursively<PathRef: AsRef<Path>> (source: PathRef, dest: PathRef) ->
 	Ok(())
 }
 
-/// Create a `PathBuf` containing the `$OUT_DIR` path of the current *Cargo* invocation.
+/// Report the root path of source code for the crate that is currently building.
 ///
 /// # Panics
 ///
 /// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
 /// information.
-pub fn getCargoOutDir () -> PathBuf {
-	std::env::var("OUT_DIR").map(std::path::PathBuf::from).expect("`$OUT_DIR` should point to a valid path")
+pub fn getCargoSourceDir () -> &'static Path {
+	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(||
+		env::var("CARGO_MANIFEST_DIR").map(std::path::PathBuf::from)
+			.expect("`CARGO_MANIFEST_DIR` should point to a valid path")
+	);
+	PATH.as_path()
+}
+
+/// Report the path of the `OUT_DIR` of the current *Cargo* invocation.
+///
+/// # Panics
+///
+/// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
+/// information.
+pub fn getCargoOutDir () -> &'static Path {
+	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(||
+		env::var("OUT_DIR").map(std::path::PathBuf::from)
+			.expect("`OUT_DIR` should point to a valid path")
+	);
+	PATH.as_path()
 }
 
 /// Find the path to the *target* directory of the current *Cargo* invocation, based on the provided `outDir` path.
@@ -183,7 +201,7 @@ pub fn getCargoOutDir () -> PathBuf {
 ///
 /// # Arguments
 ///
-/// * `outDir` – A directory, typically the *Cargo*-assigned `$OUT_DIR` of a running build script, that is known to be
+/// * `outDir` – A directory, typically the *Cargo*-assigned `OUT_DIR` of a running build script, that is known to be
 ///              inside the directory structure of the *target* directory.
 pub fn getCargoTargetDirFromOutDir (outDir: &Path) -> Result<PathBuf>
 {
@@ -205,12 +223,10 @@ pub fn getCargoTargetDirFromOutDir (outDir: &Path) -> Result<PathBuf>
 /// Find the path to the *target* directory of the current *Cargo* invocation.
 /// Adapted from the following issue: https://github.com/rust-lang/cargo/issues/9661#issuecomment-1722358176
 pub fn getCargoTargetDir () -> Result<PathBuf> {
-	getCargoTargetDirFromOutDir(
-		Path::new(env::var("OUT_DIR").or(Err(anyhow!("No $OUT_DIR received from Cargo")))?.as_str())
-	)
+	getCargoTargetDirFromOutDir(getCargoOutDir())
 }
 
-/// Retrieve the base path of the CGV crate.
+/// Retrieve the base path of the `cgv-build` crate.
 pub fn cgvBuildCrateDirectory () -> &'static Path {
 	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
 		|| env!("CARGO_MANIFEST_DIR").parse::<PathBuf>().unwrap()
@@ -231,6 +247,34 @@ pub fn isWindows () -> Result<bool> {
 /// Detect whether a build is targeting Windows.
 pub fn isMac () -> Result<bool> {
 	Ok(env::var("CARGO_CFG_TARGET_OS")? == "macos")
+}
+
+/// Report the debug level set for the current *Cargo* build process.
+pub fn getCargoDebugBuild () -> Result<bool>
+{
+	let dbgLvl = std::env::var("DEBUG").context(
+		"Cargo did not provide the `DEBUG` environment variable"
+	)?;
+	match dbgLvl.as_str() {
+		"none" | "false" | "0" => Ok(false), "1" | "true" => Ok(true),
+		_ => Err(anyhow!("Invalid value for `DEBUG` environment variable received from Cargo: '{}'", dbgLvl))
+	}
+}
+
+/// Report the optimization level set for the current *Cargo* build process.
+pub fn getCargoOptLevel () -> Result<u32>
+{
+	let optLevel = std::env::var("OPT_LEVEL").context(
+		"Cargo did not provide the `OPT_LEVEL` environment variable"
+	)?;
+	optLevel.parse::<u32>().context(
+		format!("Invalid value for `OPT_LEVEL` environment variable received from Cargo: '{}'", optLevel)
+	)
+}
+
+/// Report both debug (1st value) and optimization (2nd value) levels set for the current *Cargo* build process.
+pub fn getCargoDebugAndOptLevel () -> Result<(bool, u32)> {
+	Ok((getCargoDebugBuild()?, getCargoOptLevel()?))
 }
 
 /// Retrieve the path to the favicon resources
@@ -272,8 +316,7 @@ pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> R
 }
 
 /// Deploy a CGV-rs WASM application to the given directory.
-pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment)
-	-> Result<()>
+pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment) -> Result<()>
 {
 	// Instantiate templates
 	let indexHtml = instantiateTemplate(templateFileIndexHtml(), &webDeployment)?;

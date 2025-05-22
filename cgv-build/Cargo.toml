@@ -14,12 +14,9 @@ anyhow = "*"
 reqwest = {version="*", features=["blocking"]}
 zip-extract = "*"
 bytes = "*"
-slang = {git="https://github.com/brussig-tud/slang-rs.git", features=[
-	"copy_libs", "download_slang_binaries", "build_slang_from_source"
-]}
 cgv-util = {path="../cgv-util"}
+cgv-shader = {path="../cgv-shader"}
 
 [features]
-default = ["buildScriptUsage"]
-buildScriptUsage = []
-copy_libs = ["slang/copy_libs"]
+default = []
+copy_libs = ["cgv-shader/copy_libs"]

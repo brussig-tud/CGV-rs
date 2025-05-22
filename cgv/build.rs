@@ -4,6 +4,10 @@
 // Language config
 //
 
+// Allow debugging the build script
+#![allow(internal_features)]
+#![feature(core_intrinsics)]
+
 // Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
 #![allow(non_snake_case)]
 
@@ -27,15 +31,16 @@ fn main() -> cgv_build::Result<()>
 	);
 	if let Ok(result) = std::process::Command::new("code").arg("--open-url").arg(url).output()
 	    && result.status.success() {
-		std::thread::sleep(std::time::Duration::from_secs(4)); // <- give debugger time to attach
+		std::thread::sleep(std::time::Duration::from_secs(3)); // <- give debugger time to attach
+		std::intrinsics::breakpoint();
 	}*/
 
 	// Get source directory
-	let cgvSrcDir = std::env::var("CARGO_MANIFEST_DIR").map(std::path::PathBuf::from)?;
+	let cgvSrcDir = cgv_build::getCargoSourceDir();
 
 	// Find current out- and target directories
 	let outDir = cgv_build::getCargoOutDir();
-	let targetDir = cgv_build::getCargoTargetDirFromOutDir(outDir.as_path())?;
+	let targetDir = cgv_build::getCargoTargetDirFromOutDir(outDir)?;
 
 
 	////
@@ -61,17 +66,10 @@ fn main() -> cgv_build::Result<()>
 	// Proof-of-concept: Manually compile the viewport compositor shader – TODO: add proper shader building facilities
 	println!("cargo::rerun-if-changed={}", cgvSrcDir.join("shader/player/viewport.slang").to_str().unwrap());
 	let (optLvlArg, debugLvlArg) = {
-		let optLevel = std::env::var("OPT_LEVEL").expect(
-			"Cargo did not provide the `OPT_LEVEL` environment variable"
-		);
-		let dbgLevel = std::env::var("DEBUG").map(|dbg|
-			match dbg.as_str() {"none" | "false" | "0" => 0, _ => 3 }
-		).expect(
-			"Cargo did not provide the `DEBUG` environment variable"
-		);
+		let (debug, optLevel) = cgv_build::getCargoDebugAndOptLevel()?;
 		/* evaluate to: */ (
-			if optLevel == "0" { format!("-O0") } else { format!("-O3") },
-			if dbgLevel ==  0  { format!("-g0") } else { format!("-g3") }
+			if optLevel == 0 { format!("-O0") } else { format!("-O3") },
+			if debug         { format!("-g3") } else { format!("-g0") }
 		)
 	};
 	let slangcOutput = std::process::Command::new("slangc")
@@ -86,6 +84,12 @@ fn main() -> cgv_build::Result<()>
 		println!("cargo::error=Shader compilation produced errors!");
 		panic!("{err}");
 	}
+
+	// Test proper shader compilation
+	let slang = cgv_build::shader::SlangContext::new(
+		&[cgv_build::getCargoSourceDir().join("shader/lib")]
+	)?;
+	let _viewportCompositorProg = slang.buildProgram(cgvSrcDir.join("shader/player/viewport.slang"))?;
 
 	// Done!
 	Ok(())
