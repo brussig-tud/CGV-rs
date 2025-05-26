@@ -15,7 +15,7 @@ reqwest = {version="*", features=["blocking"]}
 zip-extract = "*"
 bytes = "*"
 cgv-util = {path="../cgv-util"}
-cgv-shader = {path="../cgv-shader"}
+cgv-shader = {path="../cgv-shader", features=["slang_programs"]}
 
 [features]
 default = []

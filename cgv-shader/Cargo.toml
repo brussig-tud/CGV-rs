@@ -12,4 +12,5 @@ cgv-util = {path="../cgv-util"}
 
 [features]
 default = []
+slang_programs = []
 copy_libs = ["slang/copy_libs"]

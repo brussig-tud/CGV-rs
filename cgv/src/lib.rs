@@ -44,6 +44,9 @@ pub mod view;
 /// The module providing various reusable UI components
 pub mod gui;
 
+/// Re-export cgv-shader
+pub use cgv_shader as shader;
+
 /// Make sure we can access glm functionality as such
 pub extern crate nalgebra_glm as glm;
 

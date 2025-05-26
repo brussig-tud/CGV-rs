@@ -30,6 +30,7 @@ image = {version="*", default-features=false, features=["png", "jpeg"]}
 nalgebra-glm = "*"
 alum = "*"
 cgv-util = {path="../cgv-util"}
+cgv-shader = {path="../cgv-shader"}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
@@ -47,5 +48,7 @@ cgv-build = {path="../cgv-build"}
 
 [features]
 default = []
+copy_libs = ["cgv-shader/copy_libs"]
+slang_runtime = ["cgv-shader/slang_programs"]
 wayland = ["eframe/wayland"]
 x11 = ["eframe/x11"]

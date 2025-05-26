@@ -10,7 +10,7 @@ nice-name = "CGV-rs Example"
 #web-favicon-srcdir = "CGV-rs" # relative to the crate's manifest file (i.e. this Cargo.toml). We don't ship our own
                                # though, so we don't actually define it, this is just here for documentation purposes.
 [dependencies]
-cgv = {path="../cgv"}
+cgv = {path="../cgv", features=["slang_runtime", "copy_libs"]}
 
 [build-dependencies]
 cgv-build = {path="../cgv-build", features=["copy_libs"]}

@@ -25,6 +25,12 @@ pub struct EntryPoint {
 	pub slang: slang::EntryPoint,
 	bytecode: slang::Blob,
 }
+impl EntryPoint {
+	#[inline]
+	pub fn buildArtifact (&self) -> &[u8] {
+		self.bytecode.as_slice()
+	}
+}
 
 
 
@@ -43,15 +49,28 @@ impl Program
 {
 	pub(crate) fn new (slangContext: &SlangContext, filename: impl AsRef<Path>) -> Result<Self>
 	{
+		// Compile Slang module
 		let module = slangContext.session.load_module(
 			filename.as_ref().to_str().context("invalid filename")?,
 		).or_else(|err| Err(
 			anyhow!("Compilation of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
+		let entryPoints = module.entry_points();
 
-		let program = slangContext.session.create_composite_component_type(&[
-			module.downcast().clone() //, entry_point.downcast().clone(),
-		]).unwrap();
+		// Link program instances resulting from each entry point
+		// - gather components
+		let components = {
+			let mut components = vec![module.downcast().clone()];
+			for ep in entryPoints {
+				components.push(ep.downcast().clone());
+			}
+			components
+		};
+		let program = slangContext.session.create_composite_component_type(
+			components.as_slice()
+		).or_else(|err| Err(
+			anyhow!("Instantiating `{}` failed:\n{}", filename.as_ref().display(), err)
+		))?;
 		let linkedProg = program.link().or_else(|err| Err(
 			anyhow!("Linking of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
@@ -69,5 +88,15 @@ impl Program
 		};
 
 		Ok(Self { linkedProg, genericBytecode, entryPoints })
+	}
+
+	#[inline]
+	pub fn entryPoints (&self) -> &[EntryPoint] {
+		&self.entryPoints
+	}
+
+	#[inline]
+	pub fn genericBuildArtifact (&self) -> &[u8] {
+		self.genericBytecode.as_slice()
 	}
 }

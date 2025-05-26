@@ -132,6 +132,29 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
+		// Testing
+
+		let slangCtx = cgv::shader::SlangContext::new(&[
+			std::env::current_dir()?.join("shader")
+		])?;
+		let testShader = slangCtx.buildProgram(
+			env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>()?.join("shader/example.slang")
+		)?;
+		std::fs::write(
+			env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>()?.join("shader/example_all.spv"),
+			testShader.genericBuildArtifact()
+		)?;
+		for (i, ep) in testShader.entryPoints().iter().enumerate() {
+			std::fs::write(
+				env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>()?.join(
+					format!("shader/example_ep{i}.spv")
+				),
+				ep.buildArtifact()
+			)?;
+		}
+
+
+		////
 		// Prepare buffers
 
 		let vertexBuffer = context.device().create_buffer_init(

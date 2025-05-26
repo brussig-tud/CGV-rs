@@ -15,7 +15,9 @@
 //
 
 /// Submodule providing the shader [`Program`].
+#[cfg(feature="slang_programs")]
 mod program;
+#[cfg(feature="slang_programs")]
 pub use program::Program; // - re-export
 
 
@@ -158,6 +160,7 @@ impl SlangContext
 	/// # Arguments
 	///
 	/// * `sourceFile` – The `.slang` file containing the shader source code.
+	#[cfg(feature="slang_programs")]
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> Result<Program> {
 		Program::new(self, sourceFile)
 	}
