@@ -322,7 +322,7 @@ pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment) ->
 	let siteWebmanifest = instantiateTemplate(templateFileSiteWebmanifest(), &webDeployment)?;
 
 	// Copy resources (also creates the deployment output folder)
-	util::copyRecursively(webDeployment.faviconSourceDir, outputPath.join("res/favicon"))?;
+	util::fs::copyRecursively(webDeployment.faviconSourceDir, outputPath.join("res/favicon"))?;
 
 	// Write instantiated templates
 	fs::write(outputPath.join("index.html"), indexHtml)?;

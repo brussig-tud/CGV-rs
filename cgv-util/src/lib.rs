@@ -36,6 +36,9 @@ pub mod math;
 /// Submodule providing operations on file system paths.
 pub mod path;
 
+/// Submodule providing operations on the file system.
+pub mod fs;
+
 /// Submodule providing unique entity generators (IDs etc.)
 pub mod unique;
 

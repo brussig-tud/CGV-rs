@@ -34,8 +34,7 @@ use std::path::Path;
 use anyhow::*;
 
 // Slang library
-use slang;
-use slang::Downcast;
+//use slang;
 
 
 
@@ -60,12 +59,14 @@ pub enum TargetPlatform {
 //
 
 ///
+#[cfg(feature="slang_programs")]
 pub struct SlangContext {
 	#[allow(dead_code)] // we need to keep this around as it dictates the lifetime of `session`
 	globalSession: slang::GlobalSession,
 
 	pub(crate) session: slang::Session,
 }
+#[cfg(feature="slang_programs")]
 impl SlangContext
 {
 	/// Create a new Slang context for the given target platform using the given module search path.
@@ -160,7 +161,6 @@ impl SlangContext
 	/// # Arguments
 	///
 	/// * `sourceFile` – The `.slang` file containing the shader source code.
-	#[cfg(feature="slang_programs")]
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> Result<Program> {
 		Program::new(self, sourceFile)
 	}

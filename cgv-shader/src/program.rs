@@ -9,6 +9,7 @@ use std::path::Path;
 
 // Slang library
 use slang;
+use slang::Downcast;
 
 // Local imports
 use crate::*;
