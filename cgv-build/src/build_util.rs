@@ -5,10 +5,11 @@
 //
 
 // Standard library
-use std::{fs, fmt::Display};
+use std::{fs, fmt::Display, path::{Path, PathBuf}};
 
 // Anyhow crate
 use anyhow;
+use anyhow::Result;
 
 // Reqwest crate
 use reqwest;
@@ -82,6 +83,60 @@ impl std::error::Error for CommandFailedError {}
 // Functions
 //
 
+/// Recursively run a closure on an entire directory tree.
+pub fn doRecursively<PathRef: AsRef<Path>, Action: FnMut(&Path, &Path)->Result<()>> (
+	baseDirectory: PathRef, mut action: Action
+) -> Result<()>
+{
+	// The actual recursive worker
+	fn recurse<Action: FnMut(&Path, &Path)->Result<()>> (source: &Path, dest: &Path, mut action: Action) -> Result<()>
+	{
+		action(source, &dest)?;
+		for entry in fs::read_dir(source)?
+		{
+			let entry = entry?;
+			let filetype = entry.file_type()?;
+			if filetype.is_dir() {
+				recurse(
+					&entry.path(), &dest.join(entry.file_name()),
+					|source, dest| action(source, dest)
+				)?;
+			} else {
+				action(&entry.path(), &dest.join(entry.file_name()))?;
+			}
+		}
+		Ok(())
+	}
+
+	// Dispatch
+	recurse(baseDirectory.as_ref(), Path::new(""), &mut action)
+}
+
+/// Recursively copy an entire directory tree.
+pub fn copyRecursively<PathRef: AsRef<Path>> (source: PathRef, dest: PathRef) -> Result<()>
+{
+	fn recurse (source: &Path, dest: &Path) -> Result<()>
+	{
+		fs::create_dir_all(&dest)?;
+		for entry in fs::read_dir(source)?
+		{
+			let entry = entry?;
+			let filetype = entry.file_type()?;
+			if filetype.is_dir() {
+				recurse(&entry.path(), &dest.join(entry.file_name()))?;
+			} else {
+				fs::copy(entry.path(), dest.join(entry.file_name()))?;
+			}
+		}
+		Ok(())
+	}
+	recurse(source.as_ref(), dest.as_ref())/*
+	doRecursively(source, |source, destStack| {
+		fs::copy(entry.path(), dest.as_ref().join(entry.file_name()))?
+	})?;*/
+
+}
+
 /// Request from the given URL and return the full response body as a sequence of bytes.
 pub fn download (url: impl reqwest::IntoUrl) -> anyhow::Result<bytes::Bytes> {
 	let dlResponse = reqwest::blocking::get(url.as_str())?;
@@ -92,27 +147,27 @@ pub fn download (url: impl reqwest::IntoUrl) -> anyhow::Result<bytes::Bytes> {
 }
 
 /// Request from the given URL and store the response body in the given file.
-pub fn downloadToFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<crate::Path>) -> anyhow::Result<()> {
+pub fn downloadToFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<Path>) -> anyhow::Result<()> {
 	let responseBytes = download(url)?;
 	Ok(fs::write(filepath.as_ref(), responseBytes)?)
 }
 
 /// Request an archive file from the given URL and extract its contents (without the root/parent directory if the
 /// archive contains one) to the given path.
-pub fn downloadAndExtract (url: impl reqwest::IntoUrl, dirpath: impl AsRef<crate::Path>) -> anyhow::Result<()> {
+pub fn downloadAndExtract (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>) -> anyhow::Result<()> {
 	let responseBytes = download(url)?;
 	Ok(zip::extract(std::io::Cursor::new(responseBytes), dirpath.as_ref(), true)?)
 }
 
 ///
-pub fn dependOnDownloadedFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<crate::Path>) -> anyhow::Result<()> {
+pub fn dependOnDownloadedFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<Path>) -> anyhow::Result<()> {
 	downloadToFile(url, filepath.as_ref())?;
 	println!("cargo:rerun-if-changed={}", filepath.as_ref().display());
 	Ok(())
 }
 
 ///
-pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl AsRef<crate::Path>) -> anyhow::Result<()> {
+pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>) -> anyhow::Result<()> {
 	downloadAndExtract(url, dirpath.as_ref())?;
 	println!("cargo:rerun-if-changed={}", dirpath.as_ref().display());
 	Ok(())

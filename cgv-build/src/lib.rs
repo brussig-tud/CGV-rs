@@ -17,12 +17,16 @@
 // Module definitions
 //
 
-/// The module implementing the build setup facilities.
+/// Internal module implementing the build setup facilities.
 mod setup;
 pub use setup::Setup; // re-export
 
 /// The module implementing the shader packaging facilities.
 pub use cgv_shader as shader;
+
+/// Internal module implementing the high-level shader preparation logic
+mod shaderprep;
+pub use shaderprep::*;
 
 /// The module providing all kinds of additional assorted utilities specific to building (will get inserted verbatim
 /// into the exported [`util`] module).
@@ -34,9 +38,7 @@ pub mod util {
 	pub use cgv_util::*;
 
 	// Integrate our locally defined utils
-	pub use crate::build_util::{
-		downloadToFile, downloadAndExtract, dependOnDownloadedFile, dependOnDownloadedDirectory, checkProcessOutput
-	};
+	pub use crate::build_util::*;
 }
 
 
@@ -51,6 +53,9 @@ use std::{env, fs, path::{Path, PathBuf}};
 
 // Anyhow library
 pub use anyhow::{Context, Result, anyhow};
+
+// VFS library
+pub use vfs;
 
 // Cargo Metadata parsing library
 use cargo_metadata::MetadataCommand;
@@ -151,21 +156,15 @@ pub fn applyBuildSetup () -> Result<()>
 	Ok(())
 }
 
-/// Internal utility for recursively copying entire directory trees
-pub fn copyRecursively<PathRef: AsRef<Path>> (source: PathRef, dest: PathRef) -> Result<()>
+pub fn obtainCrateLocalBuildFS (rootAtSubdir: Option<impl AsRef<Path>>) -> vfs::AltrootFS
 {
-	fs::create_dir_all(&dest)?;
-	for entry in fs::read_dir(source)?
-	{
-		let entry = entry?;
-		let filetype = entry.file_type()?;
-		if filetype.is_dir() {
-			copyRecursively(entry.path(), dest.as_ref().join(entry.file_name()))?;
-		} else {
-			fs::copy(entry.path(), dest.as_ref().join(entry.file_name()))?;
-		}
-	}
-	Ok(())
+	let path = {
+		let path = getCargoOutDir();
+		if let Some(subdir) = &rootAtSubdir { path.join(subdir.as_ref()) }
+		else { path.to_path_buf() }
+	};
+	let path = vfs::VfsPath::from(vfs::PhysicalFS::new(path));
+	vfs::AltrootFS::new(path)
 }
 
 /// Report the root path of source code for the crate that is currently building.
@@ -323,7 +322,7 @@ pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment) ->
 	let siteWebmanifest = instantiateTemplate(templateFileSiteWebmanifest(), &webDeployment)?;
 
 	// Copy resources (also creates the deployment output folder)
-	copyRecursively(webDeployment.faviconSourceDir, outputPath.join("res/favicon"))?;
+	util::copyRecursively(webDeployment.faviconSourceDir, outputPath.join("res/favicon"))?;
 
 	// Write instantiated templates
 	fs::write(outputPath.join("index.html"), indexHtml)?;
