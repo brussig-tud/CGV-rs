@@ -116,7 +116,7 @@ impl SlangContext
 		};
 		// - output profile
 		let targetDesc = slang::TargetDesc::default()
-			.profile(globalSession.find_profile("glsl_330"));
+			.profile(globalSession.find_profile("glsl_460"));
 		let targetDesc = match targetPlatform {
 			TargetPlatform::Native(_) => targetDesc.format(slang::CompileTarget::Spirv),
 			TargetPlatform::Wasm => targetDesc.format(slang::CompileTarget::Wgsl)

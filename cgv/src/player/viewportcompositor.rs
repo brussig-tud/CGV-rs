@@ -43,18 +43,14 @@ impl ViewportCompositor
 		#[cfg(target_arch="wasm32")] {
 			shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
 				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-				source: wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/viewport.spv")).source,
-			});
+				source: wgpu::ShaderSource::Wgsl(include_str!(concat!(env!("OUT_DIR"), "/viewport.pak")).into()),
+			})
 		};
 		#[cfg(not(target_arch="wasm32"))] {
-			/*shader = unsafe { context.device().create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+			shader = unsafe { context.device().create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
 				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-				source: wgpu::include_spirv_raw!(concat!(env!("OUT_DIR"), "/viewport.spv")).source,
-			})};*/
-			shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-				source: wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/viewport.spv")).source,
-			});
+				source: wgpu::include_spirv_raw!(concat!(env!("OUT_DIR"), "/viewport.pak")).source,
+			})};
 		};
 
 		// ToDo: introduce a sampler library and put this there

@@ -71,11 +71,17 @@ fn main() -> cgv_build::Result<()>
 
 	// Proof-of-concept: Manually compile the viewport compositor shader – TODO: add proper shader building facilities
 	let shaderSrc_viewport_slang = cgvSrcDir.join("shader/player/viewport.slang");
-	let shaderPak_viewport_pak = outDir.join("viewport.spv");
+	let shaderPak_viewport_pak = outDir.join("viewport.pak");
 	println!("cargo::rerun-if-changed={}", shaderSrc_viewport_slang.to_str().ok_or(anyhow!("Invalid path"))?);
 
-	// Test proper shader compilation
-	let slang = cgv_build::shader::SlangContext::new(
+	// Test proper shader
+	let slang = cgv_build::shader::SlangContext::forPlatform(
+		if cgv_build::isWasm()? {
+			cgv_build::shader::TargetPlatform::Wasm
+		}
+		else {
+			cgv_build::shader::TargetPlatform::Native(cgv_build::getCargoDebugBuild()?)
+		},
 		&[cgv_build::getCargoSourceDir().join("shader/lib")]
 	)?;
 	let viewportCompositorProg = slang.buildProgram(cgvSrcDir.join("shader/player/viewport.slang"))?;
