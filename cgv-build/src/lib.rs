@@ -70,7 +70,7 @@ use cargo_metadata::MetadataCommand;
 
 #[ctor::ctor]
 static SCRIPT_START_TIME: std::time::SystemTime = {
-	std::time::SystemTime::now().sub(std::time::Duration::from_secs(25))
+	std::time::SystemTime::now().sub(std::time::Duration::from_secs(3))
 };
 
 
@@ -272,10 +272,18 @@ pub fn getCargoTargetDir () -> Result<PathBuf> {
 
 /// Retrieve the base path of the `cgv-build` crate.
 pub fn cgvBuildCrateDirectory () -> &'static Path {
-	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static BUILD_CRATE_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
 		|| env!("CARGO_MANIFEST_DIR").parse::<PathBuf>().unwrap()
 	);
-	PATH.as_path()
+	BUILD_CRATE_DIR.as_path()
+}
+
+/// Retrieve the (absolute) web resources path of the `cgv-build` crate.
+pub fn cgvBuildCrateWebResourcesDirectory () -> &'static Path {
+	static BUILD_CRATE_WEB_RES_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+		|| cgvBuildCrateDirectory().join("web")
+	);
+	BUILD_CRATE_WEB_RES_DIR.as_path()
 }
 
 /// Detect whether a build is targeting WASM.
@@ -362,6 +370,12 @@ pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> R
 /// Deploy a CGV-rs WASM application to the given directory.
 pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment) -> Result<()>
 {
+	// Inject rerun conditions
+	println!(
+		"cargo::rerun-if-changed={}",
+		cgvBuildCrateWebResourcesDirectory().to_str().context("CGV-rs seems to appears to reside at a non-UTF-8 path")?
+	);
+
 	// Instantiate templates
 	let indexHtml = instantiateTemplate(templateFileIndexHtml(), &webDeployment)?;
 	let siteWebmanifest = instantiateTemplate(templateFileSiteWebmanifest(), &webDeployment)?;
@@ -372,6 +386,9 @@ pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment) ->
 	// Write instantiated templates
 	fs::write(outputPath.join("index.html"), indexHtml)?;
 	fs::write(outputPath.join("site.webmanifest"), siteWebmanifest)?;
+
+	// De-confuse Cargo's rerun change detection
+	util::setTimestampRecursively(&outputPath, getScriptStartTime())?;
 
 	// Done!
 	Ok(())
@@ -413,14 +430,12 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 		let dep_absPath = util::path::normalizeToAnchor(
 			&manifestPath, &dep.parse::<PathBuf>()?
 		);
+		util::setTimestampToBeforeBuildScriptTime(&dep_absPath);
 		println!("cargo::rerun-if-changed={}", dep_absPath.as_os_str().to_str().unwrap());
 	}
+	let outputPath = util::path::normalizeToAnchor(&manifestPath, &outputPath);
 	println!(
 		"cargo::rerun-if-changed={}",
-		&cgvBuildCrateDirectory().to_str().context("CGV-rs seems to appears to reside at a non-UTF-8 path")?
-	);
-	let outputPath = util::path::normalizeToAnchor(&manifestPath, &outputPath);
-	println!("cargo::rerun-if-changed={}",
 		outputPath.as_os_str().to_str().context("`outputPath` contains non-UTF-8 characters")?
 	);
 
