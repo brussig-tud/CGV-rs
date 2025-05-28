@@ -48,6 +48,7 @@ cgv-build = {path="../cgv-build"}
 
 [features]
 default = []
+build_script_debug = []
 copy_libs = ["cgv-shader/copy_libs"]
 slang_runtime = ["cgv-shader/slang_programs"]
 wayland = ["eframe/wayland"]

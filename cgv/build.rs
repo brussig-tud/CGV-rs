@@ -36,14 +36,9 @@ fn main() -> cgv_build::Result<()>
 	// Preamble
 
 	// Launch VS Code LLDB debugger if it is installed and attach to the build script
-	/*let url = format!(
-		"vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}", std::process::id()
-	);
-	if let Ok(result) = std::process::Command::new("code").arg("--open-url").arg(url).output()
-	    && result.status.success() {
-		std::thread::sleep(std::time::Duration::from_secs(3)); // <- give debugger time to attach
-		std::intrinsics::breakpoint();
-	}*/
+	if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
+		cgv_build::debugWithVsCode(true)?;
+	}
 
 	// Get source directory
 	let cgvSrcDir = cgv_build::getCargoSourceDir();
