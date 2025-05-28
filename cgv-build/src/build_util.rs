@@ -5,11 +5,14 @@
 //
 
 // Standard library
-use std::{fs, fmt::Display, path::Path};
+use std::{fs, fmt::Display, path::Path, time::SystemTime};
 
 // Anyhow crate
 use anyhow;
 use anyhow::Result;
+
+//  fs-set-times crate
+use fs_set_times::{set_mtime, SystemTimeSpec};
 
 // Reqwest crate
 use reqwest;
@@ -83,6 +86,45 @@ impl std::error::Error for CommandFailedError {}
 // Functions
 //
 
+///
+pub fn setTimestamp (path: impl AsRef<Path>, timepoint: SystemTime) -> Result<()>
+{
+	if path.as_ref().is_dir() {
+		Ok(set_mtime(path, SystemTimeSpec::from(timepoint))?)
+	}
+	else {
+		let file = fs::File::options().write(true).open(path)?;
+		Ok(file.set_times(fs::FileTimes::new().set_modified(timepoint))?)
+	}
+}
+
+///
+pub fn setTimestampWithWarning (path: impl AsRef<Path>, timepoint: SystemTime) -> bool
+{
+	if let Err(err) = setTimestamp(path.as_ref(), timepoint) {
+		println!(
+			"cargo::warning=set_timestamp_with_warning: Failed to set timestamp for '{}': {}",
+			path.as_ref().display(), err
+		);
+		false
+	}
+	else { true }
+}
+
+///
+pub fn setTimestampToBeforeBuildScriptTime (path: impl AsRef<Path>) -> bool {
+	setTimestampWithWarning(path, crate::getScriptStartTime())
+}
+
+///
+pub fn setTimestampRecursively (path: impl AsRef<Path>, timepoint: SystemTime) -> Result<bool> {
+	let mut no_problem = true;
+	cgv_util::fs::doRecursively(
+		path, |path, _, _| Ok(no_problem = setTimestampWithWarning(path, timepoint) && no_problem)
+	)?;
+	Ok(no_problem)
+}
+
 /// Request from the given URL and return the full response body as a sequence of bytes.
 pub fn download (url: impl reqwest::IntoUrl) -> anyhow::Result<bytes::Bytes> {
 	let dlResponse = reqwest::blocking::get(url.as_str())?;
@@ -107,15 +149,26 @@ pub fn downloadAndExtract (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>
 
 ///
 pub fn dependOnDownloadedFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<Path>) -> anyhow::Result<()> {
-	downloadToFile(url, filepath.as_ref())?;
-	println!("cargo:rerun-if-changed={}", filepath.as_ref().display());
+	downloadToFile(url, &filepath)?;
+	setTimestampWithWarning(&filepath, crate::getScriptStartTime());
+	println!("cargo::rerun-if-changed={}", filepath.as_ref().display());
 	Ok(())
 }
 
 ///
-pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>) -> anyhow::Result<()> {
+pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>) -> Result<()> {
 	downloadAndExtract(url, dirpath.as_ref())?;
-	println!("cargo:rerun-if-changed={}", dirpath.as_ref().display());
+	setTimestampRecursively(&dirpath, crate::getScriptStartTime())?;
+	println!("cargo::rerun-if-changed={}", dirpath.as_ref().display());
+	Ok(())
+}
+
+///
+pub fn dependOnExtractedDirectory (archivePath: impl AsRef<crate::Path>, dirpath: impl AsRef<crate::Path>)
+-> Result<()> {
+	zip::extract(std::fs::File::open(archivePath.as_ref())?, dirpath.as_ref(), true)?;
+	setTimestampRecursively(&dirpath, crate::getScriptStartTime())?;
+	println!("cargo::rerun-if-changed={}", dirpath.as_ref().display());
 	Ok(())
 }
 

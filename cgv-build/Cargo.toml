@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 ctor = "*"
 cargo_metadata = "*"
 anyhow = "*"
-vfs = "*"
+fs-set-times = "*"
 reqwest = {version="*", features=["blocking"]}
 zip-extract = "*"
 bytes = "*"

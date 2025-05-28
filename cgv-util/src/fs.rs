@@ -19,10 +19,10 @@ pub fn doRecursively<PathRef: AsRef<Path>, Action: FnMut(&Path, &Path, fs::FileT
 {
 	// The actual recursive worker
 	#[inline(always)]
-	fn recurse<Action: FnMut(&Path, &Path, fs::FileType)->Result<()>> (source: &Path, dest: &Path, action: &mut Action)
+	fn recurse<Action: FnMut(&Path, &Path, fs::FileType)->Result<()>> (source: &Path, destStack: &Path, action: &mut Action)
 	-> Result<()> {
 		let roottype = fs::metadata(source)?.file_type();
-		action(source, &dest, roottype)?;
+		action(source, &destStack, roottype)?;
 		if !roottype.is_dir() { return Ok(()) }
 		for entry in fs::read_dir(source)?
 		{
@@ -30,10 +30,10 @@ pub fn doRecursively<PathRef: AsRef<Path>, Action: FnMut(&Path, &Path, fs::FileT
 			let filetype = entry.file_type()?;
 			if filetype.is_dir() {
 				recurse(
-					&entry.path(), &dest.join(entry.file_name()), action
+					&entry.path(), &destStack.join(entry.file_name()), action
 				)?;
 			} else {
-				action(&entry.path(), &dest.join(entry.file_name()), filetype)?;
+				action(&entry.path(), &destStack.join(entry.file_name()), filetype)?;
 			}
 		}
 		Ok(())

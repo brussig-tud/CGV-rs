@@ -18,6 +18,12 @@ impl Setup
 		let contents = std::fs::read_to_string(path)?;
 		contents.split('\n').for_each(|line|
 		{
+			// Skip empty line
+			if line.split_ascii_whitespace().next().is_none() {
+				return;
+			}
+
+			// Parse non-empty line
 			if let Some((key, value)) = line.split_once('=')
 			{
 				let key = key.trim().to_owned();

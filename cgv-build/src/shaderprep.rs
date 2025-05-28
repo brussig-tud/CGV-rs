@@ -10,9 +10,6 @@ use std::{env, fs, path::{Path, PathBuf}};
 // Anyhow library
 pub use anyhow::{Context, Result, anyhow};
 
-// VFS library
-pub use vfs;
-
 
 
 //////
@@ -34,5 +31,5 @@ pub struct ShaderPath {
 
 ///
 pub fn prepShaders(directory: impl AsRef<Path>, shaderPath: Option<&ShaderPath>) {
-	let root = crate::obtainCrateLocalBuildFS(Some(directory));
+	//let root = crate::obtainCrateLocalBuildFS(Some(directory));
 }

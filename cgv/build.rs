@@ -15,6 +15,16 @@
 
 //////
 //
+// Imports
+//
+
+// Anyhow library
+use cgv_build::anyhow;
+
+
+
+//////
+//
 // Functions
 //
 
@@ -46,50 +56,37 @@ fn main() -> cgv_build::Result<()>
 	////
 	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 
+	// The path
+	let buildSetupPath = targetDir.join("_CGV_BUILD_SETUP");
 	// Linker flag in case we have the `copy_libs` feature
 	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
 		let data = "ADDITIONAL_LINKER_ARGS=-Wl,-rpath=$ORIGIN";
-		std::fs::write(targetDir.join("_CGV_BUILD_SETUP"), data).or(
-			Err(cgv_build::anyhow!("Could not write build setup file"))
-		)?;
+		std::fs::write(&buildSetupPath, data).or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
 	}
 	else {
-		// Currently, the `copy_libs` feature is the only thing giving us any build setup at all, so we don't need the
-		// build setup file
-		std::fs::remove_file(targetDir.join("_CGV_BUILD_SETUP")).ok();
+		// Currently, the `copy_libs` feature is the only thing giving us any build setup at all, so we'll just end up
+		// with an empty build file.
+		std::fs::write(&buildSetupPath, "").or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
 	}
+	cgv_build::util::setTimestampToBeforeBuildScriptTime(buildSetupPath);
 
 
 	////
 	// Compile our shaders
 
 	// Proof-of-concept: Manually compile the viewport compositor shader – TODO: add proper shader building facilities
-	println!("cargo::rerun-if-changed={}", cgvSrcDir.join("shader/player/viewport.slang").to_str().unwrap());
-	let (optLvlArg, debugLvlArg) = {
-		let (debug, optLevel) = cgv_build::getCargoDebugAndOptLevel()?;
-		/* evaluate to: */ (
-			if optLevel == 0 { format!("-O0") } else { format!("-O3") },
-			if debug         { format!("-g3") } else { format!("-g0") }
-		)
-	};
-	let slangcOutput = std::process::Command::new("slangc")
-		.current_dir(cgvSrcDir)
-		.args([
-			"./shader/player/viewport.slang", "-profile", "glsl_460", "-target", "spirv",
-			"-o", outDir.join("viewport.spv").to_str().unwrap(), optLvlArg.as_str(), debugLvlArg.as_str()
-		])
-		.output()
-		.expect("compileShaderProgram: `slangc` invocation failed");
-	if let Err(err) = cgv_build::util::checkProcessOutput(slangcOutput, "slangc") {
-		println!("cargo::error=Shader compilation produced errors!");
-		panic!("{err}");
-	}
+	let shaderSrc_viewport_slang = cgvSrcDir.join("shader/player/viewport.slang");
+	let shaderPak_viewport_pak = outDir.join("viewport.spv");
+	println!("cargo::rerun-if-changed={}", shaderSrc_viewport_slang.to_str().ok_or(anyhow!("Invalid path"))?);
 
 	// Test proper shader compilation
 	let slang = cgv_build::shader::SlangContext::new(
 		&[cgv_build::getCargoSourceDir().join("shader/lib")]
 	)?;
-	let _viewportCompositorProg = slang.buildProgram(cgvSrcDir.join("shader/player/viewport.slang"))?;
+	let viewportCompositorProg = slang.buildProgram(cgvSrcDir.join("shader/player/viewport.slang"))?;
+	std::fs::write(shaderPak_viewport_pak.as_path(), viewportCompositorProg.genericBuildArtifact())?;
+	cgv_build::util::setTimestampToBeforeBuildScriptTime(&shaderPak_viewport_pak);
+	println!("cargo::rerun-if-changed={}", shaderPak_viewport_pak.to_str().ok_or(anyhow!("Invalid path"))?);
 
 	// Done!
 	Ok(())

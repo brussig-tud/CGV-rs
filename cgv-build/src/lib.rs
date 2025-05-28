@@ -50,15 +50,24 @@ pub mod util {
 
 // Standard library
 use std::{env, fs, path::{Path, PathBuf}};
-
+use std::ops::Sub;
 // Anyhow library
 pub use anyhow::{Context, Result, anyhow};
 
-// VFS library
-pub use vfs;
-
 // Cargo Metadata parsing library
 use cargo_metadata::MetadataCommand;
+
+
+
+//////
+//
+// Ctor
+//
+
+#[ctor::ctor]
+static SCRIPT_START_TIME: std::time::SystemTime = {
+	std::time::SystemTime::now().sub(std::time::Duration::from_secs(5))
+};
 
 
 
@@ -139,6 +148,11 @@ impl WebDeploymentBuilder
 //
 
 /// Report the filename used for storing [Setup](build setups)..
+pub fn getScriptStartTime () -> std::time::SystemTime {
+	*SCRIPT_START_TIME
+}
+
+/// Report the filename used for storing [Setup](build setups)..
 pub fn getSetupFilename () -> &'static str {
 	"_CGV_BUILD_SETUP"
 }
@@ -156,7 +170,7 @@ pub fn applyBuildSetup () -> Result<()>
 	Ok(())
 }
 
-pub fn obtainCrateLocalBuildFS (rootAtSubdir: Option<impl AsRef<Path>>) -> vfs::AltrootFS
+/*pub fn obtainCrateLocalBuildFS (rootAtSubdir: Option<impl AsRef<Path>>) -> vfs::AltrootFS
 {
 	let path = {
 		let path = getCargoOutDir();
@@ -165,7 +179,7 @@ pub fn obtainCrateLocalBuildFS (rootAtSubdir: Option<impl AsRef<Path>>) -> vfs::
 	};
 	let path = vfs::VfsPath::from(vfs::PhysicalFS::new(path));
 	vfs::AltrootFS::new(path)
-}
+}*/
 
 /// Report the root path of source code for the crate that is currently building.
 ///
