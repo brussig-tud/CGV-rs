@@ -75,7 +75,7 @@ fn main() -> cgv_build::Result<()>
 	println!("cargo::rerun-if-changed={}", shaderSrc_viewport_slang.to_str().ok_or(anyhow!("Invalid path"))?);
 
 	// Test proper shader
-	let slang = cgv_build::shader::SlangContext::forPlatform(
+	let slang = cgv_build::shader::slang::Context::forPlatform(
 		if cgv_build::isWasm()? {
 			cgv_build::shader::TargetPlatform::Wasm
 		}
