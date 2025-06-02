@@ -134,7 +134,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		////
 		// Testing
 
-		/*let slangCtx = cgv::shader::SlangContext::new(&[
+		/*let slangCtx = cgv::shader::slang::Context::new(&[
 			std::env::current_dir()?.join("shader")
 		])?;
 		let testShader = slangCtx.buildProgram(

@@ -22,8 +22,18 @@ use crate::*;
 
 //////
 //
-// Structs
+// Structs & enums
 //
+
+/// Enum describing the compilation target of a [`slang::Context`](Context).
+#[derive(Debug)]
+pub enum CompilationTarget {
+	/// Compile shaders to *SPIR-V*, specifying whether they should be debuggable or not.
+	SPIRV(/* debug: */bool),
+
+	/// Transpile shaders to *WGSL*.
+	WGSL
+}
 
 ///
 pub struct EntryPoint {
@@ -50,16 +60,18 @@ pub struct Context {
 	globalSession: slang::GlobalSession,
 
 	pub(crate) session: slang::Session,
+
+	pub compilationTarget: SourceType
 }
 impl Context
 {
-	/// Create a new Slang context for the given target platform using the given module search path.
+	/// Create a new Slang context for the given compilation target using the given module search path.
 	///
 	/// # Arguments
 	///
-	/// * `targetPlatform` – The platform compiled shaders will run on.
+	/// * `target` – The target representation this `Context` will compile/transpile to.
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forPlatform (targetPlatform: TargetPlatform, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
+	pub fn forTarget (target: CompilationTarget, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
 	{
 		// Convert search path for FFI
 		// - create owned storage for the CStrings
@@ -83,9 +95,9 @@ impl Context
 		// Finalize the slang context with our CGV-rs specific options
 		// - compile flags
 		let sessionOptions = slang::CompilerOptions::default().matrix_layout_row(true);
-		let sessionOptions = match targetPlatform
+		let sessionOptions = match target
 		{
-			TargetPlatform::Native(debug) => sessionOptions
+			CompilationTarget::SPIRV(debug) => sessionOptions
 				.emit_spirv_directly(true)
 				.optimization(
 					if debug { slang::OptimizationLevel::None } else { slang::OptimizationLevel::Maximal }
@@ -94,16 +106,23 @@ impl Context
 					if debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
 				),
 
-			TargetPlatform::Wasm => sessionOptions
+			CompilationTarget::WGSL => sessionOptions
 				.optimization(slang::OptimizationLevel::Maximal)
 				.debug_information(slang::DebugInfoLevel::None)
 		};
 		// - output profile
+		let compilationTarget;
 		let targetDesc = slang::TargetDesc::default()
 			.profile(globalSession.find_profile("glsl_460"));
-		let targetDesc = match targetPlatform {
-			TargetPlatform::Native(_) => targetDesc.format(slang::CompileTarget::Spirv),
-			TargetPlatform::Wasm => targetDesc.format(slang::CompileTarget::Wgsl)
+		let targetDesc = match target {
+			CompilationTarget::SPIRV(_) => {
+				compilationTarget = SourceType::SPIRV;
+				targetDesc.format(slang::CompileTarget::Spirv)
+			},
+			CompilationTarget::WGSL => {
+				compilationTarget = SourceType::WGSL;
+				targetDesc.format(slang::CompileTarget::Wgsl)
+			}
 		};
 
 		let targets = &[targetDesc];
@@ -121,7 +140,7 @@ impl Context
 		};
 
 		// Done!
-		Ok(Self {	globalSession, session })
+		Ok(Self {	globalSession, session, compilationTarget })
 	}
 
 	/// Create a new Slang context with the given module search path. The target platform is automatically detected
@@ -133,10 +152,10 @@ impl Context
 	pub fn new (searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
 	{
 		#[cfg(not(target_arch="wasm32"))] {
-			Self::forPlatform(TargetPlatform::Native(cfg!(debug_assertions)), searchPath)
+			Self::forTarget(CompilationTarget::SPIRV(cfg!(debug_assertions)), searchPath)
 		}
 		#[cfg(target_arch="wasm32")] {
-			Self::forPlatform(TargetPlatform::Wasm, searchPath)
+			Self::forTarget(CompilationTarget::WGSL, searchPath)
 		}
 	}
 

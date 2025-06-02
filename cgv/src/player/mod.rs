@@ -247,7 +247,7 @@ impl Player
 		let globalPasses = util::statify(&camera).declareGlobalPasses();
 		let viewportCompositor = ViewportCompositor::new(
 			&context, &renderSetup, camera.framebuffer().color0(), Some("CGV__MainViewportCompositor")
-		);
+		)?;
 
 		// Now construct
 		let mut player = Self {

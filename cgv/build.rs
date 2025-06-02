@@ -70,24 +70,24 @@ fn main() -> cgv_build::Result<()>
 	// Compile our shaders
 
 	// Proof-of-concept: Manually compile the viewport compositor shader – TODO: add proper shader building facilities
-	let shaderSrc_viewport_slang = cgvSrcDir.join("shader/player/viewport.slang");
-	let shaderPak_viewport_pak = outDir.join("viewport.pak");
-	println!("cargo::rerun-if-changed={}", shaderSrc_viewport_slang.to_str().ok_or(anyhow!("Invalid path"))?);
+	let shaderSrc_viewport = cgvSrcDir.join("shader/player/viewport.slang");
+	let shaderPak_viewport = outDir.join("viewport.spk");
+	println!("cargo::rerun-if-changed={}", shaderSrc_viewport.to_str().ok_or(anyhow!("Invalid path"))?);
 
 	// Test proper shader
-	let slang = cgv_build::shader::slang::Context::forPlatform(
-		if cgv_build::isWasm()? {
-			cgv_build::shader::TargetPlatform::Wasm
-		}
-		else {
-			cgv_build::shader::TargetPlatform::Native(cgv_build::getCargoDebugBuild()?)
-		},
-		&[cgv_build::getCargoSourceDir().join("shader/lib")]
+	let shaderPath = &[cgv_build::getCargoSourceDir().join("shader/lib")];
+	let slang2SPIRV = cgv_build::shader::slang::Context::forTarget(
+		cgv_build::shader::slang::CompilationTarget::SPIRV(cgv_build::getCargoDebugBuild()?), shaderPath
 	)?;
-	let viewportCompositorProg = slang.buildProgram(cgvSrcDir.join("shader/player/viewport.slang"))?;
-	std::fs::write(shaderPak_viewport_pak.as_path(), viewportCompositorProg.genericBuildArtifact())?;
-	cgv_build::util::setTimestampToBeforeBuildScriptTime(&shaderPak_viewport_pak);
-	println!("cargo::rerun-if-changed={}", shaderPak_viewport_pak.to_str().ok_or(anyhow!("Invalid path"))?);
+	let slang2WGSL = cgv_build::shader::slang::Context::forTarget(
+		cgv_build::shader::slang::CompilationTarget::WGSL, shaderPath
+	)?;
+	let viewportCompositorPak = cgv_build::shader::Package::fromSlangMultipleContexts(
+		&[&slang2SPIRV, &slang2WGSL], cgvSrcDir.join("shader/player/viewport.slang"), None
+	)?;
+	viewportCompositorPak.writeToFile(&shaderPak_viewport)?;
+	cgv_build::util::setTimestampToBeforeBuildScriptTime(&shaderPak_viewport);
+	println!("cargo::rerun-if-changed={}", shaderPak_viewport.to_str().ok_or(anyhow!("Invalid path"))?);
 
 	// Done!
 	Ok(())

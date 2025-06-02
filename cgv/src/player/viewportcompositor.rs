@@ -31,27 +31,15 @@ pub(crate) struct ViewportCompositor
 }
 impl ViewportCompositor
 {
-	pub fn new (context: &Context, renderSetup: &RenderSetup, source: &hal::Texture, name: Option<&str>) -> Self
+	pub fn new (context: &Context, renderSetup: &RenderSetup, source: &hal::Texture, name: Option<&str>) -> Result<Self>
 	{
 		let name = name.map(String::from);
 
-		/*let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/common/compositing.wgsl").into()),
-		});*/
-		let shader;
-		#[cfg(target_arch="wasm32")] {
-			shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-				source: wgpu::ShaderSource::Wgsl(include_str!(concat!(env!("OUT_DIR"), "/viewport.pak")).into()),
-			})
-		};
-		#[cfg(not(target_arch="wasm32"))] {
-			shader = unsafe { context.device().create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
-				label: util::concatIfSome(&name, "_shaderModule").as_deref(),
-				source: wgpu::include_spirv_raw!(concat!(env!("OUT_DIR"), "/viewport.pak")).source,
-			})};
-		};
+		let shader = shader::Package::deserialize(
+			include_bytes!(concat!(env!("OUT_DIR"), "/viewport.spk"))
+		)?.createShaderModuleFromBestInstance(
+			context.device(), None, util::concatIfSome(&name, "_shaderModule").as_deref()
+		)?;
 
 		// ToDo: introduce a sampler library and put this there
 		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
@@ -139,9 +127,7 @@ impl ViewportCompositor
 			cache: None,
 		});
 
-		Self {
-			texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline
-		}
+		Ok(Self { texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline })
 	}
 
 	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture) {
