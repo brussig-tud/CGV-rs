@@ -20,6 +20,9 @@ use reqwest;
 // Zip-extract crate
 pub use zip_extract as zip;
 
+// Local imports
+use crate::*;
+
 
 
 //////
@@ -150,26 +153,20 @@ pub fn downloadAndExtract (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>
 ///
 pub fn dependOnDownloadedFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<Path>) -> anyhow::Result<()> {
 	downloadToFile(url, &filepath)?;
-	setTimestampWithWarning(&filepath, crate::getScriptStartTime());
-	println!("cargo::rerun-if-changed={}", filepath.as_ref().display());
-	Ok(())
+	dependOnGeneratedFile(filepath)
 }
 
 ///
 pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>) -> Result<()> {
 	downloadAndExtract(url, dirpath.as_ref())?;
-	setTimestampRecursively(&dirpath, crate::getScriptStartTime())?;
-	println!("cargo::rerun-if-changed={}", dirpath.as_ref().display());
-	Ok(())
+	dependOnGeneratedDirectory(dirpath)
 }
 
 ///
 pub fn dependOnExtractedDirectory (archivePath: impl AsRef<crate::Path>, dirpath: impl AsRef<crate::Path>)
 -> Result<()> {
 	zip::extract(std::fs::File::open(archivePath.as_ref())?, dirpath.as_ref(), true)?;
-	setTimestampRecursively(&dirpath, crate::getScriptStartTime())?;
-	println!("cargo::rerun-if-changed={}", dirpath.as_ref().display());
-	Ok(())
+	dependOnGeneratedDirectory(dirpath)
 }
 
 /// Check if the given [process output](std::process::Output) resulted from a successful command. On most platforms,

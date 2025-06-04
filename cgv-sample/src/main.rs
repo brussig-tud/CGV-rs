@@ -178,10 +178,12 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// Load resources
 
 		// The example shader
-		let shader = context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+		let shader = /*context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: Some("Example__ShaderModule"),
 			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
-		});
+		});*/cgv::shader::Package::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/example.spk")))?
+			.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule"))?;
+
 
 		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(
@@ -299,13 +301,13 @@ impl SampleApplication
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
 				module: &self.shader,
-				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("vs_main")
+				entry_point: Some("vertexMain"), // Slang (for now) requires explicitly stating entry points
 				buffers: &[HermiteNode::layoutDesc()],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState {
 				module: &self.shader,
-				entry_point: None, // our shader traj/shader.wgsl declares only one @vertex function ("fs_main")
+				entry_point: Some("fragmentMain"), // Slang (for now) requires explicitly stating entry points
 				targets: &[Some(renderState.colorTargetState().clone())],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			}),

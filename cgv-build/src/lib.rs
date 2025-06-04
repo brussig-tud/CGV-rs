@@ -152,9 +152,35 @@ impl WebDeploymentBuilder
 // Functions
 //
 
-/// Report the filename used for storing [Setup](build setups)..
+/// Get a time very close to but before the currently running build script was invoked.
 pub fn getScriptStartTime () -> std::time::SystemTime {
 	*SCRIPT_START_TIME
+}
+
+
+
+///
+pub fn dependOnFile (filepath: impl AsRef<Path>) {
+	println!("cargo::rerun-if-changed={}", filepath.as_ref().display());
+}
+
+///
+pub fn dependOnDirectory (dirpath: impl AsRef<crate::Path>) {
+	println!("cargo::rerun-if-changed={}", dirpath.as_ref().display());
+}
+
+/// **NOTE**: This must _**not**_ be called before the file we depend on has been _**fully generated**_!
+pub fn dependOnGeneratedFile (filepath: impl AsRef<Path>) -> Result<()> {
+	util::setTimestampWithWarning(&filepath, crate::getScriptStartTime());
+	dependOnFile(filepath);
+	Ok(())
+}
+
+/// **NOTE**: This must _**not**_ be called before the directory tree we depend on has been _**fully generated**_!
+pub fn dependOnGeneratedDirectory (dirpath: impl AsRef<crate::Path>) -> Result<()> {
+	util::setTimestampRecursively(&dirpath, crate::getScriptStartTime())?;
+	dependOnDirectory(dirpath);
+	Ok(())
 }
 
 /// Attach VS Code debugger to the build process, optionally halting execution right after
@@ -277,6 +303,16 @@ pub fn cgvBuildCrateDirectory () -> &'static Path {
 		|| env!("CARGO_MANIFEST_DIR").parse::<PathBuf>().unwrap()
 	);
 	BUILD_CRATE_DIR.as_path()
+}
+
+/// Retrieve the base path of the `cgv` crate.
+pub fn cgvCrateDirectory () -> &'static Path {
+	static CGV_CRATE_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+		|| fs::canonicalize(cgvBuildCrateDirectory().join("../cgv")).expect(
+			"`cgv` crate source path unavailable"
+		)
+	);
+	CGV_CRATE_DIR.as_path()
 }
 
 /// Retrieve the (absolute) web resources path of the `cgv-build` crate.

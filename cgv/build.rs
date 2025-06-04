@@ -67,27 +67,33 @@ fn main() -> cgv_build::Result<()>
 
 
 	////
-	// Compile our shaders
+	// Compile our shaders – TODO: add proper shader building facilities
 
-	// Proof-of-concept: Manually compile the viewport compositor shader – TODO: add proper shader building facilities
+	// Set up paths
+	let cgvShaderDir = cgv_build::cgvCrateDirectory().join("shader/lib");
+	let shaderPath = &[
+		std::fs::canonicalize(cgvShaderDir.join("lin"))?, std::fs::canonicalize(cgvShaderDir.join("api"))?
+	];
+
+	// Manually compile the viewport compositor shader
+	// - set up filenames
 	let shaderSrc_viewport = cgvSrcDir.join("shader/player/viewport.slang");
 	let shaderPak_viewport = outDir.join("viewport.spk");
-	println!("cargo::rerun-if-changed={}", shaderSrc_viewport.to_str().ok_or(anyhow!("Invalid path"))?);
-
-	// Test proper shader
-	let shaderPath = &[cgv_build::getCargoSourceDir().join("shader/lib")];
+	cgv_build::dependOnFile(&shaderSrc_viewport);
+	// - set up compilation targets to include
 	let slang2SPIRV = cgv_build::shader::slang::Context::forTarget(
 		cgv_build::shader::slang::CompilationTarget::SPIRV(cgv_build::getCargoDebugBuild()?), shaderPath
 	)?;
 	let slang2WGSL = cgv_build::shader::slang::Context::forTarget(
 		cgv_build::shader::slang::CompilationTarget::WGSL, shaderPath
 	)?;
+	// - compile
 	let viewportCompositorPak = cgv_build::shader::Package::fromSlangMultipleContexts(
-		&[&slang2SPIRV, &slang2WGSL], cgvSrcDir.join("shader/player/viewport.slang"), None
+		&[&slang2SPIRV, &slang2WGSL], shaderSrc_viewport, None
 	)?;
+	// - write shader package
 	viewportCompositorPak.writeToFile(&shaderPak_viewport)?;
-	cgv_build::util::setTimestampToBeforeBuildScriptTime(&shaderPak_viewport);
-	println!("cargo::rerun-if-changed={}", shaderPak_viewport.to_str().ok_or(anyhow!("Invalid path"))?);
+	cgv_build::dependOnGeneratedFile(shaderPak_viewport)?;
 
 	// Done!
 	Ok(())

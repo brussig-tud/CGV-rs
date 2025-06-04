@@ -1,13 +1,26 @@
 
-////
+//////
+//
+// Imports
+//
+
+// Interface with managed uniforms handled by CGV-rs.
+import cgv_api_uniforms;
+
+// Enable linear algebra mathematical operators (allows using `*` for matrix multiplication like in GLSL)
+import cgv_lin_operators;
+
+
+
+//////
+//
 // Uniforms
+//
 
-struct Viewing {
-	float4x4 modelview;
-	float4x4 projection;
-}
-ParameterBlock<Viewing> viewing;
+// group(0): Viewing parameters.
+ParameterBlock<cgv::api::Viewing> viewing;
 
+// group(1): Material parameters (just a texture and its sampler in this simple example).
 struct Texture {
 	Texture2D color;
 	SamplerState sampler;
@@ -15,40 +28,55 @@ struct Texture {
 ParameterBlock<Texture> texture;
 
 
-////
-// Streams
 
+//////
+//
+// Streams
+//
+
+// Vertex shader input attributes.
 struct VSInput {
-	float4 pos : SV_Position;
+	float4 pos;
 	float4 color;
 	float2 texcoord;
 }
 
-struct VSOutput {
+// Vertex shader output attributes.
+struct VSOutput
+{
 	float4 pos_clip : SV_Position;
 	float4 color;
 	float2 texcoord;
+
+	__init (float4 _pos_clip, float4 _color, float2 _texcoord) {
+		pos_clip = _pos_clip; color = _color; texcoord = _texcoord;
+	}
 }
 
 
-////
+//////
+//
 // Vertex shader
+//
 
-/// Vertex shader entry point
+// Vertex shader entry point
 [shader("vertex")]
 func vertexMain (vert: VSInput) -> VSOutput {
-	var out: VSOutput;
-	out.pos_clip = mul((viewing.projection * viewing.modelview), vert.pos);
-	out.color = vert.color;
-	out.texcoord = vert.texcoord;
-	return out;
+	return VSOutput(
+		/* pos_clip: */ viewing.projection*viewing.modelview * vert.pos,
+		/* color:    */ vert.color,
+		/* texcoord: */ vert.texcoord
+	);
 }
 
 
-////
-// Fragment shader
 
-/// Fragment shader entry point
+//////
+//
+// Fragment shader
+//
+
+// Fragment shader entry point
 [shader("fragment")]
 func fragmentMain (vsOut: VSOutput) -> float4 {
 	var texColor: float4 = texture.color.Sample(texture.sampler, vsOut.texcoord);

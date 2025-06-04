@@ -94,7 +94,10 @@ impl Context
 
 		// Finalize the slang context with our CGV-rs specific options
 		// - compile flags
-		let sessionOptions = slang::CompilerOptions::default().matrix_layout_row(true);
+		let sessionOptions = slang::CompilerOptions::default()
+			.matrix_layout_row(false)
+			.matrix_layout_column(true)
+			.language(slang::SourceLanguage::Glsl);
 		let sessionOptions = match target
 		{
 			CompilationTarget::SPIRV(debug) => sessionOptions
