@@ -4,7 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-bitcode = {version="*"}
 tracing = {version="*", optional=true}
 wgpu = {version="24.0.5", optional=true, features=["spirv"]}
 slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[

@@ -33,7 +33,7 @@ pub mod slang;
 /* nothing here yet */
 
 // Bitcode library
-use bitcode;
+use cgv_util::bitcode;
 
 
 

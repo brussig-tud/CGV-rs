@@ -52,6 +52,9 @@ pub mod unique;
 // Standard library
 use std::ops::{Deref, DerefMut};
 
+// Bitcode library
+pub use bitcode; // re-export
+
 
 
 //////

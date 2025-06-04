@@ -1,17 +1,45 @@
 
-pub struct Setup {
-	additionalLinkerFlags: Option<String>
-}
+//////
+//
+// Imports
+//
 
+// Standard library
+use std::{fs, path::{Path, PathBuf}};
+
+// Anyhow library
+use anyhow::{Context, Result, anyhow};
+
+// Serde library
+use serde;
+use serde_json;
+
+// Local imports
+use crate::*;
+
+
+
+//////
+//
+// Classes
+//
+
+/// Accumulates transitive build properties for crates participating in a *CGV-rs*-based build.
+#[derive(serde::Serialize,serde::Deserialize)]
+pub struct Setup {
+	additionalLinkerFlags: Option<String>,
+	shaderPath: Vec<PathBuf>,
+}
 impl Setup
 {
 	pub fn new() -> Self { Self {
-		additionalLinkerFlags: None
+		additionalLinkerFlags: None,
+		shaderPath: Vec::new(),
 	}}
 
-	pub fn fromFile (path: impl AsRef<std::path::Path>) -> anyhow::Result<Self>
+	pub(crate) fn fromFile (filename: impl AsRef<std::path::Path>) -> Result<Self>
 	{
-		// The resulting setup
+		/*// The resulting setup
 		let mut setup = Self::new();
 
 		// Parse build setup file
@@ -40,8 +68,33 @@ impl Setup
 			} else {
 				println!("cargo:warning=cgv_build::Setup::fromFile(): Cannot interpret line: {line}");
 			}
-		});
-		Ok(setup)
+		});*/
+		Ok(serde_json::from_reader(fs::File::open(filename)?)?)
+	}
+
+	pub(crate) fn writeToFile (&self, filename: impl AsRef<std::path::Path>) -> Result<()> {
+		Ok(serde_json::to_writer(fs::File::create(filename)?, self)?)
+	}
+
+	pub fn injectIntoCargoBuild (&self) -> Result<()>
+	{
+		// Preamble
+		let packageName = getCargoCrateName();
+		let targetDir = getCargoTargetDir()?;
+		let buildSetupDir = targetDir.join("_CGV_BUILD_SETUP");
+		let buildSetupFile = buildSetupDir.join(format!("{packageName}.json"));
+
+		// Make sure the build setup directory is there
+		fs::create_dir_all(&buildSetupDir)?;
+
+		// Serialize
+		self.writeToFile(&buildSetupFile)?;
+		if !util::setTimestampToBeforeBuildScriptTime(buildSetupFile) {
+			println!(
+				"cargo::warning=Build setup timestamp management failed! Cargo change detection will be affected."
+			);
+		}
+		Ok(())
 	}
 
 	pub fn addLinkerFlag (&mut self, flag: impl AsRef<str>)

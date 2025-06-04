@@ -12,7 +12,7 @@ use std::{path::Path, collections::{BTreeMap, BTreeSet}, fmt::Display};
 use anyhow;
 
 // Bitcode library
-use bitcode;
+use cgv_util::bitcode;
 
 // WGPU library
 #[cfg(feature="wgpu_runtime")]

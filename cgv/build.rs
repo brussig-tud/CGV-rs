@@ -51,19 +51,22 @@ fn main() -> cgv_build::Result<()>
 	////
 	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 
-	// The path
-	let buildSetupPath = targetDir.join("_CGV_BUILD_SETUP");
+	// The setup
+	//let buildSetupPath = targetDir.join("_CGV_BUILD_SETUP");
+	let mut buildSetup = cgv_build::Setup::new();
 	// Linker flag in case we have the `copy_libs` feature
 	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
-		let data = "ADDITIONAL_LINKER_ARGS=-Wl,-rpath=$ORIGIN";
-		std::fs::write(&buildSetupPath, data).or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
+		// let data = "ADDITIONAL_LINKER_ARGS=-Wl,-rpath=$ORIGIN";
+		// std::fs::write(&buildSetupPath, data).or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
+		buildSetup.addLinkerFlag("-Wl,-rpath=$ORIGIN");
 	}
 	else {
 		// Currently, the `copy_libs` feature is the only thing giving us any build setup at all, so we'll just end up
 		// with an empty build file.
-		std::fs::write(&buildSetupPath, "").or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
+		//std::fs::write(&buildSetupPath, "").or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
 	}
-	cgv_build::util::setTimestampToBeforeBuildScriptTime(buildSetupPath);
+	//cgv_build::util::setTimestampToBeforeBuildScriptTime(buildSetupPath);
+	buildSetup.injectIntoCargoBuild()?;
 
 
 	////

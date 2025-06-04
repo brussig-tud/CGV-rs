@@ -220,7 +220,7 @@ pub fn getSetupFilename () -> &'static str {
 pub fn applyBuildSetup () -> Result<()>
 {
 	let setupFilename = getCargoTargetDir()?.join(getSetupFilename());
-	println!("cargo::rerun-if-changed={}", setupFilename.display());
+	dependOnFile(&setupFilename);
 	if setupFilename.exists() {
 		let setup = Setup::fromFile(setupFilename)?;
 		setup.apply();
@@ -228,16 +228,18 @@ pub fn applyBuildSetup () -> Result<()>
 	Ok(())
 }
 
-/*pub fn obtainCrateLocalBuildFS (rootAtSubdir: Option<impl AsRef<Path>>) -> vfs::AltrootFS
-{
-	let path = {
-		let path = getCargoOutDir();
-		if let Some(subdir) = &rootAtSubdir { path.join(subdir.as_ref()) }
-		else { path.to_path_buf() }
-	};
-	let path = vfs::VfsPath::from(vfs::PhysicalFS::new(path));
-	vfs::AltrootFS::new(path)
-}*/
+/// Report the package name of the crate currently being built by *Cargo*.
+///
+/// # Panics
+///
+/// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
+/// information.
+pub fn getCargoCrateName () -> &'static str {
+	static NAME: std::sync::LazyLock<String> = std::sync::LazyLock::new(||
+		env::var("CARGO_PKG_NAME").expect("`CARGO_PKG_NAME` should be defined by Cargo")
+	);
+	NAME.as_str()
+}
 
 /// Report the root path of source code for the crate that is currently building.
 ///

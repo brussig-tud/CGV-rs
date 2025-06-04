@@ -11,6 +11,8 @@ crate-type = ["rlib"]
 ctor = "*"
 cargo_metadata = "*"
 anyhow = "*"
+serde = {version="*", features = ["derive"]}
+serde_json = "*"
 fs-set-times = "*"
 reqwest = {version="*", features=["blocking"]}
 zip-extract = "*"
