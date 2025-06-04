@@ -165,20 +165,20 @@ pub fn dependOnFile (filepath: impl AsRef<Path>) {
 }
 
 ///
-pub fn dependOnDirectory (dirpath: impl AsRef<crate::Path>) {
+pub fn dependOnDirectory (dirpath: impl AsRef<Path>) {
 	println!("cargo::rerun-if-changed={}", dirpath.as_ref().display());
 }
 
 /// **NOTE**: This must _**not**_ be called before the file we depend on has been _**fully generated**_!
 pub fn dependOnGeneratedFile (filepath: impl AsRef<Path>) -> Result<()> {
-	util::setTimestampWithWarning(&filepath, crate::getScriptStartTime());
+	util::setTimestampWithWarning(&filepath, getScriptStartTime());
 	dependOnFile(filepath);
 	Ok(())
 }
 
 /// **NOTE**: This must _**not**_ be called before the directory tree we depend on has been _**fully generated**_!
-pub fn dependOnGeneratedDirectory (dirpath: impl AsRef<crate::Path>) -> Result<()> {
-	util::setTimestampRecursively(&dirpath, crate::getScriptStartTime())?;
+pub fn dependOnGeneratedDirectory (dirpath: impl AsRef<Path>) -> Result<()> {
+	util::setTimestampRecursively(&dirpath, getScriptStartTime())?;
 	dependOnDirectory(dirpath);
 	Ok(())
 }
@@ -217,15 +217,19 @@ pub fn getSetupFilename () -> &'static str {
 
 /// Apply the CGV build setup which will have been stored in the current *target* directory when building the *CGV-rs*
 /// crate.
-pub fn applyBuildSetup () -> Result<()>
+pub fn applyBuildSetup () -> Result<Setup>
 {
-	let setupFilename = getCargoTargetDir()?.join(getSetupFilename());
-	dependOnFile(&setupFilename);
-	if setupFilename.exists() {
-		let setup = Setup::fromFile(setupFilename)?;
-		setup.apply();
-	}
-	Ok(())
+	let buildSetupFolder = getCargoTargetDir()?.join(getSetupFilename());
+	Ok(
+		if buildSetupFolder.exists() {
+			let setup = Setup::fromDirectory(buildSetupFolder)?;
+			setup.apply();
+			setup
+		}
+		else {
+			Setup::new()
+		}
+	)
 }
 
 /// Report the package name of the crate currently being built by *Cargo*.

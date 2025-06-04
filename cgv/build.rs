@@ -45,38 +45,33 @@ fn main() -> cgv_build::Result<()>
 
 	// Find current out- and target directories
 	let outDir = cgv_build::getCargoOutDir();
-	let targetDir = cgv_build::getCargoTargetDirFromOutDir(outDir)?;
 
 
 	////
 	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 
 	// The setup
-	//let buildSetupPath = targetDir.join("_CGV_BUILD_SETUP");
 	let mut buildSetup = cgv_build::Setup::new();
+
 	// Linker flag in case we have the `copy_libs` feature
 	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
-		// let data = "ADDITIONAL_LINKER_ARGS=-Wl,-rpath=$ORIGIN";
-		// std::fs::write(&buildSetupPath, data).or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
 		buildSetup.addLinkerFlag("-Wl,-rpath=$ORIGIN");
 	}
-	else {
-		// Currently, the `copy_libs` feature is the only thing giving us any build setup at all, so we'll just end up
-		// with an empty build file.
-		//std::fs::write(&buildSetupPath, "").or(Err(cgv_build::anyhow!("Could not write build setup file")))?;
-	}
-	//cgv_build::util::setTimestampToBeforeBuildScriptTime(buildSetupPath);
+
+	// Our shader path
+	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib"));
+	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/api"));
+	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/lin"));
+
+	// Propagate
 	buildSetup.injectIntoCargoBuild()?;
 
 
 	////
 	// Compile our shaders – TODO: add proper shader building facilities
 
-	// Set up paths
-	let cgvShaderDir = cgv_build::cgvCrateDirectory().join("shader/lib");
-	let shaderPath = &[
-		std::fs::canonicalize(cgvShaderDir.join("lin"))?, std::fs::canonicalize(cgvShaderDir.join("api"))?
-	];
+	// Obtain shader path
+	let shaderPath = buildSetup.shaderPath();
 
 	// Manually compile the viewport compositor shader
 	// - set up filenames
@@ -85,10 +80,10 @@ fn main() -> cgv_build::Result<()>
 	cgv_build::dependOnFile(&shaderSrc_viewport);
 	// - set up compilation targets to include
 	let slang2SPIRV = cgv_build::shader::slang::Context::forTarget(
-		cgv_build::shader::slang::CompilationTarget::SPIRV(cgv_build::getCargoDebugBuild()?), shaderPath
+		cgv_build::shader::slang::CompilationTarget::SPIRV(cgv_build::getCargoDebugBuild()?), &shaderPath
 	)?;
 	let slang2WGSL = cgv_build::shader::slang::Context::forTarget(
-		cgv_build::shader::slang::CompilationTarget::WGSL, shaderPath
+		cgv_build::shader::slang::CompilationTarget::WGSL, &shaderPath
 	)?;
 	// - compile
 	let viewportCompositorPak = cgv_build::shader::Package::fromSlangMultipleContexts(

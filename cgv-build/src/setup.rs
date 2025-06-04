@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, collections::BTreeSet, path::{Path, PathBuf}, ffi::OsStr};
 
 // Anyhow library
 use anyhow::{Context, Result, anyhow};
@@ -27,55 +27,46 @@ use crate::*;
 /// Accumulates transitive build properties for crates participating in a *CGV-rs*-based build.
 #[derive(serde::Serialize,serde::Deserialize)]
 pub struct Setup {
-	additionalLinkerFlags: Option<String>,
-	shaderPath: Vec<PathBuf>,
+	additionalLinkerFlags: BTreeSet<String>,
+	shaderPath: BTreeSet<PathBuf>,
 }
 impl Setup
 {
+	///
 	pub fn new() -> Self { Self {
-		additionalLinkerFlags: None,
-		shaderPath: Vec::new(),
+		additionalLinkerFlags: BTreeSet::new(),
+		shaderPath: BTreeSet::new(),
 	}}
 
-	pub(crate) fn fromFile (filename: impl AsRef<std::path::Path>) -> Result<Self>
-	{
-		/*// The resulting setup
-		let mut setup = Self::new();
-
-		// Parse build setup file
-		let contents = std::fs::read_to_string(path)?;
-		contents.split('\n').for_each(|line|
-		{
-			// Skip empty line
-			if line.split_ascii_whitespace().next().is_none() {
-				return;
-			}
-
-			// Parse non-empty line
-			if let Some((key, value)) = line.split_once('=')
-			{
-				let key = key.trim().to_owned();
-				let value = value.trim().to_owned();
-				match key.as_str()
-				{
-					"ADDITIONAL_LINKER_ARGS" => setup.addLinkerFlag(&value),
-
-					_ => {
-						// Warn of unrecognized key and ignore
-						println!("cargo:warning=cgv_build::Setup::fromFile(): Unrecognized key: {line}");
-					}
-				}
-			} else {
-				println!("cargo:warning=cgv_build::Setup::fromFile(): Cannot interpret line: {line}");
-			}
-		});*/
-		Ok(serde_json::from_reader(fs::File::open(filename)?)?)
+	///
+	pub(crate) fn fromFile (filename: impl AsRef<Path>) -> Result<Self> {
+		let setup = serde_json::from_reader(fs::File::open(&filename)?)?;
+		dependOnFile(filename);
+		Ok(setup)
 	}
 
-	pub(crate) fn writeToFile (&self, filename: impl AsRef<std::path::Path>) -> Result<()> {
+	///
+	pub(crate) fn fromDirectory (dirpath: impl AsRef<Path>) -> Result<Self>
+	{
+		const NO_EXT: &OsStr = unsafe {&*("" as *const str as *const OsStr)};
+		let mut setup = Self::new();
+		for entry in fs::read_dir(dirpath)? {
+			let entry = entry?;
+			if !entry.file_type()?.is_dir() && entry.path().extension().unwrap_or(NO_EXT) == "json" {
+				let newSetup = Self::fromFile(entry.path())?;
+				dependOnFile(entry.path());
+				setup.merge(newSetup);
+			}
+		}
+		Ok(setup)
+	}
+
+	///
+	pub(crate) fn writeToFile (&self, filename: impl AsRef<Path>) -> Result<()> {
 		Ok(serde_json::to_writer(fs::File::create(filename)?, self)?)
 	}
 
+	///
 	pub fn injectIntoCargoBuild (&self) -> Result<()>
 	{
 		// Preamble
@@ -89,27 +80,54 @@ impl Setup
 
 		// Serialize
 		self.writeToFile(&buildSetupFile)?;
-		if !util::setTimestampToBeforeBuildScriptTime(buildSetupFile) {
-			println!(
-				"cargo::warning=Build setup timestamp management failed! Cargo change detection will be affected."
-			);
-		}
+
+		// Rerun change detection
+		dependOnGeneratedFile(buildSetupFile)?;
+
+		// Done!
 		Ok(())
 	}
 
-	pub fn addLinkerFlag (&mut self, flag: impl AsRef<str>)
+	///
+	pub fn merge (&mut self, other: Self) {
+		self.additionalLinkerFlags.extend(other.additionalLinkerFlags);
+		self.shaderPath.extend(other.shaderPath);
+	}
+
+	///
+	pub fn addLinkerFlag (&mut self, flagString: impl AsRef<str>) {
+		flagString.as_ref().split_ascii_whitespace().for_each(|flag| {
+			self.additionalLinkerFlags.insert(flag.to_owned());
+		});
+	}
+
+	///
+	pub fn addShaderPath (&mut self, path: impl AsRef<Path>)
 	{
-		if let Some(flags) = self.additionalLinkerFlags.as_mut() {
-			flags.push_str(flag.as_ref());
+		if let Ok(path) = path.as_ref().canonicalize() {
+			self.shaderPath.insert(path);
 		}
 		else {
-			self.additionalLinkerFlags = Some(flag.as_ref().into());
+			println!("cargo::warning=Unaccessible shader path directory: '{}'", path.as_ref().display());
 		}
 	}
 
-	pub fn apply (&self) {
-		if let Some(flags) = self.additionalLinkerFlags.as_ref() {
-			println!("cargo:rustc-link-arg={}", flags);
+	///
+	pub fn apply (&self)
+	{
+		// Accumulate linker flags into whitespace-separated string
+		let additionalLinkerFlags = self.additionalLinkerFlags.iter().fold(
+			String::new(), |flags, flag| format!("{flags} {flag}")
+		);
+
+		// Emit flags string to Cargo
+		if !self.additionalLinkerFlags.is_empty() {
+			println!("cargo:rustc-link-arg={additionalLinkerFlags}");
 		}
+	}
+
+	///
+	pub fn shaderPath (&self) -> Vec<&Path> {
+		self.shaderPath.iter().map(|path| path.as_path()).collect()
 	}
 }
