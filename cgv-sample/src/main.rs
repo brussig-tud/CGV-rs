@@ -178,12 +178,10 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// Load resources
 
 		// The example shader
-		let shader = /*context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: Some("Example__ShaderModule"),
-			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/traj/shader.wgsl").into()),
-		});*/cgv::shader::Package::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/example.spk")))?
-			.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule"))?;
-
+		let shader = cgv::shader::Package::deserialize(
+			include_bytes!(concat!(env!("OUT_DIR"), "/shader/example.spk"))
+		)?
+		.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule"))?;
 
 		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(

@@ -36,7 +36,7 @@ impl ViewportCompositor
 		let name = name.map(String::from);
 
 		let shader = shader::Package::deserialize(
-			include_bytes!(concat!(env!("OUT_DIR"), "/viewport.spk"))
+			include_bytes!(concat!(env!("OUT_DIR"), "/shader/player/viewport.spk"))
 		)?.createShaderModuleFromBestInstance(
 			context.device(), None, util::concatIfSome(&name, "_shaderModule").as_deref()
 		)?;

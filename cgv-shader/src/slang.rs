@@ -22,18 +22,8 @@ use crate::*;
 
 //////
 //
-// Structs & enums
+// Structs
 //
-
-/// Enum describing the compilation target of a [`slang::Context`](Context).
-#[derive(Debug)]
-pub enum CompilationTarget {
-	/// Compile shaders to *SPIR-V*, specifying whether they should be debuggable or not.
-	SPIRV(/* debug: */bool),
-
-	/// Transpile shaders to *WGSL*.
-	WGSL
-}
 
 ///
 pub struct EntryPoint {
@@ -235,4 +225,22 @@ impl Program
 	pub fn genericBuildArtifact (&self) -> &[u8] {
 		self.genericBytecode.as_slice()
 	}
+}
+
+
+
+//////
+//
+// Functions
+//
+
+/// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
+/// these targets.
+pub fn createContextsForTargets (targets: &[CompilationTarget], shaderPath: &[impl AsRef<Path>])
+-> Result<Vec<Context>> {
+	let mut contexts = Vec::<Context>::with_capacity(targets.len());
+	for &target in targets {
+		contexts.push(Context::forTarget(target, shaderPath)?);
+	}
+	Ok(contexts)
 }

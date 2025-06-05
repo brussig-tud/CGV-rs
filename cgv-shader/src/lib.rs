@@ -42,6 +42,16 @@ use cgv_util::bitcode;
 // Enums
 //
 
+/// Enum describing a shader compilation target (mostly mirrors [`SourceType`] plus extra information).
+#[derive(Debug,Clone,Copy)]
+pub enum CompilationTarget {
+	/// Compile shaders to *SPIR-V*, specifying whether they should be debuggable or not.
+	SPIRV(/* debug: */bool),
+
+	/// Transpile shaders to *WGSL*.
+	WGSL
+}
+
 /// Enum describing the type of a [program instance](Program) in accordance with *WGPU*
 /// [shader module source](wgpu::ShaderSource) types.
 #[derive(Debug,Ord,PartialOrd,Eq,PartialEq,Copy,Clone,bitcode::Encode,bitcode::Decode)]
@@ -59,4 +69,53 @@ impl std::fmt::Display for SourceType {
 			SourceType::WGSL => write!(f, "WGSL")
 		}
 	}
+}
+
+
+
+//////
+//
+// Functions
+//
+
+/// Determine the most suitable shader compilation target for the current target platform.
+#[inline]
+pub fn mostSuitableCompilationTarget () -> CompilationTarget
+{
+	// WebGPU/WASM
+	#[cfg(target_arch="wasm32")] {
+		CompilationTarget::WGSL
+	}
+
+	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
+	#[cfg(not(target_arch="wasm32"))] {
+		#[cfg(debug_assertions)] {
+			CompilationTarget::SPIRV(true)
+		}
+		#[cfg(not(debug_assertions))] {
+			CompilationTarget::SPIRV(false)
+		}
+	}
+}
+
+/// Return a list of feasible shader compilation target for the current target platform, from most to least suitable.
+#[inline]
+pub fn feasibleCompilationTargets () -> &'static [CompilationTarget]
+{
+	static COMPILATION_TARGETS: &[CompilationTarget] = {
+		// WebGPU/WASM
+		#[cfg(target_arch="wasm32")] {
+			&[CompilationTarget::WGSL, CompilationTarget::SPIRV(false)]
+		}
+		// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
+		#[cfg(not(target_arch="wasm32"))] {
+			#[cfg(debug_assertions)] {
+				&[CompilationTarget::SPIRV(true), CompilationTarget::WGSL]
+			}
+			#[cfg(not(debug_assertions))] {
+				&[CompilationTarget::SPIRV(false), CompilationTarget::WGSL]
+			}
+		}
+	};
+	COMPILATION_TARGETS
 }

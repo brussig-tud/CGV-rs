@@ -8,7 +8,7 @@
 use std::{fs, collections::BTreeSet, path::{Path, PathBuf}, ffi::OsStr};
 
 // Anyhow library
-use anyhow::{Context, Result, anyhow};
+use anyhow::Result;
 
 // Serde library
 use serde;

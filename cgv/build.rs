@@ -4,22 +4,8 @@
 // Language config
 //
 
-// Allow debugging the build script
-#![allow(internal_features)]
-#![feature(core_intrinsics)]
-
 // Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
 #![allow(non_snake_case)]
-
-
-
-//////
-//
-// Imports
-//
-
-// Anyhow library
-use cgv_build::anyhow;
 
 
 
@@ -28,8 +14,8 @@ use cgv_build::anyhow;
 // Functions
 //
 
-/// Custom build steps – currently just collects known build variables from dependencies to propagate to dependent
-/// crates via the `BuildSetup` mechanism of CGV-rs.
+/// Custom build steps – collect transitive build properties to propagate to dependent crates via the `BuildSetup`
+/// mechanism of CGV-rs and compile and package all internal shaders.
 fn main() -> cgv_build::Result<()>
 {
 	////
@@ -43,55 +29,25 @@ fn main() -> cgv_build::Result<()>
 	// Get source directory
 	let cgvSrcDir = cgv_build::getCargoSourceDir();
 
-	// Find current out- and target directories
-	let outDir = cgv_build::getCargoOutDir();
-
 
 	////
-	// Propagate build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
+	// Perform build operations
 
-	// The setup
+	// Propagate our build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
 	let mut buildSetup = cgv_build::Setup::new();
-
-	// Linker flag in case we have the `copy_libs` feature
+	// - linker flag in case we have the `copy_libs` feature
 	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
 		buildSetup.addLinkerFlag("-Wl,-rpath=$ORIGIN");
 	}
-
-	// Our shader path
+	// - our shader path
 	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib"));
 	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/api"));
 	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/lin"));
-
-	// Propagate
+	// - propagate
 	buildSetup.injectIntoCargoBuild()?;
 
-
-	////
-	// Compile our shaders – TODO: add proper shader building facilities
-
-	// Obtain shader path
-	let shaderPath = buildSetup.shaderPath();
-
-	// Manually compile the viewport compositor shader
-	// - set up filenames
-	let shaderSrc_viewport = cgvSrcDir.join("shader/player/viewport.slang");
-	let shaderPak_viewport = outDir.join("viewport.spk");
-	cgv_build::dependOnFile(&shaderSrc_viewport);
-	// - set up compilation targets to include
-	let slang2SPIRV = cgv_build::shader::slang::Context::forTarget(
-		cgv_build::shader::slang::CompilationTarget::SPIRV(cgv_build::getCargoDebugBuild()?), &shaderPath
-	)?;
-	let slang2WGSL = cgv_build::shader::slang::Context::forTarget(
-		cgv_build::shader::slang::CompilationTarget::WGSL, &shaderPath
-	)?;
-	// - compile
-	let viewportCompositorPak = cgv_build::shader::Package::fromSlangMultipleContexts(
-		&[&slang2SPIRV, &slang2WGSL], shaderSrc_viewport, None
-	)?;
-	// - write shader package
-	viewportCompositorPak.writeToFile(&shaderPak_viewport)?;
-	cgv_build::dependOnGeneratedFile(shaderPak_viewport)?;
+	// Compile our shaders
+	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["common", "gpu", "lib"]))?;
 
 	// Done!
 	Ok(())

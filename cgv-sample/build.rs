@@ -15,33 +15,9 @@ fn main() -> cgv_build::Result<()>
 
 	// Deploy a web application if the target architecture is WASM
 	cgv_build::webDeployIfWasm("../pkg", &["Cargo.toml"])?;
-
-
-	////
-	// Compile our shaders – TODO: add proper shader building facilities
-
-	// Set up paths
-	let shaderPath = buildSetup.shaderPath();
-
-	// Manually compile the example shader
-	// - set up filenames
-	let shaderSrc_example = cgv_build::getCargoSourceDir().join("shader/example.slang");
-	let shaderPak_example = cgv_build::getCargoOutDir().join("example.spk");
-	cgv_build::dependOnFile(&shaderSrc_example);
-	// - set up compilation targets to include
-	let slang2SPIRV = cgv_build::shader::slang::Context::forTarget(
-		cgv_build::shader::slang::CompilationTarget::SPIRV(cgv_build::getCargoDebugBuild()?), &shaderPath
-	)?;
-	let slang2WGSL = cgv_build::shader::slang::Context::forTarget(
-		cgv_build::shader::slang::CompilationTarget::WGSL, &shaderPath
-	)?;
-	// - compile
-	let viewportCompositorPak = cgv_build::shader::Package::fromSlangMultipleContexts(
-		&[&slang2SPIRV, &slang2WGSL], shaderSrc_example, None
-	)?;
-	// - write shader package
-	viewportCompositorPak.writeToFile(&shaderPak_example)?;
-	cgv_build::dependOnGeneratedFile(shaderPak_example)?;
+	
+	// Compile our shaders - TODO: work around internal compiler error when passing `None` subdirs to skip
+	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["derp"]))?;
 
 	// Done!
 	Ok(())

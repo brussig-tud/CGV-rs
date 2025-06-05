@@ -30,7 +30,7 @@ pub use cgv_shader as shader;
 
 /// Internal module implementing the high-level shader preparation logic
 mod shaderprep;
-pub use shaderprep::*;
+pub use shaderprep::prepareShaders; // re-export
 
 /// The module providing all kinds of additional assorted utilities specific to building (will get inserted verbatim
 /// into the exported [`util`] module).
@@ -411,7 +411,7 @@ pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> R
 }
 
 /// Deploy a CGV-rs WASM application to the given directory.
-pub fn deployCgvApplication (outputPath: &Path, webDeployment: WebDeployment) -> Result<()>
+pub fn performCgvWebDeployment (outputPath: &Path, webDeployment: WebDeployment) -> Result<()>
 {
 	// Inject rerun conditions
 	println!(
@@ -513,7 +513,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 		// - build
 		builder.build(pkgName)
 	};
-	deployCgvApplication(&outputPath, webDeployment)?;
+	performCgvWebDeployment(&outputPath, webDeployment)?;
 
 	// Done!
 	Ok(())

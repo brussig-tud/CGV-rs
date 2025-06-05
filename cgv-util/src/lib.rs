@@ -27,17 +27,20 @@
 /// Submodule providing some useful datastructures
 pub mod ds;
 
-/// Submodule providing unsafe utilities
-pub mod notsafe;
+/// Submodule providing operations on the file system.
+pub mod fs;
 
 /// Submodule providing assorted math utilities.
 pub mod math;
 
+/// Submodule providing utilities for reasoning about meta-related things like the current build platform etc.
+pub mod meta;
+
+/// Submodule providing unsafe utilities
+pub mod notsafe;
+
 /// Submodule providing operations on file system paths.
 pub mod path;
-
-/// Submodule providing operations on the file system.
-pub mod fs;
 
 /// Submodule providing unique entity generators (IDs etc.)
 pub mod unique;
