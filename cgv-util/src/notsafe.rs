@@ -36,6 +36,15 @@ pub unsafe fn copyAssign<T: Sized> (target: &mut T, source: &T) {
 	unsafe { std::ptr::copy_nonoverlapping(source as *const T, target as *mut T, 1); }
 }
 
+/// Construct an version of the given `str` slice offset by the given amount of `u8`s.
+///
+/// # Arguments
+///
+#[inline(always)]
+pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
+	unsafe { std::str::from_raw_parts(source.as_ptr().offset(offset), source.len()) }
+}
+
 
 
 //////

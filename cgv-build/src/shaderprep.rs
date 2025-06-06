@@ -55,10 +55,8 @@ pub fn prepareShaders (
 
 	// Determine module source types if none were specified
 	let slangContexts = shader::slang::createContextsForTargets(
-		moduleSourceTargets.unwrap_or_else(|| shader::feasibleCompilationTargets()),
-		buildSetup.shaderPath().as_slice()
+		moduleSourceTargets.unwrap_or_else(|| shader::feasibleCompilationTargets()), buildSetup.shaderPath().as_slice()
 	)?;
-	let slangContexts = slangContexts.iter().map(|ctx| ctx).collect::<Vec<_>>();
 
 	// Recurse through provided shader directory and package each .slang shader encountered that is not in a skipped
 	// subdirectory

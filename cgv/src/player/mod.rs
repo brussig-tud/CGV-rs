@@ -310,6 +310,7 @@ impl Player
 	{
 		// Log that we have begun the startup process
 		tracing::info!("Starting up...");
+		tracing::info!("Platform: {}", util::meta::platformTargetTriple());
 
 		// Run the event loop
 		let options = eframe::NativeOptions {
@@ -396,6 +397,7 @@ impl Player
 
 		// Log that we have begun the startup process
 		tracing::info!("Starting up...");
+		tracing::info!("Platform: {}", util::meta::platformTargetTriple().full());
 
 		let webOptions = eframe::WebOptions {
 			//depth_buffer: 0,

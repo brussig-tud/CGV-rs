@@ -53,8 +53,7 @@ pub mod util {
 //
 
 // Standard library
-use std::{env, fs, path::{Path, PathBuf}};
-use std::ops::Sub;
+use std::{env, fs, path::{Path, PathBuf}, str::FromStr, sync::LazyLock, ops::Sub};
 
 // Anyhow library
 pub use anyhow::{Context, Result, anyhow};
@@ -210,8 +209,30 @@ pub fn debugWithVsCode (halt: bool) -> Result<()>
 	}
 }
 
-/// Report the filename used for storing [Setup](build setups)..
-pub fn getSetupFilename () -> &'static str {
+/// Reference a wrapper for the target platform of the currently running *Cargo* build.
+pub fn cargoBuildTargetTriple() -> &'static util::meta::TargetTriple<'static> {
+	static TARGET_TRIPLE: LazyLock<util::meta::TargetTriple> = LazyLock::new(|| {
+		let targetTriple = env::var("TARGET").expect("`TARGET` should be defined by Cargo");
+		util::meta::TargetTriple::from_str(&targetTriple).expect(
+			format!("target triple received from Cargo appears to be malformed: {targetTriple}").as_str()
+		)
+	});
+	&TARGET_TRIPLE
+}
+
+/// Reference a typed wrapper for the target platform of the currently running *Cargo* build.
+pub fn cargoBuildTargetPlatform() -> &'static util::meta::SupportedPlatform {
+	static TARGET_PLATFORM: LazyLock<util::meta::SupportedPlatform> = LazyLock::new(|| {
+		let targetTriple = cargoBuildTargetTriple();
+		util::meta::SupportedPlatform::fromTargetTriple(targetTriple).expect(
+			format!("target triple received from Cargo appears to be malformed: {targetTriple}").as_str()
+		)
+	});
+	&TARGET_PLATFORM
+}
+
+/// Report the path of the directory containing the [transitive build setup](Setup).
+pub fn getSetupPath () -> &'static str {
 	"_CGV_BUILD_SETUP"
 }
 
@@ -219,7 +240,7 @@ pub fn getSetupFilename () -> &'static str {
 /// crate.
 pub fn applyBuildSetup () -> Result<Setup>
 {
-	let buildSetupFolder = getCargoTargetDir()?.join(getSetupFilename());
+	let buildSetupFolder = getCargoTargetDir()?.join(getSetupPath());
 	Ok(
 		if buildSetupFolder.exists() {
 			let setup = Setup::fromDirectory(buildSetupFolder)?;

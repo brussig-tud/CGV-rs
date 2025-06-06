@@ -15,7 +15,8 @@
 #![allow(incomplete_features)]
 
 // Experimental language features
-#![feature(generic_const_exprs)] // required for util::Phony
+#![feature(generic_const_exprs)] // required for notsafe::Phony
+#![feature(str_from_raw_parts)]  // required for notsafe::offsetStr
 
 
 
@@ -65,8 +66,7 @@ pub use bitcode; // re-export
 // Macros
 //
 
-/// Reads a UTF-8 encoded file into a static string slice at compile time, with the path always being relative to the
-/// Crate root directory.
+/// Reads a UTF-8 encoded file located inside the source tree of the caller into a static string slice at compile time.
 ///
 /// # Arguments
 ///
@@ -82,10 +82,8 @@ macro_rules! sourceFile {
 	};
 }
 
-#[allow(unused_imports)]
-//pub use sourceFile;
-
-/// Reads a file verbatim into a static `u8` slice, treating the file as a blob.
+/// Reads a file located inside the source tree of the caller verbatim into a static `u8` slice at compile time,
+/// treating the file as a blob.
 ///
 /// # Arguments
 ///
@@ -100,8 +98,102 @@ macro_rules! sourceBytes {
 		include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), $file))
 	};
 }
-#[allow(unused_imports)]
-//pub use sourceBytes;
+
+/// Reads a UTF-8 encoded file located inside the *Cargo* build tree of the caller (as specified by the *Cargo*
+/// environment variable `OUT_DIR`) into a static string slice at compile time.
+///
+/// # Arguments
+///
+/// * `file` – The path of the file, indicated from the repository root (i.e. must always start with a `/`).
+///
+/// # Returns
+///
+/// A `'static` string slice containing the verbatim characters of the sourced file.
+#[macro_export]
+macro_rules! sourceGeneratedFile {
+	($file:expr) => {
+		include_str!(concat!(env!("OUT_DIR"), $file))
+	};
+}
+
+/// Reads a file located inside the *Cargo* build tree of the caller (as specified by the *Cargo* environment variable
+/// `OUT_DIR`) verbatim into a static `u8` slice at compile time, treating the file as a blob.
+///
+/// # Arguments
+///
+/// * `file` – The path of the file, indicated from the repository root (i.e. must always start with a `/`).
+///
+/// # Returns
+///
+/// A `'static` slice of `u8` containing the bytes of the sourced file.
+#[macro_export]
+macro_rules! sourceGeneratedBytes {
+	($file:expr) => {
+		include_bytes!(concat!(env!("OUT_DIR"), $file))
+	};
+}
+
+
+
+//////
+//
+// Structs
+//
+
+/// A zero-cost wrapper around [`Vec`] that dereferences to a slice of references to its element type. Very useful for
+/// convenience functions that create an array of things that require caller ownership, but which the owner will most
+/// typically just borrow to other functions (often as a slice of references).
+pub struct BorrowVec<'this, T: 'this> {
+	vec: Vec<T>,
+	borrowVec: Vec<&'this T>,
+}
+impl<'this, T: 'this> BorrowVec<'this, T>
+{
+	/// Create the `BorrowVec` by moving in the given regular [`Vec`].
+	///
+	/// # Arguments
+	///
+	/// * `vec` – The regular vec to wrap with the new `BorrowVec`.
+	///
+	/// # Returns
+	///
+	/// The `BorrowVec` wrapping `vec`.
+	#[inline(always)]
+	pub fn new (vec: Vec<T>) -> Self {
+		let slice = unsafe {
+			// Safety: we move ownership of this memory into a struct that cannot outlive this memory, so the self-
+			//         references to it that this struct will hold cannot outlive it either.  Also, BorrowVec hides all
+			//         its fields inside the private scope and defines no mutating methods, meaning Rust's aliasing
+			//         rules are effectively never violated.
+			&*(vec.as_slice() as *const [T])
+		};
+		Self { vec, borrowVec: slice.iter().map(|elem| elem).collect() }
+	}
+
+	/// Borrow a slice of the Vector of **owned** elements.
+	pub fn owned (&self) -> &[T] {
+		self.vec.as_slice()
+	}
+
+	/// Obtain a slice of the Vector of **borrowed** elements.
+	pub fn borrowed (&self) -> &[&T] {
+		self.borrowVec.as_slice()
+	}
+}
+impl<'this, T: 'this> From<Vec<T>> for BorrowVec<'this, T> {
+	#[inline(always)]
+	fn from (value: Vec<T>) -> Self {
+		Self::new(value)
+	}
+}
+impl<'this, T: 'this> std::ops::Deref for BorrowVec<'this, T> {
+	type Target = [&'this T];
+
+	#[inline(always)]
+	fn deref (&self) -> &Self::Target {
+		self.borrowVec.as_slice()
+	}
+}
 
 
 

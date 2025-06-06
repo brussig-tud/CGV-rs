@@ -164,7 +164,7 @@ impl Context
 
 ///
 pub struct Program {
-	linkedProg: slang::ComponentType,
+	_linkedProg: slang::ComponentType,
 	genericBytecode: slang::Blob,
 	entryPoints: Vec<EntryPoint>
 }
@@ -213,7 +213,7 @@ impl Program
 		};
 
 		// Done!
-		Ok(Self { linkedProg, genericBytecode, entryPoints })
+		Ok(Self { _linkedProg: linkedProg, genericBytecode, entryPoints })
 	}
 
 	#[inline]
@@ -236,11 +236,11 @@ impl Program
 
 /// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
 /// these targets.
-pub fn createContextsForTargets (targets: &[CompilationTarget], shaderPath: &[impl AsRef<Path>])
--> Result<Vec<Context>> {
+pub fn createContextsForTargets<'a> (targets: &[CompilationTarget], shaderPath: &[impl AsRef<Path>])
+-> Result<cgv_util::BorrowVec<'a, Context>> {
 	let mut contexts = Vec::<Context>::with_capacity(targets.len());
 	for &target in targets {
 		contexts.push(Context::forTarget(target, shaderPath)?);
 	}
-	Ok(contexts)
+	Ok(contexts.into())
 }

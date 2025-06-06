@@ -36,7 +36,7 @@ impl ViewportCompositor
 		let name = name.map(String::from);
 
 		let shader = shader::Package::deserialize(
-			include_bytes!(concat!(env!("OUT_DIR"), "/shader/player/viewport.spk"))
+			util::sourceGeneratedBytes!("/shader/player/viewport.spk")
 		)?.createShaderModuleFromBestInstance(
 			context.device(), None, util::concatIfSome(&name, "_shaderModule").as_deref()
 		)?;
@@ -130,7 +130,8 @@ impl ViewportCompositor
 		Ok(Self { texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline })
 	}
 
-	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture) {
+	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture)
+	{
 		self.texBindGroup = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
 			label: self.texBindGroupName.as_deref(),
 			layout: &self.texBindGroupLayout,

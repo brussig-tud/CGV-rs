@@ -132,31 +132,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
-		// Testing
-
-		/*let slangCtx = cgv::shader::slang::Context::new(&[
-			std::env::current_dir()?.join("shader")
-		])?;
-		let testShader = slangCtx.buildProgram(
-			env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>()?.join("shader/example.slang")
-		)?;
-		std::fs::write(
-			env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>()?.join("shader/example_all.spv"),
-			testShader.genericBuildArtifact()
-		)?;
-		for (i, ep) in testShader.entryPoints().iter().enumerate() {
-			std::fs::write(
-				env!("CARGO_MANIFEST_DIR").parse::<std::path::PathBuf>()?.join(
-					format!("shader/example_ep{i}.spv")
-				),
-				ep.buildArtifact()
-			)?;
-		}*/
-
-
-		////
 		// Prepare buffers
 
+		// Vertex buffer
 		let vertexBuffer = context.device().create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
 				label: Some("Example__HermiteNodes"),
@@ -165,6 +143,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			}
 		);
 
+		// Index buffer
 		let indexBuffer = context.device().create_buffer_init(
 			&wgpu::util::BufferInitDescriptor {
 				label: Some("Example__HermiteIndices"),
@@ -179,7 +158,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// The example shader
 		let shader = cgv::shader::Package::deserialize(
-			include_bytes!(concat!(env!("OUT_DIR"), "/shader/example.spk"))
+			util::sourceGeneratedBytes!("/shader/example.spk")
 		)?
 		.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule"))?;
 
