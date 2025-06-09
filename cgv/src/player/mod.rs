@@ -203,6 +203,8 @@ pub struct Player
 
 	pendingRedraw: bool,
 	continousRedrawRequests: u32,
+	userInstantRedraw: bool,
+
 	startInstant: time::Instant,
 	prevFrameElapsed: time::Duration,
 	prevFrameDuration: time::Duration
@@ -273,6 +275,8 @@ impl Player
 
 			pendingRedraw: false,
 			continousRedrawRequests: 0,
+			userInstantRedraw: false,
+
 			startInstant: time::Instant::now(),
 			prevFrameElapsed: time::Duration::from_secs(0),
 			prevFrameDuration: time::Duration::from_secs(0),
@@ -936,7 +940,33 @@ impl eframe::App for Player
 									// Player UI
 									ui.centered_and_justified(|ui| ui.heading("▶ Player"));
 									ui.separator();
-									ui.label("<nothing here yet>");
+									egui::CollapsingHeader::new("Control flow")
+										.id_salt("CGV__player_control_s")
+										.default_open(true)
+										.show(ui, |ui| {
+											gui::layout::ControlTableLayouter::new(ui).layout(
+												ui, "CGV__player_control",
+												|ui|
+												{
+													ui.add("Instant redraw", |ui, _idealSize|
+														ui.label(
+															format!("{} requests", self.continousRedrawRequests)
+														)
+													);
+													ui.add("force:", |ui, _| {
+														if ui.add(gui::widget::toggle(&mut self.userInstantRedraw))
+														   .clicked() {
+															if self.userInstantRedraw {
+																self.pushContinuousRedrawRequest();
+															}
+															else {
+																self.dropContinuousRedrawRequest();
+															}
+														}
+													})
+												}
+											);
+										});
 								},
 
 								1 => {

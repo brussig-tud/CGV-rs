@@ -186,12 +186,12 @@ impl Extrinsics
 		{
 			// eye
 			extrinsicsUi.add("eye point", |ui, idealSize|
-				gui::control::vec3_sized(ui, &mut self.eye, idealSize)
+				gui::complex::vec3_sized(ui, &mut self.eye, idealSize)
 			);
 
 			// dir
 			if extrinsicsUi.add("direction", |ui, idealSize|
-				gui::control::vec3_sized(ui, &mut self.dir, idealSize)
+				gui::complex::vec3_sized(ui, &mut self.dir, idealSize)
 			){
 				if self.dir.norm_squared() < 0.00001 {
 					self.dir.z = -1.;
@@ -202,7 +202,7 @@ impl Extrinsics
 
 			// up
 			if extrinsicsUi.add("up direction", |ui, idealSize|
-				gui::control::vec3_sized(ui, &mut self.up, idealSize)
+				gui::complex::vec3_sized(ui, &mut self.up, idealSize)
 			){
 				if self.up.norm_squared() < 0.00001 {
 					self.up.y = 1.;

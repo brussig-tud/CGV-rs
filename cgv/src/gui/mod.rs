@@ -4,10 +4,13 @@
 // Module definitions
 //
 
-/// Submodule providing pseudo-atomic controls for somewhat more complex datatypes
-pub mod control;
+/// Submodule providing assorted custom widgets.
+pub mod widget;
 
-/// Submodule providing custom "smart" layouts
+/// Submodule providing pseudo-atomic controls for somewhat more complex datatypes.
+pub mod complex;
+
+/// Submodule providing custom "smart" layouts.
 pub mod layout;
 
 
