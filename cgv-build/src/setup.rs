@@ -54,7 +54,6 @@ impl Setup
 			let entry = entry?;
 			if !entry.file_type()?.is_dir() && entry.path().extension().unwrap_or(NO_EXT) == "json" {
 				let newSetup = Self::fromFile(entry.path())?;
-				dependOnFile(entry.path());
 				setup.merge(newSetup);
 			}
 		}

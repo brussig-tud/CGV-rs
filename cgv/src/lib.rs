@@ -309,6 +309,7 @@ pub trait Application
 ////
 // ApplicationFactory
 
+/// An object that can create instances of an applications that can be run by the [`Player`].
 pub trait ApplicationFactory
 {
 	/// Create an instance of the target application.
