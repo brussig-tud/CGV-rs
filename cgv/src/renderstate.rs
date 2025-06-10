@@ -110,7 +110,7 @@ impl RenderState
 		self.framebuffer.resize(context, dims)
 	}
 
-	pub fn getMainColorAttachment (&self, clear: Option<&wgpu::Color>) -> Option<wgpu::RenderPassColorAttachment>
+	pub fn getMainColorAttachment (&self, clear: Option<&wgpu::Color>) -> Option<wgpu::RenderPassColorAttachment<'_>>
 	{
 		Some(wgpu::RenderPassColorAttachment {
 			view: &self.framebuffer.color0().view(),
@@ -126,7 +126,8 @@ impl RenderState
 		})
 	}
 
-	pub fn getMainDepthStencilAttachment (&self, clear: Option<f32>) -> Option<wgpu::RenderPassDepthStencilAttachment>
+	pub fn getMainDepthStencilAttachment (&self, clear: Option<f32>)
+		-> Option<wgpu::RenderPassDepthStencilAttachment<'_>>
 	{
 		self.framebuffer.depthStencil().map(|depthStencilTex| wgpu::RenderPassDepthStencilAttachment {
 			view: &depthStencilTex.view(),
@@ -206,8 +207,7 @@ pub fn defaultColorTargetState (colorTex: &hal::Texture) -> wgpu::ColorTargetSta
 /// # Returns
 ///
 /// A depth/stencil state with opinionated defaults for the given reference texture.
-pub fn defaultDepthStencilState (depthStencilTex: &hal::Texture) -> wgpu::DepthStencilState
-{
+pub fn defaultDepthStencilState (depthStencilTex: &hal::Texture) -> wgpu::DepthStencilState {
 	wgpu::DepthStencilState {
 		format: depthStencilTex.descriptor.format,
 		depth_write_enabled: true,

@@ -250,7 +250,7 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		}))
 	}
 
-	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass {
+	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
 		gpu::Pass::Compute(encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()))
 	}
 
@@ -326,7 +326,7 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for RenderPipelineGenerato
 		None
 	}
 
-	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass {
+	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
 		gpu::Pass::Render(encoder.begin_render_pass(&wgpu::RenderPassDescriptor::default()))
 	}
 

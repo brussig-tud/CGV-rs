@@ -84,7 +84,7 @@ impl gpu::mipmap::Generator for NoopMipmapGenerator
 		None
 	}
 
-	fn createPass (_: &mut wgpu::CommandEncoder) -> gpu::Pass {
+	fn createPass (_: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
 		panic!("The NoopMipmapGenerator is a dummy and cannot create any actual GPU passes!");
 	}
 

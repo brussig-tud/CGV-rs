@@ -139,7 +139,7 @@ impl Camera for MonoCamera<'_>
 		}
 	}
 
-	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration] {
+	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration<'_>] {
 		self.globalPasses.as_slice()
 	}
 	fn framebuffer (&self) -> &hal::Framebuffer {
@@ -150,7 +150,7 @@ impl Camera for MonoCamera<'_>
 		&self.name
 	}
 
-	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher>
+	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>
 	{
 		self.framebuffer.depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
 			&pixelCoords, &Viewport {

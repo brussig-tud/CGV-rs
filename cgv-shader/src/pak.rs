@@ -60,26 +60,32 @@ impl std::error::Error for InvalidEntryPointError {}
 
 /// An error resulting from attempting to use a [`Program`] instance for a [source type](SourceType) that is not
 /// available, e.g. because a [`Package`] does not include it.
+#[cfg(feature="wgpu_runtime")]
 #[derive(Debug)]
 pub struct InvalidSourceTypeError {
 	sourceType: SourceType
 }
+#[cfg(feature="wgpu_runtime")]
 impl Display for InvalidSourceTypeError {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(formatter, "InvalidSourceTypeError[`{}`]", self.sourceType)
 	}
 }
+#[cfg(feature="wgpu_runtime")]
 impl std::error::Error for InvalidSourceTypeError {}
 
 /// An error resulting from attempting to use an automatically detected suitable [`Program`] instance for some platform
 /// or scenario but the [`Package`] did not include any suitable instances.
+#[cfg(feature="wgpu_runtime")]
 #[derive(Debug)]
 pub struct NoSuitableProgramInstanceError {}
+#[cfg(feature="wgpu_runtime")]
 impl Display for NoSuitableProgramInstanceError {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(formatter, "NoSuitableProgramInstanceError")
 	}
 }
+#[cfg(feature="wgpu_runtime")]
 impl std::error::Error for NoSuitableProgramInstanceError {}
 
 
