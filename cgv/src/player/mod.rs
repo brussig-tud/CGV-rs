@@ -4,6 +4,9 @@
 // Module definitions
 //
 
+/// Private submodule holding the factored-out built-in GUI definitions
+mod ui;
+
 /// Submodule providing the [`RenderSetup`].
 mod rendersetup;
 pub use rendersetup::RenderSetup; // - re-export
@@ -40,19 +43,7 @@ use eframe::epaint;
 
 // Local imports
 use crate::*;
-use crate::view::{Camera, CameraInteractor, CameraParameters};
-
-
-
-///////
-//
-// Constants
-//
-
-// For consistent labeling of UI theme-related stuff
-const LIGHT_ICON: &str = "☀"; // ToDo: consider 💡
-const DARK_ICON: &str = "🌙";
-const SYSTEM_ICON: &str = "💻";
+use crate::view::{Camera, CameraInteractor};
 
 
 
@@ -843,225 +834,34 @@ impl Player
 
 impl eframe::App for Player
 {
-	fn update (&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame)
+	fn update (&mut self, eguiContext: &egui::Context, _frame: &mut eframe::Frame)
 	{
 		////
-		// Menu bar
+		// Main GUI
 
-		egui::TopBottomPanel::top("menu_bar").show(ctx, |ui|
-			egui::ScrollArea::horizontal().show(ui, |ui|
-			{
-				egui::menu::bar(ui, |ui|
-				{
-					// The global [ESC] quit shortcut
-					let quit_shortcut =
-						egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
-					if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
-						self.exit(ui.ctx());
-					}
+		// Draw the main menu bar
+		ui::menuBar(self, eguiContext);
 
-					// Menu bar
-					ui.menu_button("File", |ui| {
-						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-						#[cfg(not(target_arch="wasm32"))]
-						if ui.add(
-							egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
-						).clicked()
-						{
-							self.exit(ui.ctx());
-						}
-						#[cfg(target_arch="wasm32")]
-						ui.label("<nothing here>");
-					});
-					ui.separator();
-
-					/* Dark/Light mode toggle */ {
-						let menuIcon = if ui.ctx().style().visuals.dark_mode {DARK_ICON} else {LIGHT_ICON};
-						ui.menu_button(menuIcon, |ui| {
-							ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-							if ui.add(egui::Button::new(format!("{LIGHT_ICON} Light"))).clicked() {
-								ui.ctx().set_theme(egui::ThemePreference::Light);
-								ui.close_menu();
-							}
-							else if ui.add(egui::Button::new(format!("{DARK_ICON} Dark"))).clicked() {
-								ui.ctx().set_theme(egui::ThemePreference::Dark);
-								ui.close_menu();
-							}
-							else if ui.add(egui::Button::new(format!("{SYSTEM_ICON} System"))).clicked() {
-								ui.ctx().set_theme(egui::ThemePreference::System);
-								ui.close_menu();
-							}
-						});
-					}
-					ui.separator();
-
-					// App switcher
-					// - player settings
-					if ui.selectable_label(self.activeSidePanel==0, "Player").clicked() {
-						self.activeSidePanel = 0;
-					}
-					// - view settings
-					if ui.selectable_label(self.activeSidePanel==1, "View").clicked() {
-						self.activeSidePanel = 1;
-					}
-					// - applications
-					/*for (idx, app) in self.applications.iter().enumerate()
-					{
-						if ui.selectable_label(self.activeSidePanel==0, "Camera").clicked() {
-							self.activeSidePanel = 0;
-						}
-					}*/
-					if ui.selectable_label(
-						self.activeSidePanel==2, self.activeApplication.as_ref().unwrap().title()
-					).clicked() {
-						self.activeSidePanel = 2;
-					}
-				});
-			}));
-
-
-		////
-		// Side panel
-
-		egui::SidePanel::right("CGV__sidePanel")
-			.resizable(true)
-			.default_width(320.)
-			.show(ctx, |ui|
-			{
-				egui::ScrollArea::both().show(ui, |ui|
-				{
-					ui.horizontal(|ui|
-					{
-						ui.vertical(|ui|
-						{
-							match self.activeSidePanel
-							{
-								0 => {
-									// Player UI
-									ui.centered_and_justified(|ui| ui.heading("▶ Player"));
-									ui.separator();
-									egui::CollapsingHeader::new("Control flow")
-										.id_salt("CGV__player_control_s")
-										.default_open(true)
-										.show(ui, |ui| {
-											gui::layout::ControlTableLayouter::new(ui).layout(
-												ui, "CGV__player_control",
-												|ui|
-												{
-													ui.add("Instant redraw", |ui, _idealSize|
-														ui.label(
-															format!("{} requests", self.continousRedrawRequests)
-														)
-													);
-													ui.add("force:", |ui, _| {
-														if ui.add(gui::widget::toggle(&mut self.userInstantRedraw))
-														   .clicked() {
-															if self.userInstantRedraw {
-																self.pushContinuousRedrawRequest();
-															}
-															else {
-																self.dropContinuousRedrawRequest();
-															}
-														}
-													})
-												}
-											);
-										});
-								},
-
-								1 => {
-									// Camera UI
-									ui.centered_and_justified(|ui| ui.heading("📷 View"));
-									ui.separator();
-
-									// Active camera and interactor selection
-									gui::layout::ControlTableLayouter::new(ui).layout(
-										ui, "CGV__CameraUi",
-										|cameraUi|
-										{
-											// activeCameraInteractor
-											cameraUi.add("Interactor", |ui, idealSize|
-												egui::ComboBox::from_id_salt("CGV_view_inter")
-													.selected_text(
-														self.cameraInteractors[self.activeCameraInteractor].title()
-													)
-													.width(idealSize)
-													.show_ui(ui, |ui| {
-														for (i, ci) in
-															self.cameraInteractors.iter().enumerate()
-														{
-															ui.selectable_value(
-																&mut self.activeCameraInteractor, i, ci.title()
-															);
-														}
-													})
-											);
-
-											// activeCamera
-											let mut sel: usize = 0; // dummy, remove once camera management is done
-											cameraUi.add("Active Camera", |ui, idealSize|
-												egui::ComboBox::from_id_salt("CGV_view_act")
-													.selected_text(self.camera.name())
-													.width(idealSize)
-													.show_ui(ui, |ui| {
-														ui.selectable_value(
-															&mut sel, 0, self.camera.name()
-														);
-													})
-											);
-										}
-									);
-
-									// Settings from active camera and interactor
-									ui.add_space(6.);
-									egui::CollapsingHeader::new("Interactor settings")
-										.id_salt("CGV_view_inter_s")
-										.show(ui, |ui| {
-											self.cameraInteractors[self.activeCameraInteractor]
-											.ui(self.camera.as_mut(), ui);
-										});
-									egui::CollapsingHeader::new("Active camera settings")
-										.id_salt("CGV_view_act_s")
-										.show(ui, |ui| {
-											CameraParameters::ui(self.camera.as_mut(), ui);
-										});
-								},
-
-								2 => {
-									// Application UI
-									ui.centered_and_justified(|ui| ui.heading(
-										self.activeApplication.as_ref().unwrap().title()
-									));
-									ui.separator();
-									let this = util::statify(self);
-									self.activeApplication.as_mut().unwrap().ui(ui, this);
-								},
-
-								_ => unreachable!("INTERNAL LOGIC ERROR: UI state corrupted!")
-							}
-						});
-					});
-					ui.allocate_space(ui.available_size());
-				});
-			});
+		// Draw the side panel
+		ui::sidepanel(self, eguiContext);
 
 
 		////
 		// 3D viewport
 
 		// Update viewport frame style
-		let mut frame = egui::Frame::central_panel(&ctx.style());
+		let mut frame = egui::Frame::central_panel(&eguiContext.style());
 		frame.inner_margin = egui::Margin::ZERO;
 
 		// Draw actual viewport panel
-		egui::CentralPanel::default().frame(frame).show(ctx, |ui|
+		egui::CentralPanel::default().frame(frame).show(eguiContext, |ui|
 		{
 			// Keep track of reasons to do a scene redraw
 			let mut redrawScene = self.continousRedrawRequests > 0;
 
 			// Update framebuffer size
 			let availableSpace_egui = ui.available_size();
-			let pxlsPerPoint = ctx.pixels_per_point();
+			let pxlsPerPoint = eguiContext.pixels_per_point();
 			let fbResolution = {
 				let pixelsEgui = (availableSpace_egui*pxlsPerPoint).ceil();
 				glm::vec2(pixelsEgui.x as u32, pixelsEgui.y as u32)

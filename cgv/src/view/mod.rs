@@ -326,7 +326,7 @@ pub trait Camera
 	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher>;
 }
 
-/// A camera that can take input and start full scene render passes with its desired projection and view matrices.
+/// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly. 
 pub trait CameraInteractor
 {
 	/// Report a short title for the interactor that it will be selectable by.
