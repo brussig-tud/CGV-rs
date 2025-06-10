@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{fs, collections::BTreeSet, path::{Path, PathBuf}, ffi::OsStr};
+use std::{fs, collections::BTreeSet, path::{Path, PathBuf}};
 
 // Anyhow library
 use anyhow::Result;
@@ -48,13 +48,15 @@ impl Setup
 	///
 	pub(crate) fn fromDirectory (dirpath: impl AsRef<Path>) -> Result<Self>
 	{
-		const NO_EXT: &OsStr = unsafe {&*("" as *const str as *const OsStr)};
 		let mut setup = Self::new();
-		for entry in fs::read_dir(dirpath)? {
+		for entry in fs::read_dir(dirpath)?
+		{
 			let entry = entry?;
-			if !entry.file_type()?.is_dir() && entry.path().extension().unwrap_or(NO_EXT) == "json" {
-				let newSetup = Self::fromFile(entry.path())?;
-				setup.merge(newSetup);
+			if !entry.file_type()?.is_dir() {
+				if let Some(extension) =  entry.path().extension() && extension == "json" {
+					let newSetup = Self::fromFile(entry.path())?;
+					setup.merge(newSetup);
+				}
 			}
 		}
 		Ok(setup)
