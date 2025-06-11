@@ -37,30 +37,30 @@ pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 		egui::ScrollArea::horizontal().show(ui, |ui|
 		{
 			egui::menu::bar(ui, |ui|
-				{
-					// The global [ESC] quit shortcut
-					let quit_shortcut =
-						egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape);
-					if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+			{
+				// The global [ESC] quit shortcut
+				let quit_shortcut = egui::KeyboardShortcut::new(
+					egui::Modifiers::NONE, egui::Key::Escape
+				);
+				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+					player.exit(ui.ctx());
+				}
+
+				// Menu bar
+				ui.menu_button("File", |ui| {
+					ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+					#[cfg(not(target_arch="wasm32"))]
+					if ui.add(
+						egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
+					).clicked() {
 						player.exit(ui.ctx());
 					}
-
-					// Menu bar
-					ui.menu_button("File", |ui| {
-						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-						#[cfg(not(target_arch="wasm32"))]
-						if ui.add(
-							egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
-						).clicked()
-						{
-							player.exit(ui.ctx());
-						}
-						#[cfg(target_arch="wasm32")]
+					#[cfg(target_arch="wasm32")]
 						ui.label("<nothing here>");
-					});
-					ui.separator();
+				});
+				ui.separator();
 
-					/* Dark/Light mode toggle */ {
+				/* Dark/Light mode toggle */ {
 					let menuIcon = if ui.ctx().style().visuals.dark_mode {DARK_ICON} else {LIGHT_ICON};
 					ui.menu_button(menuIcon, |ui| {
 						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
@@ -78,30 +78,30 @@ pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 						}
 					});
 				}
-					ui.separator();
+				ui.separator();
 
-					// App switcher
-					// - player settings
-					if ui.selectable_label(player.activeSidePanel==0, "Player").clicked() {
+				// App switcher
+				// - player settings
+				if ui.selectable_label(player.activeSidePanel==0, "Player").clicked() {
+					player.activeSidePanel = 0;
+				}
+				// - view settings
+				if ui.selectable_label(player.activeSidePanel==1, "View").clicked() {
+					player.activeSidePanel = 1;
+				}
+				// - applications
+				/*for (idx, app) in player.applications.iter().enumerate()
+				{
+					if ui.selectable_label(player.activeSidePanel==0, "Camera").clicked() {
 						player.activeSidePanel = 0;
 					}
-					// - view settings
-					if ui.selectable_label(player.activeSidePanel==1, "View").clicked() {
-						player.activeSidePanel = 1;
-					}
-					// - applications
-					/*for (idx, app) in player.applications.iter().enumerate()
-					{
-						if ui.selectable_label(player.activeSidePanel==0, "Camera").clicked() {
-							player.activeSidePanel = 0;
-						}
-					}*/
-					if ui.selectable_label(
-						player.activeSidePanel==2, player.activeApplication.as_ref().unwrap().title()
-					).clicked() {
-						player.activeSidePanel = 2;
-					}
-				});
+				}*/
+				if ui.selectable_label(
+					player.activeSidePanel==2, player.activeApplication.as_ref().unwrap().title()
+				).clicked() {
+					player.activeSidePanel = 2;
+				}
+			});
 		})
 	);
 }
