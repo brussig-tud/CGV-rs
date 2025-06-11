@@ -6,11 +6,16 @@ edition.workspace = true
 [dependencies]
 tracing = {version="*", optional=true}
 wgpu = {version="24.0.5", optional=true, features=["spirv"]}
+anyhow = "*"
+cgv-util = {path="../cgv-util"}
+
+[target.'cfg(not(target_os="windows"))'.dependencies]
 slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
 	"copy_libs", "download_slang_binaries", "build_slang_from_source"
 ]}
-anyhow = "*"
-cgv-util = {path="../cgv-util"}
+
+[target.'cfg(target_os="windows")'.dependencies]
+slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=["copy_libs"]}
 
 [features]
 default = []
