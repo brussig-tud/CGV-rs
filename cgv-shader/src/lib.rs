@@ -30,7 +30,7 @@ pub mod slang;
 //
 
 // Standard library
-/* nothing here yet */
+use std::sync::LazyLock;
 
 // Bitcode library
 use cgv_util::bitcode;
@@ -79,7 +79,7 @@ impl std::fmt::Display for SourceType {
 //
 
 /// Determine the most suitable shader compilation target for the current target platform.
-#[inline]
+#[inline(always)]
 pub fn mostSuitableCompilationTarget () -> CompilationTarget
 {
 	// WebGPU/WASM
@@ -98,24 +98,28 @@ pub fn mostSuitableCompilationTarget () -> CompilationTarget
 	}
 }
 
+/// Return a list containing just the single most suitable shader compilation target for the current target platform.
+#[inline(always)]
+pub fn mostSuitableCompilationTargetAsSlice () -> &'static [CompilationTarget] {
+	static COMPILATION_TARGET: LazyLock<[CompilationTarget; 1]> = LazyLock::new(
+		||  [mostSuitableCompilationTarget()]
+	);
+	COMPILATION_TARGET.as_slice()
+}
+
 /// Return a list of feasible shader compilation target for the current target platform, from most to least suitable.
-#[inline]
+#[inline(always)]
 pub fn feasibleCompilationTargets () -> &'static [CompilationTarget]
 {
-	static COMPILATION_TARGETS: &[CompilationTarget] = {
-		// WebGPU/WASM
-		#[cfg(target_arch="wasm32")] {
-			&[CompilationTarget::WGSL, CompilationTarget::SPIRV(false)]
-		}
-		// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
-		#[cfg(not(target_arch="wasm32"))] {
-			#[cfg(debug_assertions)] {
-				&[CompilationTarget::SPIRV(true), CompilationTarget::WGSL]
-			}
-			#[cfg(not(debug_assertions))] {
-				&[CompilationTarget::SPIRV(false), CompilationTarget::WGSL]
-			}
-		}
-	};
-	COMPILATION_TARGETS
+	// WebGPU/WASM
+	#[cfg(target_arch="wasm32")]
+		const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::WGSL, CompilationTarget::SPIRV(false)];
+
+	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
+	#[cfg(all(not(target_arch="wasm32"),debug_assertions))]
+		const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::SPIRV(true), CompilationTarget::WGSL];
+	#[cfg(all(not(target_arch="wasm32"),not(debug_assertions)))]
+		const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::SPIRV(false), CompilationTarget::WGSL];
+
+	COMPILATION_TARGETS.as_slice()
 }

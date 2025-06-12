@@ -55,7 +55,8 @@ pub fn prepareShaders (
 
 	// Determine module source types if none were specified
 	let slangContexts = shader::slang::createContextsForTargets(
-		moduleSourceTargets.unwrap_or_else(|| shader::feasibleCompilationTargets()), buildSetup.shaderPath().as_slice()
+		moduleSourceTargets.unwrap_or(&[shader::mostSuitableCompilationTarget()]),
+		buildSetup.shaderPath().as_slice()
 	)?;
 
 	// Recurse through provided shader directory and package each .slang shader encountered that is not in a skipped
@@ -80,7 +81,7 @@ pub fn prepareShaders (
 			println!("cargo::warning=tgtPath: {}", tgtPath.display());
 			println!("cargo::warning=tgtPrnt: {}", tgtParent.display());*/
 			fs::create_dir_all(tgtParent)?;
-			let package = shader::Package::fromSlangMultipleContexts(&slangContexts, srcPath, None)?;
+			let package = shader::Package::fromSlangMultiple(&slangContexts, srcPath, None)?;
 			package.writeToFile(&tgtPath)?;
 			dependOnGeneratedFile(tgtPath)?;
 			Ok(())

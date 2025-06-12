@@ -192,7 +192,7 @@ impl Package
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
 	/// several instances for different [source types](SourceType).
 	#[cfg(feature="slang_runtime")]
-	pub fn fromSlangMultipleContexts (
+	pub fn fromSlangMultiple (
 		slangContexts: &[&slang::Context], filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self>
 	{
@@ -212,7 +212,7 @@ impl Package
 	pub fn fromSlang (
 		slangContext: &slang::Context, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self> {
-		Self::fromSlangMultipleContexts(&[slangContext], filename, entryPoints)
+		Self::fromSlangMultiple(&[slangContext], filename, entryPoints)
 	}
 
 	/// Add an instance of the program for the given source type to the package. If there is already an instance for
