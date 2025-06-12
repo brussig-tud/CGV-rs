@@ -26,10 +26,10 @@ static TARGET_TRIPLE_CARGO: LazyLock<TargetTriple> = LazyLock::new(||
 	TargetTriple::fromString(env!("CGV_TARGET_TRIPLE_CARGO").to_owned()).unwrap_or_else(|err| panic!("{}", err))
 );
 
-/// Typed description of the platform the module was built for according the build-time values of the *Cargo* `TARGET`
-/// environment variable.
+/// Typed description of the platform the module was built for according to the build-time values of the *Cargo*
+/// `TARGET` environment variable.
 static CGV_PLATFORM: LazyLock<SupportedPlatform> = LazyLock::new(||
-	SupportedPlatform::fromTargetTriple(&TARGET_TRIPLE_CARGO).unwrap_or_else(|err| panic!("{}", err))
+	SupportedPlatform::fromTargetTriple(&TARGET_TRIPLE_CARGO, None).unwrap_or_else(|err| panic!("{}", err))
 );
 
 
@@ -41,7 +41,7 @@ static CGV_PLATFORM: LazyLock<SupportedPlatform> = LazyLock::new(||
 
 /// Enum of supported ARM sub-architectures.
 #[allow(non_camel_case_types)]
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum Aarch32SubArchitecture {
 	Generic, v7, v7a, v7k, v7r, v7s, v8r
 }
@@ -50,7 +50,7 @@ pub use Aarch32SubArchitecture as ARM32Sub;
 
 /// Enum of supported ARM64 sub-architectures.
 #[allow(non_camel_case_types)]
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum Aarch64SubArchitecture {
 	Generic, be, e, ec,
 }
@@ -59,7 +59,7 @@ pub use Aarch64SubArchitecture as ARM64Sub;
 
 /// Enum of supported x86_64 sub-architectures.
 #[allow(non_camel_case_types)]
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum X86_64SubArchitecture {
 	Generic, h
 }
@@ -67,7 +67,7 @@ pub enum X86_64SubArchitecture {
 pub use X86_64SubArchitecture as X64Sub;
 
 /// Enum of supported platform architectures.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum PlatformArchitecture
 {
 	/// Intel 686, also known as x86 (32bit).
@@ -91,28 +91,35 @@ pub enum PlatformArchitecture
 	/// feature.
 	Wasm64
 }
+impl PlatformArchitecture {
+	/// `true` if the architecture is from the WebAssembly family, `false` otherwise.
+	#[inline(always)]
+	pub fn isWasm (self) -> bool {
+		self == Self::Wasm32 || self == Self::Wasm64
+	}
+}
 
 /// Enum of supported vendors. The exact semantics of each vendor are ambiguous and not very rigorously defined,
 /// therefore, no documentation is given for the entries.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum PlatformVendor {
 	Unknown, Linux, Apple, PC, Win7
 }
 
 /// Enum of supported ABIs of the *Apple* *iOS* system.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum AppleiOSABI {
 	Generic, MacABI, Sim
 }
 
 /// Enum of supported ABIs of the *Apple* *iOS* system.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum AppleEmbeddedABI {
 	Generic, Sim
 }
 
 /// Enum of supported *Windows* ABIs.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum WindowsABI
 {
 	/// *Windows* PE executable linked against the *Microsoft* *Visual C* runtime.
@@ -126,7 +133,7 @@ pub enum WindowsABI
 }
 
 /// Enum of supported *Linux* ABIs.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum LinuxABI {
 	/// Linux executable linked against *GNU* glibc.
 	GNU,
@@ -136,9 +143,12 @@ pub enum LinuxABI {
 }
 
 /// Enum of supported systems.
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum PlatformSystem
 {
+	/// An *unknown* system. More often than not actually means a *generic* system.
+	Unknown,
+
 	/// *Darwin*, the common OS core of *Apple* operating systems (usable by desktop apps only).
 	Darwin,
 
@@ -171,7 +181,7 @@ pub enum PlatformSystem
 
 /// Representation of the [target triple](https://doc.rust-lang.org/cargo/appendix/glossary.html#target) that allows
 /// easy individual access to all (sub-)components of the triple.
-#[derive(Debug)]
+#[derive(Debug,Eq)]
 pub struct TargetTriple<'this> {
 	full: String,
 	arch: &'this str,
@@ -258,6 +268,11 @@ impl FromStr for TargetTriple<'_> {
 		Self::fromString(triple.to_owned())
 	}
 }
+impl PartialEq<TargetTriple<'_>> for TargetTriple<'_> {
+	fn eq(&self, other: &TargetTriple<'_>) -> bool {
+		self.full == other.full
+	}
+}
 impl Clone for TargetTriple<'_>
 {
 	#[inline(always)]
@@ -294,17 +309,27 @@ impl std::fmt::Display for TargetTriple<'_> {
 	}
 }
 
-/// A typed representation of a platform that *CGV-rs* explicitly supports.
-#[derive(Debug,Clone,Copy)]
-pub struct SupportedPlatform {
-	arch: PlatformArchitecture,
-	vendor: PlatformVendor,
-	sys: PlatformSystem
+/// A typed representation of a platform that *CGV-rs* explicitly supports, following the [`TargetTriple`] scheme.
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
+pub struct SupportedPlatform
+{
+	/// The *architecture* of the platform.
+	pub arch: PlatformArchitecture,
+
+	/// The *vendor* indicator of the platform.
+	pub vendor: PlatformVendor,
+
+	/// The *system* indicator of the platform.
+	pub sys: PlatformSystem,
+
+	/// If `Some`, indicates whether the platform was targeted in a debug build. If `None`, then this information is
+	/// simply not available or does not apply to the context.
+	pub debug: Option<bool>
 }
 impl SupportedPlatform
 {
-	/// Create the platform representation from a [`TargetTripe'] descriptor.
-	pub fn fromTargetTriple (triple: &TargetTriple) -> Result<Self>
+	/// Create the platform representation from a [`TargetTriple`] descriptor.
+	pub fn fromTargetTriple (triple: &TargetTriple, debug: Option<bool>) -> Result<Self>
 	{
 		// Determine architecture
 		let arch = match triple.arch
@@ -348,7 +373,7 @@ impl SupportedPlatform
 			"win7"    => PlatformVendor::Win7,
 
 			// Unsupported
-			_ => return Err(anyhow!("Unsupported platform vendor: {}", triple.arch))
+			_ => return Err(anyhow!("Unsupported platform vendor: {}", triple.vendor))
 		};
 
 		// Determine system
@@ -359,7 +384,7 @@ impl SupportedPlatform
 		// - actual parsing
 		let sys = match triple.sys
 		{
-			// Aarch64
+			"unknown" => PlatformSystem::Unknown,
 			"darwin"  => PlatformSystem::Darwin,
 			"linux"   => match triple.abi {
 				"gnu"    => PlatformSystem::Linux(LinuxABI::GNU),
@@ -370,7 +395,7 @@ impl SupportedPlatform
 				"msvc"   => PlatformSystem::Windows(WindowsABI::MSVC),
 				"gnu"    => PlatformSystem::Windows(WindowsABI::GNU),
 				"gnullvm"=> PlatformSystem::Windows(WindowsABI::UCRT),
-				_        => return unsupportedABI(triple.sys, triple.abi)
+				  _      => return unsupportedABI(triple.sys, triple.abi)
 			},
 			"ios"     => match triple.abi {
 				""       => PlatformSystem::iOS(AppleiOSABI::Generic),
@@ -387,27 +412,40 @@ impl SupportedPlatform
 				""       => PlatformSystem::TVOS(AppleEmbeddedABI::Generic),
 				"sim"    => PlatformSystem::TVOS(AppleEmbeddedABI::Sim),
 				  _      => return unsupportedABI(triple.sys, triple.abi)
-			}
+			},
 
 			// Unsupported
-			_ => return Err(anyhow!("Unsupported platform system: {}", triple.arch))
+			_ => return Err(anyhow!("Unsupported platform system: {}", triple.sys))
 		};
 
 		// Done!
-		Ok(Self { arch, vendor, sys })
+		Ok(Self { arch, vendor, sys, debug })
 	}
 
 	/// Create the platform representation from a full target triple descriptor string. This is equivalent to
 	/// calling `Self::fromTargetTriple(SupportedPlatform::fromString(...))`
 	#[inline(always)]
-	pub fn fromString (triple: String) -> Result<Self> {
-		Self::fromTargetTriple(&TargetTriple::fromString(triple)?)
+	pub fn fromString (triple: String, debug: Option<bool>) -> Result<Self> {
+		Self::fromTargetTriple(&TargetTriple::fromString(triple)?, debug)
+	}
+
+	/// This is merely a convenience shorthand for [`Self::arch::isWasm`](PlatformArchitecture::isWasm).
+	#[inline(always)]
+	pub fn isWasm (&self) -> bool {
+		self.arch.isWasm()
+	}
+
+	/// Evaluates to `true` if and only if [`Self::debug`] is `Some(true)`. Evaluates to `false` in all other cases.
+	#[inline(always)]
+	pub fn isDebug (&self) -> bool {
+		self.debug.unwrap_or(false)
 	}
 }
 impl FromStr for SupportedPlatform {
 	type Err = anyhow::Error;
+
 	fn from_str (triple: &str) -> anyhow::Result<Self> {
-		Self::fromString(triple.to_owned())
+		Self::fromString(triple.to_owned(), None)
 	}
 }
 
