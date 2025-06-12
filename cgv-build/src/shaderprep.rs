@@ -55,7 +55,9 @@ pub fn prepareShaders (
 
 	// Determine module source types if none were specified
 	let slangContexts = shader::slang::createContextsForTargets(
-		moduleSourceTargets.unwrap_or(&[shader::mostSuitableCompilationTarget()]),
+		moduleSourceTargets.unwrap_or(&[shader::mostSuitableCompilationTargetForPlatform(
+			cargoBuildTargetPlatform()
+		)]),
 		buildSetup.shaderPath().as_slice()
 	)?;
 

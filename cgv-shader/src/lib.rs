@@ -30,10 +30,14 @@ pub mod slang;
 //
 
 // Standard library
-use std::sync::LazyLock;
+/* nothing here yet */
 
 // Bitcode library
 use cgv_util::bitcode;
+
+// Local imports
+use cgv_util as util;
+use util::meta;
 
 
 
@@ -78,7 +82,7 @@ impl std::fmt::Display for SourceType {
 // Functions
 //
 
-/// Determine the most suitable shader compilation target for the current target platform.
+/// Determine the most suitable shader compilation target for the platform the module was built for.
 #[inline(always)]
 pub fn mostSuitableCompilationTarget () -> CompilationTarget
 {
@@ -98,16 +102,23 @@ pub fn mostSuitableCompilationTarget () -> CompilationTarget
 	}
 }
 
-/// Return a list containing just the single most suitable shader compilation target for the current target platform.
+/// Determine the most suitable shader compilation target for the given platform.
 #[inline(always)]
-pub fn mostSuitableCompilationTargetAsSlice () -> &'static [CompilationTarget] {
-	static COMPILATION_TARGET: LazyLock<[CompilationTarget; 1]> = LazyLock::new(
-		||  [mostSuitableCompilationTarget()]
-	);
-	COMPILATION_TARGET.as_slice()
+pub fn mostSuitableCompilationTargetForPlatform (platform: &meta::SupportedPlatform) -> CompilationTarget
+{
+	// WebGPU/WASM
+	if platform.isWasm() {
+		CompilationTarget::WGSL
+	}
+	// All native backends
+	else {
+		// Currently always considers SPIR-V preferable even on non-Vulkan backends
+		CompilationTarget::SPIRV(platform.isDebug())
+	}
 }
 
-/// Return a list of feasible shader compilation target for the current target platform, from most to least suitable.
+/// Return a list of feasible shader compilation target for the platform the module was built for, from most to least
+/// suitable.
 #[inline(always)]
 pub fn feasibleCompilationTargets () -> &'static [CompilationTarget]
 {
@@ -121,5 +132,28 @@ pub fn feasibleCompilationTargets () -> &'static [CompilationTarget]
 	#[cfg(all(not(target_arch="wasm32"),not(debug_assertions)))]
 		const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::SPIRV(false), CompilationTarget::WGSL];
 
-	COMPILATION_TARGETS.as_slice()
+	&COMPILATION_TARGETS
+}
+
+/// Return a list of feasible shader compilation target for the given platform, from most to least suitable.
+#[inline(always)]
+pub fn feasibleCompilationTargetsForPlatform (platform: &meta::SupportedPlatform) -> &'static [CompilationTarget]
+{
+	// WebGPU/WASM
+	if platform.isWasm() {
+		const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::WGSL, CompilationTarget::SPIRV(false)];
+		&COMPILATION_TARGETS
+	}
+	// All native backends
+	else {
+		// Currently always considers SPIR-V preferable even on non-Vulkan backends
+		if !platform.isDebug() {
+			const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::SPIRV(false), CompilationTarget::WGSL];
+			&COMPILATION_TARGETS
+		}
+		else {
+			const COMPILATION_TARGETS: [CompilationTarget; 2] = [CompilationTarget::SPIRV(true), CompilationTarget::WGSL];
+			&COMPILATION_TARGETS
+		}
+	}
 }
