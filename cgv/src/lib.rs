@@ -91,8 +91,15 @@ pub use cgv_util as util; // re-export
 // Populate the vault
 #[cfg(not(target_arch="wasm32"))]
 #[ctor::ctor]
-fn initTracingProxy () {
-	initTracing()
+fn initTracingProxy ()
+{
+	#[cfg(target_os="windows")]
+		let ansiTermResult = ansi_term::enable_ansi_support();
+	initTracing();
+	#[cfg(target_os="windows")]
+		if let Err(err) = ansiTermResult {
+			tracing::error!("Failed to enable ANSI terminal support: {err}");
+		}
 }
 
 // Encapsulate common init tasks for the tracing crate

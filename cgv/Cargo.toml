@@ -32,6 +32,9 @@ alum = "*"
 cgv-util = {path="../cgv-util"}
 cgv-shader = {path="../cgv-shader", features=["wgpu_runtime"]}
 
+[target.'cfg(target_os="windows")'.dependencies]
+ansi_term = "*"
+
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
 tracing-wasm = "*"
