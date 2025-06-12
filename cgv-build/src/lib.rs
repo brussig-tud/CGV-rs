@@ -209,7 +209,7 @@ pub fn debugWithVsCode (halt: bool) -> Result<()>
 	}
 }
 
-/// Reference a wrapper for the target platform of the currently running *Cargo* build.
+/// Reference the target triple of the currently running *Cargo* build.
 pub fn cargoBuildTargetTriple() -> &'static util::meta::TargetTriple<'static> {
 	static TARGET_TRIPLE: LazyLock<util::meta::TargetTriple> = LazyLock::new(|| {
 		let targetTriple = env::var("TARGET").expect("`TARGET` should be defined by Cargo");
@@ -221,10 +221,11 @@ pub fn cargoBuildTargetTriple() -> &'static util::meta::TargetTriple<'static> {
 }
 
 /// Reference a typed wrapper for the target platform of the currently running *Cargo* build.
-pub fn cargoBuildTargetPlatform() -> &'static util::meta::SupportedPlatform {
+pub fn cargoBuildTargetPlatform() -> &'static util::meta::SupportedPlatform
+{
 	static TARGET_PLATFORM: LazyLock<util::meta::SupportedPlatform> = LazyLock::new(|| {
 		let targetTriple = cargoBuildTargetTriple();
-		util::meta::SupportedPlatform::fromTargetTriple(targetTriple).expect(
+		util::meta::SupportedPlatform::fromTargetTriple(targetTriple, Some(getCargoDebugBuild().unwrap())).expect(
 			format!("target triple received from Cargo appears to be malformed: {targetTriple}").as_str()
 		)
 	});
