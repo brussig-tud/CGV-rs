@@ -90,7 +90,6 @@ pub fn mostSuitableCompilationTarget () -> CompilationTarget
 	#[cfg(target_arch="wasm32")] {
 		CompilationTarget::WGSL
 	}
-
 	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
 	#[cfg(not(target_arch="wasm32"))] {
 		#[cfg(debug_assertions)] {
@@ -103,7 +102,6 @@ pub fn mostSuitableCompilationTarget () -> CompilationTarget
 }
 
 /// Determine the most suitable shader compilation target for the given platform.
-#[inline(always)]
 pub fn mostSuitableCompilationTargetForPlatform (platform: &meta::SupportedPlatform) -> CompilationTarget
 {
 	// WebGPU/WASM
@@ -136,7 +134,6 @@ pub fn feasibleCompilationTargets () -> &'static [CompilationTarget]
 }
 
 /// Return a list of feasible shader compilation target for the given platform, from most to least suitable.
-#[inline(always)]
 pub fn feasibleCompilationTargetsForPlatform (platform: &meta::SupportedPlatform) -> &'static [CompilationTarget]
 {
 	// WebGPU/WASM
