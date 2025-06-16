@@ -92,7 +92,7 @@ pub trait Generator
 
 	fn ensureShaderModule (context: &Context) -> Option<wgpu::ShaderModule>;
 
-	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass;
+	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_>;
 
 	fn ensureComputePipeline (
 		context: &Context, textureFormat: wgpu::TextureFormat, dimensionality: wgpu::TextureViewDimension

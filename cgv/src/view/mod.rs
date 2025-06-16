@@ -297,7 +297,7 @@ pub trait Camera
 	fn update (&mut self) -> bool;
 
 	/// Make the camera declare the global passes it needs to perform to produce its output image.
-	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration];
+	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration<'_>];
 
 	/// Reference the framebuffer containing the rendering of the scene acquired by the camera.
 	fn framebuffer (&self) -> &hal::Framebuffer;
@@ -323,7 +323,7 @@ pub trait Camera
 	/// # Returns
 	///
 	/// `Some` dispatcher if the camera can provide depth for the given pixel coordinates, `None` otherwise.
-	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher>;
+	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>;
 }
 
 /// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly. 
