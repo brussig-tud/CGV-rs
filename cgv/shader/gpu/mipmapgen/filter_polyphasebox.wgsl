@@ -16,10 +16,10 @@ fn filterMipmap2D (
 {
 	let offset = vec2<u32>(0, 1);
 	let color = (
-		textureLoad(prevMipmap, 2*id.xy + offset.xx, 0) +
-		textureLoad(prevMipmap, 2*id.xy + offset.xy, 0) +
-		textureLoad(prevMipmap, 2*id.xy + offset.yx, 0) +
-		textureLoad(prevMipmap, 2*id.xy + offset.yy, 0)
+		textureLoad(srcTexture, 2*id.xy + offset.xx, 0) +
+		textureLoad(srcTexture, 2*id.xy + offset.xy, 0) +
+		textureLoad(srcTexture, 2*id.xy + offset.yx, 0) +
+		textureLoad(srcTexture, 2*id.xy + offset.yy, 0)
 	) * 0.25;
 	textureStore(curMipmap, id.xy, color);
 }
