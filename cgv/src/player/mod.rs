@@ -307,9 +307,16 @@ impl Player
 		tracing::info!("Starting up...");
 		tracing::info!("Platform: {}", util::meta::platformTargetTriple());
 
+		// Prepare default player icon
+		let icon = image::load_from_memory(util::sourceBytes!("/res/ico/defaultIcon.png"))?;
+
 		// Run the event loop
 		let options = eframe::NativeOptions {
-			viewport: egui::ViewportBuilder::default().with_inner_size([1216., 800.]),
+			viewport: egui::ViewportBuilder::default()
+				.with_inner_size([1216., 800.])
+				.with_icon(egui::viewport::IconData {
+					rgba: icon.as_bytes().to_owned(), width: icon.width(), height: icon.height()
+				}),
 			vsync: false,
 			multisampling: 0,
 			//depth_buffer: 0,
