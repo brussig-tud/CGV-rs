@@ -4,6 +4,9 @@ name = "cgv"
 version.workspace = true
 edition.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = [ "--html-in-header", "katex-header.html" ]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -27,6 +30,7 @@ eframe = {version="0.31.1", default-features=false, features=[
 ]}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
+nalgebra = "*"
 nalgebra-glm = "*"
 alum = "*"
 cgv-util = {path="../cgv-util"}
