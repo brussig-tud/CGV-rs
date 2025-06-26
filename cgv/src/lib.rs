@@ -11,6 +11,7 @@
 #![allow(non_snake_case)]
 
 // Experimental language features
+#![feature(associated_type_defaults)] // required throughout data::* modules
 #![feature(generic_const_exprs)] // required for util::Phony
 
 
@@ -38,11 +39,17 @@ pub mod hal;
 /// The module providing implementations for various common gpu compute tasks.
 pub mod gpu;
 
+/// The module containing high-level rendering facilities.
+pub mod render;
+
 /// The module containing all viewing functionality.
 pub mod view;
 
 /// The module providing various reusable UI components
 pub mod gui;
+
+/// The module providing functionality related to data handling
+pub mod data;
 
 /// Re-export cgv-shader
 pub use cgv_shader as shader;
