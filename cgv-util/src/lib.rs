@@ -161,7 +161,7 @@ impl<'this, T: 'this> BorrowVec<'this, T>
 	#[inline(always)]
 	pub fn new (vec: Vec<T>) -> Self {
 		let slice = unsafe {
-			// Safety: we move ownership of this memory into a struct that cannot outlive this memory, so the self-
+			// SAFETY: we move ownership of this memory into a struct that cannot outlive this memory, so the self-
 			//         references to it that this struct will hold cannot outlive it either.  Also, BorrowVec hides all
 			//         its fields inside the private scope and defines no mutating methods, meaning Rust's aliasing
 			//         rules are effectively never violated.

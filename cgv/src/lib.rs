@@ -48,6 +48,9 @@ pub mod view;
 /// The module providing various reusable UI components
 pub mod gui;
 
+/// The module providing assorted maths utilities
+pub mod math;
+
 /// The module providing functionality related to data handling
 pub mod data;
 

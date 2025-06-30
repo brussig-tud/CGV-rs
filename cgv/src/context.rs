@@ -124,7 +124,7 @@ impl Context
 			// We already have a sampler with this config
 			let sampler = util::notsafe::UncheckedRef::new(sampler.value().as_ref());
 			unsafe {
-				// Safety: - SAMPLER_CACHE lives in the context which is considered static, so it may report 'static
+				// SAFETY: - SAMPLER_CACHE lives in the context which is considered static, so it may report 'static
 				//           references
 				//         - the values are boxed, so their addresses never change even when iterators are invalidated
 				sampler.as_ref()
@@ -137,7 +137,7 @@ impl Context
 			let sampler_unchecked = util::notsafe::UncheckedRef::new(sampler.as_ref());
 			self.samplerCache.insert(queryDesc, sampler);
 			unsafe {
-				// Safety: - the values are boxed, so their addresses never change, even when we move the newly
+				// SAFETY: - the values are boxed, so their addresses never change, even when we move the newly
 				//           constructed items into the cache
 				//         - SAMPLER_CACHE, which now ownes the box, lives in the context which is considered static, so
 				//           we may keep 'static references to its content

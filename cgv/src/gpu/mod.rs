@@ -1,4 +1,18 @@
 
+
+//////
+//
+// Module definitions
+//
+
+/// Submodule providing linear data processing functionality
+pub mod data;
+
+/// Submodule providing utilities for fast mip map computation
+pub mod mipmap;
+
+
+
 //////
 //
 // Imports
@@ -12,16 +26,6 @@ use wgpu;
 
 // Local imports
 use crate::*;
-
-
-
-//////
-//
-// Module definitions
-//
-
-/// Submodule providing utilities for fast mip map computation
-pub mod mipmap;
 
 
 

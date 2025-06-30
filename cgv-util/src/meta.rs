@@ -285,7 +285,7 @@ impl Clone for TargetTriple<'_>
 	fn clone_from(&mut self, source: &Self) {
 		self.full = source.full.clone();
 		let offset = unsafe {
-			// Safety: We are violating the "from the same allocation" invariant here, but we know the behavior of the
+			// SAFETY: We are violating the "from the same allocation" invariant here, but we know the behavior of the
 			//         platforms we support (desktop[x86,arm] and WASM) and there it works exactly like we expect. The
 			//         other invariants hold, most notably "distance must be multiple of size of T>" since we are
 			//         dealing with T=u8 here which is the smallest possible address difference on all supported
@@ -293,7 +293,7 @@ impl Clone for TargetTriple<'_>
 			self.full.as_ptr().offset_from(source.full.as_ptr())
 		};
 		unsafe {
-			// Safety: The full string is identical to the input one, so we can use all the same indices and offsets
+			// SAFETY: The full string is identical to the input one, so we can use all the same indices and offsets
 			//         from the input. Also, TargetTriple hides all its fields inside the private scope and defines no
 			//         mutating methods, meaning Rust's aliasing rules are effectively never violated.
 			self.arch = notsafe::offsetStr(&source.arch, offset);

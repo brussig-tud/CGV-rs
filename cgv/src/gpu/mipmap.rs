@@ -107,7 +107,7 @@ pub trait Generator
 				pipelineInfo.value().as_ref()
 			);
 			unsafe {
-				// Safety: - COMPUTE_PIPELINE_CACHE is static, so it may report 'static references
+				// SAFETY: - COMPUTE_PIPELINE_CACHE is static, so it may report 'static references
 				//         - the values are boxed, so their addresses never change even when iterators are invalidated
 				pipelineInfo.as_ref()
 			}
@@ -167,7 +167,7 @@ pub trait Generator
 			);
 			COMPUTE_PIPELINE_CACHE.insert(query, pipelineInfo);
 			unsafe {
-				// Safety: - the values are boxed, so their addresses never change, even when we move the newly
+				// SAFETY: - the values are boxed, so their addresses never change, even when we move the newly
 				//           constructed items into the cache
 				pipelineInfo_unchecked.as_ref()}
 		}
