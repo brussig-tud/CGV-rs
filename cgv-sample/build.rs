@@ -12,12 +12,12 @@ fn main() -> cgv_build::Result<()>
 
 	// Apply CGV-rs build setup
 	let buildSetup = cgv_build::applyBuildSetup()?;
-
-	// Deploy a web application if the target architecture is WASM
-	cgv_build::webDeployIfWasm("../pkg", &["Cargo.toml"])?;
 	
 	// Compile our shaders - TODO: work around internal compiler error when passing `None` subdirs to skip
 	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["derp"]))?;
+
+	// Deploy a web application if the target architecture is WASM
+	cgv_build::webDeployIfWasm("../pkg", &buildSetup, &["Cargo.toml"])?;
 
 	// Done!
 	Ok(())

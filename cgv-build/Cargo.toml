@@ -22,4 +22,3 @@ cgv-shader = {path="../cgv-shader", features=["slang_runtime"]}
 
 [features]
 default = []
-copy_libs = ["cgv-shader/copy_libs"]

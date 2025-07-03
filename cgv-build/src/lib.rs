@@ -83,7 +83,8 @@ static SCRIPT_START_TIME: std::time::SystemTime = {
 ////
 // WebDeployment
 
-pub struct WebDeployment {
+pub struct WebDeployment<'bs> {
+	buildSetup: &'bs Setup,
 	packageName: String,
 	niceName: String,
 	shortNiceName: String,
@@ -96,8 +97,7 @@ pub struct WebDeployment {
 
 /// A builder for setting the optional properties of the `index.html` template for web deployment.
 #[derive(Default)]
-pub struct WebDeploymentBuilder
-{
+pub struct WebDeploymentBuilder {
 	niceName: Option<String>,
 	shortNiceName: Option<String>,
 	faviconSourceDir: Option<PathBuf>
@@ -118,10 +118,10 @@ impl WebDeploymentBuilder
 		self
 	}
 
-	pub fn build (&self, packageName: String) -> WebDeployment
+	pub fn build<'bs> (&self, packageName: String, buildSetup: &'bs Setup) -> WebDeployment<'bs>
 	{
 		WebDeployment {
-			packageName,
+			buildSetup, packageName,
 
 			niceName: if let Some(niceName) = &self.niceName {
 				niceName.clone()
@@ -242,16 +242,15 @@ pub fn getSetupPath () -> &'static str {
 pub fn applyBuildSetup () -> Result<Setup>
 {
 	let buildSetupFolder = getCargoTargetDir()?.join(getSetupPath());
-	Ok(
-		if buildSetupFolder.exists() {
-			let setup = Setup::fromDirectory(buildSetupFolder)?;
-			setup.apply();
-			setup
-		}
-		else {
-			Setup::new()
-		}
-	)
+	if buildSetupFolder.join("cgv.json").exists() {
+		// Import everything (not just the 'cgv.json' main build setup)
+		let setup = Setup::fromDirectory(&buildSetupFolder)?;
+		setup.apply();
+		Ok(setup)
+	}
+	else {
+		panic!("CGV-rs build setup appears to have not yet been generated! Try re-running your build.")
+	}
 }
 
 /// Report the package name of the crate currently being built by *Cargo*.
@@ -433,7 +432,7 @@ pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> R
 }
 
 /// Deploy a CGV-rs WASM application to the given directory.
-pub fn performCgvWebDeployment (outputPath: &Path, webDeployment: WebDeployment) -> Result<()>
+pub fn performCgvWebDeployment (deployPath: &Path, webDeployment: WebDeployment) -> Result<()>
 {
 	// Inject rerun conditions
 	println!(
@@ -446,14 +445,22 @@ pub fn performCgvWebDeployment (outputPath: &Path, webDeployment: WebDeployment)
 	let siteWebmanifest = instantiateTemplate(templateFileSiteWebmanifest(), &webDeployment)?;
 
 	// Copy resources (also creates the deployment output folder)
-	util::fs::copyRecursively(webDeployment.faviconSourceDir, outputPath.join("res/favicon"))?;
+	util::fs::copyRecursively(webDeployment.faviconSourceDir, deployPath.join("res/favicon"))?;
 
 	// Write instantiated templates
-	fs::write(outputPath.join("index.html"), indexHtml)?;
-	fs::write(outputPath.join("site.webmanifest"), siteWebmanifest)?;
+	fs::write(deployPath.join("index.html"), indexHtml)?;
+	fs::write(deployPath.join("site.webmanifest"), siteWebmanifest)?;
+
+	// In case `slang_runtime` is enabled, deploy the Slang WASM build artifacts also
+	if webDeployment.buildSetup.cgvFeatures.slang_runtime {
+		let cargoTargetDir = getCargoTargetDir()?;
+		util::installFile(cargoTargetDir.join("slang-wasm.wasm"), deployPath)?;
+		util::installFile(cargoTargetDir.join("slang-wasm.js"), deployPath)?;
+		util::installFile(cargoTargetDir.join("interface.d.ts"), deployPath)?;
+	}
 
 	// De-confuse Cargo's rerun change detection
-	util::setTimestampRecursively(&outputPath, getScriptStartTime())?;
+	util::setTimestampRecursively(&deployPath, getScriptStartTime())?;
 
 	// Done!
 	Ok(())
@@ -469,7 +476,7 @@ pub fn performCgvWebDeployment (outputPath: &Path, webDeployment: WebDeployment)
 ///                                 monitoring rules, the calling build script must make explicit any locations it would
 ///                                 normally depend on being monitored automatically by *Cargo*. It can do so here if it
 ///                                 doesn't already do it elsewhere (passing in an empty slice is perfectly OK).
-pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> Result<()>
+pub fn webDeployIfWasm (deployPath: &str, buildSetup: &Setup, changeCheckedFilesOrDirs: &[&str]) -> Result<()>
 {
 	////
 	// Preamble
@@ -488,7 +495,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 	// Gather metadata
 
 	// First, parse output path
-	let outputPath = outputPath.parse::<PathBuf>()?;
+	let outputPath = deployPath.parse::<PathBuf>()?;
 
 	// Inject re-run decision dependencies
 	for dep in changeCheckedFilesOrDirs {
@@ -533,7 +540,7 @@ pub fn webDeployIfWasm (outputPath: &str, changeCheckedFilesOrDirs: &[&str]) -> 
 			builder.faviconSourceDir(faviconSourceDir.into());
 		}
 		// - build
-		builder.build(pkgName)
+		builder.build(pkgName, buildSetup)
 	};
 	performCgvWebDeployment(&outputPath, webDeployment)?;
 

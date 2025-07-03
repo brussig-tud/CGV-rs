@@ -56,7 +56,6 @@ cgv-build = {path="../cgv-build"}
 [features]
 default = ["wayland", "x11"]
 build_script_debug = []
-copy_libs = ["cgv-shader/copy_libs"]
 slang_runtime = ["cgv-shader/slang_runtime"]
 wayland = ["eframe/wayland"]
 x11 = ["eframe/x11"]

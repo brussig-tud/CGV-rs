@@ -151,6 +151,13 @@ pub fn downloadAndExtract (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>
 }
 
 ///
+pub fn dependOnCopiedFile (copySource: impl AsRef<Path>, filepath: impl AsRef<Path>) -> anyhow::Result<()> {
+	fs::copy(copySource.as_ref(), filepath.as_ref())?;
+	dependOnFile(copySource);
+	dependOnGeneratedFile(filepath)
+}
+
+///
 pub fn dependOnDownloadedFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<Path>) -> anyhow::Result<()> {
 	downloadToFile(url, &filepath)?;
 	dependOnGeneratedFile(filepath)
@@ -166,7 +173,16 @@ pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl As
 pub fn dependOnExtractedDirectory (archivePath: impl AsRef<crate::Path>, dirpath: impl AsRef<crate::Path>)
 -> Result<()> {
 	zip::extract(std::fs::File::open(archivePath.as_ref())?, dirpath.as_ref(), true)?;
+	dependOnFile(archivePath);
 	dependOnGeneratedDirectory(dirpath)
+}
+
+///
+pub fn installFile (filepath: impl AsRef<Path>, targetDir: impl AsRef<Path>) -> anyhow::Result<()> {
+	let targetFilepath = targetDir.as_ref().join(filepath.as_ref().file_name().unwrap());
+	fs::copy(filepath.as_ref(), &targetFilepath)?;
+	dependOnFile(filepath);
+	dependOnGeneratedFile(targetFilepath)
 }
 
 /// Check if the given [process output](std::process::Output) resulted from a successful command. On most platforms,

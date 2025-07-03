@@ -24,20 +24,31 @@ use crate::*;
 // Classes
 //
 
+/// Holds all CGV features
+#[derive(Default,serde::Serialize,serde::Deserialize)]
+pub struct CgvFeatures {
+	pub slang_runtime: bool,
+	pub wayland: bool,
+	pub x11: bool
+}
+impl CgvFeatures {
+	///
+	pub fn merge (&mut self, other: &Self) {
+		self.slang_runtime |= other.slang_runtime;
+		self.wayland |= other.wayland;
+		self.x11 |= other.x11;
+	}
+}
+
 /// Accumulates transitive build properties for crates participating in a *CGV-rs*-based build.
-#[derive(serde::Serialize,serde::Deserialize)]
+#[derive(Default,serde::Serialize,serde::Deserialize)]
 pub struct Setup {
+	pub cgvFeatures: CgvFeatures,
 	additionalLinkerFlags: BTreeSet<String>,
 	shaderPath: BTreeSet<PathBuf>,
 }
 impl Setup
 {
-	///
-	pub fn new() -> Self { Self {
-		additionalLinkerFlags: BTreeSet::new(),
-		shaderPath: BTreeSet::new(),
-	}}
-
 	///
 	pub(crate) fn fromFile (filename: impl AsRef<Path>) -> Result<Self> {
 		let setup = serde_json::from_reader(fs::File::open(&filename)?)?;
@@ -48,7 +59,7 @@ impl Setup
 	///
 	pub(crate) fn fromDirectory (dirpath: impl AsRef<Path>) -> Result<Self>
 	{
-		let mut setup = Self::new();
+		let mut setup = Self::default();
 		for entry in fs::read_dir(dirpath)?
 		{
 			let entry = entry?;
@@ -91,6 +102,7 @@ impl Setup
 
 	///
 	pub fn merge (&mut self, other: Self) {
+		self.cgvFeatures.merge(&other.cgvFeatures);
 		self.additionalLinkerFlags.extend(other.additionalLinkerFlags);
 		self.shaderPath.extend(other.shaderPath);
 	}
@@ -117,8 +129,8 @@ impl Setup
 	pub fn apply (&self)
 	{
 		// Accumulate linker flags into whitespace-separated string
-		let additionalLinkerFlags = self.additionalLinkerFlags.iter().fold(
-			String::new(), |flags, flag| format!("{flags} {flag}")
+		let additionalLinkerFlags = self.additionalLinkerFlags.iter().fold(String::new(),
+			|flags, flag| if flags.is_empty() { flag.to_owned() } else { format!("{flags} {flag}") }
 		);
 
 		// Emit flags string to Cargo

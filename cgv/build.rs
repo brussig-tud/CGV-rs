@@ -34,9 +34,13 @@ fn main() -> cgv_build::Result<()>
 	// Perform build operations
 
 	// Propagate our build setup (should be applied by dependent crates via cgv_build::applyBuildSetup())
-	let mut buildSetup = cgv_build::Setup::new();
+	let mut buildSetup = cgv_build::Setup::default();
+	// active features
+	buildSetup.cgvFeatures.slang_runtime = std::env::var("CARGO_FEATURE_SLANG_RUNTIME").is_ok();
+	buildSetup.cgvFeatures.wayland = std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok();
+	buildSetup.cgvFeatures.x11 = std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok();
 	// - linker flag in case we have the `copy_libs` feature
-	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && std::env::var("CARGO_FEATURE_COPY_LIBS").is_ok() {
+	if !cgv_build::isWindows()? && !cgv_build::isWasm()? && buildSetup.cgvFeatures.slang_runtime {
 		buildSetup.addLinkerFlag("-Wl,-rpath=$ORIGIN");
 	}
 	// - our shader path
