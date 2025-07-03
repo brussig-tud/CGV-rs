@@ -438,7 +438,7 @@ pub fn performCgvWebDeployment (outputPath: &Path, webDeployment: WebDeployment)
 	// Inject rerun conditions
 	println!(
 		"cargo::rerun-if-changed={}",
-		cgvBuildCrateWebResourcesDirectory().to_str().context("CGV-rs seems to appears to reside at a non-UTF-8 path")?
+		cgvBuildCrateWebResourcesDirectory().to_str().context("CGV-rs appears to reside at a non-UTF-8 path")?
 	);
 
 	// Instantiate templates
