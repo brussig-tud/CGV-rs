@@ -19,6 +19,7 @@ use std::default::Default;
 
 // CGV re-imports
 use cgv::{wgpu, glm, egui};
+#[cfg(target_arch="wasm32")] use cgv::tracing;
 
 // WGPU API
 use wgpu::util::DeviceExt;
@@ -155,6 +156,13 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		////
 		// Load resources
+
+		// Test Slang runtime compilation
+		#[cfg(target_arch="wasm32")] {
+			let moduleBytes = cgv::shader::slang::compileShader("HALLO");
+			tracing::info!("Compiled shader! Bytes:");
+			tracing::info!("{:?}", moduleBytes);
+		}
 
 		// The example shader
 		let shader = cgv::shader::Package::deserialize(

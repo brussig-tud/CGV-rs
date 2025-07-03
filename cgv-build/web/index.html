@@ -90,6 +90,14 @@
 		}
 	</style>
 	<script type="module">
+		// JavaScript bridge functions testing
+		window.slang_compileShader = function (moduleSourceCode) {
+			// We assume that moduleSrc is a String. Convert it into an Uint8Array
+			const encoder = new TextEncoder();
+			const arr = encoder.encode(moduleSourceCode);
+			console.log(arr);
+			return arr;
+		}
 		import init from './@PACKAGE_NAME@.js'
 		init().catch((error) => {
 			// Prevent the necessary control flow exception from showing up in the console

@@ -7,6 +7,10 @@
 // Standard library
 use std::path::Path;
 
+// Wasm-bindgen library
+#[cfg(target_arch="wasm32")]
+use wasm_bindgen::prelude::*;
+
 // Anyhow library
 use anyhow::*;
 use anyhow::Context as AnyhowContext;
@@ -227,6 +231,15 @@ impl Program
 	}
 }
 
+#[cfg(target_arch="wasm32")]
+#[wasm_bindgen]
+extern "C" {
+	fn slang_compileShader(moduleSourceCode: &str) -> Vec<u8>;
+}
+#[cfg(target_arch="wasm32")]
+pub fn compileShader(moduleSourceCode: &str) -> Vec<u8> {
+	slang_compileShader(moduleSourceCode)
+}
 
 
 //////
