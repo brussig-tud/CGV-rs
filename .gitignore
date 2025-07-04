@@ -8,3 +8,9 @@ pkg
 # IDE files
 /.idea
 /.vscode
+
+# CGV-rs specific: ignore Slang WASM artifacts in case they're being placed in the source tree to enable code completion
+# in IDEs when working on the standard web deployment 'index.html'
+/cgv-build/web/interface.d.ts
+/cgv-build/web/slang-wasm.js
+/cgv-build/web/slang-wasm.wasm

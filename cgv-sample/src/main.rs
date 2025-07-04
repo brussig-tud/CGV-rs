@@ -159,7 +159,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// Test Slang runtime compilation
 		#[cfg(target_arch="wasm32")] {
-			let moduleBytes = cgv::shader::slang::compileShader("HALLO");
+			let moduleBytes = cgv::shader::slang::testJsInterop("HALLO");
 			tracing::info!("Compiled shader! Bytes:");
 			tracing::info!("{:?}", moduleBytes);
 		}

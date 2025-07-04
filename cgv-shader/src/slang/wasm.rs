@@ -8,7 +8,6 @@
 use std::path::Path;
 
 // Wasm-bindgen library
-#[cfg(target_arch="wasm32")]
 use wasm_bindgen::prelude::*;
 
 // Anyhow library
@@ -146,14 +145,8 @@ impl Context
 	/// # Arguments
 	///
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn new (searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
-	{
-		#[cfg(not(target_arch="wasm32"))] {
-			Self::forTarget(CompilationTarget::SPIRV(cfg!(debug_assertions)), searchPath)
-		}
-		#[cfg(target_arch="wasm32")] {
-			Self::forTarget(CompilationTarget::WGSL, searchPath)
-		}
+	pub fn new (searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self> {
+		Self::forTarget(CompilationTarget::WGSL, searchPath)
 	}
 
 	/// Build a shader program from the given *Slang* source file.
@@ -231,29 +224,10 @@ impl Program
 	}
 }
 
-#[cfg(target_arch="wasm32")]
 #[wasm_bindgen]
 extern "C" {
-	fn slang_compileShader(moduleSourceCode: &str) -> Vec<u8>;
+	fn jsinterop_test(moduleSourceCode: &str) -> Vec<u8>;
 }
-#[cfg(target_arch="wasm32")]
-pub fn compileShader(moduleSourceCode: &str) -> Vec<u8> {
-	slang_compileShader(moduleSourceCode)
-}
-
-
-//////
-//
-// Functions
-//
-
-/// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
-/// these targets.
-pub fn createContextsForTargets<'a> (targets: &[CompilationTarget], shaderPath: &[impl AsRef<Path>])
--> Result<cgv_util::BorrowVec<'a, Context>> {
-	let mut contexts = Vec::<Context>::with_capacity(targets.len());
-	for &target in targets {
-		contexts.push(Context::forTarget(target, shaderPath)?);
-	}
-	Ok(contexts.into())
+pub fn testJsInterop(moduleSourceCode: &str) -> Vec<u8> {
+	jsinterop_test(moduleSourceCode)
 }

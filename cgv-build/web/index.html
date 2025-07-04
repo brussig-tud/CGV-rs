@@ -11,6 +11,7 @@
 	<link rel="shortcut icon" href="./res/favicon/favicon.ico" />
 	<link rel="apple-touch-icon" sizes="180x180" href="./res/favicon/apple-touch-icon.png" />
 	<link rel="manifest" href="./site.webmanifest" />
+	<script  type="module" src="./slang-wasm.js"></script>
 	<style>
 		/* Remove touch delay */
 		html { touch-action: manipulation }
@@ -90,14 +91,30 @@
 		}
 	</style>
 	<script type="module">
-		// JavaScript bridge functions testing
-		window.slang_compileShader = function (moduleSourceCode) {
+		// JavaScript bridge testing
+		//const { mod } = await WebAssembly.instantiateStreaming(fetch("./slang-wasm.wasm"));
+		//console.log("!!!Module: "+mod);
+		//import {createModule, ComponentType, EmbindString, GlobalSession, MainModule, Module, ProgramLayout, Session} from './slang-wasm.js';
+		const req = new XMLHttpRequest();
+		req.open("GET", "./slang-wasm.wasm", true);
+		req.responseType = "arraybuffer";
+		req.onload = (event) => {
+			const arrayBuffer = req.response; // Note: not req.responseText
+			if (arrayBuffer) {
+				const wasmBinary = new Uint8Array(arrayBuffer);
+				WebAssembly.instantiate(wasmBinary).then((result) => {
+					console.log("Slang WASM module loaded:");
+					console.log(inst);
+				});
+			}
+		};
+		window.jsinterop_test = function (moduleSourceCode) {
 			// We assume that moduleSrc is a String. Convert it into an Uint8Array
 			const encoder = new TextEncoder();
 			const arr = encoder.encode(moduleSourceCode);
 			console.log(arr);
 			return arr;
-		}
+		};
 		import init from './@PACKAGE_NAME@.js'
 		init().catch((error) => {
 			// Prevent the necessary control flow exception from showing up in the console
