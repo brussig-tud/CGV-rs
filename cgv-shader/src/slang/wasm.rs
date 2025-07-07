@@ -226,8 +226,8 @@ impl Program
 
 #[wasm_bindgen]
 extern "C" {
-	fn jsinterop_test(moduleSourceCode: &str) -> Vec<u8>;
+	fn slangjs_interopTest(moduleSourceCode: &str) -> Vec<u8>;
 }
 pub fn testJsInterop(moduleSourceCode: &str) -> Vec<u8> {
-	jsinterop_test(moduleSourceCode)
+	slangjs_interopTest(moduleSourceCode)
 }

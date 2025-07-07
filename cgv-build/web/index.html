@@ -91,38 +91,29 @@
 		}
 	</style>
 	<script type="module">
-		// JavaScript bridge testing
-		//const { mod } = await WebAssembly.instantiateStreaming(fetch("./slang-wasm.wasm"));
-		//console.log("!!!Module: "+mod);
-		//import {createModule, ComponentType, EmbindString, GlobalSession, MainModule, Module, ProgramLayout, Session} from './slang-wasm.js';
-		const req = new XMLHttpRequest();
-		req.open("GET", "./slang-wasm.wasm", true);
-		req.responseType = "arraybuffer";
-		req.onload = (event) => {
-			const arrayBuffer = req.response; // Note: not req.responseText
-			if (arrayBuffer) {
-				const wasmBinary = new Uint8Array(arrayBuffer);
-				WebAssembly.instantiate(wasmBinary).then((result) => {
-					console.log("Slang WASM module loaded:");
-					console.log(inst);
-				});
-			}
-		};
-		window.jsinterop_test = function (moduleSourceCode) {
-			// We assume that moduleSrc is a String. Convert it into an Uint8Array
-			const encoder = new TextEncoder();
-			const arr = encoder.encode(moduleSourceCode);
-			console.log(arr);
-			return arr;
-		};
-		import init from './@PACKAGE_NAME@.js'
-		init().catch((error) => {
-			// Prevent the necessary control flow exception from showing up in the console
-			if (!error.message.startsWith(
-					"Using exceptions for control flow, don't mind me. This isn't actually an error!"
-			)) {
-				throw error; // Legit error, rethrow
-			}
+		// Import modules
+		// - Slang JavaScript bridge
+		import slang_setupAndAddInterface from "./slang-interface.js";
+		// - CGV-rs WASM application
+		import init from "./@PACKAGE_NAME@.js";
+
+		// Make JavaScript bridge accessible to CGV-rs WASM module
+		console.info("Loading and linking Slang WASM module...");
+		const startTime = performance.now();
+		slang_setupAndAddInterface(window).then(() => {
+			const duration = performance.now()-startTime;
+			console.info("...took "+duration+"ms. Slang-WASM JavaScript bridge ready.");
+
+			// Hand over control to CGV-rs WASM module
+			console.info("Delegating control to CGV-rs application '@PACKAGE_NAME@'");
+			init().catch((error) => {
+				// Prevent the necessary control flow exception from showing up in the console
+				if (!error.message.startsWith(
+						"Using exceptions for control flow, don't mind me. This isn't actually an error!"
+				)) {
+					throw error; // Legit error, rethrow
+				}
+			});
 		});
 	</script>
 </head>

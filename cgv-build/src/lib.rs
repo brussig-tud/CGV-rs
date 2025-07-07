@@ -456,7 +456,7 @@ pub fn performCgvWebDeployment (deployPath: &Path, webDeployment: WebDeployment)
 		let cargoTargetDir = getCargoTargetDir()?;
 		util::installFile(cargoTargetDir.join("slang-wasm.wasm"), deployPath)?;
 		util::installFile(cargoTargetDir.join("slang-wasm.js"), deployPath)?;
-		util::installFile(cargoTargetDir.join("interface.d.ts"), deployPath)?;
+		util::installFile(cgvBuildCrateDirectory().join("web/slang-interface.js"), deployPath)?;
 	}
 
 	// De-confuse Cargo's rerun change detection
