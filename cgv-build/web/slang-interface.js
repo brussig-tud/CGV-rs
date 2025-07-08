@@ -2,30 +2,58 @@ import Module from "./slang-wasm.js";
 
 // The Slang compilation and reflection context used by the JavaScript bridge to serve Slang shader-related requests.
 export class SlangContext {
+	// Helper function for exiting context creation on error.
+	static handleSlangError (slangModule) {
+		const error = slangModule.getLastError();
+		return {context: null, message: (error.type + " error: " + error.message)};
+	}
+
 	// Create a Slang context using the given Slang WASM module.
 	static create (slangModule)
 	{
 		// Perform initialization
 		let globalSession;
-		let compileTargetMap;
+		let compileTargets = {};
 		try {
+			// Create global session
 			globalSession = slangModule.createGlobalSession();
-			compileTargetMap = slangModule.getCompileTargets();
-			if (!globalSession || !compileTargetMap) {
-				const error = slangModule.getLastError();
-				return {context: null, message: (error.type + " error: " + error.message)};
+			if (!globalSession)
+				return this.handleSlangError(slangModule);
+
+			// Log feasible compile targets
+			// - obtain compile target map from Slang
+			let compileTargetMap = slangModule.getCompileTargets();
+			if (!compileTargetMap)
+				return this.handleSlangError(slangModule);
+			// - scan list for feasible targets
+			let numValidTargets = 0;
+			for (let i=0; i<compileTargetMap.length; i++)
+			{
+				const target = compileTargetMap[i];
+				if (target.name === "WGSL") {
+					compileTargets["WGSL"] = target.value;
+					numValidTargets++;
+				}
+				else if (target.name === "SPIRV") {
+					compileTargets["SPIRV"] = target.value;
+					numValidTargets++;
+				}
 			}
+			if (numValidTargets < 1)
+				return {context: null, message: "Slang did not report any feasible compilation targets"};
 		} catch (e) {
 			return {context: null, message: ''+e};
 		}
 
 		// Done, create the SlangContext object
-		return {context: new SlangContext(slangModule, globalSession, compileTargetMap), message: "Success."};
+		return {context: new SlangContext(slangModule, globalSession, compileTargets), message: "Success."};
 	}
-	constructor(slangModule, globalSession, compileTargetMap) {
+
+	// The actual constructor.
+	constructor(slangModule, globalSession, compileTargets) {
 		this.slang = slangModule;
 		this.globalSession = globalSession;
-		this.availableTargets = compileTargetMap;
+		this.availableTargets = compileTargets;
 	}
 }
 
