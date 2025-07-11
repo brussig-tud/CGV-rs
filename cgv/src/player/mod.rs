@@ -4,6 +4,9 @@
 // Module definitions
 //
 
+/// Private submodule holding the code for setting up our custom fonts
+mod font;
+
 /// Private submodule holding the factored-out built-in GUI definitions
 mod ui;
 
@@ -207,6 +210,7 @@ impl Player
 {
 	pub fn new (applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext) -> Result<Self>
 	{
+		// Log player initialization start
 		tracing::info!("Initializing Player...");
 
 		// Get necessary context handles from eframe
@@ -215,10 +219,11 @@ impl Player
 		}
 		let eguiRs = cc.wgpu_render_state.as_ref().unwrap();
 
-		// Adjust GUI font sizes (leave at original for now)
+		// Adjust GUI styling to our own CGV-rs defaults
+		font::replaceDefaults(&cc.egui_ctx);
 		cc.egui_ctx.all_styles_mut(|style| {
 			for (_, fontId) in style.text_styles.iter_mut() {
-				fontId.size *= 1.;
+				fontId.size *= 0.984375; // ToDo: consider 0.96875
 			}
 		});
 

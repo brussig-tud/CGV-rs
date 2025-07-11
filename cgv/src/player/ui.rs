@@ -19,7 +19,7 @@ use crate::view::CameraParameters;
 //
 
 // For consistent labeling of UI theme-related stuff
-const LIGHT_ICON: &str = "☀"; // ToDo: consider 💡
+const LIGHT_ICON: &str = "💡"; // ToDo: consider ☀
 const DARK_ICON: &str = "🌙";
 const SYSTEM_ICON: &str = "💻";
 

@@ -21,7 +21,7 @@ use crate::gui;
 //
 
 /// The default width (in logical units) of the right-hand side of a [`ControlTable`] layout.
-pub const DEFAULT_RHS_WIDTH: f32 = 192.;
+pub const DEFAULT_RHS_WIDTH: f32 = 184.;
 
 
 
@@ -117,10 +117,10 @@ impl<'ui> ControlTable<'ui>
 /// spawned by vertically stacking [collapsible regions](egui::CollapsingHeader).
 pub struct ControlTableLayouter {
 	#[doc=include_str!("_doc/ControlTable_lhsWidth.md")]
-	rhsWidth: f32,
+	lhsWidth: f32,
 
 	#[doc=include_str!("_doc/ControlTable_rhsWidth.md")]
-	lhsWidth: f32
+	rhsWidth: f32
 }
 impl ControlTableLayouter
 {
