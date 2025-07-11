@@ -36,7 +36,7 @@ pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 	egui::TopBottomPanel::top("menu_bar").show(eguiContext, |ui|
 		egui::ScrollArea::horizontal().show(ui, |ui|
 		{
-			egui::menu::bar(ui, |ui|
+			egui::MenuBar::new().ui(ui, |ui|
 			{
 				// The global [ESC] quit shortcut
 				let quit_shortcut = egui::KeyboardShortcut::new(
@@ -66,15 +66,15 @@ pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
 						if ui.add(egui::Button::new(format!("{LIGHT_ICON} Light"))).clicked() {
 							ui.ctx().set_theme(egui::ThemePreference::Light);
-							ui.close_menu();
+							ui.close();
 						}
 						else if ui.add(egui::Button::new(format!("{DARK_ICON} Dark"))).clicked() {
 							ui.ctx().set_theme(egui::ThemePreference::Dark);
-							ui.close_menu();
+							ui.close();
 						}
 						else if ui.add(egui::Button::new(format!("{SYSTEM_ICON} System"))).clicked() {
 							ui.ctx().set_theme(egui::ThemePreference::System);
-							ui.close_menu();
+							ui.close();
 						}
 					});
 				}
