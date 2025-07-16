@@ -15,7 +15,7 @@ serde = {version="*", features = ["derive"]}
 serde_json = "*"
 fs-set-times = "*"
 reqwest = {version="*", features=["blocking"]}
-zip-extract = "*"
+zip = "*"
 bytes = "*"
 cgv-util = {path="../cgv-util"}
 cgv-shader = {path="../cgv-shader", features=["slang_runtime"]}

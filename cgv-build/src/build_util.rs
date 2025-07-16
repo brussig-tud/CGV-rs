@@ -18,7 +18,7 @@ use fs_set_times::{set_mtime, SystemTimeSpec};
 use reqwest;
 
 // Zip-extract crate
-pub use zip_extract as zip;
+pub use zip;
 
 // Local imports
 use crate::*;
@@ -147,7 +147,7 @@ pub fn downloadToFile (url: impl reqwest::IntoUrl, filepath: impl AsRef<Path>) -
 /// archive contains one) to the given path.
 pub fn downloadAndExtract (url: impl reqwest::IntoUrl, dirpath: impl AsRef<Path>) -> anyhow::Result<()> {
 	let responseBytes = download(url)?;
-	Ok(zip::extract(std::io::Cursor::new(responseBytes), dirpath.as_ref(), true)?)
+	Ok(zip::ZipArchive::new(std::io::Cursor::new(responseBytes))?.extract(dirpath.as_ref())?)
 }
 
 ///
@@ -172,7 +172,7 @@ pub fn dependOnDownloadedDirectory (url: impl reqwest::IntoUrl, dirpath: impl As
 ///
 pub fn dependOnExtractedDirectory (archivePath: impl AsRef<crate::Path>, dirpath: impl AsRef<crate::Path>)
 -> Result<()> {
-	zip::extract(std::fs::File::open(archivePath.as_ref())?, dirpath.as_ref(), true)?;
+	zip::ZipArchive::new(fs::File::open(archivePath.as_ref())?)?.extract(dirpath.as_ref())?;
 	dependOnFile(archivePath);
 	dependOnGeneratedDirectory(dirpath)
 }
