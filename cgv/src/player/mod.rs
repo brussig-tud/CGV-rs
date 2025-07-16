@@ -27,6 +27,8 @@ use viewportcompositor::*;
 
 // Standard library
 use std::sync::Arc;
+#[cfg(not(target_arch="wasm32"))]
+use std::fs;
 
 // Winit library
 #[cfg(all(not(target_arch="wasm32"),not(target_os="windows"),not(target_os="macos"),feature="wayland"))]
@@ -208,7 +210,9 @@ unsafe impl Sync for Player {}
 
 impl Player
 {
-	pub fn new (applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext) -> Result<Self>
+	pub fn new (
+		applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext, environment: Environment
+	) -> Result<Self>
 	{
 		// Log player initialization start
 		tracing::info!("Initializing Player...");
@@ -281,7 +285,7 @@ impl Player
 
 		// Init application(s)
 		let mut activeApplication = player.applicationFactory.take().unwrap().create(
-			&player.context, &player.renderSetup
+			&player.context, &player.renderSetup, environment
 		)?;
 		activeApplication.preInit(player.context(), player_ref)?;
 		activeApplication.recreatePipelines(
@@ -311,6 +315,22 @@ impl Player
 		// Log that we have begun the startup process
 		tracing::info!("Starting up...");
 		tracing::info!("Platform: {}", util::meta::platformTargetTriple());
+
+		// Set up environment
+		let environment = match fs::read("ENVIRONMENT.yaml")
+		{
+			Ok(bytes) => Environment::fromBytes(&bytes).unwrap_or_else(|e| {
+				tracing::warn!("Failed to read ENVIRONMENT.yaml file: {}", e);
+				Environment::default()
+			}),
+
+			Err(e) => {
+				if e.kind() != std::io::ErrorKind::NotFound {
+					tracing::warn!("Failed to read ENVIRONMENT.yaml file: {}", e);
+				}
+				Environment::default()
+			}
+		};
 
 		// Prepare default player icon
 		let icon = image::load_from_memory(util::sourceBytes!("/res/ico/defaultIcon.png"))?;
@@ -384,7 +404,7 @@ impl Player
 		// Run and report result
 		match eframe::run_native(
 			"CGV-rs Player", options, Box::new(
-				move |cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc)?))
+				move |cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc, environment)?))
 			)
 		){
 			Ok(_) => {
@@ -450,7 +470,7 @@ impl Player
 				.start(
 					canvas,
 					webOptions,
-					Box::new(|cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc)?)))
+					Box::new(|cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc, Environment::default())?)))
 				)
 				.await;
 

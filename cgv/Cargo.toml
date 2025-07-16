@@ -16,6 +16,8 @@ tracing = "*"
 tracing-subscriber = {version="*", features=["env-filter"]}
 cfg-if = "*"
 ctor = "*"
+serde = {version="*", features = ["derive"]}
+serde_yaml_ng = "*"
 arrayvec = "*"
 dashmap = "*"
 web-time = "*"

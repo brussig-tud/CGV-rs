@@ -130,7 +130,8 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup) -> cgv::Result<Box<dyn cgv::Application>>
+	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::Environment)
+		-> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
 		// Prepare buffers
@@ -159,9 +160,13 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// Test Slang runtime compilation
 		#[cfg(target_arch="wasm32")] {
+			drop(environment); // <- make sure we don't get an "unused" warning
 			let moduleBytes = cgv::shader::slang::testJsInterop("HALLO");
 			tracing::info!("Compiled shader! Bytes:");
 			tracing::info!("{:?}", moduleBytes);
+		}
+		#[cfg(not(target_arch="wasm32"))] {
+			let _slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath);
 		}
 
 		// The example shader

@@ -21,6 +21,10 @@
 // Module definitions
 //
 
+// THe module implementing the runtime environment information
+mod env;
+pub use env::Environment; // re-export
+
 // The module implementing the Player
 mod player;
 pub use player::{Player, InputEvent, EventOutcome, RenderSetup, ManagedBindGroupLayouts}; // re-export
@@ -335,10 +339,13 @@ pub trait ApplicationFactory
 	///
 	/// * `context` – The graphics context.
 	/// * `renderSetup` – The global render setup of the *CGV-rs* [`Player`].
+	/// * `environment` – Runtime environment information (like the shader path) for the to-be-created application.
 	///
 	/// # Returns
 	///
 	/// A boxed instance of the application if successful, or some descriptive error detailing the failure if no
 	/// instance could be created.
-	fn create (&self, context: &Context, renderSetup: &RenderSetup) -> Result<Box<dyn Application>>;
+	fn create (
+		&self, context: &Context, renderSetup: &RenderSetup, environment: Environment
+	) -> Result<Box<dyn Application>>;
 }
