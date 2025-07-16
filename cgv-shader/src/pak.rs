@@ -45,48 +45,57 @@ struct EntryPoint {
 // Errors
 //
 
-/// An error resulting from an invalid entry point name, typically because no entry point with that name existed in a
-/// [`Program`].
-#[derive(Debug)]
-pub struct InvalidEntryPointError {
-	epName: String
-}
-impl Display for InvalidEntryPointError {
-	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(formatter, "InvalidEntryPointError[`{}`]", self.epName)
-	}
-}
-impl std::error::Error for InvalidEntryPointError {}
+/// Error conditions when creating [`wgpu::ShaderModule`]s.
+#[cfg(feature="wgpu_runtime")]
+#[derive(Debug,PartialEq)]
+pub enum CreateShaderModuleError
+{
+	#[doc=include_str!("_doc/_InvalidEntryPoint_withString.md")]
+	InvalidEntryPoint(String),
 
-/// An error resulting from attempting to use a [`Program`] instance for a [source type](SourceType) that is not
-/// available, e.g. because a [`Package`] does not include it.
-#[cfg(feature="wgpu_runtime")]
-#[derive(Debug)]
-pub struct InvalidSourceTypeError {
-	sourceType: SourceType
+	/// The package from which a module was requested does not contain an instance in the requested source type. Holds
+	/// the `SourceType` that was not available.
+	InvalidSourceType(SourceType)
 }
 #[cfg(feature="wgpu_runtime")]
-impl Display for InvalidSourceTypeError {
+impl Display for CreateShaderModuleError {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(formatter, "InvalidSourceTypeError[`{}`]", self.sourceType)
+		let desc = match self {
+			Self::InvalidEntryPoint(ep) => format!("invalid entry point: `{ep}`"),
+			Self::InvalidSourceType(st) => format!("invalid source type: `{st}`")
+		};
+		write!(formatter, "InvalidEntryPointError[{desc}]")
 	}
 }
 #[cfg(feature="wgpu_runtime")]
-impl std::error::Error for InvalidSourceTypeError {}
+impl std::error::Error for CreateShaderModuleError {}
 
-/// An error resulting from attempting to use an automatically detected suitable [`Program`] instance for some platform
-/// or scenario but the [`Package`] did not include any suitable instances.
-#[cfg(feature="wgpu_runtime")]
+
+/// Error conditions when building [shader program instances](Program).
 #[derive(Debug)]
-pub struct NoSuitableProgramInstanceError {}
-#[cfg(feature="wgpu_runtime")]
-impl Display for NoSuitableProgramInstanceError {
-	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(formatter, "NoSuitableProgramInstanceError")
+pub enum ProgramInstanceBuildError
+{
+	#[doc=include_str!("_doc/_InvalidEntryPoint_withString.md")]
+	InvalidEntryPoint(String),
+
+	/// Some other (nested) error caused by external code.
+	External(anyhow::Error)
+}
+impl Display for ProgramInstanceBuildError {
+	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+	{
+		match self {
+			Self::InvalidEntryPoint(ep)
+				=> write!(formatter, "ProgramInstanceBuildError[invalid entry point: `{ep}`]"),
+
+			Self::External(e) => {
+				writeln!(formatter, "ProgramInstanceBuildError[<Nested>]:")?;
+				write!(formatter, "-> {e}")
+			}
+		}
 	}
 }
-#[cfg(feature="wgpu_runtime")]
-impl std::error::Error for NoSuitableProgramInstanceError {}
+impl std::error::Error for ProgramInstanceBuildError {}
 
 
 
@@ -116,12 +125,10 @@ impl Program
 		self.entryPoints.insert(name.map(|name| name.to_owned()), EntryPoint { code });
 	}
 
-	pub fn code (&self, entryPointName: Option<&str>) -> std::result::Result<&[u8], InvalidEntryPointError> {
+	pub fn code (&self, entryPointName: Option<&str>) -> Option<&[u8]> {
 		self.entryPoints.get(&entryPointName.map(|name| name.to_owned())).map(
 			|ep| ep.code.as_slice()
-		).ok_or(InvalidEntryPointError {
-			epName: entryPointName.unwrap_or("<all/generic>").to_owned()
-		})
+		)
 	}
 }
 
@@ -129,7 +136,8 @@ impl Program
 /// (e.g. *SPIR-V* or *WGSL*).
 #[derive(bitcode::Encode,bitcode::Decode)]
 pub struct Package {
-	instances: BTreeMap<SourceType, Program>,
+	name: String,
+	instances: BTreeMap<SourceType, Program>
 }
 impl Package
 {
@@ -144,18 +152,37 @@ impl Package
 	}
 
 	/// Create a package with a single instance.
-	pub fn withSingleInstance (sourceType: SourceType, program: Program) -> anyhow::Result<Self> {
-		Ok(Self { instances: BTreeMap::from([(sourceType, program)]) })
+	pub fn withSingleInstance (sourceType: SourceType, program: Program, name: Option<&str>)
+	-> anyhow::Result<Self> {
+		Ok(Self {
+			name: name.unwrap_or("<unnamed>").to_owned(),
+			instances: BTreeMap::from([(sourceType, program)])
+		})
 	}
 
 	/// Internal helper function to create a single program instance from a *Slang* shader source file.
+	///
+	/// # Arguments
+	///
+	/// * `slangContext` – The [`SlangContext`] to use for building the sole instance in the package.
+	/// * `filepath` – The path to the file containing the *Slang* source code.
+	/// * `entryPoints` – Optionally a set of entry points to include in the sole instance in the package. This set can
+	///                   contain [`None`] to indicate that the non-specialized program with all entry points should be
+	///                   included in the instance.
+	///
+	/// # Returns
+	///
+	/// A tuple with the built [program instance](Program) and, for convenience, the [`SourceType`] it was built for as
+	/// dictated by the passed-in `slangContext`.
 	#[cfg(feature="slang_runtime")]
 	fn buildSingleInstanceFromSlang (
-		slangContext: &slang::Context, filename: impl AsRef<Path>, entryPoints: Option<&BTreeSet<Option<&str>>>
-	) -> anyhow::Result<(SourceType, Program)>
+		slangContext: &slang::Context, filepath: impl AsRef<Path>, entryPoints: Option<&BTreeSet<Option<&str>>>
+	) -> Result<(Program, SourceType), ProgramInstanceBuildError>
 	{
 		// Compile Slang code
-		let slangProg = slangContext.buildProgram(filename)?;
+		let slangProg = slangContext.buildProgram(filepath).or_else(
+			|e| Err(ProgramInstanceBuildError::External(e))
+		)?;
 
 		// Create the program instance for the compilation target indicated by the Slang context, with code for the
 		// indicated entry points if any, or the generic code if no entry points were specified.
@@ -172,33 +199,33 @@ impl Package
 						progInstance.addEntryPoint(Some(entryPointName), ep.buildArtifact().to_owned());
 					}
 					else {
-						return Err(InvalidEntryPointError { epName: entryPointName.to_owned() }.into())
+						return Err(ProgramInstanceBuildError::InvalidEntryPoint(entryPointName.to_owned()))
 					}
 				}
 				else {
 					progInstance.addEntryPoint(None, slangProg.genericBuildArtifact().to_owned());
 				}
 			}
-			Ok((slangContext.compilationTarget, progInstance))
+			Ok((progInstance, slangContext.compilationTarget))
 		}
 		else {
 			// Only include the generic program that includes code paths from all entry points
 			Ok((
-				slangContext.compilationTarget, Program::generic(slangProg.genericBuildArtifact().to_owned())
+				Program::generic(slangProg.genericBuildArtifact().to_owned()), slangContext.compilationTarget
 			))
 		}
 	}
 
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
-	/// several instances for different [source types](SourceType).
+	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
 	#[cfg(feature="slang_runtime")]
 	pub fn fromSlangMultiple (
 		slangContexts: &[&slang::Context], filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self>
 	{
-		let mut package = Self { instances: BTreeMap::new() };
+		let mut package = Self { name: filename.as_ref().display().to_string(), instances: BTreeMap::new() };
 		for &slangContext in slangContexts {
-			let (sourceType, program) = Self::buildSingleInstanceFromSlang(
+			let (program, sourceType) = Self::buildSingleInstanceFromSlang(
 				slangContext, filename.as_ref(), entryPoints.as_ref()
 			)?;
 			package.addInstance(sourceType, program);
@@ -230,22 +257,25 @@ impl Package
 	/// * `sourceType` – The desired type of shader source.
 	/// * `entryPointName` – Optionally get the program specialization for the entry point of this name. If no entry
 	///                      point is specified, the generic code containing all code paths for all entry points will be
-	///                      used if available or an [`InvalidEntryPointError`] will be emitted.
+	///                      used if available or a [`CreateShaderModuleError::InvalidEntryPoint`] will be emitted.
+	/// * `label` – The string to internally label the GPU-side shader module object with.
 	///
 	/// # Returns
 	///
 	/// A ready-to-use *WGPU* shader module if the requested source type and a specialization for the requested entry
-	/// point exist. May otherwise fail with any of the following errors:
-	/// * [`InvalidSourceTypeError`] – The package does not contain an instance in the requested source type.
-	/// * [`InvalidEntryPointError`] – The requested entry point does not exist.
+	/// point exist, or an error describing the encountered [failure condition](CreateShaderModuleError).
 	#[cfg(feature="wgpu_runtime")]
 	pub fn createShaderModule (
 		&self, device: &wgpu::Device, sourceType: SourceType, entryPointName: Option<&str>, label: Option<&str>
-	) -> anyhow::Result<wgpu::ShaderModule>
+	) -> Result<wgpu::ShaderModule, CreateShaderModuleError>
 	{
 		// Find requested entry point in the requested instance
-		let progInstance = self.instances.get(&sourceType).ok_or(InvalidSourceTypeError { sourceType })?;
-		let code = progInstance.code(entryPointName)?;
+		let progInstance = self.instances.get(&sourceType).ok_or(
+			CreateShaderModuleError::InvalidSourceType(sourceType)
+		)?;
+		let code = progInstance.code(entryPointName).ok_or_else(||
+			CreateShaderModuleError::InvalidEntryPoint(entryPointName.unwrap_or("<default>").to_owned())
+		)?;
 
 		// Create the shader module
 		let shaderModule = match sourceType
@@ -286,7 +316,7 @@ impl Package
 
 			SourceType::WGSL => {
 				device.create_shader_module(wgpu::ShaderModuleDescriptor {
-					label, source: wgpu::ShaderSource::Wgsl(str::from_utf8(code)?.into()),
+					label, source: wgpu::ShaderSource::Wgsl(str::from_utf8(code).unwrap().into()),
 				})
 			}
 		};
@@ -308,17 +338,16 @@ impl Package
 	/// * `entryPointName` – Optionally get the program specialization for the entry point of this name. If no entry
 	///                      point is specified, the generic code containing all code paths for all entry points will be
 	///                      used if available or an [`InvalidEntryPointError`] will be emitted.
+	/// * `label` – The string to internally label the GPU-side shader module object with.
 	///
 	/// # Returns
 	///
-	/// A ready-to-use *WGPU* shader module if the package contains a suitable instance and a specialization for the
-	/// requested entry point exists. May otherwise fail with any of the following errors:
-	/// * [`InvalidEntryPointError`] – The requested entry point does not exist.
-	/// * [`NoSuitableProgramInstanceError`] – The package does not contain an instance for a suitable source type.
+	/// `Some` ready-to-use *WGPU* shader module if the package contains a suitable instance and a specialization for
+	/// the requested entry point exists, 'None' otherwise.
 	#[cfg(feature="wgpu_runtime")]
 	pub fn createShaderModuleFromBestInstance (
 		&self, device: &wgpu::Device, entryPointName: Option<&str>, label: Option<&str>
-	) -> anyhow::Result<wgpu::ShaderModule>
+	) -> Option<wgpu::ShaderModule>
 	{
 		// Define feasible source types from most to least suitable
 		let sourceTypes;
@@ -338,26 +367,21 @@ impl Package
 		{
 			match self.createShaderModule(device, sourceType, entryPointName, label)
 			{
-				Ok(shaderModule) => return Ok(shaderModule),
+				Ok(shaderModule) => return Some(shaderModule),
 				Err(err) => {
 					// Move on if no instance of this source type is available
-					if err.downcast_ref::<InvalidSourceTypeError>().is_some() {
-						continue;
-					}
-					// Warn if the instance was missing the entry point
-					if let Some(err) = err.downcast_ref::<InvalidEntryPointError>() {
-						tracing::warn!("Shader entry point `{}` not found in {} program instance", err.epName, sourceType);
-					}
-					// Warn of any other error
-					else {
-						tracing::warn!("Could not process {} program instance!\nReason: {}", sourceType, err);
+					match err {
+						CreateShaderModuleError::InvalidSourceType(_) => continue, // try next source type
+						CreateShaderModuleError::InvalidEntryPoint(ep) => tracing::warn!(
+							"Shader entry point `{ep}` not found in {sourceType} program instance"
+						)
 					}
 				}
 			}
 		}
 
 		// No instance in the package could be turned into a functioning shader module!
-		Err(NoSuitableProgramInstanceError {}.into())
+		None
 	}
 
 	/// Serialize the package into a series of bytes (e.g. for storing in a file).

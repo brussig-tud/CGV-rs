@@ -168,7 +168,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		let shader = cgv::shader::Package::deserialize(
 			util::sourceGeneratedBytes!("/shader/example.spk")
 		)?
-		.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule"))?;
+		.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule")).ok_or(
+			cgv::anyhow!("Could not create example shader module")
+		)?;
 
 		// The example texture
 		let tex = cgv::hal::Texture::fromBlob(

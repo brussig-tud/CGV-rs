@@ -39,7 +39,11 @@ impl ViewportCompositor
 			util::sourceGeneratedBytes!("/shader/player/viewport.spk")
 		)?.createShaderModuleFromBestInstance(
 			context.device(), None, util::concatIfSome(&name, "_shaderModule").as_deref()
-		)?;
+		).ok_or_else(|| {
+			let msg = "Failed to create shader module";
+			tracing::error!(msg);
+			anyhow!(msg)
+		})?;
 
 		// ToDo: introduce a sampler library and put this there
 		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
