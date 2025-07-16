@@ -100,7 +100,7 @@ macro_rules! sourceBytes {
 }
 
 /// Reads a UTF-8 encoded file located inside the *Cargo* build tree of the caller (as specified by the *Cargo*
-/// environment variable `OUT_DIR`) into a static string slice at compile time.
+/// environment variable `OUT_DIR`) into a `'static` string slice at compile time.
 ///
 /// # Arguments
 ///
@@ -117,7 +117,7 @@ macro_rules! sourceGeneratedFile {
 }
 
 /// Reads a file located inside the *Cargo* build tree of the caller (as specified by the *Cargo* environment variable
-/// `OUT_DIR`) verbatim into a static `u8` slice at compile time, treating the file as a blob.
+/// `OUT_DIR`) verbatim into a `'static` `u8` slice at compile time, treating the file as a blob.
 ///
 /// # Arguments
 ///
