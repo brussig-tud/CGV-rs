@@ -116,13 +116,11 @@ impl RenderState
 			view: &self.framebuffer.color0().view(),
 			resolve_target: None,
 			ops: wgpu::Operations {
-				load: if let Some(color) = clear {
-					wgpu::LoadOp::Clear(*color)
-				} else {
-					wgpu::LoadOp::Load
-				},
+				load: if let Some(color) = clear { wgpu::LoadOp::Clear(*color) }
+				      else                       { wgpu::LoadOp::Load },
 				store: wgpu::StoreOp::Store,
 			},
+			depth_slice: None
 		})
 	}
 

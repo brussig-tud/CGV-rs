@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 wasm-bindgen = {version="*", optional=true}
 tracing = {version="*", optional=true}
-wgpu = {version="25.0.2", optional=true, features=["spirv"]}
+wgpu = {version="*", optional=true, features=["spirv"]}
 anyhow = "*"
 cgv-util = {path="../cgv-util"}
 

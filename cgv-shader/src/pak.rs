@@ -293,7 +293,7 @@ impl Package
 					// - native SPIR-V passthrough on Vulkan
 					if unsafe {
 						// SAFETY: we won't do anything with the device if it is not the expected Vulkan backend
-						device.as_hal::<wgpu::hal::api::Vulkan, _, bool>(|dev| dev.is_some())
+						device.as_hal::<wgpu::hal::api::Vulkan>().is_some()
 					}{
 						shaderModule = unsafe {
 							// SAFETY: we already verified that the code is SPIR-V

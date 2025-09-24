@@ -22,12 +22,14 @@ arrayvec = "*"
 dashmap = "*"
 web-time = "*"
 winit = "*"
-egui = {version="*", default-features=true, features=["color-hex", "rayon"]}
-egui_extras = {version="*", default-features=true, features=[
+egui = {git="https://github.com/emilk/egui.git", rev="b69bab73e14ff9376c27080d585bcd99f14a5c11", default-features=true, features=[
+	"color-hex", "rayon"
+]}
+egui_extras = {git="https://github.com/emilk/egui.git", rev="b69bab73e14ff9376c27080d585bcd99f14a5c11", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
-wgpu = {version="25.0.2", features=["spirv"] }
-eframe = {version="*", default-features=false, features=[
+wgpu = {version="*", features=["spirv"] }
+eframe = {git="https://github.com/emilk/egui.git", rev="b69bab73e14ff9376c27080d585bcd99f14a5c11", default-features=false, features=[
 	"default_fonts", "wgpu"
 ]}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
@@ -47,8 +49,8 @@ tracing-wasm = "*"
 wasm-bindgen-futures = "*"
 getrandom = {version="*", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
-wgpu = {version="25.0.2", default-features=false, features=["webgpu", "spirv"]}
-egui-wgpu = {version="*", default-features=false, features=[
+wgpu = {version="*", default-features=false, features=["webgpu", "spirv"]}
+egui-wgpu = {git="https://github.com/emilk/egui.git", rev="b69bab73e14ff9376c27080d585bcd99f14a5c11", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}
 
