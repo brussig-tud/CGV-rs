@@ -11,12 +11,12 @@ anyhow = "*"
 cgv-util = {path="../cgv-util"}
 
 [target.'cfg(not(target_os="windows"))'.dependencies]
-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
+shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
 	"download_slang_binaries", "build_slang_from_source"
 ]}
 
 [target.'cfg(target_os="windows")'.dependencies]
-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true}
+shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 wasm-bindgen = {version="*", optional=true}
@@ -24,4 +24,4 @@ wasm-bindgen = {version="*", optional=true}
 [features]
 default = []
 wgpu_runtime = ["dep:wgpu", "dep:tracing"]
-slang_runtime = ["dep:slang", "dep:wasm-bindgen", "slang/copy_libs"]
+slang_runtime = ["dep:shader-slang", "dep:wasm-bindgen", "shader-slang/copy_libs"]

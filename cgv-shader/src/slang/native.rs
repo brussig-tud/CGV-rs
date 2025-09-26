@@ -12,7 +12,7 @@ use anyhow::*;
 use anyhow::Context as AnyhowContext;
 
 // Slang library
-use ::slang;
+pub use shader_slang as slang;
 use slang::Downcast;
 
 // Local imports

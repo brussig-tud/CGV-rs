@@ -194,7 +194,7 @@ impl Package
 				if let Some(entryPointName) = entryPoint
 				{
 					if let Some(ep) = slangProg.entryPoints().iter().find(
-						|&ep| ep.slang.function_reflection().name() == entryPointName
+						|&ep| ep.slang.function_reflection().name() == Some(entryPointName)
 					){
 						progInstance.addEntryPoint(Some(entryPointName), ep.buildArtifact().to_owned());
 					}
