@@ -8,6 +8,7 @@ wasm-bindgen = {version="*", optional=true}
 tracing = {version="*", optional=true}
 wgpu = {version="*", optional=true, features=["spirv"]}
 anyhow = "*"
+uuid = "*"
 cgv-util = {path="../cgv-util"}
 
 [target.'cfg(not(target_os="windows"))'.dependencies]

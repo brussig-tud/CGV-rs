@@ -7,12 +7,21 @@
 // Eff this convention.
 #![allow(non_snake_case)]
 
+// Enable the `intersperse` iterator feature
+#![feature(iter_intersperse)]
+
 
 
 //////
 //
 // Module definitions
 //
+
+/// Submodule implementing the shader environment facilities
+#[cfg(feature="wgpu_runtime")]
+mod environment;
+#[cfg(feature="wgpu_runtime")]
+pub use environment::Environment; // re-export
 
 /// Submodule implementing the shader package facilities
 mod pak;
