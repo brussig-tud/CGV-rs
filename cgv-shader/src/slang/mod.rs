@@ -4,18 +4,13 @@
 // Module definitions
 //
 
-/// Submodule implementing the Slang runtime interface for native builds
-#[cfg(not(target_arch="wasm32"))]
-mod native;
-#[cfg(not(target_arch="wasm32"))]
-pub use native::*; // re-export
+/// Submodule implementing the Slang runtime context
+mod context;
+pub use context::Context; // re-export
 
-/// Submodule implementing the Slang runtime interface for WASM builds
-#[cfg(target_arch="wasm32")]
-mod wasm;
-#[cfg(target_arch="wasm32")]
-pub use wasm::*; // re-export
-
+/// Submodule implementing the Slang shader program representation
+mod program;
+pub use program::Program; // re-export
 
 
 
@@ -27,11 +22,37 @@ pub use wasm::*; // re-export
 // Standard library
 use std::path::Path;
 
+// Wasm-bindgen library
+#[cfg(target_arch="wasm32")]
+use wasm_bindgen::prelude::*;
+
 // Anyhow library
 use anyhow::Result;
 
+// Slang library
+use shader_slang as slang;
+
 // Local imports
 use crate::CompilationTarget;
+
+
+
+//////
+//
+// Structs
+//
+
+/// 
+pub struct EntryPoint {
+	pub slang: slang::EntryPoint,
+	bytecode: slang::Blob,
+}
+impl EntryPoint {
+	#[inline]
+	pub fn buildArtifact (&self) -> &[u8] {
+		self.bytecode.as_slice()
+	}
+}
 
 
 
@@ -50,3 +71,14 @@ pub fn createContextsForTargets<'a> (targets: &[CompilationTarget], shaderPath: 
 	}
 	Ok(contexts.into())
 }
+
+#[cfg(target_arch="wasm32")]
+#[wasm_bindgen]
+extern "C" {
+	fn slangjs_interopTest(moduleSourceCode: &str) -> Vec<u8>;
+}
+#[cfg(target_arch="wasm32")]
+pub fn testJsInterop(moduleSourceCode: &str) -> Vec<u8> {
+	slangjs_interopTest(moduleSourceCode)
+}
+

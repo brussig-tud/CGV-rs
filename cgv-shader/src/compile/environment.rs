@@ -8,6 +8,7 @@
 use std::{vec::Vec, collections::BTreeSet, collections::BTreeMap, error::Error, fmt::{Display, Formatter}};
 
 // Tracing library
+#[cfg(feature="tracing_output")]
 use tracing;
 
 // UUID library
@@ -171,11 +172,13 @@ impl<ModuleType: Module> Environment<ModuleType>
 				}
 			}
 		}
-		tracing::info!("Merging shader environments: [{}] <- [{}]", self.uuid, other.uuid);
-		tracing::debug!(
-			"Skipped already referenced sub-environments: [{}]",
-			skippedExistingEnvs.iter().map(|k| k.to_string()).intersperse(",".to_string()).collect::<String>()
-		);
+		#[cfg(feature="tracing_output")] {
+			tracing::info!("Merging shader environments: [{}] <- [{}]", self.uuid, other.uuid);
+			tracing::debug!(
+				"Skipped already referenced sub-environments: [{}]",
+				skippedExistingEnvs.iter().map(|k| k.to_string()).intersperse(",".to_string()).collect::<String>()
+			);
+		}
 
 
 		// Step 3 - The merge has been validated, now commit the changes

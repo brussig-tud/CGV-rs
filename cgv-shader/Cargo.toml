@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 wasm-bindgen = {version="*", optional=true}
 tracing = {version="*", optional=true}
-wgpu = {version="*", optional=true, features=["spirv"]}
+wgpu = {version="26.0.1", optional=true, features=["spirv"]}
 anyhow = "*"
 uuid = "*"
 cgv-util = {path="../cgv-util"}
@@ -24,5 +24,6 @@ wasm-bindgen = {version="*", optional=true}
 
 [features]
 default = []
+tracing_output = ["dep:tracing"]
 wgpu_runtime = ["dep:wgpu", "dep:tracing"]
 slang_runtime = ["dep:shader-slang", "dep:wasm-bindgen", "shader-slang/copy_libs"]

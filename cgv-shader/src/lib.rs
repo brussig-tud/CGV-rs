@@ -17,11 +17,8 @@
 // Module definitions
 //
 
-/// Submodule implementing the shader environment facilities
-#[cfg(feature="wgpu_runtime")]
-mod environment;
-#[cfg(feature="wgpu_runtime")]
-pub use environment::Environment; // re-export
+/// Submodule implementing shader compilation infrastructure
+pub mod compile;
 
 /// Submodule implementing the shader package facilities
 mod pak;
@@ -39,7 +36,6 @@ pub mod slang;
 //
 
 // Standard library
-/* nothing here yet */
 
 // Bitcode library
 use cgv_util::bitcode;
