@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum MergeError {
+	Incompatible,
 	DuplicateModuleNames(String)
 }
 impl Display for MergeError {
@@ -65,10 +66,19 @@ impl Module for _DummyModule {}
 /// [merged](Environment::mergeWith) with the environments that the other crates provide their modules in** in order to
 /// make it usable in a self-contained manner\* (akin to static linking).
 ///
-/// \*Note that this is *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
+/// If the collected modules depend on some sort of compiler or preprocessor settings, some hash that uniquely
+/// identifies the required configuration should be set which will be checked when [merging](Environment::merge) and
+/// which crates using the environment can check to make sure that they are compatible. The crate exporting the
+/// environment should naturally provide a way for clients to find and use compatible settings.
+///
+/// ##### Footnotes
+///
+/// \*This is merely *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
 /// dependencies on their side.
+#[derive(Clone)]
 pub struct Environment<ModuleType: Module> {
 	uuid: Uuid,
+	compatHash: u64,
 	ownedModules: BTreeSet<String>,
 	linkedEnvs: BTreeMap<Uuid, BTreeSet<String>>,
 	modules: BTreeMap<String, ModuleType>
@@ -78,12 +88,25 @@ impl<ModuleType: Module> Environment<ModuleType>
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier).
 	pub fn withUuid (uuid: Uuid) -> Self { Self {
-		uuid, ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
+		uuid, compatHash: 0, ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
+	}}
+
+	/// Construct an empty environment identified by the given
+	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and an initial compatibility hash.
+	pub fn withUuidAndCompatHash (uuid: Uuid, compatHash: u64) -> Self { Self {
+		uuid, compatHash, ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
 	}}
 
 	/// Reports the [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) of this environment.
+	#[inline(always)]
 	pub fn uuid (&self) -> Uuid {
 		self.uuid
+	}
+
+	/// Reports the compatibility hash of this environment.
+	#[inline(always)]
+	pub fn compatHash (&self) -> u64 {
+		self.compatHash
 	}
 
 	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.
@@ -96,13 +119,16 @@ impl<ModuleType: Module> Environment<ModuleType>
 	/// # Arguments
 	///
 	/// * `other` – The other environment to merge.
-	/// * `uuid` – A UUID to assign the new environment.
+	/// * `uuid` – A UUID for the merged environment.
 	///
 	/// # Returns
 	///
 	/// The merged environment, or a [`MergeError`] indicating what went wrong.
-	pub fn merge (self, other: &Environment<ModuleType>, uuid: Uuid) -> Result<Self, MergeError> {
-		let mut newEnv = Self::withUuid(uuid);
+	pub fn merge (&self, other: &Environment<ModuleType>, uuid: Uuid) -> Result<Self, MergeError> {
+		if self.compatHash != other.compatHash {
+			return Err(MergeError::Incompatible);
+		}
+		let mut newEnv = self.clone();
 		newEnv.mergeWith(other).map(move |_| newEnv)
 	}
 
@@ -118,6 +144,11 @@ impl<ModuleType: Module> Environment<ModuleType>
 	/// **remains unchanged**!
 	pub fn mergeWith (&mut self, other: &Environment<ModuleType>) -> Result<(), MergeError>
 	{
+		// Initial sanity check
+		if self.compatHash != other.compatHash {
+			return Err(MergeError::Incompatible);
+		}
+
 		// Step 1 - Compile list of linked environments in the `other` environment that we need to import (basically all
 		//          envs that we're not already referencing ourselves)
 		let mut skippedExistingEnvs: Vec<&Uuid> = Vec::with_capacity(self.linkedEnvs.len());
@@ -144,7 +175,6 @@ impl<ModuleType: Module> Environment<ModuleType>
 				}
 			}
 		}
-
 
 		// Step 2 - Flatten list of new modules to be merged in, checking for duplicates (this check is what in theory
 		//          should prevent the panic above from ever being triggered)
@@ -180,7 +210,6 @@ impl<ModuleType: Module> Environment<ModuleType>
 			);
 		}
 
-
 		// Step 3 - The merge has been validated, now commit the changes
 		// - commit new modules
 		for (name, module) in newModules
@@ -206,7 +235,6 @@ impl<ModuleType: Module> Environment<ModuleType>
 		}
 		// - reference the merged-in environment itself
 		self.linkedEnvs.insert(other.uuid, other.ownedModules.clone());
-
 
 		// Done!
 		Ok(())

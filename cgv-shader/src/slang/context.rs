@@ -13,6 +13,9 @@ use anyhow::*;
 // Slang library
 use shader_slang as slang;
 
+// CRC64-fast library
+use crc64fast_nvme as crc64;
+
 // Local imports
 use crate::*;
 use crate::slang::Program;
@@ -25,13 +28,22 @@ use crate::slang::Program;
 //
 
 ///
+#[derive(Clone)]
+pub struct Module {}
+impl compile::Module for Module {}
+
+///
 pub struct Context {
 	#[allow(dead_code)] // we need to keep this around as it dictates the lifetime of `session`
 	globalSession: slang::GlobalSession,
 
 	pub(crate) session: slang::Session,
 
-	pub compilationTarget: SourceType
+	pub compilationTarget: SourceType,
+
+	compatHash: u64,
+
+	environment: Option<compile::Environment<Module>>
 }
 impl Context
 {
@@ -112,12 +124,16 @@ impl Context
 			return Err(anyhow!("Failed to create Slang context"));
 		};
 
+		// Create the compatibility hash for our configuration
+		let digest = crc64::Digest::new();
+		/*  ToDo: ingest relevant session options */
+
 		// Done!
-		Ok(Self {	globalSession, session, compilationTarget })
+		Ok(Self {	globalSession, session, compilationTarget, compatHash: digest.sum64(), environment: None })
 	}
 
-	/// Create a new Slang context with the given module search path. The target platform is automatically detected
-	/// before delegating to [`Self::forPlatform`].
+	/// Create a new Slang context with the given module search path. The actual creation is delegated to
+	/// [`Self::forTarget`] using the default shader compilation target for the current target platform.
 	///
 	/// # Arguments
 	///
@@ -139,5 +155,34 @@ impl Context
 	/// * `sourceFile` – The `.slang` file containing the shader source code.
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> Result<Program> {
 		Program::new(self, sourceFile)
+	}
+}
+
+impl compile::Context<Module> for Context
+{
+	fn replaceEnvironment (&mut self, environment: Option<&compile::Environment<Module>>)
+		-> std::result::Result<(), compile::SetEnvironmentError>
+	{
+		if let Some(curEnv) = &self.environment
+		{
+			if let Some(newEnv) = environment
+			{
+				if self.compatHash != newEnv.compatHash() {
+					return Err(compile::SetEnvironmentError::IncompatibleEnvironment)
+				}
+				todo!()
+			}
+			else {
+				self.environment = None;
+				todo!()
+			}
+		}
+		else {
+			todo!()
+		}
+	}
+
+	fn environmentCompatHash (&self) -> u64 {
+		self.compatHash
 	}
 }

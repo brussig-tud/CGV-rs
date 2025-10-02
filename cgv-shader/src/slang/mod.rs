@@ -6,7 +6,7 @@
 
 /// Submodule implementing the Slang runtime context
 mod context;
-pub use context::Context; // re-export
+pub use context::{Context, Module}; // re-export
 
 /// Submodule implementing the Slang shader program representation
 mod program;

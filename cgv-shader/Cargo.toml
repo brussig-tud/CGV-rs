@@ -9,6 +9,7 @@ tracing = {version="*", optional=true}
 wgpu = {version="26.0.1", optional=true, features=["spirv"]}
 anyhow = "*"
 uuid = "*"
+crc64fast-nvme = "*"
 cgv-util = {path="../cgv-util"}
 
 [target.'cfg(not(target_os="windows"))'.dependencies]

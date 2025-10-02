@@ -6,7 +6,7 @@
 
 // Submodule implementing compilation environments
 mod environment;
-pub use environment::Environment; // re-export
+pub use environment::{Module, Environment}; // re-export
 
 
 
@@ -46,8 +46,8 @@ pub enum MergeEnvironmentError {
 pub trait Context<ModuleType: environment::Module>
 {
 	///
-	fn replaceEnvironment (&mut self, environment: &Environment<ModuleType>) -> Result<(), SetEnvironmentError>;
+	fn replaceEnvironment (&mut self, environment: Option<&Environment<ModuleType>>) -> Result<(), SetEnvironmentError>;
 
 	///
-	fn mergeEnvironment (&mut self, environment: &Environment<ModuleType>) -> Result<(), MergeEnvironmentError>;
+	fn environmentCompatHash (&self) -> u64;
 }
