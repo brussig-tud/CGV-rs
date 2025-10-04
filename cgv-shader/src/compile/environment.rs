@@ -15,6 +15,9 @@ use tracing;
 use uuid;
 use uuid::Uuid;
 
+// Local imports
+use crate::compile;
+
 
 
 //////
@@ -27,9 +30,14 @@ pub enum MergeError {
 	Incompatible,
 	DuplicateModuleNames(String)
 }
-impl Display for MergeError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.to_string())
+impl Display for MergeError
+{
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::Incompatible => "incompatible environments",
+			Self::DuplicateModuleNames(st) => &format!("duplicate module names: {st}")
+		};
+		write!(formatter, "MergeError[{desc}]")
 	}
 }
 impl Error for MergeError {}
@@ -92,10 +100,24 @@ impl<ModuleType: Module> Environment<ModuleType>
 	}}
 
 	/// Construct an empty environment identified by the given
+	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
+	/// [cgv_shader::]()
+	pub fn forContextWithUuid (context: &impl compile::Context<ModuleType>, uuid: Uuid) -> Self { Self {
+		uuid, compatHash: context.environmentCompatHash(), ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
+	}}
+
+	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and an initial compatibility hash.
 	pub fn withUuidAndCompatHash (uuid: Uuid, compatHash: u64) -> Self { Self {
 		uuid, compatHash, ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
 	}}
+
+	///
+	pub fn cloneWithNewUuid (&self, uuid: Uuid) -> Self {
+		let mut newEnv = self.clone();
+		newEnv.uuid = uuid;
+		newEnv
+	}
 
 	/// Reports the [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) of this environment.
 	#[inline(always)]
@@ -128,7 +150,7 @@ impl<ModuleType: Module> Environment<ModuleType>
 		if self.compatHash != other.compatHash {
 			return Err(MergeError::Incompatible);
 		}
-		let mut newEnv = self.clone();
+		let mut newEnv = self.cloneWithNewUuid(uuid);
 		newEnv.mergeWith(other).map(move |_| newEnv)
 	}
 

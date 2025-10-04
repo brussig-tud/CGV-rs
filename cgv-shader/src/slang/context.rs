@@ -24,13 +24,40 @@ use crate::slang::Program;
 
 //////
 //
-// Classes
+// Structs
 //
 
 ///
 #[derive(Clone)]
 pub struct Module {}
 impl compile::Module for Module {}
+
+/// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
+#[derive(Default)]
+struct CompatOptions {
+	matrixLayoutColumn: bool,
+	matrixLayoutRow: bool,
+	optimize: bool
+}
+impl CompatOptions {
+	pub fn matrixLayoutColumn(&mut self, enable: bool) -> bool {
+		self.matrixLayoutColumn = enable;
+		enable
+	}
+	pub fn matrixLayoutRow(&mut self, enable: bool) -> bool {
+		self.matrixLayoutRow = enable;
+		enable
+	}
+	pub fn optimize(&mut self, enable: bool) -> slang::OptimizationLevel {
+		self.optimize = enable;
+		if enable { slang::OptimizationLevel::Maximal } else { slang::OptimizationLevel::None }
+	}
+	pub fn digest (self) -> u64 {
+		let mut digest = crc64::Digest::new();
+		digest.write(util::slicify(&self));
+		digest.sum64()
+	}
+}
 
 ///
 pub struct Context {
@@ -75,17 +102,19 @@ impl Context
 		};
 
 		// Finalize the slang context with our CGV-rs specific options
+		// - initialize compat-relevant settings
+		let mut compatOptions = CompatOptions::default();
 		// - compile flags
 		let sessionOptions = slang::CompilerOptions::default()
-			.matrix_layout_row(false)
-			.matrix_layout_column(true)
+			.matrix_layout_column(compatOptions.matrixLayoutColumn(true))
+			.matrix_layout_row(compatOptions.matrixLayoutRow(false))
 			.language(slang::SourceLanguage::Glsl);
 		let sessionOptions = match target
 		{
 			CompilationTarget::SPIRV(debug) => sessionOptions
 				.emit_spirv_directly(true)
 				.optimization(
-					if debug { slang::OptimizationLevel::None } else { slang::OptimizationLevel::Maximal }
+					if debug {compatOptions.optimize(false)} else { compatOptions.optimize(true)}
 				)
 				.debug_information(
 					if debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
@@ -125,11 +154,12 @@ impl Context
 		};
 
 		// Create the compatibility hash for our configuration
-		let digest = crc64::Digest::new();
-		/*  ToDo: ingest relevant session options */
+		let compatHash = compatOptions.digest();
 
 		// Done!
-		Ok(Self {	globalSession, session, compilationTarget, compatHash: digest.sum64(), environment: None })
+		Ok(Self {
+			globalSession, session, compilationTarget, compatHash, environment: None
+		})
 	}
 
 	/// Create a new Slang context with the given module search path. The actual creation is delegated to
@@ -163,7 +193,7 @@ impl compile::Context<Module> for Context
 	fn replaceEnvironment (&mut self, environment: Option<&compile::Environment<Module>>)
 		-> std::result::Result<(), compile::SetEnvironmentError>
 	{
-		if let Some(curEnv) = &self.environment
+		if let Some(_curEnv) = &self.environment
 		{
 			if let Some(newEnv) = environment
 			{
@@ -184,5 +214,13 @@ impl compile::Context<Module> for Context
 
 	fn environmentCompatHash (&self) -> u64 {
 		self.compatHash
+	}
+
+	fn loadModuleFromDisk (&mut self, _filepath: impl AsRef<Path>) -> Result<Module, compile::LoadModuleError> {
+		todo!()
+	}
+
+	fn loadModuleFromMemory (&mut self, _blob: &[u8]) -> Result<Module, compile::LoadModuleError> {
+		todo!()
 	}
 }
