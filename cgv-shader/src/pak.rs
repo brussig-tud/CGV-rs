@@ -297,12 +297,16 @@ impl Package
 					}{
 						shaderModule = unsafe {
 							// SAFETY: we already verified that the code is SPIR-V
-							device.create_shader_module_passthrough(
+							/*device.create_shader_module_passthrough(
 								wgpu::ShaderModuleDescriptorPassthrough::SpirV(
 									wgpu::ShaderModuleDescriptorSpirV {label, source: wgpu::util::make_spirv_raw(code)}
 								)
-							)
-						};
+							)*/
+							device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+								entry_point: "NOT_USED".into(), label, spirv: Some(wgpu::util::make_spirv_raw(code)),
+								..Default::default()
+							})
+						}
 					}
 					// - transpile from SPIR-V otherwise
 					else {
