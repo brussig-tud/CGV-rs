@@ -143,4 +143,11 @@ impl Setup
 	pub fn shaderPath (&self) -> Vec<&Path> {
 		self.shaderPath.iter().map(|path| path.as_path()).collect()
 	}
+
+	///
+	pub fn obtainRuntimeEnvironment (&self) -> run::Environment {
+		run::Environment {
+			shaderPath: self.shaderPath.iter().map(|p| p.to_owned()).collect()
+		}
+	}
 }

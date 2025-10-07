@@ -13,11 +13,13 @@ cargo_metadata = "*"
 anyhow = "*"
 serde = {version="*", features = ["derive"]}
 serde_json = "*"
+serde_yaml_ng = "*"
 fs-set-times = "*"
 reqwest = {version="*", features=["blocking"]}
 zip = "*"
 bytes = "*"
 cgv-util = {path="../cgv-util"}
+cgv-runenv = {path="../cgv-runenv"}
 cgv-shader = {path="../cgv-shader", features=["slang_runtime"]}
 
 [features]

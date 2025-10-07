@@ -12,7 +12,11 @@ fn main() -> cgv_build::Result<()>
 
 	// Apply CGV-rs build setup
 	let buildSetup = cgv_build::applyBuildSetup()?;
-	
+	if !cgv_build::isWasm()? {
+		// also get an "ENVIRONMENT.yaml" file for non-WASN builds
+		cgv_build::generateRuntimeEnvironmentFile(&buildSetup)?;
+	}
+
 	// Compile our shaders - TODO: work around internal compiler error when passing `None` subdirs to skip
 	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["derp"]))?;
 

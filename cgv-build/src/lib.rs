@@ -61,6 +61,9 @@ pub use anyhow::{Context, Result, anyhow};
 // Cargo Metadata parsing library
 use cargo_metadata::MetadataCommand;
 
+// CGV imports
+pub use cgv_runenv as run; // re-export
+
 
 
 //////
@@ -251,6 +254,16 @@ pub fn applyBuildSetup () -> Result<Setup>
 	else {
 		panic!("CGV-rs build setup appears to have not yet been generated! Try re-running your build.")
 	}
+}
+
+
+
+/// Emit the [`ENVIRONMENT.yaml`](run::Environment) file resulting from the given [build setup](Setup) next to the
+/// target executable.
+pub fn generateRuntimeEnvironmentFile (buildSetup: &Setup) -> Result<()> {
+	let filepath = getCargoTargetDir()?.join("ENVIRONMENT.yaml");
+	buildSetup.obtainRuntimeEnvironment().serializeToFile(&filepath)?;
+	dependOnGeneratedFile(filepath)
 }
 
 /// Report the package name of the crate currently being built by *Cargo*.

@@ -21,10 +21,6 @@
 // Module definitions
 //
 
-// THe module implementing the runtime environment information
-mod env;
-pub use env::Environment; // re-export
-
 // The module implementing the Player
 mod player;
 pub use player::{Player, InputEvent, EventOutcome, RenderSetup, ManagedBindGroupLayouts}; // re-export
@@ -92,8 +88,9 @@ use ctor;
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-// CGV utils
+// CGV imports
 pub use cgv_util as util; // re-export
+pub use cgv_runenv as run; // re-export
 
 
 
@@ -346,6 +343,6 @@ pub trait ApplicationFactory
 	/// A boxed instance of the application if successful, or some descriptive error detailing the failure if no
 	/// instance could be created.
 	fn create (
-		&self, context: &Context, renderSetup: &RenderSetup, environment: Environment
+		&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment
 	) -> Result<Box<dyn Application>>;
 }

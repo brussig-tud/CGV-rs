@@ -16,8 +16,6 @@ tracing = "*"
 tracing-subscriber = {version="*", features=["env-filter"]}
 cfg-if = "*"
 ctor = "*"
-serde = {version="*", features = ["derive"]}
-serde_yaml_ng = "*"
 arrayvec = "*"
 dashmap = "*"
 web-time = "*"
@@ -38,6 +36,7 @@ nalgebra = "*"
 nalgebra-glm = "*"
 alum = "*"
 cgv-util = {path="../cgv-util"}
+cgv-runenv = {path="../cgv-runenv"}
 cgv-shader = {path="../cgv-shader", features=["wgpu_runtime", "tracing_output"]}
 
 [target.'cfg(target_os="windows")'.dependencies]

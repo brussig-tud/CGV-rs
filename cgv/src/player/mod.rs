@@ -211,7 +211,7 @@ unsafe impl Sync for Player {}
 impl Player
 {
 	pub fn new (
-		applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext, environment: Environment
+		applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext, environment: run::Environment
 	) -> Result<Self>
 	{
 		// Log player initialization start
@@ -317,18 +317,21 @@ impl Player
 		tracing::info!("Platform: {}", util::meta::platformTargetTriple());
 
 		// Set up environment
-		let environment = match fs::read("ENVIRONMENT.yaml")
-		{
-			Ok(bytes) => Environment::fromBytes(&bytes).unwrap_or_else(|e| {
-				tracing::warn!("Failed to read ENVIRONMENT.yaml file: {}", e);
-				Environment::default()
-			}),
-
-			Err(e) => {
-				if e.kind() != std::io::ErrorKind::NotFound {
+		let environment = {
+			let path = util::meta::currentExeDir().join("ENVIRONMENT.yaml");
+			match fs::read(path)
+			{
+				Ok(bytes) => run::Environment::deserialize(&bytes).unwrap_or_else(|e| {
 					tracing::warn!("Failed to read ENVIRONMENT.yaml file: {}", e);
+					run::Environment::default()
+				}),
+
+				Err(e) => {
+					if e.kind() != std::io::ErrorKind::NotFound {
+						tracing::warn!("Failed to read ENVIRONMENT.yaml file: {}", e);
+					}
+					run::Environment::default()
 				}
-				Environment::default()
 			}
 		};
 
@@ -472,7 +475,9 @@ impl Player
 				.start(
 					canvas,
 					webOptions,
-					Box::new(|cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc, Environment::default())?)))
+					Box::new(|cc| Ok(
+						Box::new(Player::new(Box::new(applicationFactory), cc, run::Environment::default())?)
+					))
 				)
 				.await;
 

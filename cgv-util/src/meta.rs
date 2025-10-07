@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{env, str::FromStr, sync::LazyLock};
+use std::{env, str::FromStr, sync::LazyLock, path::{Path, PathBuf}};
 
 // Anyhow library
 use anyhow::{anyhow, Result};
@@ -19,6 +19,24 @@ use crate::*;
 //
 // Constants
 //
+
+/// The *Cargo* `CARGO_MANIFEST_DIR` environment variable as it was set during the build.
+static MANIFEST_DIR: LazyLock<PathBuf> = LazyLock::new(||
+	env!("CARGO_MANIFEST_DIR").into()
+);
+
+/// The directory of the executable that was run to start the current process.
+static CURRENT_EXE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+	#[cfg(not(target_arch="wasm32"))] {
+		let ce = std::env::current_exe().unwrap_or_else(
+			|err| panic!("{}", err)
+		);
+		ce.parent().map_or("".into(), |path| path.into())
+	}
+	#[cfg(target_arch="wasm32")] {
+		"".into()
+	}
+});
 
 /// The target triple the module was built for according the build-time values of the *Cargo* `TARGET` environment
 /// variable.
@@ -455,6 +473,20 @@ impl FromStr for SupportedPlatform {
 //
 // Functions
 //
+
+/// Report the directory path that the [manifest file](https://doc.rust-lang.org/cargo/reference/manifest.html) of the
+/// calling crate is located in. This equivalent to the expression
+/// `&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))`, with the difference that the returned `Path` slice has a
+/// static lifetime.
+pub fn manifestDir() -> &'static Path {
+	&MANIFEST_DIR
+}
+
+/// Report the directory that the executable of the calling process was started from resides in. For WASM builds, this
+/// will just be the empty path `""`.
+pub fn currentExeDir() -> &'static Path {
+	&CURRENT_EXE_DIR
+}
 
 /// Retrieve the [target triple](https://doc.rust-lang.org/cargo/appendix/glossary.html#target) that the calling code
 /// was compiled for.

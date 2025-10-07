@@ -66,11 +66,28 @@ pub use bitcode; // re-export
 // Macros
 //
 
+/// Returns a UTF-8 encoded `'static` string slice containing the full path to the indicated location inside the source
+/// tree of the caller.
+///
+/// # Arguments
+///
+/// * `path` – The path inside the crate root folder (must, by convention, always start with a `/`).
+///
+/// # Returns
+///
+/// A `'static` string slice containing the verbatim characters of the sourced file.
+#[macro_export]
+macro_rules! pathInsideCrate {
+	($path:expr) => {
+		concat!(env!("CARGO_MANIFEST_DIR"), $path)
+	};
+}
+
 /// Reads a UTF-8 encoded file located inside the source tree of the caller into a static string slice at compile time.
 ///
 /// # Arguments
 ///
-/// * `file` – The path of the file, indicated from the repository root (i.e. must always start with a `/`).
+/// * `file` – The path of the file, indicated from the crate root folder (i.e. must always start with a `/`).
 ///
 /// # Returns
 ///
@@ -87,7 +104,7 @@ macro_rules! sourceFile {
 ///
 /// # Arguments
 ///
-/// * `file` – The path of the file, indicated from the repository root (i.e. must always start with a `/`).
+/// * `file` – The path of the file, indicated from the crate root folder (i.e. must always start with a `/`).
 ///
 /// # Returns
 ///
@@ -104,7 +121,7 @@ macro_rules! sourceBytes {
 ///
 /// # Arguments
 ///
-/// * `file` – The path of the file, indicated from the repository root (i.e. must always start with a `/`).
+/// * `file` – The path of the file, indicated from the *Cargo* `OUT_DIR` as root (i.e. must always start with a `/`).
 ///
 /// # Returns
 ///
@@ -121,7 +138,7 @@ macro_rules! sourceGeneratedFile {
 ///
 /// # Arguments
 ///
-/// * `file` – The path of the file, indicated from the repository root (i.e. must always start with a `/`).
+/// * `file` – The path of the file, indicated from the *Cargo* `OUT_DIR` as root (i.e. must always start with a `/`).
 ///
 /// # Returns
 ///

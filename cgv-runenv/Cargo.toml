@@ -1,0 +1,16 @@
+
+[package]
+name = "cgv-runenv"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+anyhow = "*"
+serde = {version="*", features = ["derive"]}
+serde_yaml_ng = "*"
+
+[features]
+default = []

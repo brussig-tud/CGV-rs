@@ -130,7 +130,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::Environment)
+	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
 		-> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
@@ -167,6 +167,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		}
 		#[cfg(not(target_arch="wasm32"))] {
 			let _slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath);
+			let _ = _slangCtx?.buildProgram(util::pathInsideCrate!("/shader/example.slang"))?;
 		}
 
 		// The example shader
