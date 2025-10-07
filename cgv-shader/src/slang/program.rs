@@ -28,7 +28,9 @@ use crate::slang::{Context, EntryPoint};
 ///
 pub struct Program {
 	_linkedProg: slang::ComponentType,
-	genericBytecode: slang::Blob,
+	_genericIRBytecode: slang::Blob,
+	_genericIRBytecode_bytes: Vec<u8>,
+	allEntryPointsBytecode: slang::Blob,
 	entryPoints: Vec<EntryPoint>
 }
 impl Program
@@ -41,6 +43,8 @@ impl Program
 		).or_else(|err| Err(
 			anyhow!("Compilation of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
+		let _genericIRBytecode = module.serialize()?;
+		let _genericIRBytecode_bytes = _genericIRBytecode.as_slice().to_vec();
 		let entryPoints = module.entry_points();
 
 		// Link program instances resulting from each entry point
@@ -62,7 +66,7 @@ impl Program
 			anyhow!("Linking of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
 		// - generic bytecode including all entry points
-		let genericBytecode = linkedProg.target_code(0).or_else(|err| Err(
+		let allEntryPointsBytecode = linkedProg.target_code(0).or_else(|err| Err(
 			anyhow!("Building of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
 		// - bytecode specialized to each entry point
@@ -76,7 +80,7 @@ impl Program
 		};
 
 		// Done!
-		Ok(Self { _linkedProg: linkedProg, genericBytecode, entryPoints })
+		Ok(Self { _linkedProg: linkedProg, _genericIRBytecode, _genericIRBytecode_bytes, allEntryPointsBytecode, entryPoints })
 	}
 
 	#[inline]
@@ -86,6 +90,6 @@ impl Program
 
 	#[inline]
 	pub fn genericBuildArtifact (&self) -> &[u8] {
-		self.genericBytecode.as_slice()
+		self.allEntryPointsBytecode.as_slice()
 	}
 }

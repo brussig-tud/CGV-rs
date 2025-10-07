@@ -34,12 +34,13 @@ pub struct Environment {
 	/// Array of directory paths to search for whenever shader files are given by a relative path.
 	pub shaderPath: Vec<PathBuf>
 }
-impl Environment {
+impl Environment
+{
 	///
 	pub fn serialize (&self) -> Vec<u8> {
 		let mut bytes = Vec::new();
 		serde_yaml_ng::to_writer(&mut bytes, self).expect(
-			"INTERNAL LOGIC ERROR: failed to serialize in instance of cgv::Environment"
+			"INTERNAL LOGIC ERROR: failed to serialize in instance of cgv_runenv::Environment"
 		);
 		bytes
 	}
