@@ -41,16 +41,19 @@ impl Module {
 	}
 
 	///
+	#[inline(always)]
 	pub fn slangModule (&self) -> &slang::Module {
 		&self.slangModule
 	}
 
 	///
+	#[inline(always)]
 	pub fn irBlob (&self) -> &slang::Blob {
 		&self.irBlob
 	}
 
 	///
+	#[inline(always)]
 	pub fn irBytecode (&self) -> &[u8] {
 		self.irBlob.as_slice()
 	}
