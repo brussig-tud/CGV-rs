@@ -37,11 +37,11 @@ impl Program
 	pub(crate) fn fromSource (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self>
 	{
 		// Compile Slang module
-		let genericModule = slangContext.compileModule(filename.as_ref())?;
-		let module = genericModule.slangModule();
+		let generic = slangContext.compileModule(filename.as_ref())?;
+		let module = generic.slangModule();
 		let entryPoints = module.entry_points();
 
-		// Link program instances resulting from each entry point
+		// Specialize program instances for each entry point
 		// - gather components
 		let components = {
 			let mut components = vec![module.downcast().clone()];
@@ -59,7 +59,7 @@ impl Program
 		let linkedProg = program.link().or_else(|err| Err(
 			anyhow!("Linking of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
-		// - generic bytecode including all entry points
+		// - variant including all entry points
 		let allEntryPointsProg = linkedProg.target_code(0).or_else(|err| Err(
 			anyhow!("Building of `{}` failed:\n{}", filename.as_ref().display(), err)
 		))?;
@@ -76,7 +76,7 @@ impl Program
 		};
 
 		// Done!
-		Ok(Self { _linkedProg: linkedProg, genericModule, allEntryPointsProg, entryPointProgs })
+		Ok(Self { _linkedProg: linkedProg, genericModule: generic, allEntryPointsProg, entryPointProgs })
 	}
 
 	///
