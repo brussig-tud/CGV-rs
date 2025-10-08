@@ -193,17 +193,17 @@ impl Package
 			{
 				if let Some(entryPointName) = entryPoint
 				{
-					if let Some(ep) = slangProg.entryPoints().iter().find(
-						|&ep| ep.slang.function_reflection().name() == Some(entryPointName)
+					if let Some(ep) = slangProg.entryPointProgs().iter().find(
+						|&ep| ep.slangEntryPoint().function_reflection().name() == Some(entryPointName)
 					){
-						progInstance.addEntryPoint(Some(entryPointName), ep.buildArtifact().to_owned());
+						progInstance.addEntryPoint(Some(entryPointName), ep.programBytecode().to_owned());
 					}
 					else {
 						return Err(ProgramInstanceBuildError::InvalidEntryPoint(entryPointName.to_owned()))
 					}
 				}
 				else {
-					progInstance.addEntryPoint(None, slangProg.genericBuildArtifact().to_owned());
+					progInstance.addEntryPoint(None, slangProg.allEntryPointsProg().to_owned());
 				}
 			}
 			Ok((progInstance, slangContext.compilationTarget))
@@ -211,7 +211,7 @@ impl Package
 		else {
 			// Only include the generic program that includes code paths from all entry points
 			Ok((
-				Program::generic(slangProg.genericBuildArtifact().to_owned()), slangContext.compilationTarget
+				Program::generic(slangProg.allEntryPointsProg().to_owned()), slangContext.compilationTarget
 			))
 		}
 	}

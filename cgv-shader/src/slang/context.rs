@@ -8,7 +8,7 @@
 use std::path::Path;
 
 // Anyhow library
-use anyhow::*;
+use anyhow::anyhow;
 
 // Slang library
 use shader_slang as slang;
@@ -18,6 +18,7 @@ use crc64fast_nvme as crc64;
 
 // Local imports
 use crate::*;
+use crate::compile::LoadModuleError;
 use crate::slang::Program;
 
 
@@ -29,7 +30,31 @@ use crate::slang::Program;
 
 ///
 #[derive(Clone)]
-pub struct Module {}
+pub struct Module {
+	slangModule: slang::Module,
+	irBlob: slang::Blob
+}
+impl Module {
+	///
+	pub fn fromSlangModule (slangModule: slang::Module) -> anyhow::Result<Self> {
+		Ok(Self { irBlob: slangModule.serialize()?, slangModule })
+	}
+
+	///
+	pub fn slangModule (&self) -> &slang::Module {
+		&self.slangModule
+	}
+
+	///
+	pub fn irBlob (&self) -> &slang::Blob {
+		&self.irBlob
+	}
+
+	///
+	pub fn irBytecode (&self) -> &[u8] {
+		self.irBlob.as_slice()
+	}
+}
 impl compile::Module for Module {}
 
 /// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
@@ -59,7 +84,14 @@ impl CompatOptions {
 	}
 }
 
+/// # ToDos
 ///
+/// *Slang* sessions are stateful. This is not necessarily something we always want. Consider using a fresh session in
+/// the implementations of the [`compile...()`](compile::Context::compileModule) and
+/// [`load...()`](compile::Context::loadModule) family of methods, as currently, they will cause the created module to
+/// be embedded in the session, which can affect subsequent compilations of other modules in unexpected ways. The
+/// [`compile::Context`] trait on the other hand has them take immutable references to `self` while very much _**not**_
+/// implying any interior mutability.
 pub struct Context {
 	#[allow(dead_code)] // we need to keep this around as it dictates the lifetime of `session`
 	globalSession: slang::GlobalSession,
@@ -183,8 +215,8 @@ impl Context
 	/// # Arguments
 	///
 	/// * `sourceFile` – The `.slang` file containing the shader source code.
-	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> Result<Program> {
-		Program::new(self, sourceFile)
+	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
+		Program::fromSource(self, sourceFile)
 	}
 }
 
@@ -216,11 +248,35 @@ impl compile::Context<Module> for Context
 		self.compatHash
 	}
 
-	fn loadModuleFromDisk (&mut self, _filepath: impl AsRef<Path>) -> Result<Module, compile::LoadModuleError> {
+	fn compileModule (&self, sourcefile: impl AsRef<Path>) -> Result<Module, compile::LoadModuleError>
+	{
+		// Let slang load and compile the module
+		let module = self.session.load_module(
+			sourcefile.as_ref().to_string_lossy().as_ref()
+		).or_else(|err| Err(LoadModuleError::ImplementationSpecific(
+			anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
+		)))?;
+
+		// Wrap the Slang module in our compile::Module-compliant representation
+		let module = Module::fromSlangModule(module).or_else(
+			|err| Err(LoadModuleError::ImplementationSpecific(
+				anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
+			))
+		)?;
+
+		// Done!
+		Ok(module)
+	}
+
+	fn compileModuleFromMemory(&self, _source: &str) -> std::result::Result<Module, LoadModuleError> {
 		todo!()
 	}
 
-	fn loadModuleFromMemory (&mut self, _blob: &[u8]) -> Result<Module, compile::LoadModuleError> {
+	fn loadModule (&self, _filepath: impl AsRef<Path>) -> Result<Module, compile::LoadModuleError> {
+		todo!()
+	}
+
+	fn loadModuleFromMemory (&self, _blob: &[u8]) -> Result<Module, compile::LoadModuleError> {
 		todo!()
 	}
 }

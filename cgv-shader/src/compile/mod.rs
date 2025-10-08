@@ -72,8 +72,14 @@ pub trait Context<ModuleType: environment::Module>
 	fn environmentCompatHash (&self) -> u64;
 
 	///
-	fn loadModuleFromDisk (&mut self, filepath: impl AsRef<Path>) -> Result<ModuleType, LoadModuleError>;
+	fn compileModule (&self, filepath: impl AsRef<Path>) -> Result<ModuleType, LoadModuleError>;
 
 	///
-	fn loadModuleFromMemory (&mut self, blob: &[u8]) -> Result<ModuleType, LoadModuleError>;
+	fn compileModuleFromMemory (&self, source: &str) -> Result<ModuleType, LoadModuleError>;
+
+	///
+	fn loadModule (&self, filepath: impl AsRef<Path>) -> Result<ModuleType, LoadModuleError>;
+
+	///
+	fn loadModuleFromMemory (&self, blob: &[u8]) -> Result<ModuleType, LoadModuleError>;
 }

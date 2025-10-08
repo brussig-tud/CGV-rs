@@ -44,13 +44,19 @@ use crate::CompilationTarget;
 
 /// 
 pub struct EntryPoint {
-	pub slang: slang::EntryPoint,
-	bytecode: slang::Blob,
+	slang: slang::EntryPoint,
+	progBytecode: slang::Blob,
 }
-impl EntryPoint {
+impl EntryPoint
+{
 	#[inline]
-	pub fn buildArtifact (&self) -> &[u8] {
-		self.bytecode.as_slice()
+	pub fn slangEntryPoint (&self) -> &slang::EntryPoint {
+		&self.slang
+	}
+
+	#[inline]
+	pub fn programBytecode (&self) -> &[u8] {
+		self.progBytecode.as_slice()
 	}
 }
 
