@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::path::Path;
+use std::{rc::Rc, path::Path};
 
 // Anyhow library
 use anyhow::anyhow;
@@ -87,6 +87,19 @@ impl CompatOptions {
 	}
 }
 
+/// Helper struct storing session configuration info in order to facilitate [Context::fork].
+#[derive(Clone)]
+struct SlangSessionConfig {
+	searchPaths: Vec<std::ffi::CString>,
+	target: CompilationTarget,
+	compilerOptions: slang::CompilerOptions
+}
+impl SlangSessionConfig {
+	pub fn searchPathsAsPointers(&self) -> Vec<*const i8> {
+		self.searchPaths.iter().map(|p| p.as_ptr()).collect::<Vec<*const i8>>()
+	}
+}
+
 /// # ToDos
 ///
 /// *Slang* sessions are stateful. This is not necessarily something we always want. Consider using a fresh session in
@@ -97,8 +110,9 @@ impl CompatOptions {
 /// implying any interior mutability.
 pub struct Context {
 	#[allow(dead_code)] // we need to keep this around as it dictates the lifetime of `session`
-	globalSession: slang::GlobalSession,
+	globalSession: Rc<slang::GlobalSession>,
 
+	sessionConfig: SlangSessionConfig,
 	pub(crate) session: slang::Session,
 
 	pub compilationTarget: SourceType,
@@ -117,16 +131,6 @@ impl Context
 	/// * `searchPath` – The module search path for the *Slang* compiler.
 	pub fn forTarget (target: CompilationTarget, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
 	{
-		// Convert search path for FFI
-		// - create owned storage for the CStrings
-		let searchPaths = searchPath.iter().map(|p| unsafe {
-			std::ffi::CString::from_vec_unchecked(p.as_ref().to_string_lossy().as_bytes().to_vec())
-		}).collect::<Vec<std::ffi::CString>>();
-		// - build array of raw pointers required by the FFI
-		let searchPaths = searchPaths.iter().map(|p|
-			p.as_ptr()
-		).collect::<Vec<*const i8>>();
-
 		// Start a Slang global session
 		let globalSession = slang::GlobalSession::new();
 		let globalSession = if globalSession.is_some() {
@@ -136,17 +140,17 @@ impl Context
 			return Err(anyhow!("Failed to create Slang global session"));
 		};
 
-		// Finalize the slang context with our CGV-rs specific options
+		// Finalize the Slang session configuration
 		// - initialize compat-relevant settings
 		let mut compatOptions = CompatOptions::default();
 		// - compile flags
-		let sessionOptions = slang::CompilerOptions::default()
+		let compilerOptions = slang::CompilerOptions::default()
 			.matrix_layout_column(compatOptions.matrixLayoutColumn(true))
 			.matrix_layout_row(compatOptions.matrixLayoutRow(false))
 			.language(slang::SourceLanguage::Glsl);
-		let sessionOptions = match target
+		let compilerOptions = match target
 		{
-			CompilationTarget::SPIRV(debug) => sessionOptions
+			CompilationTarget::SPIRV(debug) => compilerOptions
 				.emit_spirv_directly(true)
 				.optimization(
 					if debug {compatOptions.optimize(false)} else { compatOptions.optimize(true)}
@@ -155,31 +159,26 @@ impl Context
 					if debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
 				),
 
-			CompilationTarget::WGSL => sessionOptions
+			CompilationTarget::WGSL => compilerOptions
 				.optimization(slang::OptimizationLevel::Maximal)
 				.debug_information(slang::DebugInfoLevel::None)
 		};
-		// - output profile
-		let compilationTarget;
-		let targetDesc = slang::TargetDesc::default()
-			.profile(globalSession.find_profile("glsl_460"));
-		let targetDesc = match target {
-			CompilationTarget::SPIRV(_) => {
-				compilationTarget = SourceType::SPIRV;
-				targetDesc.format(slang::CompileTarget::Spirv)
-			},
-			CompilationTarget::WGSL => {
-				compilationTarget = SourceType::WGSL;
-				targetDesc.format(slang::CompileTarget::Wgsl)
-			}
+		// - store
+		let sessionConfig = SlangSessionConfig {
+			target, compilerOptions,
+			searchPaths: searchPath.iter().map(|p| unsafe {
+				std::ffi::CString::from_vec_unchecked(p.as_ref().to_string_lossy().as_bytes().to_vec())
+			}).collect::<Vec<std::ffi::CString>>()
 		};
 
-		let targets = &[targetDesc];
-		// - the reusable compiler session
+		// Create the reusable Slang compiler session
+		let (targetDesc, compilationTarget) = constructTargetDesc(
+			sessionConfig.target, globalSession.find_profile("glsl_460")
+		);
 		let session = globalSession.create_session(&slang::SessionDesc::default()
-			.targets(targets)
-			.search_paths(searchPaths.as_slice())
-			.options(&sessionOptions)
+			.targets(&[targetDesc])
+			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
+			.options(&sessionConfig.compilerOptions)
 		);
 		let session = if session.is_some() {
 			session.unwrap()
@@ -193,7 +192,8 @@ impl Context
 
 		// Done!
 		Ok(Self {
-			globalSession, session, compilationTarget, compatHash, environment: None
+			globalSession: Rc::new(globalSession), sessionConfig, session, compilationTarget, compatHash,
+			environment: None
 		})
 	}
 
@@ -210,6 +210,32 @@ impl Context
 		}
 		#[cfg(target_arch="wasm32")] {
 			Self::forTarget(CompilationTarget::WGSL, searchPath)
+		}
+	}
+
+	/// Create a new Slang context inheriting all settings and the [environment](compile::Context::replaceEnvironment).
+	pub fn fork (&self) -> Self
+	{
+		// Re-create the reusable Slang compiler session from the stored configuration
+		let (targetDesc, compilationTarget) = constructTargetDesc(
+			self.sessionConfig.target, self.globalSession.find_profile("glsl_460")
+		);
+		let session = self.globalSession.create_session(&slang::SessionDesc::default()
+			.targets(&[targetDesc])
+			.search_paths(self.sessionConfig.searchPathsAsPointers().as_slice())
+			.options(&self.sessionConfig.compilerOptions)
+		).expect(
+			"Creating a Slang session identical to an existing one should never fail unless there are \
+			 unrecoverable external circumstances (out-of-memory etc.)"
+		);
+
+		// Done!
+		Self {
+			session, compilationTarget,
+			globalSession: self.globalSession.clone(),
+			sessionConfig: self.sessionConfig.clone(),
+			compatHash: self.compatHash,
+			environment: self.environment.clone()
 		}
 	}
 
@@ -281,5 +307,24 @@ impl compile::Context<Module> for Context
 
 	fn loadModuleFromMemory (&self, _blob: &[u8]) -> Result<Module, compile::LoadModuleError> {
 		todo!()
+	}
+}
+
+
+
+//////
+//
+// Functions
+//
+
+///
+#[inline(always)]
+fn constructTargetDesc<'caller> (target: CompilationTarget, profile: slang::ProfileID)
+	-> (slang::TargetDesc<'caller>, SourceType)
+{
+	let targetDesc = slang::TargetDesc::default().profile(profile);
+	match target {
+		CompilationTarget::SPIRV(_) => (targetDesc.format(slang::CompileTarget::Spirv), SourceType::SPIRV),
+		CompilationTarget::WGSL => (targetDesc.format(slang::CompileTarget::Wgsl), SourceType::WGSL)
 	}
 }
