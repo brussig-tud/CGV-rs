@@ -37,7 +37,7 @@ nalgebra-glm = "*"
 alum = "*"
 cgv-util = {path="../cgv-util"}
 cgv-runenv = {path="../cgv-runenv"}
-cgv-shader = {path="../cgv-shader", features=["wgpu_runtime", "tracing_output"]}
+cgv-shader = {path="../cgv-shader", features=["wgpu_runtime"]} # , "tracing_output"
 
 [target.'cfg(target_os="windows")'.dependencies]
 ansi_term = "*"
