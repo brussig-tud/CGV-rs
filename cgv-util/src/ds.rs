@@ -122,11 +122,11 @@ impl UniqueArrayElement<Self> for &std::path::Path {
 /// memory, efficiently guaranteeing element uniqueness at the cost of requiring more memory (in the worst case double
 /// that of a [`Vec`]).
 ///
-/// **NOTE**: `UniqueArray` does not implement [`IndexMut`] as mutating an element in place leaves the container with no
-/// way of vetting the changes, and thus it could not uphold the uniqueness guarantee. If you need to change a value in
-/// the array, use [`UniqueArray::changeElement`] instead.
+/// **NOTE**: `UniqueArray` does not implement [`IndexMut`] as mutating an element from the outside leaves the container
+/// with no way of vetting the changes, and thus it could not uphold the uniqueness guarantee. If you need to change an
+/// element in the array, use [`UniqueArray::changeElement`] instead.
 #[derive(Clone)]
-struct UniqueArray<K: Ord+Clone, E: UniqueArrayElement<K>> {
+pub struct UniqueArray<K: Ord+Clone, E: UniqueArrayElement<K>> {
 	keys: BTreeSet<K>,
 	elems: Vec<E>
 }
@@ -142,7 +142,7 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 		keys: BTreeSet::new(), elems: Vec::with_capacity(n)
 	}}
 
-	/// Return a range that spans the indices of all elements in the `UniqueArray`.
+	/// Return the number of elements currently stored in the `UniqueArray`.
 	#[inline(always)]
 	pub fn len (&self) -> usize {
 		self.elems.len()
@@ -159,6 +159,84 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 		else {
 			assert_eq!(self.keys.len(), self.elems.len());
 			Err(())
+		}
+	}
+
+	/// Checks if the given element is present in the collection.
+	///
+	/// # Arguments
+	///
+	/// * `elem` – A reference to the element to look for in the collection. Makes use of the
+	/// [key](UniqueArrayElement::key) provided by the [`UniqueArrayElement`] (which `E` implements) to enable cheap
+	/// comparison.
+	///
+	/// # Returns
+	///
+	/// * `true` if the given element is found in the collection.
+	/// * `false` if the element is not found.
+	pub fn contains (&self, elem: &E) -> bool {
+		self.keys.contains(elem.key())
+	}
+
+	/// Checks if the `UniqueArray` contains an element that is being [keyed](UniqueArrayElement::key) to the given
+	/// value.
+	///
+	/// # Arguments
+	///
+	/// * `key` – The key to look for in the collection.
+	///
+	/// # Returns
+	///
+	/// `true` if an element with the given key exists in the collection, `false` otherwise.
+	///
+	/// # Example
+	///
+	/// TODO, TODO, TODO!
+	/// ```
+	/// let mut map = MyMap::new();
+	/// map.insert(1, "value1");
+	///
+	/// assert!(map.containsKey(&1)); // Returns true, as key 1 exists.
+	/// assert!(!map.containsKey(&2)); // Returns false, as key 2 does not exist.
+	/// ```
+	pub fn containsKey (&self, key: &K) -> bool {
+		self.keys.contains(key)
+	}
+
+	/// Retrieves a reference to an element in the `UniqueArray` that [keys](UniqueArrayElement::key) to the given
+	/// value.
+	///
+	/// Determining whether the element is present in the collection is fast, so this method will return very quickly if
+	/// no such element is contained. But **actually finding the element** if it exists **involves a linear search**.
+	///
+	/// # Arguments
+	///
+	/// * `key` – The value that the desired element should key to.
+	///
+	/// # Returns
+	///
+	/// `Some` element from the collection that keys to the specified value, `None` if no such element exists in the
+	/// collection.
+	///
+	/// # Example
+	///
+	/// TODO, TODO, TODO!
+	/// ```
+	/// let mut collection = MyCollection::new();
+	/// collection.insert("key1", "value1");
+	///
+	/// if let Some(value) = collection.get(&"key1") {
+	///     println!("Found: {}", value);
+	/// } else {
+	///     println!("Key not found");
+	/// }
+	/// ```
+	pub fn get (&self, key: &K) -> Option<&E> {
+		if self.keys.contains(key) {
+			self.elems.iter().find(|&e| e.key() == key)
+		}
+		else {
+			None
 		}
 	}
 
