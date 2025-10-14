@@ -5,13 +5,7 @@
 //
 
 // Standard library
-use std::{
-	collections::BTreeMap, path::PathBuf, error::Error, fmt::{Display, Formatter}
-};
-
-// Tracing library
-//#[cfg(feature="tracing_output")]
-//use tracing;
+use std::{path::PathBuf, error::Error, fmt::{Display, Formatter}};
 
 // UUID library
 use uuid;
@@ -19,6 +13,7 @@ use uuid::Uuid;
 
 // Local imports
 use crate::compile;
+use crate::util;
 
 
 
@@ -30,14 +25,14 @@ use crate::compile;
 #[derive(Debug)]
 pub enum MergeError {
 	Incompatible,
-	DuplicateModuleNames(String)
+	DuplicateModulePaths(PathBuf)
 }
 impl Display for MergeError
 {
 	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::Incompatible => "incompatible environments",
-			Self::DuplicateModuleNames(st) => &format!("duplicate module names: {st}")
+			Self::DuplicateModulePaths(path) => &format!("duplicate module names: {}", path.display())
 		};
 		write!(formatter, "MergeError[{desc}]")
 	}
@@ -64,191 +59,16 @@ impl Module for _DummyModule {}
 // Structs
 //
 
-/*#[derive(Clone)]
-pub struct Environment<ModuleType: Module> {
-	uuid: Uuid,
-	compatHash: u64,
-	ownedModules: BTreeSet<String>,
-	linkedEnvs: BTreeMap<Uuid, BTreeSet<String>>,
-	modules: BTreeMap<String, ModuleType>
-}
-impl<ModuleType: Module> Environment<ModuleType>
-{
-	/// Construct an empty environment identified by the given
-	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier).
-	pub fn withUuid (uuid: Uuid) -> Self { Self {
-		uuid, compatHash: 0, ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
-	}}
-
-	/// Construct an empty environment identified by the given
-	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
-	/// [cgv_shader::]()
-	pub fn forContextWithUuid (context: &impl compile::Context<ModuleType>, uuid: Uuid) -> Self { Self {
-		uuid, compatHash: context.environmentCompatHash(), ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
-	}}
-
-	/// Construct an empty environment identified by the given
-	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and an initial compatibility hash.
-	pub fn withUuidAndCompatHash (uuid: Uuid, compatHash: u64) -> Self { Self {
-		uuid, compatHash, ownedModules: BTreeSet::new(), linkedEnvs: BTreeMap::new(), modules: BTreeMap::new()
-	}}
-
-	///
-	pub fn cloneWithNewUuid (&self, uuid: Uuid) -> Self {
-		let mut newEnv = self.clone();
-		newEnv.uuid = uuid;
-		newEnv
-	}
-
-	/// Reports the [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) of this environment.
-	#[inline(always)]
-	pub fn uuid (&self) -> Uuid {
-		self.uuid
-	}
-
-	/// Reports the compatibility hash of this environment.
-	#[inline(always)]
-	pub fn compatHash (&self) -> u64 {
-		self.compatHash
-	}
-
-	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.
-	///
-	/// The language in the above sentence is chosen very deliberately – this operation is, technically, **not
-	/// commutative**! Merging env 'b' to env 'a' will mean that 'a' will reference 'b'. This will make little
-	/// difference in practice, as the modules contained in the merger will be the same no matter the order. But the
-	/// *references* semantics will be reverses of each other.
-	///
-	/// # Arguments
-	///
-	/// * `other` – The other environment to merge.
-	/// * `uuid` – A UUID for the merged environment.
-	///
-	/// # Returns
-	///
-	/// The merged environment, or a [`MergeError`] indicating what went wrong.
-	pub fn merge (&self, other: &Environment<ModuleType>, uuid: Uuid) -> Result<Self, MergeError> {
-		if self.compatHash != other.compatHash {
-			return Err(MergeError::Incompatible);
-		}
-		let mut newEnv = self.cloneWithNewUuid(uuid);
-		newEnv.mergeWith(other).map(move |_| newEnv)
-	}
-
-	/// Merges another `Environment` into `self`.
-	///
-	/// # Arguments
-	///
-	/// * `other` – The other environment to merge with.
-	///
-	/// # Returns
-	///
-	/// Nothing in case of success, or a [`MergeError`] indicating what went wrong. In case of any error, `self`
-	/// **remains unchanged**!
-	pub fn mergeWith (&mut self, other: &Environment<ModuleType>) -> Result<(), MergeError>
-	{
-		// Initial sanity check
-		if self.compatHash != other.compatHash {
-			return Err(MergeError::Incompatible);
-		}
-
-		// Step 1 - Compile list of linked environments in the `other` environment that we need to import (basically all
-		//          envs that we're not already referencing ourselves)
-		let mut skippedExistingEnvs: Vec<&Uuid> = Vec::with_capacity(self.linkedEnvs.len());
-		let mut moduleOrigins: BTreeMap<&str, Uuid> = BTreeMap::new();
-		let mut subenvsToLink: Vec<(Uuid, &BTreeSet<String>)> = Vec::with_capacity(other.linkedEnvs.len());
-		for (uuid, moduleNames) in &other.linkedEnvs
-		{
-			if let Some(alreadyReferenced) = self.linkedEnvs.iter().find(
-				|&(existingUuid, _)| existingUuid == uuid
-			){
-				skippedExistingEnvs.push(alreadyReferenced.0)
-			}
-			else
-			{
-				subenvsToLink.push((*uuid, moduleNames));
-				for moduleName in moduleNames {
-					if let Some(existingUuid) = moduleOrigins.insert(moduleName, *uuid) {
-						panic!(
-							"Internal state violation: to-be-merged shader environment [{}], claims to reference at \
-							 least two other environments that define modules with conflicting names: module \
-							 '{moduleName}' is reportedly defined in both [{existingUuid}] and [{uuid}]", other.uuid
-						);
-					}
-				}
-			}
-		}
-
-		// Step 2 - Flatten list of new modules to be merged in, checking for duplicates (this check is what in theory
-		//          should prevent the panic above from ever being triggered)
-		let mut newModules: BTreeMap<&str, &ModuleType> = BTreeMap::new();
-		for &(_, subEnvModules) in &subenvsToLink
-		{
-			for moduleName in subEnvModules
-			{
-				if let Some((alreadyDefined, _)) = self.modules.iter().find(
-					|&(name, _)| name == moduleName
-				){
-					assert_eq!(alreadyDefined, moduleName);
-					return Err(MergeError::DuplicateModuleNames(moduleName.to_owned()));
-				}
-				else
-				{
-					let module = other.modules.get(moduleName).unwrap();
-					if newModules.insert(moduleName, module).is_some() {
-						panic!(
-							"Internal state violation: to-be-merged shader environment [{}] somehow defines module \
-							 '{moduleName}' twice! (this should be impossible as the modules live in a `Map` that is \
-							 keyed by name)", other.uuid
-						);
-					}
-				}
-			}
-		}
-		#[cfg(feature="tracing_output")] {
-			tracing::info!("Merging shader environments: [{}] <- [{}]", self.uuid, other.uuid);
-			tracing::debug!(
-				"Skipped already referenced sub-environments: [{}]",
-				skippedExistingEnvs.iter().map(|k| k.to_string()).intersperse(",".to_string()).collect::<String>()
-			);
-		}
-
-		// Step 3 - The merge has been validated, now commit the changes
-		// - commit new modules
-		for (name, module) in newModules
-		{
-			if self.modules.insert(name.to_owned(), module.clone()).is_some() {
-				panic!(
-					"Internal logic error: a shader module with the name '{name}' is already present in the target \
-					 environment! This should have been detected when validating the merger. There is now no way to \
-					 recover from this condition."
-				);
-			};
-		}
-		// - reference new sub-environments
-		for (uuid, moduleNames) in subenvsToLink
-		{
-			if self.linkedEnvs.insert(uuid, moduleNames.to_owned()).is_some() {
-				panic!(
-					"Internal logic error: the new sub-environment [{uuid}] was already referenced by the target! This \
-					 should have been detected when validating the merger. There is now no way to recover from this \
-					 condition."
-				);
-			};
-		}
-		// - reference the merged-in environment itself
-		self.linkedEnvs.insert(other.uuid, other.ownedModules.clone());
-
-		// Done!
-		Ok(())
-	}
-}*/
-
-
 #[derive(Clone)]
 struct ModuleEntry<ModuleType: Module> {
+	path: PathBuf,
 	module: ModuleType,
 	sourceEnv: Option<Uuid>
+}
+impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
+	fn key (&self) -> &PathBuf {
+		&self.path
+	}
 }
 
 /// Represents a shader *environment* that, in essence, collects shader modules that should be accessible in conjunction
@@ -277,7 +97,7 @@ pub struct Environment<ModuleType: Module> {
 	uuid: Uuid,
 	label: &'static str,
 	compatHash: u64,
-	modules: BTreeMap<PathBuf, ModuleEntry<ModuleType>>,
+	modules: util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>>
 }
 impl<ModuleType: Module> Environment<ModuleType>
 {
@@ -289,38 +109,49 @@ impl<ModuleType: Module> Environment<ModuleType>
 	#[inline(always)]
 	fn externalizeModule (&self, moduleEntry: &ModuleEntry<ModuleType>) -> ModuleEntry<ModuleType> {
 		ModuleEntry::<ModuleType> {
+			path: moduleEntry.path.clone(),
 			module: moduleEntry.module.clone(),
 			sourceEnv: if moduleEntry.sourceEnv.is_some() { moduleEntry.sourceEnv } else { Some(self.uuid) }
 		}
 	}
 
-	#[inline(always)]
-	fn externalizeModules (&self) -> BTreeMap<PathBuf, ModuleEntry<ModuleType>> {
-		self.modules.iter().map(
-			|(name, entry)| (
-				name.to_owned(), self.externalizeModule(entry)
-			)
-		).collect::<BTreeMap<_, _>>()
+	#[inline]
+	fn externalizeModules (&self) -> util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>> {
+		let mut newModules = util::ds::UniqueArray::withCapacity(
+			self.modules.len()
+		);
+		for entry in self.modules.iter() {
+			newModules.push(self.externalizeModule(&entry)).unwrap()
+		}
+		newModules
 	}
+
+
+	////
+	// Constructors
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier).
 	pub fn withUuid (uuid: Uuid, label: &'static str) -> Self { Self {
-		uuid, label, compatHash: 0, modules: BTreeMap::new()
+		uuid, label, compatHash: 0, modules: util::ds::UniqueArray::new()
 	}}
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
-	/// [cgv_shader::]()
+	/// [`compile::Context`]
 	pub fn forContextWithUuid (context: &impl compile::Context<ModuleType>, uuid: Uuid, label: &'static str) -> Self { Self {
-		uuid, label, compatHash: context.environmentCompatHash(), modules: BTreeMap::new()
+		uuid, label, compatHash: context.environmentCompatHash(), modules: util::ds::UniqueArray::new()
 	}}
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and an initial compatibility hash.
 	pub fn withUuidAndCompatHash (uuid: Uuid, label: &'static str, compatHash: u64) -> Self { Self {
-		uuid, label, compatHash, modules: BTreeMap::new()
+		uuid, label, compatHash, modules: util::ds::UniqueArray::new()
 	}}
+
+
+	////
+	// Methods
 
 	/// Clones the current environment with a new UUID and label.
 	///
@@ -366,6 +197,30 @@ impl<ModuleType: Module> Environment<ModuleType>
 		self.compatHash
 	}
 
+	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.
+	///
+	/// The language in the above sentence is chosen very deliberately – this operation is, technically, **not
+	/// commutative**! Merging env 'b' to env 'a' will mean that 'a' will reference 'b'. This will make little
+	/// difference in practice, as the modules contained in the merger will be the same no matter the order. But the
+	/// *references* semantics will be reverses of each other.
+	///
+	/// # Arguments
+	///
+	/// * `other` – The other environment to merge.
+	/// * `uuid` – A UUID for the merged environment.
+	/// * `label` – The label for the merged environment.
+	///
+	/// # Returns
+	///
+	/// The merged environment, or a [`MergeError`] indicating what went wrong.
+	pub fn merge (&self, other: &Environment<ModuleType>, uuid: Uuid, label: &'static str) -> Result<Self, MergeError> {
+		if self.compatHash != other.compatHash {
+			return Err(MergeError::Incompatible);
+		}
+		let mut newEnv = self.cloneWithNewUuid(uuid, label);
+		newEnv.mergeWith(other).map(move |_| newEnv)
+	}
+
 	/// Merges another `Environment` into `self`.
 	///
 	/// # Arguments
@@ -383,26 +238,23 @@ impl<ModuleType: Module> Environment<ModuleType>
 			return Err(MergeError::Incompatible);
 		}
 
-		// Compile list of foreign modules to incorperate
-		let mut newModules = BTreeMap::<PathBuf, ModuleEntry<ModuleType>>::new();
-		for (path, moduleEntry) in &other.modules
+		// Compile list of foreign modules to incorporate
+		let mut newModules = util::ds::UniqueArray::withCapacity(other.modules.len());
+		for otherModuleEntry in other.modules.iter()
 		{
 			// Decide what to do with this module
-			match self.modules.get(path)
+			match self.modules.get(&otherModuleEntry.path)
 			{
-				None => {
-					// Case 1: this is a new module, include
-					let check = newModules.insert(
-						path.to_owned(), other.externalizeModule(moduleEntry)
-					);
-					assert!(check.is_none());
-				},
+				// Case 1: this is an unseen module, include
+				None => newModules.push(other.externalizeModule(otherModuleEntry)).unwrap(),
 
-				Some(ownEntry) => {
+				Some(ownEntry) =>
+					if     ownEntry.sourceEnv != otherModuleEntry.sourceEnv
+					   || (ownEntry.sourceEnv.is_none() && otherModuleEntry.sourceEnv.is_none()) {
+						// Case 3: we already have a module at this path, and it has a different source: ERROR!
+						return Err(MergeError::DuplicateModulePaths(otherModuleEntry.path.clone()));
+					}
 					// Case 2: we already have a module at this path, and it has the same source: do not include
-					if ownEntry.sourceEnv != moduleEntry.sourceEnv {}
-					// Case 2: we already have a module at this path, and it has the same source: do not include
-				}
 			};
 		}
 
