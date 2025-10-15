@@ -9,6 +9,7 @@ tracing = {version="*", optional=true}
 wgpu = {version="27.*", optional=true, features=["spirv"]}
 anyhow = "*"
 uuid = "*"
+bitcode = "*"
 crc64fast-nvme = "*"
 cgv-util = {path="../cgv-util"}
 

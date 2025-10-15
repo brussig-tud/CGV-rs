@@ -38,7 +38,7 @@ pub mod slang;
 // Standard library
 
 // Bitcode library
-use cgv_util::bitcode;
+use bitcode;
 
 // Local imports
 use cgv_util as util;
