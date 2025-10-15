@@ -10,6 +10,9 @@ use std::{rc::Rc, path::Path};
 // Anyhow library
 use anyhow::anyhow;
 
+// Serde library
+use serde;
+
 // Slang library
 use shader_slang as slang;
 
@@ -25,37 +28,50 @@ use crate::slang::Program;
 
 //////
 //
+// Enums
+//
+
+/// Indicates how a [`slang::Context`](Context) should reflect modules in the active [`compile::Environment`].
+#[derive(Clone,serde::Serialize,serde::Deserialize)]
+pub enum EnvironmentStorage {
+	/// The module should be stored as source code.
+	SourceCode,
+
+	/// The module should be stored in *Slang*-IR form.
+	IR
+}
+
+
+
+//////
+//
 // Structs
 //
 
 ///
-#[derive(Clone)]
-pub struct Module {
-	slangModule: slang::Module,
-	irBlob: slang::Blob
+#[derive(Clone,serde::Serialize,serde::Deserialize)]
+pub struct Module{
+	kind: EnvironmentStorage,
+	code: Vec<u8>
 }
-impl Module {
+impl Module
+{
 	///
-	pub fn fromSlangModule (slangModule: slang::Module) -> anyhow::Result<Self> {
-		Ok(Self { irBlob: slangModule.serialize()?, slangModule })
+	#[inline]
+	fn fromSlangModule (slangModule: slang::Module) -> anyhow::Result<Self> {
+		Ok(Self {
+			kind: EnvironmentStorage::IR,
+			code: slangModule.serialize()?.as_slice().to_owned()
+		})
 	}
 
 	///
-	#[inline(always)]
-	pub fn slangModule (&self) -> &slang::Module {
-		&self.slangModule
-	}
-
-	///
-	#[inline(always)]
-	pub fn irBlob (&self) -> &slang::Blob {
-		&self.irBlob
-	}
-
-	///
-	#[inline(always)]
-	pub fn irBytecode (&self) -> &[u8] {
-		self.irBlob.as_slice()
+	#[inline]
+	fn fromSlangSourceCode (sourceCode: &str) -> Self {
+		Self {
+			kind: EnvironmentStorage::SourceCode,
+			code: sourceCode.as_bytes().to_owned()
+		}
 	}
 }
 impl compile::Module for Module {}
@@ -92,7 +108,8 @@ impl CompatOptions {
 struct SlangSessionConfig {
 	searchPaths: Vec<std::ffi::CString>,
 	target: CompilationTarget,
-	compilerOptions: slang::CompilerOptions
+	compilerOptions: slang::CompilerOptions,
+	profile: String,
 }
 impl SlangSessionConfig {
 	pub fn searchPathsAsPointers(&self) -> Vec<*const i8> {
@@ -114,8 +131,6 @@ pub struct Context {
 
 	sessionConfig: SlangSessionConfig,
 	pub(crate) session: slang::Session,
-
-	pub compilationTarget: SourceType,
 
 	compatHash: u64,
 
@@ -168,13 +183,12 @@ impl Context
 			target, compilerOptions,
 			searchPaths: searchPath.iter().map(|p| unsafe {
 				std::ffi::CString::from_vec_unchecked(p.as_ref().to_string_lossy().as_bytes().to_vec())
-			}).collect::<Vec<std::ffi::CString>>()
+			}).collect::<Vec<std::ffi::CString>>(),
+			profile: "glsl_460".into()
 		};
 
 		// Create the reusable Slang compiler session
-		let (targetDesc, compilationTarget) = constructTargetDesc(
-			sessionConfig.target, globalSession.find_profile("glsl_460")
-		);
+		let targetDesc = constructTargetDesc(&globalSession, &sessionConfig);
 		let session = globalSession.create_session(&slang::SessionDesc::default()
 			.targets(&[targetDesc])
 			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
@@ -192,8 +206,7 @@ impl Context
 
 		// Done!
 		Ok(Self {
-			globalSession: Rc::new(globalSession), sessionConfig, session, compilationTarget, compatHash,
-			environment: None
+			globalSession: Rc::new(globalSession), sessionConfig, session, compatHash, environment: None
 		})
 	}
 
@@ -217,9 +230,7 @@ impl Context
 	pub fn fork (&self) -> Self
 	{
 		// Re-create the reusable Slang compiler session from the stored configuration
-		let (targetDesc, compilationTarget) = constructTargetDesc(
-			self.sessionConfig.target, self.globalSession.find_profile("glsl_460")
-		);
+		let targetDesc = constructTargetDesc(&self.globalSession, &self.sessionConfig);
 		let session = self.globalSession.create_session(&slang::SessionDesc::default()
 			.targets(&[targetDesc])
 			.search_paths(self.sessionConfig.searchPathsAsPointers().as_slice())
@@ -231,11 +242,19 @@ impl Context
 
 		// Done!
 		Self {
-			session, compilationTarget,
+			session,
 			globalSession: self.globalSession.clone(),
 			sessionConfig: self.sessionConfig.clone(),
 			compatHash: self.compatHash,
 			environment: self.environment.clone()
+		}
+	}
+
+	///
+	pub fn targetType (&self) -> WgpuSourceType {
+		match self.sessionConfig.target {
+			CompilationTarget::SPIRV(_) => WgpuSourceType::SPIRV,
+			CompilationTarget::WGSL => WgpuSourceType::WGSL
 		}
 	}
 
@@ -247,57 +266,30 @@ impl Context
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
 		Program::fromSource(self, sourceFile)
 	}
-}
 
-impl compile::Context<Module> for Context
-{
-	fn replaceEnvironment (&mut self, environment: Option<&compile::Environment<Module>>)
-		-> std::result::Result<(), compile::SetEnvironmentError>
+	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<slang::Module, compile::LoadModuleError>
 	{
-		if let Some(_curEnv) = &self.environment
-		{
-			if let Some(newEnv) = environment
-			{
-				if self.compatHash != newEnv.compatHash() {
-					return Err(compile::SetEnvironmentError::IncompatibleEnvironment)
-				}
-				todo!()
-			}
-			else {
-				self.environment = None;
-				todo!()
-			}
-		}
-		else {
-			todo!()
-		}
-	}
+		// We operate on a forked context to avoid polluting our session (only the loadModule... family of methods
+		// should leave modules in the session for later reuse/import/specialization)
+		let module = // Let slang load and compile the module
+			self.session.load_module(
+				sourcefile.as_ref().to_string_lossy().as_ref()
+			).or_else(|err| Err(LoadModuleError::ImplementationSpecific(
+				anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
+			)))?;
 
-	fn environmentCompatHash (&self) -> u64 {
-		self.compatHash
-	}
-
-	fn compileModule (&self, sourcefile: impl AsRef<Path>) -> Result<Module, compile::LoadModuleError>
-	{
-		// Let slang load and compile the module
-		let module = self.session.load_module(
-			sourcefile.as_ref().to_string_lossy().as_ref()
-		).or_else(|err| Err(LoadModuleError::ImplementationSpecific(
-			anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
-		)))?;
-
-		// Wrap the Slang module in our compile::Module-compliant representation
+		/*// Wrap the Slang module in our compile::Module-compliant representation
 		let module = Module::fromSlangModule(module).or_else(
 			|err| Err(LoadModuleError::ImplementationSpecific(
 				anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
 			))
-		)?;
+		)?;*/
 
 		// Done!
 		Ok(module)
 	}
 
-	fn compileModuleFromMemory(&self, _source: &str) -> std::result::Result<Module, LoadModuleError> {
+	fn compileModuleFromMemory(&self, _source: &str) -> std::result::Result<slang::Module, LoadModuleError> {
 		todo!()
 	}
 
@@ -310,6 +302,42 @@ impl compile::Context<Module> for Context
 	}
 }
 
+impl compile::Context<Module> for Context
+{
+	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
+		-> std::result::Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
+	{
+		if self.environment.is_some()
+		{
+			if let Some(newEnv) = environment
+			{
+				if self.compatHash != newEnv.compatHash() {
+					return Err(compile::SetEnvironmentError::IncompatibleEnvironment)
+				}
+				todo!()
+			}
+			else {
+				// Take the old environment out of the context and start with a fresh session
+				let oldEnv = self.environment.take().unwrap();
+				self.environment = None;
+				todo!(); // replace the session with a fresh one
+				return Ok(Some(oldEnv))
+			}
+		}
+		else {
+			todo!()
+		}
+	}
+
+	fn finishEnvironment (self) -> Option<compile::Environment<Module>> {
+		self.environment
+	}
+
+	fn environmentCompatHash (&self) -> u64 {
+		self.compatHash
+	}
+}
+
 
 
 //////
@@ -319,12 +347,14 @@ impl compile::Context<Module> for Context
 
 ///
 #[inline(always)]
-fn constructTargetDesc<'caller> (target: CompilationTarget, profile: slang::ProfileID)
-	-> (slang::TargetDesc<'caller>, SourceType)
+fn constructTargetDesc<'caller> (globalSesssion: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
+	-> slang::TargetDesc<'caller>
 {
-	let targetDesc = slang::TargetDesc::default().profile(profile);
-	match target {
-		CompilationTarget::SPIRV(_) => (targetDesc.format(slang::CompileTarget::Spirv), SourceType::SPIRV),
-		CompilationTarget::WGSL => (targetDesc.format(slang::CompileTarget::Wgsl), SourceType::WGSL)
+	let targetDesc = slang::TargetDesc::default().profile(
+		globalSesssion.find_profile(&sessionConfig.profile)
+	);
+	match sessionConfig.target {
+		CompilationTarget::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
+		CompilationTarget::WGSL => targetDesc.format(slang::CompileTarget::Wgsl)
 	}
 }

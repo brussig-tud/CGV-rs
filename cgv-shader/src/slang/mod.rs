@@ -4,11 +4,11 @@
 // Module definitions
 //
 
-/// Submodule implementing the Slang runtime context
+/// Submodule implementing the Slang runtime context.
 mod context;
 pub use context::{Context, Module}; // re-export
 
-/// Submodule implementing the Slang shader program representation
+/// Submodule implementing the Slang shader program representation.
 mod program;
 pub use program::Program; // re-export
 
@@ -27,7 +27,7 @@ use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 // Anyhow library
-use anyhow::Result;
+use anyhow;
 
 // Slang library
 use shader_slang as slang;
@@ -70,7 +70,7 @@ impl EntryPoint
 /// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
 /// these targets.
 pub fn createContextsForTargets<'a> (targets: &[CompilationTarget], shaderPath: &[impl AsRef<Path>])
--> Result<cgv_util::BorrowVec<'a, Context>> {
+-> anyhow::Result<cgv_util::BorrowVec<'a, Context>> {
 	let mut contexts = Vec::<Context>::with_capacity(targets.len());
 	for &target in targets {
 		contexts.push(Context::forTarget(target, shaderPath)?);
@@ -87,4 +87,3 @@ extern "C" {
 pub fn testJsInterop(moduleSourceCode: &str) -> Vec<u8> {
 	slangjs_interopTest(moduleSourceCode)
 }
-

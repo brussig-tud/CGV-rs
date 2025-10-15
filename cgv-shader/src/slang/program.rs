@@ -15,7 +15,6 @@ use shader_slang as slang;
 use slang::Downcast;
 
 // Local imports
-use crate::compile::Context as CompileContext;
 use crate::slang::{Context, EntryPoint};
 
 
@@ -28,7 +27,6 @@ use crate::slang::{Context, EntryPoint};
 ///
 pub struct Program {
 	_linkedProg: slang::ComponentType,
-	genericModule: crate::slang::Module,
 	allEntryPointsProg: slang::Blob,
 	entryPointProgs: Vec<EntryPoint>
 }
@@ -37,8 +35,7 @@ impl Program
 	pub(crate) fn fromSource (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self>
 	{
 		// Compile Slang module
-		let generic = slangContext.compileModule(filename.as_ref())?;
-		let module = generic.slangModule();
+		let module = slangContext.compile(filename.as_ref())?;
 		let entryPoints = module.entry_points();
 
 		// Specialize program instances for each entry point
@@ -76,19 +73,13 @@ impl Program
 		};
 
 		// Done!
-		Ok(Self { _linkedProg: linkedProg, genericModule: generic, allEntryPointsProg, entryPointProgs })
+		Ok(Self { _linkedProg: linkedProg, allEntryPointsProg, entryPointProgs })
 	}
 
 	///
 	#[inline]
 	pub fn entryPointProgs (&self) -> &[EntryPoint] {
 		&self.entryPointProgs
-	}
-
-	///
-	#[inline]
-	pub fn genericModule (&self) -> &crate::slang::Module {
-		&self.genericModule
 	}
 
 	///

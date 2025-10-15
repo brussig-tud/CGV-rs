@@ -18,6 +18,7 @@
 //
 
 /// Submodule implementing shader compilation infrastructure
+#[cfg(feature="compilation")]
 pub mod compile;
 
 /// Submodule implementing the shader package facilities
@@ -64,18 +65,18 @@ pub enum CompilationTarget {
 /// Enum describing the type of a [program instance](Program) in accordance with *WGPU*
 /// [shader module source](wgpu::ShaderSource) types.
 #[derive(Debug,Ord,PartialOrd,Eq,PartialEq,Copy,Clone,bitcode::Encode,bitcode::Decode)]
-pub enum SourceType {
+pub enum WgpuSourceType {
 	/// The source is a blob of *SPIR-V* bytecode, potentially including debug information.
 	SPIRV,
 
 	/// The source is a [`String`] of self-contained *WGSL* code.
 	WGSL
 }
-impl std::fmt::Display for SourceType {
+impl std::fmt::Display for WgpuSourceType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			SourceType::SPIRV => write!(f, "SPIR-V"),
-			SourceType::WGSL => write!(f, "WGSL")
+			WgpuSourceType::SPIRV => write!(f, "SPIR-V"),
+			WgpuSourceType::WGSL => write!(f, "WGSL")
 		}
 	}
 }

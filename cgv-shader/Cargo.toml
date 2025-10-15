@@ -10,6 +10,8 @@ wgpu = {version="27.*", optional=true, features=["spirv"]}
 anyhow = "*"
 uuid = "*"
 bitcode = "*"
+serde = {version="*", optional=true}
+postcard = {version="*", optional=true}
 crc64fast-nvme = "*"
 cgv-util = {path="../cgv-util"}
 
@@ -28,4 +30,5 @@ wasm-bindgen = {version="*", optional=true}
 default = []
 #tracing_output = ["dep:tracing"]
 wgpu_runtime = ["dep:wgpu", "dep:tracing"]
-slang_runtime = ["dep:shader-slang", "dep:wasm-bindgen", "shader-slang/copy_libs"]
+compilation = ["dep:serde", "dep:postcard"]
+slang_runtime = ["compilation", "dep:shader-slang", "dep:wasm-bindgen", "shader-slang/copy_libs", "shader-slang/serde"]

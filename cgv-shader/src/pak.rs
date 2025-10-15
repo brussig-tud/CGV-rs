@@ -55,7 +55,7 @@ pub enum CreateShaderModuleError
 
 	/// The package from which a module was requested does not contain an instance in the requested source type. Holds
 	/// the `SourceType` that was not available.
-	InvalidSourceType(SourceType)
+	InvalidSourceType(WgpuSourceType)
 }
 #[cfg(feature="wgpu_runtime")]
 impl Display for CreateShaderModuleError {
@@ -137,7 +137,7 @@ impl Program
 #[derive(bitcode::Encode,bitcode::Decode)]
 pub struct Package {
 	name: String,
-	instances: BTreeMap<SourceType, Program>
+	instances: BTreeMap<WgpuSourceType, Program>
 }
 impl Package
 {
@@ -152,7 +152,7 @@ impl Package
 	}
 
 	/// Create a package with a single instance.
-	pub fn withSingleInstance (sourceType: SourceType, program: Program, name: Option<&str>)
+	pub fn withSingleInstance (sourceType: WgpuSourceType, program: Program, name: Option<&str>)
 	-> anyhow::Result<Self> {
 		Ok(Self {
 			name: name.unwrap_or("<unnamed>").to_owned(),
@@ -177,7 +177,7 @@ impl Package
 	#[cfg(feature="slang_runtime")]
 	fn buildSingleInstanceFromSlang (
 		slangContext: &slang::Context, filepath: impl AsRef<Path>, entryPoints: Option<&BTreeSet<Option<&str>>>
-	) -> Result<(Program, SourceType), ProgramInstanceBuildError>
+	) -> Result<(Program, WgpuSourceType), ProgramInstanceBuildError>
 	{
 		// Compile Slang code
 		let slangProg = slangContext.buildProgram(filepath).or_else(
@@ -206,12 +206,12 @@ impl Package
 					progInstance.addEntryPoint(None, slangProg.allEntryPointsProg().to_owned());
 				}
 			}
-			Ok((progInstance, slangContext.compilationTarget))
+			Ok((progInstance, slangContext.targetType()))
 		}
 		else {
 			// Only include the generic program that includes code paths from all entry points
 			Ok((
-				Program::generic(slangProg.allEntryPointsProg().to_owned()), slangContext.compilationTarget
+				Program::generic(slangProg.allEntryPointsProg().to_owned()), slangContext.targetType()
 			))
 		}
 	}
@@ -244,7 +244,7 @@ impl Package
 
 	/// Add an instance of the program for the given source type to the package. If there is already an instance for
 	/// the given source type, it will be replaced.
-	pub fn addInstance (&mut self, sourceType: SourceType, program: Program) {
+	pub fn addInstance (&mut self, sourceType: WgpuSourceType, program: Program) {
 		self.instances.insert(sourceType, program);
 	}
 
@@ -266,7 +266,7 @@ impl Package
 	/// point exist, or an error describing the encountered [failure condition](CreateShaderModuleError).
 	#[cfg(feature="wgpu_runtime")]
 	pub fn createShaderModule (
-		&self, device: &wgpu::Device, sourceType: SourceType, entryPointName: Option<&str>, label: Option<&str>
+		&self, device: &wgpu::Device, sourceType: WgpuSourceType, entryPointName: Option<&str>, label: Option<&str>
 	) -> Result<wgpu::ShaderModule, CreateShaderModuleError>
 	{
 		// Find requested entry point in the requested instance
@@ -280,7 +280,7 @@ impl Package
 		// Create the shader module
 		let shaderModule = match sourceType
 		{
-			SourceType::SPIRV => {
+			WgpuSourceType::SPIRV => {
 				let shaderModule;
 				#[cfg(target_arch="wasm32")] {
 					// WASM WebGPU requires internal transpiling to WGSL via Naga.
@@ -318,7 +318,7 @@ impl Package
 				shaderModule
 			},
 
-			SourceType::WGSL => {
+			WgpuSourceType::WGSL => {
 				device.create_shader_module(wgpu::ShaderModuleDescriptor {
 					label, source: wgpu::ShaderSource::Wgsl(str::from_utf8(code).unwrap().into()),
 				})
@@ -362,7 +362,7 @@ impl Package
 		}
 		// - all native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
 		#[cfg(not(target_arch="wasm32"))] {
-			const SOURCE_TYPES: [SourceType; 2] = [SourceType::SPIRV, SourceType::WGSL];
+			const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::SPIRV, WgpuSourceType::WGSL];
 			sourceTypes = SOURCE_TYPES;
 		}
 

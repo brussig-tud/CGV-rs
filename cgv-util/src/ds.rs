@@ -192,7 +192,7 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 	///
 	/// # Parameters
 	///
-	/// - `other`: A reference to another `UniqueArray` whose elements are to be joined to `self`.
+	/// * `other` – A reference to another `UniqueArray` whose elements are to be joined to `self`.
 	///
 	/// # Returns
 	///
@@ -234,7 +234,7 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 	///
 	/// # Parameters
 	///
-	/// - `other`: A reference to another `UniqueArray` whose elements are to be joined to `self`.
+	/// * `other` – A reference to another `UniqueArray` whose elements are to be joined to `self`.
 	///
 	/// # Panics
 	///

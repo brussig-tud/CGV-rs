@@ -167,11 +167,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		}
 		#[cfg(not(target_arch="wasm32"))] {
 			let slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath);
-			let prog = slangCtx?.buildProgram(util::pathInsideCrate!("/shader/example.slang"))?;
-			let genericModule = prog.genericModule();
-			std::fs::write(
-				util::meta::currentExeDir().join("example.slang-module"), genericModule.irBytecode()
-			)?;
+			let _prog = slangCtx?.buildProgram(util::pathInsideCrate!("/shader/example.slang"))?;
 		}
 
 		// The example shader

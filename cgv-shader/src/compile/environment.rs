@@ -7,6 +7,10 @@
 // Standard library
 use std::{path::PathBuf, error::Error, fmt::{Display, Formatter}};
 
+// Serialization
+use serde;
+use postcard;
+
 // UUID library
 use uuid;
 use uuid::Uuid;
@@ -46,11 +50,7 @@ impl Error for MergeError {}
 // Traits
 //
 
-pub trait Module: Sized+Clone {}
-
-#[derive(Clone)]
-pub struct _DummyModule;
-impl Module for _DummyModule {}
+pub trait Module: Sized+Clone+serde::Serialize+serde::de::DeserializeOwned {}
 
 
 
@@ -58,6 +58,33 @@ impl Module for _DummyModule {}
 //
 // Structs
 //
+
+
+
+///
+#[derive(Clone,serde::Serialize,serde::Deserialize)]
+pub struct BytesModule(Vec<u8>);
+impl BytesModule
+{
+	///
+	#[inline(always)]
+	pub fn fromVec (bytes: Vec<u8>) -> Self {
+		Self(bytes)
+	}
+
+	///
+	#[inline(always)]
+	pub fn fromSlice (bytes: &[u8]) -> Self {
+		Self(bytes.to_owned())
+	}
+
+	///
+	#[inline(always)]
+	pub fn irBytes (&self) -> &[u8] {
+		self.0.as_slice()
+	}
+}
+impl Module for BytesModule {}
 
 #[derive(Clone)]
 struct ModuleEntry<ModuleType: Module> {
