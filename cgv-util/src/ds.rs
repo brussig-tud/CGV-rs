@@ -118,9 +118,12 @@ impl UniqueArrayElement<Self> for &std::path::Path {
 	}
 }
 
-/// A container storing elements sequentially (in the order that they are pushed to it) inside a contiguous region of
-/// memory, efficiently guaranteeing element uniqueness at the cost of requiring more memory (in the worst case double
-/// that of a [`Vec`]).
+/// A collection storing elements sequentially (in the order they were inserted) inside a contiguous region of memory,
+/// efficiently guaranteeing element uniqueness at the cost of requiring more memory (in the worst case double that of a
+/// [`Vec`]). This is a lightweight, less-featured alternative to the collections provided by the popular
+/// [index-](https://crates.io/crates/indexmap)/[ordermap](https://crates.io/crates/ordermap) crates. Its most notable
+/// trade-off is that it **cannot do constant-time lookup** of elements, falling back to a
+/// [linear search](UniqueArray::get) instead.
 ///
 /// **NOTE**: `UniqueArray` does not implement [`IndexMut`] as mutating an element from the outside leaves the container
 /// with no way of vetting the changes, and thus it could not uphold the uniqueness guarantee. If you need to change an
@@ -148,7 +151,26 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 		self.elems.len()
 	}
 
-	/// Push a new element onto the end of the `UniqueArray`, if it does not already contain an equivalent element.
+	/// Push a new element onto the end of the `UniqueArray`, if it does not already contain an equivalent element that
+	/// [keys](UniqueArrayElement::key) to the same value.
+	///
+	/// # Arguments
+	///
+	/// * `elem` – The new element to be inserted.
+	///
+	/// # Returns
+	///
+	/// `Ok(())`if the element was successfully inserted, `Err(())` if an equivalent was already present.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// let mut uniqueThings = UniqueArray::new();
+	///
+	/// assert!(collection.push(2).is_ok());
+	/// assert!(collection.push(3).is_ok());
+	/// assert!(collection.push(2).is_err()); // duplicate
+	/// ```
 	pub fn push (&mut self, elem: E) -> Result<(), ()>
 	{
 		if self.keys.insert(elem.key().to_owned()) {
@@ -192,7 +214,7 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 	/// # Example
 	///
 	/// TODO, TODO, TODO!
-	/// ```
+	/// ```rust
 	/// let mut map = MyMap::new();
 	/// map.insert(1, "value1");
 	///
@@ -221,7 +243,7 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 	/// # Example
 	///
 	/// TODO, TODO, TODO!
-	/// ```
+	/// ```rust
 	/// let mut collection = MyCollection::new();
 	/// collection.insert("key1", "value1");
 	///
