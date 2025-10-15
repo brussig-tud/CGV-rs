@@ -29,7 +29,7 @@ struct MultiIndexContainer {}
 // UniqueArray
 
 /// The trait of things that can be stored in a [`UniqueArray`].
-pub trait UniqueArrayElement<K: PartialOrd+Clone> {
+pub trait UniqueArrayElement<K: PartialOrd+Clone>: Clone {
 	fn key (&self) -> &K;
 }
 impl UniqueArrayElement<Self> for bool {
@@ -181,6 +181,87 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> UniqueArray<K, E>
 		else {
 			assert_eq!(self.keys.len(), self.elems.len());
 			Err(())
+		}
+	}
+
+	/// Attempts to concatenate the elements of another `UniqueArray` to `self`.
+	///
+	/// This function checks that all elements from the `other` array are unique with respect to `self`. If any element
+	/// in `other` already exists, the operation is aborted leaving `self` **unchanged**, and the function returns an
+	/// error.
+	///
+	/// # Parameters
+	///
+	/// - `other`: A reference to another `UniqueArray` whose elements are to be joined to `self`.
+	///
+	/// # Returns
+	///
+	/// `Ok` if the join was successfull, `Err` if the join failed due to duplicate elements.
+	///
+	/// # Example
+	///
+	/// ```rust
+	/// let mut array1 = UniqueArray::new();
+	/// array1.push(1).unwrap();
+	/// array1.push(2).unwrap();
+	///
+	/// let mut array2 = UniqueArray::new();
+	/// array2.push(3).unwrap();
+	/// array2.push(4).unwrap();
+	///
+	/// assert!(array1.tryJoin(&array2).is_ok());
+	/// assert_eq!(array1.len(), 4);
+	///
+	/// assert!(array1.tryJoin(&array2).is_err()); // Operation will now fail due to duplication
+	/// ```
+	pub fn tryJoin (&mut self, other: &UniqueArray<K, E>) -> Result<(), ()>
+	{
+		// Pass 1 - check for uniqueness
+		for elem in other.elems.iter() {
+			if self.contains(elem) {
+				return Err(())
+			}
+		}
+
+		// Pass 2 - push elements
+		for elem in other.elems.iter() {
+			self.push(elem.clone()).unwrap();
+		};
+		Ok(())
+	}
+
+	/// Unsafely concatenates the elements of another `UniqueArray` to `self`, without checking for uniqueness.
+	///
+	/// # Parameters
+	///
+	/// - `other`: A reference to another `UniqueArray` whose elements are to be joined to `self`.
+	///
+	/// # Panics
+	///
+	/// If the join produces duplicates. This will cause the internal datastructures to desync which is very cheap to
+	/// detect, so it is done even in *Release* builds rather than leaving the `UniqueArray` in an unusable state.
+	///
+	/// # Example
+	///
+	/// ```rust
+	/// let mut array1 = UniqueArray::new();
+	/// array1.push(1).unwrap();
+	/// array1.push(2).unwrap();
+	///
+	/// let mut array2 = UniqueArray::new();
+	/// array2.push(3).unwrap();
+	/// array2.push(4).unwrap();
+	///
+	/// unsafe { array1.join_unchecked(&array2) }
+	/// assert_eq!(array1.len(), 4);
+	///
+	/// unsafe { array1.join_unchecked(&array2) } // This will panic!
+	/// ```
+	pub unsafe fn join_unchecked (&mut self, other: &UniqueArray<K, E>) {
+		self.elems.extend_from_slice(other.elems.as_slice());
+		self.keys.extend(other.keys.iter().cloned());
+		if self.elems.len() != self.keys.len() {
+			panic!("UniqueArray::join_unchecked: internal state corruption! Did you try to join duplicate elements?");
 		}
 	}
 
