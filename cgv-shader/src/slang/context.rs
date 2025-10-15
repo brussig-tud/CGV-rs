@@ -138,6 +138,18 @@ pub struct Context {
 }
 impl Context
 {
+	/// Helper for obtaining a fresh *Slang* session.
+	fn freshSession (globalSession: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
+	-> Result<slang::Session, ()>
+	{
+		let targetDesc = constructTargetDesc(&globalSession, &sessionConfig);
+		globalSession.create_session(&slang::SessionDesc::default()
+			.targets(&[targetDesc])
+			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
+			.options(&sessionConfig.compilerOptions)
+		).ok_or(())
+	}
+
 	/// Create a new Slang context for the given compilation target using the given module search path.
 	///
 	/// # Arguments
@@ -187,19 +199,10 @@ impl Context
 			profile: "glsl_460".into()
 		};
 
-		// Create the reusable Slang compiler session
-		let targetDesc = constructTargetDesc(&globalSession, &sessionConfig);
-		let session = globalSession.create_session(&slang::SessionDesc::default()
-			.targets(&[targetDesc])
-			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
-			.options(&sessionConfig.compilerOptions)
-		);
-		let session = if session.is_some() {
-			session.unwrap()
-		}
-		else {
-			return Err(anyhow!("Failed to create Slang context"));
-		};
+		// Create the stateful Slang compiler session
+		let session = Self::freshSession(&globalSession, &sessionConfig).map_err(|_|
+			anyhow!("Failed to create Slang context")
+		)?;
 
 		// Create the compatibility hash for our configuration
 		let compatHash = compatOptions.digest();
@@ -223,30 +226,6 @@ impl Context
 		}
 		#[cfg(target_arch="wasm32")] {
 			Self::forTarget(CompilationTarget::WGSL, searchPath)
-		}
-	}
-
-	/// Create a new Slang context inheriting all settings and the [environment](compile::Context::replaceEnvironment).
-	pub fn fork (&self) -> Self
-	{
-		// Re-create the reusable Slang compiler session from the stored configuration
-		let targetDesc = constructTargetDesc(&self.globalSession, &self.sessionConfig);
-		let session = self.globalSession.create_session(&slang::SessionDesc::default()
-			.targets(&[targetDesc])
-			.search_paths(self.sessionConfig.searchPathsAsPointers().as_slice())
-			.options(&self.sessionConfig.compilerOptions)
-		).expect(
-			"Creating a Slang session identical to an existing one should never fail unless there are \
-			 unrecoverable external circumstances (out-of-memory etc.)"
-		);
-
-		// Done!
-		Self {
-			session,
-			globalSession: self.globalSession.clone(),
-			sessionConfig: self.sessionConfig.clone(),
-			compatHash: self.compatHash,
-			environment: self.environment.clone()
 		}
 	}
 
@@ -305,28 +284,48 @@ impl Context
 impl compile::Context<Module> for Context
 {
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
-		-> std::result::Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
+		-> Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
 	{
-		if self.environment.is_some()
+		// Check if the new environment is compatible (in case it's `Some`)
+		if let Some(newEnv) = &environment && self.compatHash != newEnv.compatHash() {
+			return Err(compile::SetEnvironmentError::IncompatibleEnvironment)
+		}
+
+		// Start from a fresh session
+		let newSession = Self::freshSession(&self.globalSession, &self.sessionConfig).expect(
+			"Creating a Slang session identical to an existing one should never fail unless there are \
+			unrecoverable external circumstances (out-of-memory etc.)"
+		);
+
+		// Apply the new environment to the new session
+		if let Some(newEnv) = &environment
 		{
-			if let Some(newEnv) = environment
+			for module in newEnv.modules()
 			{
-				if self.compatHash != newEnv.compatHash() {
-					return Err(compile::SetEnvironmentError::IncompatibleEnvironment)
-				}
-				todo!()
-			}
-			else {
-				// Take the old environment out of the context and start with a fresh session
-				let oldEnv = self.environment.take().unwrap();
-				self.environment = None;
-				todo!(); // replace the session with a fresh one
-				return Ok(Some(oldEnv))
+				let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(&module.module.code));
+				match module.module.kind {
+					EnvironmentStorage::IR => newSession.load_module_from_ir_blob(
+						&module.path.file_name().unwrap().to_string_lossy(),
+						&module.path.parent().unwrap().to_string_lossy(),
+						&*irBlob
+					).unwrap(), // ToDo: emit suitable SetEnvironmentError::ImplementationSpecific
+
+					EnvironmentStorage::SourceCode => newSession.load_module_from_source_string(
+						&module.path.file_name().unwrap().to_string_lossy(),
+						&module.path.parent().unwrap().to_string_lossy(),
+						str::from_utf8(&module.module.code).unwrap()
+					).unwrap()  // ToDo: emit suitable SetEnvironmentError::ImplementationSpecific
+				};
 			}
 		}
-		else {
-			todo!()
-		}
+
+		// Commit both
+		let oldEnv = self.environment.take();
+		self.session = newSession;
+		self.environment = environment;
+
+		// Done!
+		Ok(oldEnv)
 	}
 
 	fn finishEnvironment (self) -> Option<compile::Environment<Module>> {

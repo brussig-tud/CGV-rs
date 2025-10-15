@@ -31,4 +31,7 @@ default = []
 #tracing_output = ["dep:tracing"]
 wgpu_runtime = ["dep:wgpu", "dep:tracing"]
 compilation = ["dep:serde", "dep:postcard"]
-slang_runtime = ["compilation", "dep:shader-slang", "dep:wasm-bindgen", "shader-slang/copy_libs", "shader-slang/serde"]
+slang_runtime = [
+	"compilation", "dep:wasm-bindgen", "dep:shader-slang", "shader-slang/copy_libs", "shader-slang/serde",
+	"shader-slang/com_impls"
+]
