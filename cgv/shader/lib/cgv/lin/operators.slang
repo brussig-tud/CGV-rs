@@ -5,7 +5,7 @@
 //
 
 // A module (re-)defining mathematical operators for linear algebra.
-module cgv_lin_operators;
+module operators;
 
 
 

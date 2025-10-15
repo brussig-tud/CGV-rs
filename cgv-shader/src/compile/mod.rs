@@ -41,20 +41,6 @@ impl Display for SetEnvironmentError {
 }
 impl Error for SetEnvironmentError {}
 
-#[derive(Debug)]
-pub enum LoadModuleError {
-	ImplementationSpecific(anyhow::Error)
-}
-impl Display for LoadModuleError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-		let desc = match self {
-			Self::ImplementationSpecific(st) => &format!("nested implementation error: {st}"),
-		};
-		write!(formatter, "LoadModuleError[{desc}]")
-	}
-}
-impl Error for LoadModuleError {}
-
 
 
 //////

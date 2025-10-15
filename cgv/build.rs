@@ -45,8 +45,8 @@ fn main() -> cgv_build::Result<()>
 	}
 	// - our shader path
 	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib"));
-	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/api"));
-	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/lin"));
+	/*XXX buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/api"));
+	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/lin"));*/
 	// - propagate
 	buildSetup.injectIntoCargoBuild()?;
 

@@ -357,7 +357,7 @@ impl Package
 		let sourceTypes;
 		// - WebGPU/WASM
 		#[cfg(target_arch="wasm32")] {
-			const SOURCE_TYPES: [SourceType; 2] = [SourceType::WGSL, SourceType::SPIRV];
+			const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::WGSL, WgpuSourceType::SPIRV];
 			sourceTypes = SOURCE_TYPES;
 		}
 		// - all native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)

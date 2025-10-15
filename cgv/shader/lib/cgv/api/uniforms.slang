@@ -5,7 +5,7 @@
 //
 
 // A module providing the common uniforms defined by the CGV-rs rendering API.
-module cgv_api_uniforms;
+module uniforms;
 
 // Insert into cgv::lin namespace
 namespace cgv::api {

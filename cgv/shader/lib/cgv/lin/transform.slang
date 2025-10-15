@@ -5,7 +5,7 @@
 //
 
 // A module providing coordinate system transformation utilities.
-module cgv_lin_transform;
+module transform;
 
 // Insert into cgv::lin namespace
 namespace cgv::lin {

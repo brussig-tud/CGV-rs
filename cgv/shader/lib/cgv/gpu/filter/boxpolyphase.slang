@@ -5,7 +5,7 @@
 //
 
 // A module (re-)defining mathematical operators for linear algebra.
-module cgv_gpu_filter_boxpolyphase;
+module boxpolyphase;
 
 // Insert into cgv::gpu::filter namespace
 namespace cgv::gpu::filter {

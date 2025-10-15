@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{rc::Rc, path::Path};
+use std::{error::Error, rc::Rc, path::{PathBuf, Path}, fmt::{Display, Formatter}};
 
 // Anyhow library
 use anyhow::anyhow;
@@ -21,8 +21,32 @@ use crc64fast_nvme as crc64;
 
 // Local imports
 use crate::*;
-use crate::compile::LoadModuleError;
 use crate::slang::Program;
+
+
+
+//////
+//
+// Errors
+//
+
+#[derive(Debug)]
+pub enum LoadModuleError {
+	CompilationError(String),
+	InvalidModulePath(PathBuf),
+	DuplicatePath(PathBuf)
+}
+impl Display for LoadModuleError {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
+			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
+			Self::DuplicatePath(path) => &format!("module already present at path: {}", path.display()),
+		};
+		write!(formatter, "LoadModuleError[{desc}]")
+	}
+}
+impl Error for LoadModuleError {}
 
 
 
@@ -246,38 +270,82 @@ impl Context
 		Program::fromSource(self, sourceFile)
 	}
 
-	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<slang::Module, compile::LoadModuleError>
+	///
+	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<slang::Module, LoadModuleError>
 	{
-		// We operate on a forked context to avoid polluting our session (only the loadModule... family of methods
-		// should leave modules in the session for later reuse/import/specialization)
-		let module = // Let slang load and compile the module
-			self.session.load_module(
-				sourcefile.as_ref().to_string_lossy().as_ref()
-			).or_else(|err| Err(LoadModuleError::ImplementationSpecific(
-				anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
-			)))?;
-
-		/*// Wrap the Slang module in our compile::Module-compliant representation
-		let module = Module::fromSlangModule(module).or_else(
-			|err| Err(LoadModuleError::ImplementationSpecific(
-				anyhow!("Compilation of `{}` failed:\n{}", sourcefile.as_ref().display(), err)
-			))
-		)?;*/
+		// Let slang load and compile the module
+		let module =  self.session.load_module(
+			sourcefile.as_ref().to_string_lossy().as_ref()
+		).or_else(|err|
+			Err(LoadModuleError::CompilationError(format!("File {} – {err}", sourcefile.as_ref().display())))
+		)?;
 
 		// Done!
 		Ok(module)
 	}
 
-	fn compileModuleFromMemory(&self, _source: &str) -> std::result::Result<slang::Module, LoadModuleError> {
-		todo!()
+	///
+	#[inline]
+	pub fn compileFromSource (&self, sourceCode: &str) -> Result<slang::Module, LoadModuleError> {
+		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
+		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
-	fn loadModule (&self, _filepath: impl AsRef<Path>) -> Result<Module, compile::LoadModuleError> {
-		todo!()
+	///
+	pub fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
+	-> Result<slang::Module, LoadModuleError>
+	{
+		let path = targetPath.as_ref().parent().ok_or(
+			LoadModuleError::InvalidModulePath(targetPath.as_ref().to_owned())
+		)?.to_string_lossy();
+		let name = targetPath.as_ref().file_stem().ok_or(
+			LoadModuleError::InvalidModulePath(targetPath.as_ref().to_owned())
+		)?.to_string_lossy();
+
+		// Let slang compile the module
+		let module =  self.session.load_module_from_source_string(
+			&name, &path, sourceCode
+		).or_else(|err| Err(LoadModuleError::CompilationError(format!("{err}"))))?;
+
+		// Done!
+		Ok(module)
 	}
 
-	fn loadModuleFromMemory (&self, _blob: &[u8]) -> Result<Module, compile::LoadModuleError> {
-		todo!()
+	///
+	pub fn loadModule (&mut self, envStorage: EnvironmentStorage, filename: impl AsRef<Path>)
+		-> Result<(), LoadModuleError>
+	{
+		let module = self.compile(&filename)?;
+		Self::storeInEnvironment(self.environment.as_mut(), filename, &module, envStorage)
+	}
+
+	///
+	pub fn loadModuleFromSource (
+		&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str
+	) -> Result<(), LoadModuleError>
+	{
+		let module = self.compileFromNamedSource(&targetPath, sourceCode)?;
+		Self::storeInEnvironment(self.environment.as_mut(), targetPath, &module, envStorage)
+	}
+
+	fn storeInEnvironment (
+		environment: Option<&mut compile::Environment<Module>>, atPath: impl AsRef<Path>, module: &slang::Module,
+		storage: EnvironmentStorage
+	) -> Result<(), LoadModuleError>
+	{
+		// If we got an environment, put the module in it
+		if let Some(env) = environment
+		{
+			match storage {
+				EnvironmentStorage::IR => {
+					//env.
+				}
+				EnvironmentStorage::SourceCode => {}
+			}
+		}
+
+		// Done!
+		Ok(())
 	}
 }
 

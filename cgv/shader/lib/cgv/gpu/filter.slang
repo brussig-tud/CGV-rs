@@ -5,7 +5,7 @@
 //
 
 // A module (re-)defining mathematical operators for linear algebra.
-module cgv_gpu_filter;
+module filter;
 
 // Insert into cgv::gpu namespace
 namespace cgv::gpu {
