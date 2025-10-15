@@ -233,29 +233,55 @@ impl<ModuleType: Module> Environment<ModuleType>
 	/// **remains unchanged**!
 	pub fn mergeWith (&mut self, other: &Environment<ModuleType>) -> Result<(), MergeError>
 	{
-		// Initial sanity check
+		// Initial sanity checks
+		// - environments are incompatible
 		if self.compatHash != other.compatHash {
 			return Err(MergeError::Incompatible);
+		}
+		// - trying to merge with an identical environment (a no-op)
+		if self.uuid == other.uuid {
+			return Ok(());
 		}
 
 		// Compile list of foreign modules to incorporate
 		let mut newModules = util::ds::UniqueArray::withCapacity(other.modules.len());
-		for otherModuleEntry in other.modules.iter()
+		for otherEntry in other.modules.iter()
 		{
 			// Decide what to do with this module
-			match self.modules.get(&otherModuleEntry.path)
+			match self.modules.get(&otherEntry.path)
 			{
 				// Case 1: this is an unseen module, include
-				None => newModules.push(other.externalizeModule(otherModuleEntry)).unwrap(),
+				None => newModules.push(other.externalizeModule(otherEntry)).unwrap(),
 
-				Some(ownEntry) =>
-					if     ownEntry.sourceEnv != otherModuleEntry.sourceEnv
-					   || (ownEntry.sourceEnv.is_none() && otherModuleEntry.sourceEnv.is_none()) {
-						// Case 3: we already have a module at this path, and it has a different source: ERROR!
-						return Err(MergeError::DuplicateModulePaths(otherModuleEntry.path.clone()));
+				Some(ownEntry) => {
+					// Case 2: one of the envs has introduced this module, and the other imported it - don't (re-)import
+					// - scenario 2.1: `other` is the original source of the module
+					if ownEntry.sourceEnv == Some(other.uuid) {
+						assert!(otherEntry.sourceEnv.is_none()); // this assert could only trigger if there was a logic
+						continue;                                // bug elsewhere
 					}
-					// Case 2: we already have a module at this path, and it has the same source: do not include
+					// - scenario 2.2: `self` is the original source of the module
+					if otherEntry.sourceEnv == Some(self.uuid) {
+						assert!(ownEntry.sourceEnv.is_none()); // this assert could only trigger if there was a logic
+						continue;                              // bug elsewhere
+					}
+
+					// Case 3: we already have a module at this path, and it has the same source: don't import
+					if    ownEntry.sourceEnv.is_some() && otherEntry.sourceEnv.is_some()
+					   && ownEntry.sourceEnv == otherEntry.sourceEnv {
+						continue;
+					};
+
+					// Case 4: we already have a module at this path, and it has a different source: ERROR!
+					return Err(MergeError::DuplicateModulePaths(otherEntry.path.clone()));
+				}
 			};
+		}
+
+		// Incorporate the new modules
+		unsafe {
+			// SAFETY: we guaranteed above that the new modules will be unique after merging
+			self.modules.join_unchecked(&newModules);
 		}
 
 		// Done!
