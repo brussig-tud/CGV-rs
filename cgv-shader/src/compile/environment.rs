@@ -87,10 +87,10 @@ impl BytesModule
 impl Module for BytesModule {}
 
 #[derive(Clone)]
-struct ModuleEntry<ModuleType: Module> {
-	path: PathBuf,
-	module: ModuleType,
-	sourceEnv: Option<Uuid>
+pub struct ModuleEntry<ModuleType: Module> {
+	pub path: PathBuf,
+	pub module: ModuleType,
+	pub sourceEnv: Option<Uuid>
 }
 impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
 	fn key (&self) -> &PathBuf {
@@ -222,6 +222,12 @@ impl<ModuleType: Module> Environment<ModuleType>
 	#[inline(always)]
 	pub fn compatHash (&self) -> u64 {
 		self.compatHash
+	}
+
+	///
+	#[inline]
+	pub fn modules (&self) -> impl Iterator<Item=&ModuleEntry<ModuleType>> {
+		self.modules.iter()
 	}
 
 	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.
