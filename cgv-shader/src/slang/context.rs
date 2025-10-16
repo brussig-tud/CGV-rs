@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{error::Error, rc::Rc, path::{PathBuf, Path}, fmt::{Display, Formatter}};
+use std::{error::Error, rc::Rc, borrow::Cow, path::{PathBuf, Path}, fmt::{Display, Formatter}};
 
 // Anyhow library
 use anyhow::anyhow;
@@ -21,7 +21,7 @@ use crc64fast_nvme as crc64;
 
 // Local imports
 use crate::*;
-use crate::slang::Program;
+use crate::{compile::{SetEnvironmentError, AddModuleError}, slang::Program};
 
 
 
@@ -65,40 +65,37 @@ pub enum EnvironmentStorage {
 	IR
 }
 
+///
+#[derive(Clone,serde::Serialize,serde::Deserialize)]
+pub enum Module {
+	/// The module should be stored as source code.
+	SourceCode(String),
+
+	/// The module should be stored in *Slang*-IR form.
+	IR(Vec<u8>)
+}
+impl Module
+{
+	///
+	#[inline(always)]
+	fn fromSlangModule (slangModule: slang::Module) -> anyhow::Result<Self> {
+		Ok(Self::IR(slangModule.serialize()?.as_slice().to_owned()))
+	}
+
+	///
+	#[inline(always)]
+	fn fromSlangSourceCode (sourceCode: &str) -> Self {
+		Self::SourceCode(sourceCode.to_owned())
+	}
+}
+impl compile::Module for Module {}
+
 
 
 //////
 //
 // Structs
 //
-
-///
-#[derive(Clone,serde::Serialize,serde::Deserialize)]
-pub struct Module{
-	kind: EnvironmentStorage,
-	code: Vec<u8>
-}
-impl Module
-{
-	///
-	#[inline]
-	fn fromSlangModule (slangModule: slang::Module) -> anyhow::Result<Self> {
-		Ok(Self {
-			kind: EnvironmentStorage::IR,
-			code: slangModule.serialize()?.as_slice().to_owned()
-		})
-	}
-
-	///
-	#[inline]
-	fn fromSlangSourceCode (sourceCode: &str) -> Self {
-		Self {
-			kind: EnvironmentStorage::SourceCode,
-			code: sourceCode.as_bytes().to_owned()
-		}
-	}
-}
-impl compile::Module for Module {}
 
 /// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
 #[derive(Default)]
@@ -295,28 +292,26 @@ impl Context
 	pub fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
 	-> Result<slang::Module, LoadModuleError>
 	{
-		let path = targetPath.as_ref().parent().ok_or(
-			LoadModuleError::InvalidModulePath(targetPath.as_ref().to_owned())
-		)?.to_string_lossy();
-		let name = targetPath.as_ref().file_stem().ok_or(
-			LoadModuleError::InvalidModulePath(targetPath.as_ref().to_owned())
-		)?.to_string_lossy();
+		// Make sure we get a valid target path
+		let targetPath = validateModulePath(targetPath.as_ref())?;
 
 		// Let slang compile the module
-		let module =  self.session.load_module_from_source_string(
-			&name, &path, sourceCode
-		).or_else(|err| Err(LoadModuleError::CompilationError(format!("{err}"))))?;
+		let module =  self.session.load_module_from_source_string(targetPath, targetPath, sourceCode)
+			.or_else(|err| Err(LoadModuleError::CompilationError(format!("{err}"))))?;
 
 		// Done!
 		Ok(module)
 	}
 
 	///
-	pub fn loadModule (&mut self, envStorage: EnvironmentStorage, filename: impl AsRef<Path>)
-		-> Result<(), LoadModuleError>
+	pub fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), LoadModuleError>
 	{
-		let module = self.compile(&filename)?;
-		Self::storeInEnvironment(self.environment.as_mut(), filename, &module, envStorage)
+		let module = Module::fromSlangModule(self.compile(&filename)?).map_err(
+			|err| LoadModuleError::CompilationError(format!("{err}"))
+		)?;
+		storeInEnvironment(self.environment.as_mut(), filename, module).map_err(|err| match err {
+			AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
+		})
 	}
 
 	///
@@ -324,28 +319,40 @@ impl Context
 		&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str
 	) -> Result<(), LoadModuleError>
 	{
-		let module = self.compileFromNamedSource(&targetPath, sourceCode)?;
-		Self::storeInEnvironment(self.environment.as_mut(), targetPath, &module, envStorage)
+		// Compile the source code inside the Slang session
+		let slangModule = self.compileFromNamedSource(&targetPath, sourceCode)?;
+		let module = match envStorage {
+			EnvironmentStorage::SourceCode => Module::fromSlangSourceCode(sourceCode),
+			EnvironmentStorage::IR => Module::fromSlangModule(slangModule).map_err(
+				|err| LoadModuleError::CompilationError(format!("{err}"))
+			)?
+		};
+
+		// Store the module in the environment
+		storeInEnvironment(self.environment.as_mut(), targetPath, module).map_err(|err| match err {
+			AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
+		})
 	}
 
-	fn storeInEnvironment (
-		environment: Option<&mut compile::Environment<Module>>, atPath: impl AsRef<Path>, module: &slang::Module,
-		storage: EnvironmentStorage
-	) -> Result<(), LoadModuleError>
+	///
+	pub fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, bytes: &[u8])
+		-> Result<(), LoadModuleError>
 	{
-		// If we got an environment, put the module in it
-		if let Some(env) = environment
-		{
-			match storage {
-				EnvironmentStorage::IR => {
-					//env.
-				}
-				EnvironmentStorage::SourceCode => {}
-			}
-		}
+		// Make sure we get a valid target path
+		let targetPath_str = validateModulePath(targetPath.as_ref())?;
 
-		// Done!
-		Ok(())
+		// Load the IR bytecode blob into the Slang session
+		let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
+		self.session.load_module_from_ir_blob(targetPath_str, targetPath_str, &*irBlob).or_else(
+			|err| Err(LoadModuleError::CompilationError(format!("{err}")))
+		)?;
+
+		// Store the IR module in the environment
+		storeInEnvironment(self.environment.as_mut(), targetPath, Module::IR(bytes.to_owned())).map_err(
+			|err| match err {
+				AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
+			}
+		)
 	}
 }
 
@@ -370,19 +377,24 @@ impl compile::Context<Module> for Context
 		{
 			for module in newEnv.modules()
 			{
-				let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(&module.module.code));
-				match module.module.kind {
-					EnvironmentStorage::IR => newSession.load_module_from_ir_blob(
-						&module.path.file_name().unwrap().to_string_lossy(),
-						&module.path.parent().unwrap().to_string_lossy(),
-						&*irBlob
-					).unwrap(), // ToDo: emit suitable SetEnvironmentError::ImplementationSpecific
+				let (path, name) = decomposeValidModulePath(&module.path);
+				match &module.module
+				{
+					Module::SourceCode(sourceCode) =>
+						newSession.load_module_from_source_string(&path, &name, sourceCode).or_else(|err|Err(
+							SetEnvironmentError::ImplementationSpecific(
+								LoadModuleError::CompilationError(format!("{err}")).into()
+							)
+						))?,
 
-					EnvironmentStorage::SourceCode => newSession.load_module_from_source_string(
-						&module.path.file_name().unwrap().to_string_lossy(),
-						&module.path.parent().unwrap().to_string_lossy(),
-						str::from_utf8(&module.module.code).unwrap()
-					).unwrap()  // ToDo: emit suitable SetEnvironmentError::ImplementationSpecific
+					Module::IR(bytes) => {
+						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
+						newSession.load_module_from_ir_blob(&path, &name, &*irBlob).or_else(|err|Err(
+							SetEnvironmentError::ImplementationSpecific(
+								LoadModuleError::CompilationError(format!("{err}")).into()
+							)
+						))?
+					}
 				};
 			}
 		}
@@ -413,7 +425,6 @@ impl compile::Context<Module> for Context
 //
 
 ///
-#[inline(always)]
 fn constructTargetDesc<'caller> (globalSesssion: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
 	-> slang::TargetDesc<'caller>
 {
@@ -423,5 +434,50 @@ fn constructTargetDesc<'caller> (globalSesssion: &slang::GlobalSession, sessionC
 	match sessionConfig.target {
 		CompilationTarget::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
 		CompilationTarget::WGSL => targetDesc.format(slang::CompileTarget::Wgsl)
+	}
+}
+
+///
+fn validateModulePath (targetPath: &Path) -> Result<&str, LoadModuleError>
+{
+	targetPath.parent().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	)?;
+	targetPath.file_stem().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	)?;
+
+	Ok(targetPath.as_os_str().to_str().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	)?)
+}
+
+///
+#[inline]
+fn decomposeValidModulePath (targetPath: &Path) -> (Cow<'_, str>, Cow<'_, str>)
+{
+	let path = targetPath.parent().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	).unwrap().to_string_lossy();
+	let name = targetPath.file_stem().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	).unwrap().to_string_lossy();
+
+	(path, name)
+}
+
+///
+#[inline]
+fn storeInEnvironment (
+	environment: Option<&mut compile::Environment<Module>>, atPath: impl AsRef<Path>, module: Module
+) -> Result<(), AddModuleError>
+{
+	if let Some(env) = environment {
+		// If we got an environment, put the module in it
+		env.addModule(atPath, module)
+	}
+	else {
+		// No environment, nothing to do
+		Ok(())
 	}
 }

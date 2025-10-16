@@ -6,4 +6,5 @@ edition.workspace = true
 [dependencies]
 ordered-float = "*"
 anyhow = "*"
+uuid = "*"
 nalgebra-glm = "*"

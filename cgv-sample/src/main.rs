@@ -18,15 +18,16 @@
 use std::default::Default;
 
 // CGV re-imports
-use cgv::{wgpu, glm, egui};
-#[cfg(target_arch="wasm32")] use cgv::tracing;
+use cgv::{wgpu, glm, egui, util::uuid};
+#[cfg(target_arch="wasm32")]
+use cgv::tracing;
 
 // WGPU API
 use wgpu::util::DeviceExt;
 
 // CGV Framework
 use cgv;
-use cgv::util;
+use cgv::{util, shader::compile::prelude::*};
 
 
 
@@ -130,7 +131,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
+	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, _environment: cgv::run::Environment)
 		-> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
@@ -159,22 +160,42 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		// Load resources
 
 		// Test Slang runtime compilation
-		#[cfg(target_arch="wasm32")] {
-			drop(environment); // <- make sure we don't get an "unused" warning
+		#[cfg(target_arch="wasm32")] let shaderPackage = {
+			//drop(environment); // <- make sure we don't get an "unused" warning
 			let moduleBytes = cgv::shader::slang::testJsInterop("HALLO");
 			tracing::info!("Compiled shader! Bytes:");
 			tracing::info!("{:?}", moduleBytes);
-		}
-		#[cfg(not(target_arch="wasm32"))] {
-			let slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath);
-			let _prog = slangCtx?.buildProgram(util::pathInsideCrate!("/shader/example.slang"))?;
-		}
+			cgv::shader::Package::deserialize(
+				util::sourceGeneratedBytes!("/shader/example.spk")
+			)?
+		};
+		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
+			let mut slangCtx = cgv::shader::slang::Context::forTarget(
+				cgv::shader::CompilationTarget::SPIRV(cfg!(debug_assertions)),
+				&["derp"]/*&environment.shaderPath*/
+			)?;
+			let env = cgv::shader::compile::Environment::forContextWithUuid(
+				&slangCtx, uuid::Uuid::from_u128(0x1234567890abcdef), "TestEnv"
+			);
+			slangCtx.replaceEnvironment(Some(env))?;
+			slangCtx.loadModuleFromSource(
+				cgv::shader::slang::EnvironmentStorage::IR, "cgv/api/uniforms.slang",
+				util::sourceFile!("/../cgv/shader/lib/cgv/api/uniforms.slang"),
+			)?;
+			slangCtx.loadModuleFromSource(
+				cgv::shader::slang::EnvironmentStorage::IR, "cgv/lin/operators.slang",
+				util::sourceFile!("/../cgv/shader/lib/cgv/lin/operators.slang"),
+			)?;
+			cgv::shader::Package::fromSlang(
+				&slangCtx, util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
+			)?
+		};
 
 		// The example shader
-		let shader = cgv::shader::Package::deserialize(
+		let shader = /*cgv::shader::Package::deserialize(
 			util::sourceGeneratedBytes!("/shader/example.spk")
-		)?
-		.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule")).ok_or(
+		)?*/
+		shaderPackage.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule")).ok_or(
 			cgv::anyhow!("Could not create example shader module")
 		)?;
 

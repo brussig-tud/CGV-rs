@@ -5,10 +5,10 @@
 //
 
 // Interface with managed uniforms handled by CGV-rs.
-import "cgv/api/uniforms";
+import "cgv/api/uniforms.slang";
 
 // Enable linear algebra mathematical operators (allows using `*` for matrix multiplication like in GLSL)
-import "cgv/lin/operators";
+import "cgv/lin/operators.slang";
 
 
 

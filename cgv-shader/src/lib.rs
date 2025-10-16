@@ -37,6 +37,7 @@ pub mod slang;
 //
 
 // Standard library
+/* nothing here yet */
 
 // Bitcode library
 use bitcode;

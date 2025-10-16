@@ -56,6 +56,9 @@ pub mod unique;
 // Standard library
 use std::ops::{Deref, DerefMut};
 
+// Uuid library
+pub use uuid; // re-export
+
 
 
 //////

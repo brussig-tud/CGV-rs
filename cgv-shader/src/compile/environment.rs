@@ -5,14 +5,14 @@
 //
 
 // Standard library
-use std::{path::PathBuf, error::Error, fmt::{Display, Formatter}};
+use std::{path::{PathBuf, Path}, error::Error, fmt::{Display, Formatter}};
 
 // Serialization
 use serde;
 use postcard;
 
 // UUID library
-use uuid;
+use util::uuid as uuid;
 use uuid::Uuid;
 
 // Local imports
@@ -36,12 +36,27 @@ impl Display for MergeError
 	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::Incompatible => "incompatible environments",
-			Self::DuplicateModulePaths(path) => &format!("duplicate module names: {}", path.display())
+			Self::DuplicateModulePaths(path) => &format!("duplicate module paths: {}", path.display())
 		};
 		write!(formatter, "MergeError[{desc}]")
 	}
 }
 impl Error for MergeError {}
+
+#[derive(Debug)]
+pub enum AddModuleError {
+	DuplicateModulePaths(PathBuf)
+}
+impl Display for AddModuleError
+{
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::DuplicateModulePaths(path) => &format!("duplicate module paths: {}", path.display())
+		};
+		write!(formatter, "AddModuleError[{desc}]")
+	}
+}
+impl Error for AddModuleError {}
 
 
 
@@ -119,7 +134,6 @@ impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<M
 ///
 /// \*This is merely *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
 /// dependencies on their side.
-#[derive(Clone)]
 pub struct Environment<ModuleType: Module> {
 	uuid: Uuid,
 	label: &'static str,
@@ -224,10 +238,49 @@ impl<ModuleType: Module> Environment<ModuleType>
 		self.compatHash
 	}
 
-	///
+	/// Obtain an iterator over all [modules](ModuleEntry) in the environment.
 	#[inline]
 	pub fn modules (&self) -> impl Iterator<Item=&ModuleEntry<ModuleType>> {
 		self.modules.iter()
+	}
+
+	/// Adds a new module to the collection of modules in the current context.
+	///
+	/// **Note**: that by convention, modules added this way will **always** be considered to be introduced by *this*
+	/// environment. Externally sourced modules can only be added via [merging](Environment::mergeWith) with other
+	/// environments.
+	///
+	/// # Arguments
+	///
+	/// * `path` – The path associated with the module being added. This determines how the module can be found during
+	/// compilation or linking of shaders by a [`compile::Context`] later on.
+	/// * `module` – A module of this environment's [`ModuleType`] to add to the environment.
+	///
+	/// # Returns
+	///
+	/// `Ok` if the module is successfully added, or an `AddModuleError` if there was a problem (most typically, a
+	/// module already exists at the desired `path`).
+	///
+	/// # Example
+	///
+	/// ```rust
+	/// use {uuid::Uuid, cgv_util as util};
+	///
+	/// let mut env = Environment::<BytesModule>::withUuid(
+	/// 	Uuid::from_u64_pair(util::unique::uint64(), util::unique::uint64()), "testEnvironment"
+	/// );
+	/// let module1 = BytesModule::fromVec(vec![0, 1, 2]/* ← dummy bytecode */);
+	/// let module2 = BytesModule::fromVec(vec![3, 4, 5]/* ← dummy bytecode */);
+	///
+	/// assert!(env.addModule("/namespace/mymodule", module1).is_ok());
+	/// assert!(env.addModule("/namespace/mymodule", module2).is_err()); // duplicate module path
+	/// ```
+	pub fn addModule (&mut self, path: impl AsRef<Path>, module: ModuleType) -> Result<(), AddModuleError> {
+		self.modules.push(
+			ModuleEntry { path: path.as_ref().to_owned(), module, sourceEnv: None }
+		).map_err(
+			|_| AddModuleError::DuplicateModulePaths(path.as_ref().to_owned())
+		)
 	}
 
 	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.

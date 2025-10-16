@@ -6,7 +6,12 @@
 
 // Submodule implementing compilation environments
 mod environment;
-pub use environment::{Module, Environment, BytesModule}; // re-export
+pub use environment::{Module, Environment, BytesModule, AddModuleError}; // re-export
+
+// The module prelude
+pub mod prelude {
+	pub use super::Context;
+}
 
 
 
