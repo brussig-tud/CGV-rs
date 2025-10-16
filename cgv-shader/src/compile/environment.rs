@@ -65,7 +65,8 @@ impl Error for AddModuleError {}
 // Traits
 //
 
-pub trait Module: Sized+Clone+serde::Serialize+serde::de::DeserializeOwned {}
+/// The trait of modules that make up a [`compile::Environment`].
+pub trait Module: Sized+Clone {}
 
 
 
@@ -73,8 +74,6 @@ pub trait Module: Sized+Clone+serde::Serialize+serde::de::DeserializeOwned {}
 //
 // Structs
 //
-
-
 
 ///
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
@@ -101,7 +100,7 @@ impl BytesModule
 }
 impl Module for BytesModule {}
 
-#[derive(Clone)]
+#[derive(Clone,serde::Serialize,serde::Deserialize)]
 pub struct ModuleEntry<ModuleType: Module> {
 	pub path: PathBuf,
 	pub module: ModuleType,
@@ -113,8 +112,8 @@ impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<M
 	}
 }
 
-/// Represents a shader *environment* that, in essence, collects shader modules that should be accessible in conjunction
-/// with each other to shader programs that might want to use them.
+/// Represents a shader *compilation environment* that, in essence, collects shader modules that should be accessible in
+/// conjunction with each other to shader programs that might want to use them.
 ///
 /// Environments should be utilized the following way: *CGV-rs* crates that want to provide shaders should collect all
 /// their shaders either during compile-time (preferred) or at initialization, potentially already compiling them to
@@ -134,13 +133,15 @@ impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<M
 ///
 /// \*This is merely *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
 /// dependencies on their side.
+#[derive(Clone,serde::Serialize,serde::Deserialize)]
 pub struct Environment<ModuleType: Module> {
 	uuid: Uuid,
-	label: &'static str,
+	label: String,
 	compatHash: u64,
 	modules: util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>>
 }
-impl<ModuleType: Module> Environment<ModuleType>
+impl<ModuleType> Environment<ModuleType>
+	where ModuleType: Module + serde::Serialize+(for<'de> serde::Deserialize<'de>)
 {
 	/////
 	// Helper functions
@@ -171,28 +172,51 @@ impl<ModuleType: Module> Environment<ModuleType>
 	////
 	// Constructors
 
+	///
+	pub fn deserialize (bytes: &[u8]) -> anyhow::Result<Self> {
+		Ok(postcard::from_bytes(bytes).map_err(anyhow::Error::new)?)
+	}
+
+	///
+	#[inline(always)]
+	pub fn deserializeFromFile (filepath: impl AsRef<Path>) -> anyhow::Result<Self> {
+		Self::deserialize(std::fs::read(filepath)?.as_slice())
+	}
+
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier).
-	pub fn withUuid (uuid: Uuid, label: &'static str) -> Self { Self {
-		uuid, label, compatHash: 0, modules: util::ds::UniqueArray::new()
+	pub fn withUuid (uuid: Uuid, label: &str) -> Self { Self {
+		uuid, label: label.to_owned(), compatHash: 0, modules: util::ds::UniqueArray::new()
 	}}
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
 	/// [`compile::Context`]
-	pub fn forContextWithUuid (context: &impl compile::Context<ModuleType>, uuid: Uuid, label: &'static str) -> Self { Self {
-		uuid, label, compatHash: context.environmentCompatHash(), modules: util::ds::UniqueArray::new()
+	pub fn forContextWithUuid (context: &impl compile::Context<ModuleType>, uuid: Uuid, label: &str)
+	-> Self { Self {
+		uuid, label: label.to_owned(), compatHash: context.environmentCompatHash(), modules: util::ds::UniqueArray::new()
 	}}
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and an initial compatibility hash.
-	pub fn withUuidAndCompatHash (uuid: Uuid, label: &'static str, compatHash: u64) -> Self { Self {
-		uuid, label, compatHash, modules: util::ds::UniqueArray::new()
+	pub fn withUuidAndCompatHash (uuid: Uuid, label: &str, compatHash: u64) -> Self { Self {
+		uuid, label: label.to_owned(), compatHash, modules: util::ds::UniqueArray::new()
 	}}
 
 
 	////
 	// Methods
+
+	///
+	pub fn serialize (&self) -> Vec<u8> {
+		postcard::to_allocvec(self).unwrap()
+	}
+
+	///
+	#[inline(always)]
+	pub fn serializeToFile (&self, filepath: impl AsRef<Path>) -> std::io::Result<()> {
+		std::fs::write(filepath, self.serialize())
+	}
 
 	/// Clones the current environment with a new UUID and label.
 	///
@@ -209,14 +233,14 @@ impl<ModuleType: Module> Environment<ModuleType>
 	///
 	/// A new instance of the environment with the provided UUID and label, with all modules and the same compatibility
 	/// hash as the original.
-	pub fn cloneWithNewUuid (&self, newUuid: Uuid, newLabel: &'static str) -> Self
+	pub fn cloneWithNewUuid (&self, newUuid: Uuid, newLabel: &str) -> Self
 	{
 		// Commit all modules, marking the ones owned by `self` as being sourced from `self.uuid`
 		let newModules = self.externalizeModules();
 
 		// Build cloned environment
 		Self {
-			uuid: newUuid, label: newLabel, compatHash: self.compatHash, modules: newModules
+			uuid: newUuid, label: newLabel.to_owned(), compatHash: self.compatHash, modules: newModules
 		}
 	}
 
@@ -228,8 +252,8 @@ impl<ModuleType: Module> Environment<ModuleType>
 
 	/// Reference the label string of this environment.
 	#[inline(always)]
-	pub fn label (&self) -> &'static str {
-		self.label
+	pub fn label (&self) -> &str {
+		&self.label
 	}
 
 	/// Report the compatibility hash of this environment.
@@ -299,7 +323,7 @@ impl<ModuleType: Module> Environment<ModuleType>
 	/// # Returns
 	///
 	/// The merged environment, or a [`MergeError`] indicating what went wrong.
-	pub fn merge (&self, other: &Environment<ModuleType>, uuid: Uuid, label: &'static str) -> Result<Self, MergeError> {
+	pub fn merge (&self, other: &Environment<ModuleType>, uuid: Uuid, label: &str) -> Result<Self, MergeError> {
 		if self.compatHash != other.compatHash {
 			return Err(MergeError::Incompatible);
 		}

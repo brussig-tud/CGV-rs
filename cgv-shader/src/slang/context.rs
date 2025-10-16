@@ -377,11 +377,11 @@ impl compile::Context<Module> for Context
 		{
 			for module in newEnv.modules()
 			{
-				let (path, name) = decomposeValidModulePath(&module.path);
+				let path = encodeValidModulePath(&module.path);
 				match &module.module
 				{
 					Module::SourceCode(sourceCode) =>
-						newSession.load_module_from_source_string(&path, &name, sourceCode).or_else(|err|Err(
+						newSession.load_module_from_source_string(&path, "", sourceCode).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
 								LoadModuleError::CompilationError(format!("{err}")).into()
 							)
@@ -389,7 +389,7 @@ impl compile::Context<Module> for Context
 
 					Module::IR(bytes) => {
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
-						newSession.load_module_from_ir_blob(&path, &name, &*irBlob).or_else(|err|Err(
+						newSession.load_module_from_ir_blob(&path, "", &*irBlob).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
 								LoadModuleError::CompilationError(format!("{err}")).into()
 							)
@@ -454,16 +454,16 @@ fn validateModulePath (targetPath: &Path) -> Result<&str, LoadModuleError>
 
 ///
 #[inline]
-fn decomposeValidModulePath (targetPath: &Path) -> (Cow<'_, str>, Cow<'_, str>)
+fn /*decompose*/encodeValidModulePath (targetPath: &Path) -> /*(*/Cow<'_, str>//, Cow<'_, str>)
 {
-	let path = targetPath.parent().ok_or(
+	targetPath.parent().ok_or(
 		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	).unwrap().to_string_lossy();
-	let name = targetPath.file_stem().ok_or(
+	).unwrap();
+	targetPath.file_stem().ok_or(
 		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	).unwrap().to_string_lossy();
+	).unwrap();
 
-	(path, name)
+	targetPath.as_os_str().to_string_lossy()
 }
 
 ///

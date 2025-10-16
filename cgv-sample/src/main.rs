@@ -174,7 +174,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				cgv::shader::CompilationTarget::SPIRV(cfg!(debug_assertions)),
 				&["derp"]/*&environment.shaderPath*/
 			)?;
-			let env = cgv::shader::compile::Environment::forContextWithUuid(
+			let env = /*cgv::shader::compile::Environment::<cgv::shader::slang::Module>::deserializeFromFile(
+				util::meta::currentExeDir().join("shaderCompile.env")
+			)?*/cgv::shader::compile::Environment::forContextWithUuid(
 				&slangCtx, uuid::Uuid::from_u128(0x1234567890abcdef), "TestEnv"
 			);
 			slangCtx.replaceEnvironment(Some(env))?;
@@ -186,9 +188,12 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				cgv::shader::slang::EnvironmentStorage::IR, "cgv/lin/operators.slang",
 				util::sourceFile!("/../cgv/shader/lib/cgv/lin/operators.slang"),
 			)?;
-			cgv::shader::Package::fromSlang(
+			let pak = cgv::shader::Package::fromSlang(
 				&slangCtx, util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
-			)?
+			)?;
+			let env = slangCtx.takeEnvironment().unwrap();
+			env.serializeToFile(cgv::util::meta::currentExeDir().join("shaderCompile.env"))?;
+			pak
 		};
 
 		// The example shader
