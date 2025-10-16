@@ -7,5 +7,10 @@ edition.workspace = true
 ordered-float = "*"
 anyhow = "*"
 normalize-path = "*"
-uuid = "*"
+serde = {version="*", optional=true}
+uuid = {version="*"}
 nalgebra-glm = "*"
+
+[features]
+default = []
+serde = ["dep:serde", "uuid/serde"]

@@ -129,6 +129,7 @@ impl UniqueArrayElement<Self> for &std::path::Path {
 /// with no way of vetting the changes, and thus it could not uphold the uniqueness guarantee. If you need to change an
 /// element in the array, use [`UniqueArray::changeElement`] instead.
 #[derive(Clone)]
+#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
 pub struct UniqueArray<K: Ord+Clone, E: UniqueArrayElement<K>> {
 	keys: BTreeSet<K>,
 	elems: Vec<E>
