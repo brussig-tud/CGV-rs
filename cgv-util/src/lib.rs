@@ -59,6 +59,9 @@ use std::ops::{Deref, DerefMut};
 // Uuid library
 pub use uuid; // re-export
 
+// Normlize-path library
+pub use normalize_path; // re-export
+
 
 
 //////
