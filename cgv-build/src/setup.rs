@@ -117,12 +117,10 @@ impl Setup
 	///
 	pub fn addShaderPath (&mut self, path: impl AsRef<Path>)
 	{
-		if let Ok(path) = path.as_ref().canonicalize() {
-			self.shaderPath.insert(path);
-		}
-		else {
+		if path.as_ref().canonicalize().is_err() {
 			println!("cargo::warning=Unaccessible shader path directory: '{}'", path.as_ref().display());
 		}
+		self.shaderPath.insert(util::path::normalize(path));
 	}
 
 	///
