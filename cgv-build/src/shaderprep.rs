@@ -1,4 +1,9 @@
 
+/// All facilities in this module assume the default Slang shading language. If crates want to provide different compile
+/// contexts and environments, they should also provide their own build-time facilities similar to this one.
+
+
+
 //////
 //
 // Imports
@@ -10,8 +15,55 @@ use std::{fs, path::{Path}};
 // Anyhow library
 pub use anyhow::{Result, anyhow};
 
+// CGV re-imports
+use util::uuid;
+
+// CGV-rs
+use cgv_shader as shader;
+use cgv_util as util;
+use shader::compile::prelude::*;
+
 // Local imports
 use crate::*;
+
+
+
+//////
+//
+// Structs
+//
+
+///
+pub struct EnvironmentBuilder<'ctx> {
+	slangContext: &'ctx mut shader::slang::Context,
+	addModulesRoot: PathBuf,
+}
+impl<'ctx> EnvironmentBuilder<'ctx>
+{
+	///
+	pub fn new(slangContext: &'ctx mut shader::slang::Context, addModulesRoot: impl AsRef<Path>) -> Self {
+		Self { slangContext, addModulesRoot: addModulesRoot.as_ref().to_owned() }
+	}
+
+	///
+	pub fn addModule (
+		&mut self, envStorage: shader::slang::EnvironmentStorage,
+		sourceFilePath: impl AsRef<Path>
+	) -> Result<()> {
+		let contents = std::fs::read_to_string(self.addModulesRoot.join(sourceFilePath.as_ref()))?;
+		Ok(self.slangContext.loadModuleFromSource(envStorage, sourceFilePath.as_ref(), &contents)?)
+	}
+
+	///
+	pub fn addModuleAtPath (
+		&mut self, environmentPath: impl AsRef<Path>, envStorage: shader::slang::EnvironmentStorage,
+		sourceFile: impl AsRef<Path>
+	) -> Result<()> {
+		let contents = std::fs::read_to_string(sourceFile.as_ref())?;
+		Ok(self.slangContext.loadModuleFromSource(envStorage, environmentPath.as_ref(), &contents)?)
+	}
+}
+
 
 
 //////
@@ -29,7 +81,7 @@ pub fn prepareShaders (
 	// - syntactic
 	if shaderDirectory.as_ref().is_absolute() {
 		return Err(anyhow!(
-			"`shaderDirectory` is not relative: '{}'\nMust be a directory relative to the path of the Crate manifest!",
+			"`shaderDirectory` is not relative: '{}'\nMust be a directory relative to the path of the crate manifest!",
 			shaderDirectory.as_ref().display()
 		))
 	}
@@ -45,7 +97,7 @@ pub fn prepareShaders (
 	let absoluteShaderDir = crateSrcDir.join(shaderDirectory.as_ref()).canonicalize()?;
 	if !absoluteShaderDir.starts_with(fs::canonicalize(crateSrcDir)?) {
 		return Err(anyhow!(
-			"`shaderDirectory` is not a subdir of the Crate source root:\ncrate root: {}\nshader dir: {}",
+			"`shaderDirectory` is not a subdir of the crate source root:\ncrate root: {}\nshader dir: {}",
 			crateSrcDir.display(), absoluteShaderDir.display()
 		))
 	}
@@ -94,5 +146,38 @@ pub fn prepareShaders (
 	})?;
 
 	// Mirror the shader structure of the given directory
+	Ok(())
+}
+
+///
+pub fn generateShaderEnvironment (
+	environmentFilename: impl AsRef<Path>, addModulesRoot: impl AsRef<Path>, shaderPath: Option<&[impl AsRef<Path>]>,
+	addModules: impl FnOnce(&mut EnvironmentBuilder, shader::slang::EnvironmentStorage)->Result<()>
+) -> Result<()> {
+	// Create Slang compilation context
+	let mut slangContext = shader::slang::Context::forTarget(
+		shader::mostSuitableCompilationTargetForPlatform(cargoBuildTargetPlatform()),
+		shaderPath.unwrap_or_default(),
+	)?;
+
+	// Create and set target environment
+	let env = shader::compile::Environment::forContextWithUuid(
+		&slangContext, uuid::Uuid::from_u64_pair(0u64, 1u64), "CgvShaderLib"
+	);
+	slangContext.replaceEnvironment(Some(env))?;
+
+	// Dispatch the builder
+	addModules(
+		&mut EnvironmentBuilder::new(&mut slangContext, addModulesRoot),
+		shader::slang::mostSuitableEnvironmentStorageForPlatform(cargoBuildTargetPlatform())
+	)?;
+
+	// Retrieve environment and generate
+	let env = slangContext.finishEnvironment().unwrap();
+	let actualFilename = getCargoOutDir().join(environmentFilename);
+	env.serializeToFile(&actualFilename)?;
+	dependOnGeneratedFile(actualFilename)?;
+
+	// Done!
 	Ok(())
 }

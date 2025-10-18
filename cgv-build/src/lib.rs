@@ -30,7 +30,7 @@ pub use cgv_shader as shader;
 
 /// Internal module implementing the high-level shader preparation logic
 mod shaderprep;
-pub use shaderprep::prepareShaders; // re-export
+pub use shaderprep::{prepareShaders, generateShaderEnvironment}; // re-export
 
 /// The module providing all kinds of additional assorted utilities specific to building (will get inserted verbatim
 /// into the exported [`util`] module).

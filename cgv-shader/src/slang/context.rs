@@ -55,8 +55,11 @@ impl Error for LoadModuleError {}
 // Enums
 //
 
-/// Indicates how a [`slang::Context`](Context) should reflect modules in the active [`compile::Environment`].
-#[derive(Clone,serde::Serialize,serde::Deserialize)]
+/// Indicates in what form a [`slang::Context`](Context) should enter modules into the active [`compile::Environment`]:
+///
+/// * `SourceCode` – The module should be stored as source code.
+/// * `IR` – The module should be stored in *Slang*-IR form.
+#[derive(Clone,Copy,serde::Serialize,serde::Deserialize)]
 pub enum EnvironmentStorage {
 	/// The module should be stored as source code.
 	SourceCode,

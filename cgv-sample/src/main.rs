@@ -18,7 +18,7 @@
 use std::default::Default;
 
 // CGV re-imports
-use cgv::{wgpu, glm, egui, util::uuid};
+use cgv::{wgpu, glm, egui};
 #[cfg(target_arch="wasm32")]
 use cgv::tracing;
 
@@ -131,7 +131,7 @@ struct SampleApplicationFactory {}
 
 impl cgv::ApplicationFactory for SampleApplicationFactory
 {
-	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, _environment: cgv::run::Environment)
+	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
 		-> cgv::Result<Box<dyn cgv::Application>>
 	{
 		////
@@ -161,7 +161,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// Test Slang runtime compilation
 		#[cfg(target_arch="wasm32")] let shaderPackage = {
-			//drop(environment); // <- make sure we don't get an "unused" warning
+			drop(environment); // <- make sure we don't get an "unused" warning
 			let moduleBytes = cgv::shader::slang::testJsInterop("HALLO");
 			tracing::info!("Compiled shader! Bytes:");
 			tracing::info!("{:?}", moduleBytes);
@@ -171,29 +171,13 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		};
 		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
 			let mut slangCtx = cgv::shader::slang::Context::forTarget(
-				cgv::shader::CompilationTarget::SPIRV(cfg!(debug_assertions)),
-				&["derp"]/*&environment.shaderPath*/
+				cgv::shader::CompilationTarget::SPIRV(cfg!(debug_assertions)), &environment.shaderPath
 			)?;
-			let env = /*cgv::shader::compile::Environment::<cgv::shader::slang::Module>::deserializeFromFile(
-				util::meta::currentExeDir().join("shaderCompile.env")
-			)?*/cgv::shader::compile::Environment::forContextWithUuid(
-				&slangCtx, uuid::Uuid::from_u128(0x1234567890abcdef), "TestEnv"
-			);
+			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
-			slangCtx.loadModuleFromSource(
-				cgv::shader::slang::EnvironmentStorage::IR, "cgv/api/uniforms.slang",
-				util::sourceFile!("/../cgv/shader/lib/cgv/api/uniforms.slang"),
-			)?;
-			slangCtx.loadModuleFromSource(
-				cgv::shader::slang::EnvironmentStorage::IR, "cgv/lin/operators.slang",
-				util::sourceFile!("/../cgv/shader/lib/cgv/lin/operators.slang"),
-			)?;
-			let pak = cgv::shader::Package::fromSlang(
+			cgv::shader::Package::fromSlang(
 				&slangCtx, util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
-			)?;
-			let env = slangCtx.takeEnvironment().unwrap();
-			env.serializeToFile(cgv::util::meta::currentExeDir().join("shaderCompile.env"))?;
-			pak
+			)?
 		};
 
 		// The example shader

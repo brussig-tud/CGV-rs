@@ -8,8 +8,11 @@ ordered-float = "*"
 anyhow = "*"
 normalize-path = "*"
 serde = {version="*", optional=true}
-uuid = {version="*"}
+uuid = "*"
 nalgebra-glm = "*"
+
+[target.'cfg(target_arch="wasm32")'.dependencies]
+uuid = {version="*", features=["js"]}
 
 [features]
 default = []

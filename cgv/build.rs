@@ -45,10 +45,20 @@ fn main() -> cgv_build::Result<()>
 	}
 	// - our shader path
 	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib"));
-	/*XXX buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/api"));
-	buildSetup.addShaderPath(cgvSrcDir.join("shader/lib/lin"));*/
 	// - propagate
 	buildSetup.injectIntoCargoBuild()?;
+
+	// Generate the runtime shader compilation environment exposing the core CGV shader library
+	cgv_build::generateShaderEnvironment(
+		"shaderlib.env", "shader/lib", Some(&buildSetup.shaderPath()),
+		|env, recommendedStorage| {
+			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
+			env.addModule(recommendedStorage, "cgv/lin/operators.slang")?;
+			env.addModule(recommendedStorage, "cgv/lin/transform.slang")?;
+			env.addModule(recommendedStorage, "cgv/gpu/filter.slang")?;
+			env.addModule(recommendedStorage, "cgv/gpu/filter/box-polyphase.slang")
+		}
+	)?;
 
 	// Compile our shaders
 	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["common", "gpu", "lib"]))?;

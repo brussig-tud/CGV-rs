@@ -33,6 +33,7 @@ use anyhow;
 use shader_slang as slang;
 
 // Local imports
+use cgv_util as util;
 use crate::CompilationTarget;
 
 
@@ -76,6 +77,20 @@ pub fn createContextsForTargets<'a> (targets: &[CompilationTarget], shaderPath: 
 		contexts.push(Context::forTarget(target, shaderPath)?);
 	}
 	Ok(contexts.into())
+}
+
+/// Report the most suitable storagy type for Slang-sourced compilation enviorment modules.
+pub fn mostSuitableEnvironmentStorageForPlatform (platform: &util::meta::SupportedPlatform) -> EnvironmentStorage
+{
+	// WebGPU/WASM
+	if platform.isWasm() {
+		// Slang-WASM currently doesn't support loading IR modules
+		EnvironmentStorage::SourceCode
+	}
+	// All native backends
+	else {
+		EnvironmentStorage::IR
+	}
 }
 
 #[cfg(target_arch="wasm32")]
