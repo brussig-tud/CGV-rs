@@ -50,8 +50,8 @@ fn main() -> cgv_build::Result<()>
 
 	// Generate the runtime shader compilation environment exposing the core CGV shader library
 	cgv_build::generateShaderEnvironment(
-		"shaderlib.env", "shader/lib", Some(&buildSetup.shaderPath()),
-		|env, recommendedStorage| {
+		"coreshaderlib.env", "shader/lib", Some(&buildSetup.shaderPath()),
+		"CgvCoreShaderLib", |env, recommendedStorage| {
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/operators.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/transform.slang")?;

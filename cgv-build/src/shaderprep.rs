@@ -15,9 +15,6 @@ use std::{fs, path::{Path}};
 // Anyhow library
 pub use anyhow::{Result, anyhow};
 
-// CGV re-imports
-use util::uuid;
-
 // CGV-rs
 use cgv_shader as shader;
 use cgv_util as util;
@@ -152,7 +149,7 @@ pub fn prepareShaders (
 ///
 pub fn generateShaderEnvironment (
 	environmentFilename: impl AsRef<Path>, addModulesRoot: impl AsRef<Path>, shaderPath: Option<&[impl AsRef<Path>]>,
-	addModules: impl FnOnce(&mut EnvironmentBuilder, shader::slang::EnvironmentStorage)->Result<()>
+	label: &str, addModules: impl FnOnce(&mut EnvironmentBuilder, shader::slang::EnvironmentStorage)->Result<()>
 ) -> Result<()> {
 	// Create Slang compilation context
 	let mut slangContext = shader::slang::Context::forTarget(
@@ -162,7 +159,7 @@ pub fn generateShaderEnvironment (
 
 	// Create and set target environment
 	let env = shader::compile::Environment::forContextWithUuid(
-		&slangContext, uuid::Uuid::from_u64_pair(0u64, 1u64), "CgvShaderLib"
+		&slangContext, util::unique::uuidFromUserString(label), label
 	);
 	slangContext.replaceEnvironment(Some(env))?;
 
