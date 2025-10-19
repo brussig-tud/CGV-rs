@@ -498,3 +498,11 @@ pub fn platformTargetTriple() -> &'static TargetTriple<'static> {
 pub fn platform() -> &'static SupportedPlatform {
 	&CGV_PLATFORM
 }
+
+/// Reference the UUID namespace of *CGV-rs*.
+pub fn uuidNamespace() -> &'static uuid::Uuid {
+	static CGV_UUID_NAMESPACE: LazyLock<uuid::Uuid> = LazyLock::new(||
+		uuid::Uuid::from_str("97e2c953-544c-4394-8bd7-2eae60ab9d0e").unwrap()
+	);
+	&CGV_UUID_NAMESPACE
+}

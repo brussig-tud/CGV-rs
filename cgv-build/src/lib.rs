@@ -159,8 +159,6 @@ pub fn getScriptStartTime () -> std::time::SystemTime {
 	*SCRIPT_START_TIME
 }
 
-
-
 ///
 pub fn dependOnFile (filepath: impl AsRef<Path>) {
 	println!("cargo::rerun-if-changed={}", filepath.as_ref().display());

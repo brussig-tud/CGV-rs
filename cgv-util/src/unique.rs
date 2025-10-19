@@ -8,6 +8,9 @@
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU32, AtomicU64};
 
+// Local imports
+use crate::*;
+
 
 
 //////
@@ -109,4 +112,10 @@ pub fn uint32 () -> u32 {
 #[inline(always)]
 pub fn uint64 () -> u64 {
 	GLOBAL_REALM_U64.newEntity()
+}
+
+/// Generate a [V5](https://en.wikipedia.org/wiki/Universally_unique_identifier#Versions_3_and_5_(namespace_name-based))
+/// UUID using the generic [CGV-rs UUID](meta::uuidNamespace) as namespace and the given user string as the data.
+pub fn uuidFromUserString (userString: &str) -> uuid::Uuid {
+	uuid::Uuid::new_v5(meta::uuidNamespace(), userString.as_bytes())
 }
