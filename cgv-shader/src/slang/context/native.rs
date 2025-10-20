@@ -5,93 +5,29 @@
 //
 
 // Standard library
-use std::{error::Error, rc::Rc, borrow::Cow, path::{PathBuf, Path}, fmt::{Display, Formatter}};
+use std::{sync::{Mutex, LazyLock}, path::{PathBuf, Path}};
 
 // Anyhow library
 use anyhow::anyhow;
 
-// Serde library
-use serde;
-
 // Slang library
 use shader_slang as slang;
 
-// CRC64-fast library
-use crc64fast_nvme as crc64;
-
 // Local imports
 use crate::*;
-use crate::{compile::{SetEnvironmentError, AddModuleError}, slang::Program};
+use crate::{compile::{SetEnvironmentError, AddModuleError}, slang::Program, slang::context::*};
 
 
 
 //////
 //
-// Errors
+// Globals
 //
 
-#[derive(Debug)]
-pub enum LoadModuleError {
-	CompilationError(String),
-	InvalidModulePath(PathBuf),
-	DuplicatePath(PathBuf)
-}
-impl Display for LoadModuleError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-		let desc = match self {
-			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
-			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
-			Self::DuplicatePath(path) => &format!("module already present at path: {}", path.display()),
-		};
-		write!(formatter, "LoadModuleError[{desc}]")
-	}
-}
-impl Error for LoadModuleError {}
-
-
-
-//////
-//
-// Enums
-//
-
-/// Indicates in what form a [`slang::Context`](Context) should enter modules into the active [`compile::Environment`]:
-///
-/// * `SourceCode` – The module should be stored as source code.
-/// * `IR` – The module should be stored in *Slang*-IR form.
-#[derive(Clone,Copy,serde::Serialize,serde::Deserialize)]
-pub enum EnvironmentStorage {
-	/// The module should be stored as source code.
-	SourceCode,
-
-	/// The module should be stored in *Slang*-IR form.
-	IR
-}
-
-///
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub enum Module {
-	/// The module should be stored as source code.
-	SourceCode(String),
-
-	/// The module should be stored in *Slang*-IR form.
-	IR(Vec<u8>)
-}
-impl Module
-{
-	///
-	#[inline(always)]
-	fn fromSlangModule (slangModule: slang::Module) -> anyhow::Result<Self> {
-		Ok(Self::IR(slangModule.serialize()?.as_slice().to_owned()))
-	}
-
-	///
-	#[inline(always)]
-	fn fromSlangSourceCode (sourceCode: &str) -> Self {
-		Self::SourceCode(sourceCode.to_owned())
-	}
-}
-impl compile::Module for Module {}
+/// The singleton global session instance.
+static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::new(
+	|| NativeGlobalSessionContainer { globalSession: Mutex::new(slang::GlobalSession::new().unwrap()) }
+);
 
 
 
@@ -100,31 +36,27 @@ impl compile::Module for Module {}
 // Structs
 //
 
-/// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
-#[derive(Default)]
-struct CompatOptions {
-	matrixLayoutColumn: bool,
-	matrixLayoutRow: bool,
-	optimize: bool
+impl From<&slang::Module> for Module {
+	fn from (value: &shader_slang::Module) -> Self {
+		Self::fromSlangIRBytes(
+			value.serialize().expect("Slang failed to serialize a pre-compiled module").as_slice()
+		)
+	}
 }
-impl CompatOptions {
-	pub fn matrixLayoutColumn(&mut self, enable: bool) -> bool {
-		self.matrixLayoutColumn = enable;
-		enable
-	}
-	pub fn matrixLayoutRow(&mut self, enable: bool) -> bool {
-		self.matrixLayoutRow = enable;
-		enable
-	}
-	pub fn optimize(&mut self, enable: bool) -> slang::OptimizationLevel {
-		self.optimize = enable;
-		if enable { slang::OptimizationLevel::Maximal } else { slang::OptimizationLevel::None }
-	}
-	pub fn digest (self) -> u64 {
-		let mut digest = crc64::Digest::new();
-		digest.write(util::slicify(&self));
-		digest.sum64()
-	}
+
+///
+struct NativeGlobalSessionContainer {
+	globalSession: Mutex<slang::GlobalSession>
+}
+unsafe impl Send for NativeGlobalSessionContainer {
+	// SAFETY: According to the [*Slang* docs](https://shader-slang.org/slang/user-guide/compiling.html#multithreading),
+	// global session methods may be called from any thread, as long as they don't do it concurrently.
+}
+unsafe impl Sync for NativeGlobalSessionContainer {
+	// SAFETY: According to the [*Slang* docs](https://shader-slang.org/slang/user-guide/compiling.html#multithreading),
+	// global session methods are **NOT** re-entrant. However, we only ever create a single global session inside a
+	// LazyLock, which enforces mutual exclusion when initializing it, and our internal mutex enforces serial access to
+	// the global session after initialization.
 }
 
 /// Helper struct storing session configuration info in order to facilitate [Context::fork].
@@ -141,30 +73,20 @@ impl SlangSessionConfig {
 	}
 }
 
-/// # ToDos
-///
-/// *Slang* sessions are stateful. This is not necessarily something we always want. Consider using a fresh session in
-/// the implementations of the [`compile...()`](compile::Context::compileModule) and
-/// [`load...()`](compile::Context::loadModule) family of methods, as currently, they will cause the created module to
-/// be embedded in the session, which can affect subsequent compilations of other modules in unexpected ways. The
-/// [`compile::Context`] trait on the other hand has them take immutable references to `self` while very much _**not**_
-/// implying any interior mutability.
+/// A *Slang* [compilation context](compile::Context).
 pub struct Context {
-	#[allow(dead_code)] // we need to keep this around as it dictates the lifetime of `session`
-	globalSession: Rc<slang::GlobalSession>,
-
 	sessionConfig: SlangSessionConfig,
-	pub(crate) session: slang::Session,
+
+	pub(crate)session: slang::Session,
 
 	compatHash: u64,
-
 	environment: Option<compile::Environment<Module>>
 }
 impl Context
 {
 	/// Helper for obtaining a fresh *Slang* session.
 	fn freshSession (globalSession: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
-	-> Result<slang::Session, ()>
+		-> Result<slang::Session, ()>
 	{
 		let targetDesc = constructTargetDesc(&globalSession, &sessionConfig);
 		globalSession.create_session(&slang::SessionDesc::default()
@@ -174,7 +96,7 @@ impl Context
 		).ok_or(())
 	}
 
-	/// Create a new Slang context for the given compilation target using the given module search path.
+	/// Create a new *Slang* context for the given compilation target using the given module search path.
 	///
 	/// # Arguments
 	///
@@ -182,14 +104,8 @@ impl Context
 	/// * `searchPath` – The module search path for the *Slang* compiler.
 	pub fn forTarget (target: CompilationTarget, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
 	{
-		// Start a Slang global session
-		let globalSession = slang::GlobalSession::new();
-		let globalSession = if globalSession.is_some() {
-			globalSession.unwrap()
-		}
-		else {
-			return Err(anyhow!("Failed to create Slang global session"));
-		};
+		// Obtain the global session
+		let globalSession = obtainGlobalSession().lock().unwrap();
 
 		// Finalize the Slang session configuration
 		// - initialize compat-relevant settings
@@ -232,25 +148,18 @@ impl Context
 		let compatHash = compatOptions.digest();
 
 		// Done!
-		Ok(Self {
-			globalSession: Rc::new(globalSession), sessionConfig, session, compatHash, environment: None
-		})
+		Ok(Self { sessionConfig, session, compatHash, environment: None })
 	}
 
-	/// Create a new Slang context with the given module search path. The actual creation is delegated to
-	/// [`Self::forTarget`] using the default shader compilation target for the current target platform.
+	/// Create a new *Slang* context for the *SPIR-V* target with the given module search path. The actual creation is
+	/// delegated to [`Self::forTarget`] using the default shader compilation target, this function merely decides
+	/// whether to enable debug information in the *SPIR-V* target based on `cfg!(debug_assertions)`.
 	///
 	/// # Arguments
 	///
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn new (searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
-	{
-		#[cfg(not(target_arch="wasm32"))] {
-			Self::forTarget(CompilationTarget::SPIRV(cfg!(debug_assertions)), searchPath)
-		}
-		#[cfg(target_arch="wasm32")] {
-			Self::forTarget(CompilationTarget::WGSL, searchPath)
-		}
+	pub fn new (searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self> {
+		Self::forTarget(CompilationTarget::SPIRV(cfg!(debug_assertions)), searchPath)
 	}
 
 	///
@@ -293,7 +202,7 @@ impl Context
 
 	///
 	pub fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
-	-> Result<slang::Module, LoadModuleError>
+	                               -> Result<slang::Module, LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(targetPath.as_ref())?;
@@ -339,7 +248,7 @@ impl Context
 
 	///
 	pub fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, bytes: &[u8])
-		-> Result<(), LoadModuleError>
+	                         -> Result<(), LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath_str = validateModulePath(targetPath.as_ref())?;
@@ -358,7 +267,6 @@ impl Context
 		)
 	}
 }
-
 impl compile::Context<Module> for Context
 {
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
@@ -370,7 +278,7 @@ impl compile::Context<Module> for Context
 		}
 
 		// Start from a fresh session
-		let newSession = Self::freshSession(&self.globalSession, &self.sessionConfig).expect(
+		let newSession = Self::freshSession(&obtainGlobalSession().lock().unwrap(), &self.sessionConfig).expect(
 			"Creating a Slang session identical to an existing one should never fail unless there are \
 			unrecoverable external circumstances (out-of-memory etc.)"
 		);
@@ -427,60 +335,22 @@ impl compile::Context<Module> for Context
 // Functions
 //
 
+/// Obtain a reference to the singleton [`slang::GlobalSession`](slang::GlobalSession) from which actual, stateful
+/// compiler sessions can be created.
+#[inline(always)]
+pub fn obtainGlobalSession () -> &'static Mutex<slang::GlobalSession> {
+	&SLANG_GLOBAL_SESSION.globalSession
+}
+
 ///
-fn constructTargetDesc<'caller> (globalSesssion: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
+fn constructTargetDesc<'caller> (globalSession: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
 	-> slang::TargetDesc<'caller>
 {
 	let targetDesc = slang::TargetDesc::default().profile(
-		globalSesssion.find_profile(&sessionConfig.profile)
+		globalSession.find_profile(&sessionConfig.profile)
 	);
 	match sessionConfig.target {
 		CompilationTarget::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
 		CompilationTarget::WGSL => targetDesc.format(slang::CompileTarget::Wgsl)
-	}
-}
-
-///
-fn validateModulePath (targetPath: &Path) -> Result<&str, LoadModuleError>
-{
-	targetPath.parent().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	)?;
-	targetPath.file_stem().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	)?;
-
-	Ok(targetPath.as_os_str().to_str().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	)?)
-}
-
-///
-#[inline]
-fn /*decompose*/encodeValidModulePath (targetPath: &Path) -> /*(*/Cow<'_, str>//, Cow<'_, str>)
-{
-	targetPath.parent().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	).unwrap();
-	targetPath.file_stem().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	).unwrap();
-
-	targetPath.as_os_str().to_string_lossy()
-}
-
-///
-#[inline]
-fn storeInEnvironment (
-	environment: Option<&mut compile::Environment<Module>>, atPath: impl AsRef<Path>, module: Module
-) -> Result<(), AddModuleError>
-{
-	if let Some(env) = environment {
-		// If we got an environment, put the module in it
-		env.addModule(atPath, module)
-	}
-	else {
-		// No environment, nothing to do
-		Ok(())
 	}
 }

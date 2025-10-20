@@ -32,6 +32,7 @@ pub struct Program {
 }
 impl Program
 {
+	#[cfg(not(target_arch="wasm32"))]
 	pub(crate) fn fromSource (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self>
 	{
 		// Compile Slang module
@@ -74,6 +75,11 @@ impl Program
 
 		// Done!
 		Ok(Self { _linkedProg: linkedProg, allEntryPointsProg, entryPointProgs })
+	}
+
+	#[cfg(target_arch="wasm32")]
+	pub(crate) fn fromSource (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self> {
+		todo!()
 	}
 
 	///

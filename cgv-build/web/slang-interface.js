@@ -77,4 +77,12 @@ export default async function slang_setupAndAddInterface (targetObj)
 		const encoder = new TextEncoder();
 		return encoder.encode(moduleSourceCode);
 	};
+	targetObj.slangjs_interopTest1 = function (moduleSourceCode) {
+		// We assume that moduleSourceCode is a String. Convert it into Uint8Array
+		console.info("slangjs_interopTest(): Using Slang Context:");
+		console.info(targetObj.slangCtx);
+		console.info('slangjs_interopTest(): Echoing bytes of received string "'+moduleSourceCode+'"');
+		const encoder = new TextEncoder();
+		return encoder.encode(moduleSourceCode);
+	};
 }
