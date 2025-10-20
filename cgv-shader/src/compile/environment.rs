@@ -76,7 +76,7 @@ pub trait Module: Sized+Clone {}
 //
 
 ///
-#[derive(Clone,serde::Serialize,serde::Deserialize)]
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 pub struct BytesModule(Vec<u8>);
 impl BytesModule
 {

@@ -69,7 +69,7 @@ pub enum EnvironmentStorage {
 }
 
 ///
-#[derive(Clone,serde::Serialize,serde::Deserialize)]
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 pub enum Module {
 	/// The module should be stored as source code.
 	SourceCode(String),
