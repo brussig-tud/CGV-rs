@@ -7,6 +7,9 @@
 // Standard library
 use std::{ops::{Range, Index}, collections::BTreeSet};
 
+// Serde library
+use serde::ser::SerializeSeq;
+
 // Ordered-float crate
 use ordered_float::OrderedFloat;
 
@@ -129,7 +132,6 @@ impl UniqueArrayElement<Self> for &std::path::Path {
 /// with no way of vetting the changes, and thus it could not uphold the uniqueness guarantee. If you need to change an
 /// element in the array, use [`UniqueArray::changeElement`] instead.
 #[derive(Clone)]
-#[cfg_attr(feature="serde", derive(serde::Serialize,serde::Deserialize))]
 pub struct UniqueArray<K: Ord+Clone, E: UniqueArrayElement<K>> {
 	keys: BTreeSet<K>,
 	elems: Vec<E>
@@ -388,5 +390,69 @@ impl<K: Ord+Clone, E: UniqueArrayElement<K>> Index<usize> for UniqueArray<K, E>
 	/// Reference the element at the given index.
 	fn index (&self, index: usize) -> &Self::Output {
 		&self.elems[index]
+	}
+}
+#[cfg(feature="serde")]
+impl<K, E> serde::Serialize for UniqueArray<K, E>
+	where K: Clone+Ord, E: UniqueArrayElement<K>+serde::Serialize
+{
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where S: serde::Serializer
+	{
+		let mut seq = serializer.serialize_seq(Some(self.elems.len()))?;
+		for e in &self.elems {
+			seq.serialize_element(&e)?;
+		}
+		seq.end()
+	}
+}
+#[cfg(feature="serde")]
+impl<'de, K, E> serde::Deserialize<'de> for UniqueArray<K, E>
+	where K: Clone+Ord, E: UniqueArrayElement<K>+serde::Deserialize<'de>
+{
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+		where D: serde::Deserializer<'de>
+	{
+		// Deserialize the elements
+		let elems: Vec<E> = deserializer.deserialize_seq(VecVisitor::new())?;
+
+		// Rebuild key set
+		let mut keys = BTreeSet::new();
+		for elem in &elems {
+			if !keys.insert(elem.key().clone()) {
+				return Err(serde::de::Error::custom("duplicate element"));
+			}
+		}
+
+		// Done!
+		Ok(Self { keys, elems })
+	}
+}
+
+#[cfg(feature="serde")]
+struct VecVisitor<E> {
+	marker: std::marker::PhantomData<fn() -> Vec<E>>
+}
+#[cfg(feature="serde")]
+impl<E> VecVisitor<E> {
+	fn new() -> Self { VecVisitor {
+		marker: std::marker::PhantomData
+	}}
+}
+#[cfg(feature="serde")]
+impl<'de, E: serde::Deserialize<'de>> serde::de::Visitor<'de> for VecVisitor<E>
+{
+	type Value = Vec<E>;
+
+	fn expecting (&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		formatter.write_str("a sequence of unique elements")
+	}
+
+	fn visit_seq<M: serde::de::SeqAccess<'de>> (self, mut access: M) -> Result<Self::Value, M::Error> {
+		let mut elems = Vec::with_capacity(access.size_hint().unwrap_or(2));
+		while let Some(elem) = access.next_element()? {
+			elems.push(elem);
+		}
+		Ok(elems)
 	}
 }
