@@ -175,6 +175,7 @@ impl Package
 	/// A tuple with the built [program instance](Program) and, for convenience, the [`SourceType`] it was built for as
 	/// dictated by the passed-in `slangContext`.
 	#[cfg(feature="slang_runtime")]
+	#[cfg(not(target_arch="wasm32"))]
 	fn buildSingleInstanceFromSlang (
 		slangContext: &slang::Context, filepath: impl AsRef<Path>, entryPoints: Option<&BTreeSet<Option<&str>>>
 	) -> Result<(Program, WgpuSourceType), ProgramInstanceBuildError>
@@ -211,7 +212,7 @@ impl Package
 		else {
 			// Only include the generic program that includes code paths from all entry points
 			Ok((
-				Program::generic(slangProg.allEntryPointsProg().to_owned()), slangContext.targetType()
+				Program::generic(slangProg.allEntryPointsProg().to_owned()),  slangContext.targetType()
 			))
 		}
 	}
@@ -219,6 +220,7 @@ impl Package
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
 	#[cfg(feature="slang_runtime")]
+	#[cfg(not(target_arch="wasm32"))]
 	pub fn fromSlangMultiple (
 		slangContexts: &[&slang::Context], filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self>
@@ -235,6 +237,7 @@ impl Package
 
 	/// Create the package from the given *Slang* shader source file.
 	#[cfg(feature="slang_runtime")]
+	#[cfg(not(target_arch="wasm32"))]
 	#[inline]
 	pub fn fromSlang (
 		slangContext: &slang::Context, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>

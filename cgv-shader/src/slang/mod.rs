@@ -7,9 +7,13 @@
 /// Submodule implementing the Slang runtime context.
 mod context;
 pub use context::{Context, Module, EnvironmentStorage}; // re-export
+#[cfg(target_arch="wasm32")]
+pub use context::testJsInterop; // re-export
 
 /// Submodule implementing the Slang shader program representation.
+#[cfg(not(target_arch="wasm32"))]
 mod program;
+#[cfg(not(target_arch="wasm32"))]
 pub use program::Program; // re-export
 
 
@@ -22,14 +26,11 @@ pub use program::Program; // re-export
 // Standard library
 use std::path::Path;
 
-// Wasm-bindgen library
-#[cfg(target_arch="wasm32")]
-use wasm_bindgen::prelude::*;
-
 // Anyhow library
 use anyhow;
 
 // Slang library
+#[cfg(not(target_arch="wasm32"))]
 use shader_slang as slang;
 
 // Local imports
@@ -43,11 +44,13 @@ use crate::CompilationTarget;
 // Structs
 //
 
-/// 
+///
+#[cfg(not(target_arch="wasm32"))]
 pub struct EntryPoint {
 	slang: slang::EntryPoint,
 	progBytecode: slang::Blob,
 }
+#[cfg(not(target_arch="wasm32"))]
 impl EntryPoint
 {
 	#[inline]
@@ -91,14 +94,4 @@ pub fn mostSuitableEnvironmentStorageForPlatform (platform: &util::meta::Support
 	else {
 		EnvironmentStorage::IR
 	}
-}
-
-#[cfg(target_arch="wasm32")]
-#[wasm_bindgen]
-extern "C" {
-	fn slangjs_interopTest(moduleSourceCode: &str) -> Vec<u8>;
-}
-#[cfg(target_arch="wasm32")]
-pub fn testJsInterop(moduleSourceCode: &str) -> Vec<u8> {
-	slangjs_interopTest(moduleSourceCode)
 }

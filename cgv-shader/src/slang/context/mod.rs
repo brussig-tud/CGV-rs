@@ -14,7 +14,7 @@ pub use native::Context; // re-export
 #[cfg(target_arch="wasm32")]
 mod wasm;
 #[cfg(target_arch="wasm32")]
-pub use wasm::Context; // re-export
+pub use wasm::{Context, testJsInterop}; // re-export
 
 
 
@@ -30,6 +30,7 @@ use std::{error::Error, borrow::Cow, path::{PathBuf, Path}, fmt::{Display, Forma
 use serde;
 
 // Slang library
+#[cfg(not(target_arch="wasm32"))]
 use shader_slang as slang;
 
 // CRC64-fast library
@@ -125,11 +126,13 @@ impl compile::Module for Module {}
 
 /// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
 #[derive(Default)]
+#[cfg(not(target_arch="wasm32"))]
 struct CompatOptions {
 	matrixLayoutColumn: bool,
 	matrixLayoutRow: bool,
 	optimize: bool
 }
+#[cfg(not(target_arch="wasm32"))]
 impl CompatOptions {
 	pub fn matrixLayoutColumn(&mut self, enable: bool) -> bool {
 		self.matrixLayoutColumn = enable;

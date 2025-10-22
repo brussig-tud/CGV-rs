@@ -62,6 +62,25 @@ pub enum CompilationTarget {
 	/// Transpile shaders to *WGSL*.
 	WGSL
 }
+impl CompilationTarget {
+	#[inline(always)]
+	pub fn isSPIRV (&self) -> bool {
+		std::mem::discriminant(self) == std::mem::discriminant(&Self::SPIRV(false))
+	}
+
+	#[inline(always)]
+	pub fn isWGSL (&self) -> bool {
+		std::mem::discriminant(self) == std::mem::discriminant(&Self::WGSL)
+	}
+}
+impl std::fmt::Display for CompilationTarget {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::SPIRV(debug) => write!(f, "SPIR-V(debug={debug}"),
+			Self::WGSL => write!(f, "WGSL")
+		}
+	}
+}
 
 /// Enum describing the type of a [program instance](Program) in accordance with *WGPU*
 /// [shader module source](wgpu::ShaderSource) types.

@@ -161,10 +161,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// Test Slang runtime compilation
 		#[cfg(target_arch="wasm32")] let shaderPackage = {
-			drop(environment); // <- make sure we don't get an "unused" warning
-			let moduleBytes = cgv::shader::slang::testJsInterop("HALLO");
-			tracing::info!("Compiled shader! Bytes:");
-			tracing::info!("{:?}", moduleBytes);
+			let slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath)?;
 			cgv::shader::Package::deserialize(
 				util::sourceGeneratedBytes!("/shader/example.spk")
 			)?

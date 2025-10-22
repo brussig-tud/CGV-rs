@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::*;
 
 // Local imports
 use crate::*;
-use crate::{compile::{SetEnvironmentError, AddModuleError}, slang::Program, slang::context::*};
+use crate::{compile::{SetEnvironmentError, AddModuleError}, /*slang::Program, */slang::context::*};
 
 
 
@@ -18,30 +18,28 @@ use crate::{compile::{SetEnvironmentError, AddModuleError}, slang::Program, slan
 // Structs
 //
 
-/// A handle for the JavaScript-side `slang::Session` instance.
-struct SlangSessionHandle(u32);
-impl SlangSessionHandle
-{
-	pub fn new () -> Result<Self, ()> {
-		todo!()
+/// A handle for a JavaScript-side `slang::Session` instance.
+struct Session(i64);
+impl Session {
+	pub fn new () -> Option<Self> {
+		let handle = slangjs_createSession();
+		if handle > 0 { Some(Self(handle)) }
+		else          { None }
 	}
 }
-impl Drop for SlangSessionHandle
-{
+impl Drop for Session {
 	fn drop (&mut self) {
-		todo!()
+		slangjs_dropSession(self.0 as u64);
+		self.0 = -1;
 	}
 }
-
-/// An thin layer around the JavaScript-side `slang::Session` instance.
-struct SlangSession {}
 
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
 /// significantly but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.
 pub struct Context {
-	sessionHandle: SlangSession,
+	sessionHandle: Session,
 	searchPath: Vec<String>,
 	compatHash: u64,
 	environment: Option<compile::Environment<Module>>
@@ -49,8 +47,9 @@ pub struct Context {
 impl Context
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession (searchPath: &[impl AsRef<Path>]) -> Result<SlangSession, ()> {
-		todo!()
+	fn freshSession (_searchPath: &[impl AsRef<Path>]) -> Result<Session, ()> {
+		if let Some(session) = Session::new() { Ok(session) }
+		else                                  { Err(()) }
 	}
 
 	/// Create a new *Slang* context for the given compilation target using the given module search path.
@@ -59,8 +58,26 @@ impl Context
 	///
 	/// * `target` – The target representation this `Context` will compile/transpile to.
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forTarget (target: CompilationTarget, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self> {
-		todo!()
+	pub fn forTarget (target: CompilationTarget, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
+	{
+		if target.isWGSL()
+		{
+			let sessionHandle = Self::freshSession(searchPath).map_err(
+				|_| anyhow::anyhow!("Failed to create Slang session")
+			)?;
+
+			Ok(Self {
+				sessionHandle,
+				searchPath: searchPath.iter().map(
+					|p| p.as_ref().to_string_lossy().to_string()
+				).collect(),
+				compatHash: 123,
+				environment: None
+			})
+		}
+		else {
+			Err(anyhow::anyhow!("Unsupported compilation target: {target}"))
+		}
 	}
 
 	/// Create a new *Slang* context for the *WGSL* target with the given module search path.
@@ -80,14 +97,14 @@ impl Context
 		}*/
 	}
 
-	/// Build a shader program from the given *Slang* source file.
+	/*/// Build a shader program from the given *Slang* source file.
 	///
 	/// # Arguments
 	///
 	/// * `sourceFile` – The `.slang` file containing the shader source code.
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
 		Program::fromSource(self, sourceFile)
-	}
+	}*/
 
 	///
 	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<crate::slang::Module, LoadModuleError>
@@ -241,4 +258,23 @@ impl compile::Context<Module> for Context
 	fn environmentCompatHash (&self) -> u64 {
 		self.compatHash
 	}
+}
+
+
+
+//////
+//
+// Functions
+//
+
+#[wasm_bindgen]
+extern "C" {
+	fn slangjs_interopTest(moduleSourceCode: &str) -> Vec<u8>;
+	fn slangjs_createSession() -> i64;
+	fn slangjs_dropSession(handle: u64);
+}
+
+///
+pub fn testJsInterop(moduleSourceCode: &str) -> Vec<u8> {
+	slangjs_interopTest(moduleSourceCode)
 }
