@@ -12,7 +12,6 @@ use anyhow::*;
 
 // Slang library
 use shader_slang as slang;
-use slang::Downcast;
 
 // Local imports
 use crate::slang::{Context, EntryPoint};
@@ -42,9 +41,9 @@ impl Program
 		// Specialize program instances for each entry point
 		// - gather components
 		let components = {
-			let mut components = vec![module.downcast().clone()];
+			let mut components = vec![module.clone().into()];
 			for ep in entryPoints {
-				components.push(ep.downcast().clone());
+				components.push(ep.clone().into());
 			}
 			components
 		};

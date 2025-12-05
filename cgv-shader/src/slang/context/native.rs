@@ -255,7 +255,7 @@ impl Context
 
 		// Load the IR bytecode blob into the Slang session
 		let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
-		self.session.load_module_from_ir_blob(targetPath_str, targetPath_str, &*irBlob).or_else(
+		self.session.load_module_from_ir_blob(targetPath_str, targetPath_str, &irBlob).or_else(
 			|err| Err(LoadModuleError::CompilationError(format!("{err}")))
 		)?;
 
@@ -300,7 +300,7 @@ impl compile::Context<Module> for Context
 
 					Module::IR(bytes) => {
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
-						newSession.load_module_from_ir_blob(&path, "", &*irBlob).or_else(|err|Err(
+						newSession.load_module_from_ir_blob(&path, "", &irBlob).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
 								LoadModuleError::CompilationError(format!("{err}")).into()
 							)
