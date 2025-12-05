@@ -33,7 +33,7 @@ const SYSTEM_ICON: &str = "💻";
 /// Draw (and act upon) the [`crate::Player`] menu bar at the top of the main window.
 pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 {
-	egui::TopBottomPanel::top("menu_bar").show(eguiContext, |ui|
+	egui::Panel::top("menu_bar").show(eguiContext, |ui|
 		egui::ScrollArea::horizontal().show(ui, |ui|
 		{
 			egui::MenuBar::new().ui(ui, |ui|
@@ -109,9 +109,9 @@ pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 /// Draw (and act upon) the [`crate::Player`] side panel GUI.
 pub(crate) fn sidepanel (player: &mut Player, eguiContext: &egui::Context)
 {
-	egui::SidePanel::right("CGV__sidePanel")
+	egui::Panel::right("CGV__sidePanel")
 		.resizable(true)
-		.default_width(320.)
+		.default_size(320.)
 		.show(eguiContext, |ui|
 		{
 			egui::ScrollArea::both().show(ui, |ui|
