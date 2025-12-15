@@ -889,7 +889,7 @@ impl eframe::App for Player
 		// 3D viewport
 
 		// Update viewport frame style
-		let mut frame = egui::Frame::central_panel(&eguiContext.style());
+		let mut frame = egui::Frame::central_panel(&eguiContext.global_style());
 		frame.inner_margin = egui::Margin::ZERO;
 
 		// Draw actual viewport panel

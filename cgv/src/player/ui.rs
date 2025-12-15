@@ -61,7 +61,7 @@ pub(crate) fn menuBar (player: &mut Player, eguiContext: &egui::Context)
 				ui.separator();
 
 				/* Dark/Light mode toggle */ {
-					let menuIcon = if ui.ctx().style().visuals.dark_mode {DARK_ICON} else {LIGHT_ICON};
+					let menuIcon = if ui.ctx().global_style().visuals.dark_mode {DARK_ICON} else {LIGHT_ICON};
 					ui.menu_button(menuIcon, |ui| {
 						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
 						if ui.add(egui::Button::new(format!("{LIGHT_ICON} Light"))).clicked() {
