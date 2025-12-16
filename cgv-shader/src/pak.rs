@@ -221,7 +221,7 @@ impl Package
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
 	#[cfg(feature="slang_runtime")]
 	#[cfg(not(target_arch="wasm32"))]
-	pub fn fromSlangMultiple (
+	pub fn fromSlangSourceFileMultiple (
 		slangContexts: &[&slang::Context], filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self>
 	{
@@ -239,10 +239,10 @@ impl Package
 	#[cfg(feature="slang_runtime")]
 	#[cfg(not(target_arch="wasm32"))]
 	#[inline]
-	pub fn fromSlang (
+	pub fn fromSlangSourceFile (
 		slangContext: &slang::Context, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self> {
-		Self::fromSlangMultiple(&[slangContext], filename, entryPoints)
+		Self::fromSlangSourceFileMultiple(&[slangContext], filename, entryPoints)
 	}
 
 	/// Add an instance of the program for the given source type to the package. If there is already an instance for

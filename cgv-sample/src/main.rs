@@ -19,8 +19,6 @@ use std::default::Default;
 
 // CGV re-imports
 use cgv::{wgpu, glm, egui};
-#[cfg(target_arch="wasm32")]
-use cgv::tracing;
 
 // WGPU API
 use wgpu::util::DeviceExt;
@@ -161,7 +159,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// Test Slang runtime compilation
 		#[cfg(target_arch="wasm32")] let shaderPackage = {
-			let slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath)?;
+			let mut slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath)?;
+			let env = cgv::obtainShaderCompileEnvironment();
+			slangCtx.replaceEnvironment(Some(env))?;
 			cgv::shader::Package::deserialize(
 				util::sourceGeneratedBytes!("/shader/example.spk")
 			)?
@@ -172,7 +172,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			)?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
-			cgv::shader::Package::fromSlang(
+			cgv::shader::Package::fromSlangSourceFile(
 				&slangCtx, util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
 			)?
 		};

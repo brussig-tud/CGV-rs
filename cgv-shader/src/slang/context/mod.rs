@@ -14,7 +14,7 @@ pub use native::Context; // re-export
 #[cfg(target_arch="wasm32")]
 mod wasm;
 #[cfg(target_arch="wasm32")]
-pub use wasm::{Context, testJsInterop}; // re-export
+pub use wasm::Context; // re-export
 
 
 

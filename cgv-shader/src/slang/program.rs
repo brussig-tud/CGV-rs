@@ -32,10 +32,11 @@ pub struct Program {
 impl Program
 {
 	#[cfg(not(target_arch="wasm32"))]
-	pub(crate) fn fromSource (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self>
+	pub(crate) fn finishCreation (
+		slangContext: &Context, module: &slang::Module, virtualFilename: impl AsRef<Path>
+	) -> Result<Self>
 	{
-		// Compile Slang module
-		let module = slangContext.compile(filename.as_ref())?;
+		// List entry points
 		let entryPoints = module.entry_points();
 
 		// Specialize program instances for each entry point
@@ -50,15 +51,15 @@ impl Program
 		let program = slangContext.session.create_composite_component_type(
 			components.as_slice()
 		).or_else(|err| Err(
-			anyhow!("Instantiating `{}` failed:\n{}", filename.as_ref().display(), err)
+			anyhow!("Instantiating `{}` failed:\n{}", virtualFilename.as_ref().display(), err)
 		))?;
 		// - link
 		let linkedProg = program.link().or_else(|err| Err(
-			anyhow!("Linking of `{}` failed:\n{}", filename.as_ref().display(), err)
+			anyhow!("Linking of `{}` failed:\n{}", virtualFilename.as_ref().display(), err)
 		))?;
 		// - variant including all entry points
 		let allEntryPointsProg = linkedProg.target_code(0).or_else(|err| Err(
-			anyhow!("Building of `{}` failed:\n{}", filename.as_ref().display(), err)
+			anyhow!("Building of `{}` failed:\n{}", virtualFilename.as_ref().display(), err)
 		))?;
 		// - bytecode specialized to each entry point
 		let entryPointProgs = {
@@ -76,9 +77,25 @@ impl Program
 		Ok(Self { _linkedProg: linkedProg, allEntryPointsProg, entryPointProgs })
 	}
 
-	#[cfg(target_arch="wasm32")]
-	pub(crate) fn fromSource (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self> {
-		todo!()
+	#[cfg(not(target_arch="wasm32"))]
+	pub(crate) fn fromSource (slangContext: &Context, virtualFilename: impl AsRef<Path>, sourceCode: &str)
+		-> Result<Self>
+	{
+		// Compile Slang module
+		let module = slangContext.compileFromNamedSource(&virtualFilename, sourceCode)?;
+
+		// Common initialization code
+		Self::finishCreation(slangContext, &module, virtualFilename)
+	}
+
+	#[cfg(not(target_arch="wasm32"))]
+	pub(crate) fn fromSourceFile (slangContext: &Context, filename: impl AsRef<Path>) -> Result<Self>
+	{
+		// Compile Slang module
+		let module = slangContext.compile(filename.as_ref())?;
+
+		// Common initialization code
+		Self::finishCreation(slangContext, &module, filename)
 	}
 
 	///

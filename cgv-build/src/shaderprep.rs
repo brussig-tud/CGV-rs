@@ -127,12 +127,8 @@ pub fn prepareShaders (
 				}
 			}
 			dependOnFile(srcPath);
-			/*println!("cargo::warning=PREP_SHADER:");
-			println!("cargo::warning=source:  {}", srcPath.display());
-			println!("cargo::warning=tgtPath: {}", tgtPath.display());
-			println!("cargo::warning=tgtPrnt: {}", tgtParent.display());*/
 			fs::create_dir_all(tgtParent)?;
-			let package = shader::Package::fromSlangMultiple(&slangContexts, srcPath, None)?;
+			let package = shader::Package::fromSlangSourceFileMultiple(&slangContexts, srcPath, None)?;
 			package.writeToFile(&tgtPath)?;
 			dependOnGeneratedFile(tgtPath)?;
 			Ok(())

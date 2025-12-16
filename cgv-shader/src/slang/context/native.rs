@@ -59,7 +59,7 @@ unsafe impl Sync for NativeGlobalSessionContainer {
 	// the global session after initialization.
 }
 
-/// Helper struct storing session configuration info in order to facilitate [Context::fork].
+/// Helper struct storing session configuration info to facilitate [`compile::Environment`] compatibility checking.
 #[derive(Clone)]
 struct SlangSessionConfig {
 	searchPaths: Vec<std::ffi::CString>,
@@ -176,7 +176,7 @@ impl Context
 	///
 	/// * `sourceFile` – The `.slang` file containing the shader source code.
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
-		Program::fromSource(self, sourceFile)
+		Program::fromSourceFile(self, sourceFile)
 	}
 
 	///
@@ -201,11 +201,11 @@ impl Context
 	}
 
 	///
-	pub fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
+	pub fn compileFromNamedSource (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
 	                               -> Result<slang::Module, LoadModuleError>
 	{
 		// Make sure we get a valid target path
-		let targetPath = validateModulePath(targetPath.as_ref())?;
+		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
 
 		// Let slang compile the module
 		let module =  self.session.load_module_from_source_string(targetPath, targetPath, sourceCode)
@@ -228,11 +228,11 @@ impl Context
 
 	///
 	pub fn loadModuleFromSource (
-		&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str
+		&mut self, envStorage: EnvironmentStorage, virtualFilepath: impl AsRef<Path>, sourceCode: &str
 	) -> Result<(), LoadModuleError>
 	{
 		// Compile the source code inside the Slang session
-		let slangModule = self.compileFromNamedSource(&targetPath, sourceCode)?;
+		let slangModule = self.compileFromNamedSource(&virtualFilepath, sourceCode)?;
 		let module = match envStorage {
 			EnvironmentStorage::SourceCode => Module::fromSlangSourceCode(sourceCode),
 			EnvironmentStorage::IR => Module::fromSlangModule(slangModule).map_err(
@@ -241,7 +241,7 @@ impl Context
 		};
 
 		// Store the module in the environment
-		storeInEnvironment(self.environment.as_mut(), targetPath, module).map_err(|err| match err {
+		storeInEnvironment(self.environment.as_mut(), virtualFilepath, module).map_err(|err| match err {
 			AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
 		})
 	}

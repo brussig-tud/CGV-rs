@@ -7,8 +7,6 @@
 /// Submodule implementing the Slang runtime context.
 mod context;
 pub use context::{Context, Module, EnvironmentStorage}; // re-export
-#[cfg(target_arch="wasm32")]
-pub use context::testJsInterop; // re-export
 
 /// Submodule implementing the Slang shader program representation.
 #[cfg(not(target_arch="wasm32"))]
