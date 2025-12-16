@@ -870,37 +870,36 @@ impl Player
 		}
 	}
 }
-
 impl eframe::App for Player
 {
-	fn update (&mut self, eguiContext: &egui::Context, _frame: &mut eframe::Frame)
+	fn ui (&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame)
 	{
 		////
 		// Main GUI
 
 		// Draw the main menu bar
-		ui::menuBar(self, eguiContext);
+		ui::menuBar(self, ui);
 
 		// Draw the side panel
-		ui::sidepanel(self, eguiContext);
+		ui::sidepanel(self, ui);
 
 
 		////
 		// 3D viewport
 
 		// Update viewport frame style
-		let mut frame = egui::Frame::central_panel(&eguiContext.global_style());
+		let mut frame = egui::Frame::central_panel(&ui.ctx().global_style());
 		frame.inner_margin = egui::Margin::ZERO;
 
 		// Draw actual viewport panel
-		egui::CentralPanel::default().frame(frame).show(eguiContext, |ui|
+		egui::CentralPanel::default().frame(frame).show_inside(ui, |ui|
 		{
 			// Keep track of reasons to do a scene redraw
 			let mut redrawScene = self.continousRedrawRequests > 0;
 
 			// Update framebuffer size
 			let availableSpace_egui = ui.available_size();
-			let pxlsPerPoint = eguiContext.pixels_per_point();
+			let pxlsPerPoint = ui.ctx().pixels_per_point();
 			let fbResolution = {
 				let pixelsEgui = (availableSpace_egui*pxlsPerPoint).ceil();
 				glm::vec2(pixelsEgui.x as u32, pixelsEgui.y as u32)
