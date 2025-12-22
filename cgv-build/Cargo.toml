@@ -16,7 +16,7 @@ serde_json = "*"
 serde_yaml_ng = "*"
 fs-set-times = "*"
 reqwest = {version="*", features=["blocking"]}
-zip = "*"
+zip = "6"
 bytes = "*"
 cgv-util = {path="../cgv-util"}
 cgv-runenv = {path="../cgv-runenv"}
