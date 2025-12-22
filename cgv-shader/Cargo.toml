@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 wasm-bindgen = {version="*", optional=true}
 tracing = {version="*", optional=true}
-wgpu = {version="*", optional=true, features=["spirv"]}
+wgpu = {version="27", optional=true, features=["spirv"]}
 anyhow = "*"
 bitcode = "*"
 serde = {version="*", optional=true}
