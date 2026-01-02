@@ -31,14 +31,14 @@ use crate::*;
 //
 
 ///
-pub struct EnvironmentBuilder<'ctx> {
-	slangContext: &'ctx mut shader::slang::Context,
+pub struct EnvironmentBuilder<'this, 'ctx> {
+	slangContext: &'this mut shader::slang::Context<'ctx>,
 	addModulesRoot: PathBuf,
 }
-impl<'ctx> EnvironmentBuilder<'ctx>
+impl<'this, 'ctx> EnvironmentBuilder<'this, 'ctx>
 {
 	///
-	pub fn new(slangContext: &'ctx mut shader::slang::Context, addModulesRoot: impl AsRef<Path>) -> Self {
+	pub fn new(slangContext: &'this mut shader::slang::Context<'ctx>, addModulesRoot: impl AsRef<Path>) -> Self {
 		Self { slangContext, addModulesRoot: addModulesRoot.as_ref().to_owned() }
 	}
 

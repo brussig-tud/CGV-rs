@@ -4,6 +4,9 @@
 // Imports
 //
 
+// Standard library
+use std::{path::{PathBuf, Path}, collections::BTreeSet, sync::LazyLock, cell::RefCell};
+
 // Wasm-bindgen library
 use wasm_bindgen::prelude::*;
 
@@ -15,18 +18,93 @@ use crate::{compile::{SetEnvironmentError, AddModuleError}, /*slang::Program, */
 
 //////
 //
+// Globals
+//
+
+/// A realm of unique unsigned 32-bit integers.
+pub static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(|| GlobalSession::new().unwrap());
+
+
+
+//////
+//
 // Structs
 //
 
-/// A handle for a JavaScript-side `slang::Session` instance.
-struct Session(i64);
-impl Session {
+struct GlobalSessionState {
+	pub(crate) handle: u64,
+	pub(crate) sessions: BTreeSet<u64>
+}
+/// A handle for a JavaScript-side `slang::GlobalSession` instance.
+struct GlobalSession{
+	pub(crate) state: RefCell<GlobalSessionState>
+}
+impl GlobalSession {
 	pub(crate) fn new () -> Option<Self> {
-		let handle = slangjs_createSession();
-		if handle > 0 { Some(Self(handle)) }
+		let handle = slangjs_createGlobalSession();
+		if handle > 0 {
+			Some(Self {
+				state: RefCell::new(GlobalSessionState{ handle: handle as u64, sessions: BTreeSet::new() })
+			})
+		}
 		else          { None }
 	}
 
+	pub(crate) fn handle (&self) -> u64 {
+		self.state.borrow().handle
+	}
+
+	pub(crate) fn dropSession (&self, handle: u64) {
+		let mut state = self.state.borrow_mut();
+		slangjs_dropSession(state.handle, handle);
+		state.sessions.remove(&handle);
+	}
+
+	pub fn createSession (&self) -> Result<Session, CreateSessionError>
+	{
+		let mut state = self.state.borrow_mut();
+		let handle = slangjs_createSession(state.handle);
+		if handle > 0 {
+			state.sessions.insert(handle as u64);
+			Ok(Session { handle: handle as u64, globalSession: self })
+		}
+		else {
+			Err(CreateSessionError::generic())
+		}
+	}
+}
+impl Drop for GlobalSession {
+	fn drop (&mut self)
+	{
+		/* debug info */ {
+			let state = self.state.borrow();
+			if !state.sessions.is_empty() {
+				tracing::warn!("Dropping global session #{} with active child sessions", state.handle);
+			}
+		}
+		while let Some(handle) = self.state.borrow().sessions.iter().next().map(|&h| h) {
+			self.dropSession(handle);
+		}
+		let state = self.state.borrow();
+		if !state.sessions.is_empty() {
+			let msg = format!(
+				"INTERNAL LOGIC ERROR: dropped global session #{} still contains child sessions", state.handle
+			);
+			tracing::error!("{msg}");
+			panic!("{msg}");
+		}
+		slangjs_dropGlobalSession(state.handle);
+	}
+}
+unsafe // SAFETY: `GlobalSession` stores all its state in a RefCell, which prevents concurrent mutable access.
+impl Sync for GlobalSession {}
+
+/// A handle for a JavaScript-side `slang::Session` instance.
+struct Session<'gs> {
+	globalSession: &'gs GlobalSession,
+	handle: u64
+}
+impl<'gs> Session<'gs> {
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: &str, sourceCode: &str)
 		-> Result<JsSlangModule, LoadModuleError>
 	{
@@ -34,8 +112,9 @@ impl Session {
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
 
 		// Compile via JavaScript bridge
-		tracing::warn!("Session #{}: Compiling module `{targetPath}` via JavaScript bridge", self.0);
-		let moduleHandle = slangjs_loadModuleFromSource(self.0 as u64, targetPath, targetPath, sourceCode);
+		tracing::warn!("Session #{}: Compiling module `{targetPath}` via JavaScript bridge", self.handle);
+		let moduleHandle = slangjs_loadModuleFromSource(
+			self.globalSession.handle(), self.handle, targetPath, targetPath, sourceCode);
 		if moduleHandle < 0 {
 			return Err(LoadModuleError::CompilationError("Failed to compile module `{targetPath}`".into()))
 		}
@@ -44,10 +123,10 @@ impl Session {
 		Ok(JsSlangModule(moduleHandle))
 	}
 }
-impl Drop for Session {
+impl Drop for Session<'_> {
 	fn drop (&mut self) {
-		slangjs_dropSession(self.0 as u64);
-		self.0 = -1;
+		tracing::warn!("Session::Drop() on session #{}", self.handle);
+		self.globalSession.dropSession(self.handle);
 	}
 }
 
@@ -58,17 +137,16 @@ struct JsSlangModule(i64);
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
 /// significantly, but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.
-pub struct Context {
-	session: Session,
+pub struct Context<'this> {
+	session: Session<'this>,
 	compatHash: u64,
 	environment: Option<compile::Environment<Module>>
 }
-impl Context
+impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession () -> Result<Session, ()> {
-		if let Some(session) = Session::new() { Ok(session) }
-		else                                  { Err(()) }
+	fn freshSession (globalSession: &GlobalSession) -> Result<Session, CreateSessionError> {
+		globalSession.createSession()
 	}
 
 	/// Create a new *Slang* context for the given compilation target using the given module search path.
@@ -81,7 +159,7 @@ impl Context
 	{
 		if target.isWGSL()
 		{
-			let session = Self::freshSession().map_err(
+			let session = Self::freshSession(&GLOBAL_SESSION).map_err(
 				|_| anyhow::anyhow!("Failed to create Slang session")
 			)?;
 
@@ -167,7 +245,7 @@ impl Context
 		unimplemented!("IR bytecode loading is not currently supported by WASM Slang");
 	}
 }
-impl compile::Context<Module> for Context
+impl compile::Context<Module> for Context<'_>
 {
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
 		-> Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
@@ -178,7 +256,7 @@ impl compile::Context<Module> for Context
 		}*/
 
 		// Start from a fresh session
-		let newSession = Self::freshSession().expect(
+		let newSession = Self::freshSession(&GLOBAL_SESSION).expect(
 			"Creating a Slang session identical to an existing one should never fail unless there are \
 			unrecoverable external circumstances (out-of-memory etc.)"
 		);
@@ -229,10 +307,11 @@ impl compile::Context<Module> for Context
 
 #[wasm_bindgen]
 extern "C" {
-	fn slangjs_interopTest(moduleSourceCode: &str) -> Vec<u8>;
-	fn slangjs_createSession() -> i64;
-	fn slangjs_dropSession(handle: u64);
+	fn slangjs_createGlobalSession() -> i64;
+	fn slangjs_dropGlobalSession(handle: u64);
+	fn slangjs_createSession(globalSessionHandle: u64) -> i64;
+	fn slangjs_dropSession(globalSessionHandle: u64, sessionHandle: u64);
 	fn slangjs_loadModuleFromSource(
-		sessionHandle: u64, moduleName: &str, modulePath: &str, moduleSourceCode: &str
+		globalSessionHandle: u64, sessionHandle: u64, moduleName: &str, modulePath: &str, moduleSourceCode: &str
 	) -> i64;
 }

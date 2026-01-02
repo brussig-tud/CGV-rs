@@ -48,6 +48,24 @@ use crate::compile::AddModuleError;
 //
 
 #[derive(Debug)]
+pub struct CreateSessionError {}
+impl CreateSessionError {
+	/// Session creation failed for some generic or unknown reason.
+	pub fn generic () -> Self { Self {} }
+}
+impl Display for CreateSessionError {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = "Could not create session"/*match self {
+			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
+			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
+			Self::DuplicatePath(path) => &format!("module already present at path: {}", path.display()),
+		}*/;
+		write!(formatter, "CreateSessionError[{desc}]")
+	}
+}
+impl Error for CreateSessionError {}
+
+#[derive(Debug)]
 pub enum LoadModuleError {
 	CompilationError(String),
 	InvalidModulePath(PathBuf),

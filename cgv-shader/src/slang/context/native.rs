@@ -74,15 +74,17 @@ impl SlangSessionConfig {
 }
 
 /// A *Slang* [compilation context](compile::Context).
-pub struct Context {
+pub struct Context<'this> {
 	sessionConfig: SlangSessionConfig,
 
 	pub(crate)session: slang::Session,
 
 	compatHash: u64,
-	environment: Option<compile::Environment<Module>>
+	environment: Option<compile::Environment<Module>>,
+
+	_phantomData: std::marker::PhantomData<&'this ()>
 }
-impl Context
+impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
 	fn freshSession (globalSession: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
@@ -148,7 +150,7 @@ impl Context
 		let compatHash = compatOptions.digest();
 
 		// Done!
-		Ok(Self { sessionConfig, session, compatHash, environment: None })
+		Ok(Self { sessionConfig, session, compatHash, environment: None, _phantomData: Default::default() })
 	}
 
 	/// Create a new *Slang* context for the *SPIR-V* target with the given module search path. The actual creation is
@@ -267,7 +269,7 @@ impl Context
 		)
 	}
 }
-impl compile::Context<Module> for Context
+impl compile::Context<Module> for Context<'_>
 {
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
 		-> Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
