@@ -62,51 +62,17 @@ impl Error for AddModuleError {}
 
 //////
 //
-// Traits
-//
-
-/// The trait of modules that make up a [`compile::Environment`].
-pub trait Module: Sized+Clone {}
-
-
-
-//////
-//
 // Structs
 //
 
 ///
-#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub struct BytesModule(Vec<u8>);
-impl BytesModule
-{
-	///
-	#[inline(always)]
-	pub fn fromVec (bytes: Vec<u8>) -> Self {
-		Self(bytes)
-	}
-
-	///
-	#[inline(always)]
-	pub fn fromSlice (bytes: &[u8]) -> Self {
-		Self(bytes.to_owned())
-	}
-
-	///
-	#[inline(always)]
-	pub fn irBytes (&self) -> &[u8] {
-		self.0.as_slice()
-	}
-}
-impl Module for BytesModule {}
-
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
-pub struct ModuleEntry<ModuleType: Module> {
+pub struct ModuleEntry<ModuleType: compile::Module> {
 	pub path: PathBuf,
 	pub module: ModuleType,
 	pub sourceEnv: Option<Uuid>
 }
-impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
+impl<ModuleType: compile::Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
 	fn key (&self) -> &PathBuf {
 		&self.path
 	}
@@ -134,14 +100,14 @@ impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<M
 /// \*This is merely *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
 /// dependencies on their side.
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
-pub struct Environment<ModuleType: Module> {
+pub struct Environment<ModuleType: compile::Module> {
 	uuid: Uuid,
 	label: String,
 	compatHash: u64,
 	modules: util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>>
 }
 impl<ModuleType> Environment<ModuleType>
-	where ModuleType: Module + serde::Serialize+(for<'de> serde::Deserialize<'de>)
+	where ModuleType: compile::Module + serde::Serialize+(for<'de> serde::Deserialize<'de>)
 {
 	/////
 	// Helper functions

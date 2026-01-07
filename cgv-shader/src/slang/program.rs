@@ -36,14 +36,11 @@ impl Program
 		slangContext: &Context, module: &slang::Module, virtualFilename: impl AsRef<Path>
 	) -> Result<Self>
 	{
-		// List entry points
-		let entryPoints = module.entry_points();
-
 		// Specialize program instances for each entry point
 		// - gather components
 		let components = {
 			let mut components = vec![module.clone().into()];
-			for ep in entryPoints {
+			for ep in module.entry_points() {
 				components.push(ep.clone().into());
 			}
 			components

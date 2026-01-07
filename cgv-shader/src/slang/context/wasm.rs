@@ -56,7 +56,7 @@ impl GlobalSession {
 
 	pub(crate) fn dropSession (&self, handle: u64) {
 		let mut state = self.state.borrow_mut();
-		slangjs_dropSession(state.handle, handle);
+		slangjs_dropSession(handle);
 		state.sessions.remove(&handle);
 	}
 
@@ -69,7 +69,7 @@ impl GlobalSession {
 			Ok(Session { handle: handle as u64, globalSession: self })
 		}
 		else {
-			Err(CreateSessionError::generic())
+			Err(CreateSessionError::Generic)
 		}
 	}
 }
@@ -101,7 +101,7 @@ impl Sync for GlobalSession {}
 
 /// A handle for a JavaScript-side `slang::Session` instance.
 struct Session<'gs> {
-	globalSession: &'gs GlobalSession,
+	pub(crate) globalSession: &'gs GlobalSession,
 	handle: u64
 }
 impl<'gs> Session<'gs> {
@@ -113,8 +113,7 @@ impl<'gs> Session<'gs> {
 
 		// Compile via JavaScript bridge
 		tracing::warn!("Session #{}: Compiling module `{targetPath}` via JavaScript bridge", self.handle);
-		let moduleHandle = slangjs_loadModuleFromSource(
-			self.globalSession.handle(), self.handle, targetPath, targetPath, sourceCode);
+		let moduleHandle = slangjs_session_loadModuleFromSource(self.handle, targetPath, targetPath, sourceCode);
 		if moduleHandle < 0 {
 			return Err(LoadModuleError::CompilationError("Failed to compile module `{targetPath}`".into()))
 		}
@@ -131,7 +130,7 @@ impl Drop for Session<'_> {
 }
 
 /// A handle for a JavaScript-side `slang::Module` instance.
-struct JsSlangModule(i64);
+pub struct JsSlangModule(i64);
 
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
@@ -310,8 +309,8 @@ extern "C" {
 	fn slangjs_createGlobalSession() -> i64;
 	fn slangjs_dropGlobalSession(handle: u64);
 	fn slangjs_createSession(globalSessionHandle: u64) -> i64;
-	fn slangjs_dropSession(globalSessionHandle: u64, sessionHandle: u64);
-	fn slangjs_loadModuleFromSource(
-		globalSessionHandle: u64, sessionHandle: u64, moduleName: &str, modulePath: &str, moduleSourceCode: &str
+	fn slangjs_dropSession(sessionHandle: u64);
+	fn slangjs_session_loadModuleFromSource(
+		sessionHandle: u64, moduleName: &str, modulePath: &str, moduleSourceCode: &str
 	) -> i64;
 }
