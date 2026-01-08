@@ -4,21 +4,19 @@
 // Module definitions
 //
 
-// Submodule implementing compilation environments
+// Submodule implementing compilation environments.
 mod environment;
 pub use environment::{Environment, AddModuleError}; // re-export
 
-// Submodule implementing compilation modules
-mod module;
-pub use module::{Module, BytesModule}; // re-export
+/// Submodule providing assorted facilities for working with [`compile::Environment`](super::Environment)s.
+pub mod env {
+	// Selected additional re-exports behind shorthand namespace.
+	pub use super::environment::{Module, BytesModule};
+}
 
-// Submodule implementing compilation components
-mod component;
-pub use component::Component; // re-export
-
-// The module prelude
+/// The module prelude.
 pub mod prelude {
-	pub use super::{Context, Module, Component};
+	pub use super::{Context, EnvironmentEnabled, Module, EntryPoint, Component};
 }
 
 
@@ -31,12 +29,29 @@ pub mod prelude {
 // Standard library
 use std::{error::Error, fmt::{Display, Formatter}};
 
+// Local imports
+use crate::util;
+
 
 
 //////
 //
 // Errors
 //
+
+#[derive(Debug)]
+pub enum CreateCompositeError {
+	ImplementationSpecific(anyhow::Error)
+}
+impl Display for CreateCompositeError {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::ImplementationSpecific(st) => &format!("nested implementation error: {st}"),
+		};
+		write!(formatter, "CreateCompositeError[{desc}]")
+	}
+}
+impl Error for CreateCompositeError {}
 
 #[derive(Debug)]
 pub enum SetEnvironmentError {
@@ -61,9 +76,44 @@ impl Error for SetEnvironmentError {}
 // Traits
 //
 
-pub trait Context<ModuleType: Module>
+/// The trait of re-usable snippets of shader program code with granularity of at most (but potentially smaller than) a
+/// single [`compile::Module`].
+pub trait Component {
+	fn handle (&self) -> util::Handle;
+}
+
+
+/// The trait of entry points in a [`compile::Module`].
+pub trait EntryPoint: Component {
+	fn name (&self) -> &str;
+}
+
+
+/// The trait of modules that contain shader program code managed by a [`compile::Context`].
+pub trait Module<EntryPointType: EntryPoint>: Component {
+	fn entryPoints (&self) -> &[EntryPointType];
+}
+
+
+/// The trait of a combination of program snippets from whole [`compile::Module`]s and/or individual
+/// [`EntryPoint`]s.
+pub trait Composite: Component {}
+
+
+///
+pub trait Context<'this, ModuleType, EntryPointType, CompositeType>
+where
+	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite
 {
-	/// Replace the currently active [`compile::Environment`] with the given one (or `None`).
+	fn createComposite (&'this self, components: &[ComponentRef<'this, ModuleType, EntryPointType, CompositeType>])
+		-> Result<CompositeType, CreateCompositeError>;
+}
+
+
+/// The trait of a [`compile::Context`] that is capable of working with [`compile::Environment`](Environment)s.
+pub trait EnvironmentEnabled<ModuleType: env::Module>
+{
+	/// Replace the currently active [`compile::Environment`](Environment) with the given one (or `None`).
 	///
 	/// Note that the environment is *moved* in. The caller *must* lose ownership of the environment because of the
 	/// complex uniqueness semantics of compile environments (which are required for sane [merge](Environment::merge)
@@ -71,18 +121,18 @@ pub trait Context<ModuleType: Module>
 	/// be problematic if the caller then retains a copy of the environment that claims to be identical to the one that
 	/// underwent unknown changes inside the `compile::Context`.
 	///
-	/// If the caller wants to do other things with the environment after it plugged it into a `compile::Context`, it
+	/// If the caller wants to do other things with the environment after they plugged it into a `compile::Context`, it
 	/// can retrieve it again by passing `None` to this method (or more expressively, via the shorthand
-	/// [`compile::Context::takeEnvironment`]). This will retake ownership and leave the `compile::Context` without an
+	/// [`EnvironmentEnabled::takeEnvironment`]). This will retake ownership and leave the `compile::Context` without an
 	/// active environment.
 	///
 	/// If the context's sole purpose was to work on an environment, then clients can also reclaim it via
-	/// [`compile::Context::finishEnvironment`]. This will consume and thus "end" the context, avoiding the potentially
+	/// [`EnvironmentEnabled::finishEnvironment`]. This will consume and thus "end" the context, avoiding the potentially
 	/// expensive re-initialization for a new/blank environment that some implementations might need to perform.
 	///
 	/// **Note**: setting a [`compile::Environment`] could involve potentially expensive re-initialization as well as
-	/// (re-)compiling the contained [`compile::Module`]s for the new context, which can be a very expensive operation,
-	/// so clients should try to minimize moving environments in and out of contexts.
+	/// (re-)compiling the contained [`env::Module`]s for the new context, which can be a very expensive operation, so
+	/// clients should try to minimize moving environments in and out of contexts.
 	///
 	/// # Arguments
 	///
@@ -118,4 +168,21 @@ pub trait Context<ModuleType: Module>
 
 	///
 	fn environmentCompatHash (&self) -> u64;
+}
+
+
+
+//////
+//
+// Structs
+//
+
+///
+pub enum ComponentRef<'c, ModuleType, EntryPointType, CompositeType>
+where
+	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite
+{
+	Module(&'c ModuleType),
+	EntryPoint(&'c EntryPointType),
+	Composite(&'c CompositeType)
 }

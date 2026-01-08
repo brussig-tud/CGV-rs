@@ -62,17 +62,59 @@ impl Error for AddModuleError {}
 
 //////
 //
+// Traits
+//
+
+/// The trait of modules that make up a [`compile::Environment`].
+pub trait Module: Sized + Clone {}
+
+
+
+//////
+//
+// Structs
+//
+
+
+
+//////
+//
 // Structs
 //
 
 ///
+#[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
+pub struct BytesModule(Vec<u8>);
+impl BytesModule
+{
+	///
+	#[inline(always)]
+	pub fn fromVec (bytes: Vec<u8>) -> Self {
+		Self(bytes)
+	}
+
+	///
+	#[inline(always)]
+	pub fn fromSlice (bytes: &[u8]) -> Self {
+		Self(bytes.to_owned())
+	}
+
+	///
+	#[inline(always)]
+	pub fn irBytes (&self) -> &[u8] {
+		self.0.as_slice()
+	}
+}
+impl Module for BytesModule {}
+
+///
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
-pub struct ModuleEntry<ModuleType: compile::Module> {
+pub struct ModuleEntry<ModuleType: Module> {
 	pub path: PathBuf,
 	pub module: ModuleType,
 	pub sourceEnv: Option<Uuid>
 }
-impl<ModuleType: compile::Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
+impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
 	fn key (&self) -> &PathBuf {
 		&self.path
 	}
@@ -83,12 +125,12 @@ impl<ModuleType: compile::Module> util::ds::UniqueArrayElement<PathBuf> for Modu
 ///
 /// Environments should be utilized the following way: *CGV-rs* crates that want to provide shaders should collect all
 /// their shaders either during compile-time (preferred) or at initialization, potentially already compiling them to
-/// some intermediate representation, and put each one into a [`Module`]. The modules collected this way should then go
-/// into an instance of [`Environment`] that the crate will make available through some means of its choosing. Since
-/// the modules the crate provides will typically also depend on modules from other crates (the most notable exception
-/// being the core `cgv` crate, which only provides self-contained shader functionality), **this environment must be
-/// [merged](Environment::mergeWith) with the environments that the other crates provide their modules in** in order to
-/// make it usable in a self-contained manner\* (akin to static linking).
+/// some intermediate representation, and put each one into an [`env::Module`](Module). The modules collected this way
+/// should then go into an instance of [`Environment`] that the crate will make available through some means of its
+/// choosing. Since the modules the crate provides will typically also depend on modules from other crates (the most
+/// notable exception being the core `cgv` crate, which only provides self-contained shader functionality), **this
+/// environment must be [merged](Environment::mergeWith) with the environments that the other crates provide their
+/// modules in** to make it usable in a self-contained manner\* (akin to static linking).
 ///
 /// If the collected modules depend on some sort of compiler or preprocessor settings, some hash that uniquely
 /// identifies the required configuration should be set which will be checked when [merging](Environment::merge) and
@@ -100,14 +142,14 @@ impl<ModuleType: compile::Module> util::ds::UniqueArrayElement<PathBuf> for Modu
 /// \*This is merely *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
 /// dependencies on their side.
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
-pub struct Environment<ModuleType: compile::Module> {
+pub struct Environment<ModuleType: Module> {
 	uuid: Uuid,
 	label: String,
 	compatHash: u64,
 	modules: util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>>
 }
 impl<ModuleType> Environment<ModuleType>
-	where ModuleType: compile::Module + serde::Serialize+(for<'de> serde::Deserialize<'de>)
+	where ModuleType: Module + serde::Serialize+(for<'de> serde::Deserialize<'de>)
 {
 	/////
 	// Helper functions
@@ -157,9 +199,9 @@ impl<ModuleType> Environment<ModuleType>
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
-	/// [`compile::Context`]
-	pub fn forContextWithUuid (context: &impl compile::Context<ModuleType>, uuid: Uuid, label: &str)
-	-> Self { Self {
+	/// [`compile::EnvironmentEnabled`]
+	pub fn forContextWithUuid (context: &impl compile::EnvironmentEnabled<ModuleType>, uuid: Uuid, label: &str)
+	                           -> Self { Self {
 		uuid, label: label.to_owned(), compatHash: context.environmentCompatHash(), modules: util::ds::UniqueArray::new()
 	}}
 
@@ -243,7 +285,7 @@ impl<ModuleType> Environment<ModuleType>
 	/// # Arguments
 	///
 	/// * `path` – The path associated with the module being added. This determines how the module can be found during
-	/// compilation or linking of shaders by a [`compile::Context`] later on.
+	/// compilation or linking of shaders by a [`compile::EnvironmentEnabled`] later on.
 	/// * `module` – A module of this environment's [`ModuleType`] to add to the environment.
 	///
 	/// # Returns

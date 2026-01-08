@@ -162,7 +162,11 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			let mut slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath)?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
-			let _module = slangCtx.compileFromSource(util::sourceFile!("/shader/example.slang"))?;
+			let module = slangCtx.compileFromNamedSource("example.slang", util::sourceFile!("/shader/example.slang"))?;
+			let ep0 = &module.entryPoints()[0];
+			let _composite = slangCtx.createComposite(
+				&[module.enter(), ep0.enter()]
+			);
 			cgv::shader::Package::deserialize(
 				util::sourceGeneratedBytes!("/shader/example.spk")
 			)?

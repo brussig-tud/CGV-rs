@@ -73,7 +73,7 @@ impl SlangSessionConfig {
 	}
 }
 
-/// A *Slang* [compilation context](compile::Context).
+/// A *Slang* [compilation context](compile::EnvironmentEnabled).
 pub struct Context<'this> {
 	sessionConfig: SlangSessionConfig,
 
@@ -269,7 +269,7 @@ impl Context<'_>
 		)
 	}
 }
-impl compile::Context<Module> for Context<'_>
+impl compile::EnvironmentEnabled<Module> for Context<'_>
 {
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
 		-> Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>

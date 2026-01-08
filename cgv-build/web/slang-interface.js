@@ -3,9 +3,10 @@ import Module from "./slang-wasm.js";
 // A container storing a `Slang` *composite component* made from several modules and/or entry points.
 export class SlangComposite
 {
-	constructor(slangContext, compositeHandle, compositeObject)
+	constructor(slangContext, session, compositeHandle, compositeObject)
 	{
 		this.object = compositeObject;
+		this.session = session;
 
 		// Internal API
 		this.cleanup = () => {
@@ -17,9 +18,9 @@ export class SlangComposite
 // A container storing a `Slang` component that represents an entry point of a Slang module.
 export class SlangEntryPoint
 {
-	constructor(slangContext, epHandle, componentObject)
+	constructor(slangContext, epHandle, entryPointObject)
 	{
-		this.object = componentObject;
+		this.object = entryPointObject;
 
 		// Internal API
 		this.cleanup = () => {
@@ -62,10 +63,11 @@ export class SlangModule
 
 		// API methods
 		this.getEntryPoints = () => {
-			const wireHandles = Object.entries(this.entryPoints).map(
-				([_, handle]) => BigInt(handle)
-			).toArray();
-			return wireHandles;
+			let handles_wire = [];
+			Object.entries(this.entryPoints).forEach(
+				([_, handle]) => handles_wire.push(BigInt(handle))
+			);
+			return handles_wire;
 		};
 	}
 }
@@ -89,10 +91,12 @@ export class SlangSession
 			});
 			this.modules = null;
 			// Composites
-			this.composites.forEach((handle) => {
-				slangContext.getComposite(handle).cleanup();
-				slangContext.composites.delete(handle);
-			});
+			if (this.composites.size > 0)
+				console.warn(
+					"Destroying session #"+this.handle+" which still owns "+this.composites.size+" composites"
+				);
+			const ownedCompositeHandles = structuredClone(this.composites);
+			ownedCompositeHandles.forEach((handle) => slangContext.dropComposite(handle));
 			this.composites = null;
 			this.object = null;
 			this.globalSession = null;
@@ -106,22 +110,23 @@ export class SlangSession
 			const handle = SlangContext.getUniqueNumber();
 			slangContext.modules.set(handle, new SlangModule(slangContext, handle, newModule));
 			this.modules.add(handle);
-			console.info("Session #"+sessionHandle+": loaded new Slang module #."+handle+":");
-			console.info(newModule);
-			console.info("Session #"+sessionHandle+" modules now:");
-			console.info(this.modules);
+			console.debug("Session #"+sessionHandle+": loaded new Slang module #."+handle+":");
+			console.debug(newModule);
+			console.debug("Session #"+sessionHandle+" modules now:");
+			console.debug(this.modules);
 			return BigInt(handle);
 		}
-		this.createComposite = (handles) => {
-			/*const newComposite = this.object.createComposite(handles);
+		this.createComposite = (componentList) => {
+			const newComposite = this.object.createCompositeComponentType(componentList);
 			if (!newComposite)
 				return slangContext.handleContextError();
 			const handle = SlangContext.getUniqueNumber();
-			this.composites.set(handle, new SlangComposite(slangContext, handle, newComposite));
-			console.info("Session #"+sessionHandle+": created new composite #."+handle+":");
-			console.info(newComposite);
-			console.info("Session #"+sessionHandle+" composites now:");
-			console.info(this.composites);*/
+			slangContext.composites.set(handle, new SlangComposite(slangContext, handle, newComposite));
+			this.composites.add(handle);
+			console.debug("Session #"+sessionHandle+": created new composite #."+handle+":");
+			console.debug(newComposite);
+			console.debug("Session #"+sessionHandle+" composites now:");
+			console.debug(this.composites);
 		}
 	}
 }
@@ -153,7 +158,7 @@ export class SlangGlobalSession
 		this.createSession = () => {
 			const compilationTarget = "WGSL";
 			const target = slangContext.availableTargets[compilationTarget];
-			console.info(
+			console.debug(
 				  "Global session #"+this.handle+": New session requested for target: "
 				+ compilationTarget+"("+target+")");
 			const newSession = this.object.createSession(target);
@@ -162,12 +167,12 @@ export class SlangGlobalSession
 			let handle = SlangContext.getUniqueNumber();
 			slangContext.sessions.set(handle, new SlangSession(slangContext, this, handle, newSession));
 			this.sessions.add(handle);
-			console.info("Global session #"+this.handle+": created new session #"+handle+":");
-			console.info(newSession);
-			console.info("Global session #"+this.handle+": sessions now:");
-			console.info(this.sessions);
-			console.info("All sessions now:");
-			console.info(slangContext.sessions);
+			console.debug("Global session #"+this.handle+": created new session #"+handle+":");
+			console.debug(newSession);
+			console.debug("Global session #"+this.handle+": sessions now:");
+			console.debug(this.sessions);
+			console.debug("All sessions now:");
+			console.debug(slangContext.sessions);
 			return BigInt(handle);
 		}
 	}
@@ -214,12 +219,13 @@ export class SlangContext
 		// Fields
 		this.availableTargets = compileTargets;
 		this.globalSessions = new Map();
+		this.componentLists = new Map();
 		this.sessions = new Map();
 		this.modules = new Map();
 		this.entryPoints = new Map();
 		this.composites = new Map();
 
-		// Helper methods
+		// Private API
 		this.handleContextError = () => {
 			const error = slangModule.getLastError();
 			console.error(error.type + " error: " + error.message);
@@ -231,21 +237,56 @@ export class SlangContext
 			if (globalSession === undefined)
 				console.error("Invalid Slang global session handle: "+handle_bg);
 			return globalSession;
-		};
+		}
+		this.getComponentList = (handle) => {
+			const handle_bg = Number(handle);
+			const componentList = this.componentLists.get(handle_bg);
+			if (componentList === undefined)
+				console.error("Invalid component list handle: "+handle_bg);
+			return componentList;
+		}
+		this.getSession = (handle) => {
+			const handle_bg = Number(handle);
+			const session = this.sessions.get(handle_bg);
+			if (session === undefined)
+				console.error("Invalid Slang session handle: "+handle_bg);
+			return session;
+		}
+		this.getModule = (handle) => {
+			const handle_bg = Number(handle);
+			const module = this.modules.get(handle_bg);
+			if (module === undefined)
+				console.error("Invalid Slang module handle: "+handle_bg);
+			return module;
+		}
+		this.getEntryPoint = (handle) => {
+			const handle_bg = Number(handle);
+			const entryPoint = this.entryPoints.get(handle_bg);
+			if (entryPoint === undefined)
+				console.error("Invalid Slang entry point handle: "+handle_bg);
+			return entryPoint;
+		}
+		this.getComposite = (handle) => {
+			const handle_bg = Number(handle);
+			const composite = this.entryPoints.get(handle_bg);
+			if (composite === undefined)
+				console.error("Invalid Composite handle: "+handle_bg);
+			return composite;
+		}
 
 		// API methods
 		this.createGlobalSession = () => {
 			// Create global session
-			console.info("New Slang global session requested");
+			console.debug("New Slang global session requested");
 			const newGlobalSession = slangModule.createGlobalSession();
 			if (!newGlobalSession)
 				return this.handleContextError();
 			let handle = SlangContext.getUniqueNumber();
 			this.globalSessions.set(handle, new SlangGlobalSession(this, handle, newGlobalSession));
-			console.info("Created new Slang global session #"+handle+":");
-			console.info(newGlobalSession);
-			console.info("Slang global sessions now:");
-			console.info(this.globalSessions);
+			console.debug("Created new Slang global session #"+handle+":");
+			console.debug(newGlobalSession);
+			console.debug("Slang global sessions now:");
+			console.debug(this.globalSessions);
 			return BigInt(handle);
 		}
 		this.dropGlobalSession = (handle) => {
@@ -257,17 +298,33 @@ export class SlangContext
 			}
 			globalSession.cleanup();
 			this.globalSessions.delete(handle_bg);
-			console.info("Dropped Slang global session #"+handle_bg);
-			console.info("Slang global sessions now:");
-			console.info(this.globalSessions);
+			console.debug("Dropped Slang global session #"+handle_bg);
+			console.debug("Slang global sessions now:");
+			console.debug(this.globalSessions);
 		}
-		this.getSession = (handle) => {
+		this.createComponentList = () => {
+			console.debug("New component list requested");
+			let handle = SlangContext.getUniqueNumber();
+			const newComponentList = [];
+			this.componentLists.set(handle, newComponentList);
+			console.debug("Created new component list #"+handle+":");
+			console.debug(newComponentList);
+			console.debug("Component lists now:");
+			console.debug(this.componentLists);
+			return BigInt(handle);
+		}
+		this.dropComponentList = (handle) => {
 			const handle_bg = Number(handle);
-			const session = this.sessions.get(handle_bg);
-			if (session === undefined)
-				console.error("Invalid Slang session handle: "+handle_bg);
-			return session;
-		};
+			let componentList = this.getComponentList(handle_bg);
+			if (componentList === undefined) {
+				console.error("Attempted to drop non-existent component list handle: "+handle_bg);
+				return;
+			}
+			this.componentLists.delete(handle_bg);
+			console.debug("Dropped component list #"+handle_bg);
+			console.debug("Component lists now:");
+			console.debug(this.componentLists);
+		}
 		this.dropSession = (handle) => {
 			const handle_bg = Number(handle);
 			let session = this.getSession(handle_bg);
@@ -281,35 +338,14 @@ export class SlangContext
 				console.error("INTERNAL STATE CORRUPTION: session #"+handle_bg+" was orphaned from its parent global session");
 			this.sessions.delete(handle_bg);
 			session = null;
-			console.info("Global session #"+globalSession.handle+": dropped session #"+handle_bg);
-			console.info("Global session #"+globalSession.handle+": sessions now:");
-			console.info(globalSession.sessions);
-			console.info("All sessions now:");
-			console.info(this.sessions);
+			console.debug("Global session #"+globalSession.handle+": dropped session #"+handle_bg);
+			console.debug("Global session #"+globalSession.handle+": sessions now:");
+			console.debug(globalSession.sessions);
+			console.debug("All sessions now:");
+			console.debug(this.sessions);
 		}
-		this.getModule = (handle) => {
-			const handle_bg = Number(handle);
-			const module = this.modules.get(handle_bg);
-			if (module === undefined)
-				console.error("Invalid Slang module handle: "+handle_bg);
-			return module;
-		};
 		/* this.dropModule = (handle) */ // <- not implemented (Slang does not allow removing modules from a session)
-		this.getEntryPoint = (handle) => {
-			const handle_bg = Number(handle);
-			const entryPoint = this.entryPoints.get(handle_bg);
-			if (entryPoint === undefined)
-				console.error("Invalid Slang entry point handle: "+handle_bg);
-			return entryPoint;
-		};
 		/* this.dropEntryPoint = (handle) */ // <- not implemented (Entry points are intrinsically linked to modules)
-		this.getComposite = (handle) => {
-			const handle_bg = Number(handle);
-			const composite = this.entryPoints.get(handle_bg);
-			if (composite === undefined)
-				console.error("Invalid Composite handle: "+handle_bg);
-			return composite;
-		};
 		this.dropComposite = (handle) => {
 			const handle_bg = Number(handle);
 			let composite = this.getComposite(handle_bg);
@@ -317,17 +353,17 @@ export class SlangContext
 				console.error("Attempted to drop non-existent composite handle: "+handle_bg);
 				return;
 			}
-			/*let globalSession = session.globalSession;
-			session.cleanup();
-			if (!globalSession.sessions.delete(handle_bg))
+			let session = composite.session;
+			composite.cleanup();
+			if (!session.composites.delete(handle_bg))
 				console.error("INTERNAL STATE CORRUPTION: composite #"+handle_bg+" was orphaned from its parent session");
-			this.sessions.delete(handle_bg);
-			session = null;
-			console.info("Global session #"+globalSession.handle+": dropped session #"+handle_bg);
-			console.info("Global session #"+globalSession.handle+": sessions now:");
-			console.info(globalSession.sessions);
-			console.info("All sessions now:");
-			console.info(this.sessions);*/
+			this.composites.delete(handle_bg);
+			composite = null;
+			console.debug("Session #"+session.handle+": dropped composite #"+handle_bg);
+			console.debug("Session #"+session.handle+": composites now:");
+			console.debug(session.composites);
+			console.debug("All composites now:");
+			console.debug(this.composites);
 		}
 	}
 }
@@ -352,21 +388,57 @@ export default async function slang_setupAndAddInterface (targetObj)
 		let ctx = targetObj.slangCtx;
 		ctx.dropGlobalSession(handle);
 	};
-	targetObj.slangjs_createSession = function (globalSessionHandle) {
+	targetObj.slangjs_GlobalSession_createSession = function (globalSessionHandle) {
 		let globalSession = targetObj.slangCtx.getGlobalSession(globalSessionHandle);
 		return globalSession.createSession();
 	};
-	targetObj.slangjs_dropSession = function (sessionHandle) {
-		targetObj.slangCtx.dropSession(sessionHandle);
+	targetObj.slangjs_GlobalSession_dropSession = function (handle) {
+		targetObj.slangCtx.dropSession(handle);
 	};
-	targetObj.slangjs_session_loadModuleFromSource = function (sessionHandle, moduleName, modulePath, moduleSourceCode) {
+	targetObj.slangjs_createComponentList = function () {
+		let ctx = targetObj.slangCtx;
+		return ctx.createComponentList();
+	};
+	targetObj.slangjs_dropComponentList = function (handle) {
+		let ctx = targetObj.slangCtx;
+		ctx.dropComponentList(handle);
+	};
+	targetObj.slangjs_ComponentList_addModule = function (componentListHandle, handle) {
+		let ctx = targetObj.slangCtx;
+		const componentList = ctx.getComponentList(componentListHandle);
+		const module = ctx.getModule(handle)
+		componentList.push(module.object);
+	};
+	targetObj.slangjs_ComponentList_addEntryPoint = function (componentListHandle, handle) {
+		let ctx = targetObj.slangCtx;
+		const componentList = ctx.getComponentList(componentListHandle);
+		const entryPoint = ctx.getEntryPoint(handle)
+		componentList.push(entryPoint.object);
+	};
+	targetObj.slangjs_ComponentList_addComposite = function (componentListHandle, handle) {
+		let ctx = targetObj.slangCtx;
+		const componentList = ctx.getComponentList(componentListHandle);
+		const composite = ctx.getComposite(handle)
+		componentList.push(composite.object);
+	};
+	targetObj.slangjs_Session_loadModuleFromSource = function (sessionHandle, moduleName, modulePath, moduleSourceCode) {
 		let session = targetObj.slangCtx.getSession(sessionHandle);
 		return session.loadModuleFromSource(moduleName, modulePath, moduleSourceCode);
 	};
-	targetObj.slangjs_module_getEntryPoints = function (sessionHandle, moduleHandle) {
-		// ToDo: flatten module storage inside context, and only store list of handles in global session container
+	targetObj.slangjs_Session_createComposite = function (sessionHandle, componentListHandle) {
 		let session = targetObj.slangCtx.getSession(sessionHandle);
-		let module = session.getModule(moduleHandle);
+		const componentList = ctx.getComponentList(componentListHandle);
+		return session.createComposite(componentList);
+	};
+	targetObj.slangjs_Session_dropComposite = function (handle) {
+		targetObj.slangCtx.dropComposite(handle);
+	};
+	targetObj.slangjs_Module_getEntryPoints = function (moduleHandle) {
+		let module = targetObj.slangCtx.getModule(moduleHandle);
 		return module.getEntryPoints();
+	};
+	targetObj.slangjs_EntryPoint_name = function (entryPointHandle) {
+		let entryPoint = targetObj.slangCtx.getEntryPoint(entryPointHandle);
+		return entryPoint.name();
 	};
 }

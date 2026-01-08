@@ -160,6 +160,24 @@ macro_rules! sourceGeneratedBytes {
 // Structs
 //
 
+/// A zero-cost wrapper around any trivial type (numbers, pointers) that enables their use as typed handles.
+pub struct Handle {
+	handle: u64
+}
+impl From<u64> for Handle {
+	#[inline(always)]
+	fn from (handle: u64) -> Self { Self {
+		handle
+	}}
+}
+impl From<Handle> for u64 {
+	#[inline(always)]
+	fn from (handle: Handle) -> Self {
+		handle.handle
+	}
+}
+
+
 /// A zero-cost wrapper around [`Vec`] that dereferences to a slice of references to its element type. Very useful for
 /// convenience functions that create an array of things that require caller ownership, but which the owner will most
 /// typically just borrow to other functions (often as a slice of references).
@@ -187,7 +205,7 @@ impl<'this, T: 'this> BorrowVec<'this, T>
 			//         rules are effectively never violated.
 			&*(vec.as_slice() as *const [T])
 		};
-		Self { vec, borrowVec: slice.iter().map(|elem| elem).collect() }
+		Self { vec, borrowVec: slice.into_iter().map(|elem| elem).collect() }
 	}
 
 	/// Borrow a slice of the Vector of **owned** elements.

@@ -34,6 +34,7 @@ use serde;
 use shader_slang as slang;
 
 // CRC64-fast library
+#[cfg(not(target_arch="wasm32"))]
 use crc64fast_nvme as crc64;
 
 // Local imports
@@ -129,7 +130,7 @@ impl Module
 		Self::SourceCode(sourceCode.to_owned())
 	}
 }
-impl compile::Module for Module {}
+impl compile::env::Module for Module {}
 
 
 
