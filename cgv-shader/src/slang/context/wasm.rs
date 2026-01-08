@@ -6,7 +6,7 @@
 
 // Standard library
 use std::{path::{PathBuf, Path}, collections::BTreeSet, sync::LazyLock, cell::RefCell};
-
+use shader_slang::SourceLanguage::Slang;
 // Wasm-bindgen library
 use wasm_bindgen::prelude::*;
 
@@ -152,11 +152,10 @@ impl<'sess, 'gs> Session<'sess, 'gs> {
 		JsSlangModule::new(moduleHandle as u64)
 	}
 
-	pub fn createComposite (
-		&self, components: &[ComponentRef<'sess, 'gs>]
-	)
+	pub fn createComposite (&self, components: &[ComponentRef<'sess, 'gs>])
 		-> Result<SlangComposite<'_, '_>, compile::CreateCompositeError>
 	{
+		/// Build JavaScript-side component list
 		let componentList = ComponentList::new();
 		for component in components {
 			match component {
@@ -165,7 +164,15 @@ impl<'sess, 'gs> Session<'sess, 'gs> {
 				compile::ComponentRef::Composite(composite) => componentList.addComposite(composite)
 			}
 		}
-		Err(compile::CreateCompositeError::ImplementationSpecific(anyhow::anyhow!("not yet implemented")))
+
+		// Composit via JavaScript bridge
+		let compositeHandle = slangjs_Session_createComposite(self.handle, componentList.0);
+		if compositeHandle < 0 {
+			return Err(compile::CreateCompositeError::ImplementationSpecific(anyhow::anyhow!("Slang error")))
+		}
+
+		// Return resulting module
+		Ok(SlangComposite::new(compositeHandle as u64))
 	}
 }
 impl Drop for Session<'_, '_> {
@@ -249,6 +256,7 @@ impl SlangComposite<'_, '_> {
 }
 impl Drop for SlangComposite<'_, '_> {
 	fn drop (&mut self) {
+		tracing::warn!("Dropping composite #{}", self.handle);
 		slangjs_Session_dropComposite(self.handle);
 	}
 }
@@ -260,7 +268,7 @@ impl compile::Component for SlangComposite<'_, '_> {
 impl compile::Composite for SlangComposite<'_, '_> {}
 
 
-/// A *Slang* [compilation context](compile::EnvironmentEnabled) for `wasm32-unknown-unknown` targets that makes use of a *light*
+/// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
 /// significantly, but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.

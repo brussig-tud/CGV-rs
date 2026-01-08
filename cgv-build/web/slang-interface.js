@@ -78,6 +78,7 @@ export class SlangSession
 	constructor(slangContext, globalSession, sessionHandle, sessionObject)
 	{
 		this.object = sessionObject;
+		this.handle = sessionHandle;
 		this.globalSession = globalSession;
 		this.modules = new Set();
 		this.composites = new Set();
@@ -110,9 +111,9 @@ export class SlangSession
 			const handle = SlangContext.getUniqueNumber();
 			slangContext.modules.set(handle, new SlangModule(slangContext, handle, newModule));
 			this.modules.add(handle);
-			console.debug("Session #"+sessionHandle+": loaded new Slang module #."+handle+":");
+			console.debug("Session #"+this.handle+": loaded new Slang module #."+handle+":");
 			console.debug(newModule);
-			console.debug("Session #"+sessionHandle+" modules now:");
+			console.debug("Session #"+this.handle+" modules now:");
 			console.debug(this.modules);
 			return BigInt(handle);
 		}
@@ -121,12 +122,13 @@ export class SlangSession
 			if (!newComposite)
 				return slangContext.handleContextError();
 			const handle = SlangContext.getUniqueNumber();
-			slangContext.composites.set(handle, new SlangComposite(slangContext, handle, newComposite));
+			slangContext.composites.set(handle, new SlangComposite(slangContext, this, handle, newComposite));
 			this.composites.add(handle);
-			console.debug("Session #"+sessionHandle+": created new composite #."+handle+":");
+			console.debug("Session #"+this.handle+": created new composite #."+handle+":");
 			console.debug(newComposite);
-			console.debug("Session #"+sessionHandle+" composites now:");
+			console.debug("Session #"+this.handle+" composites now:");
 			console.debug(this.composites);
+			return BigInt(handle);
 		}
 	}
 }
@@ -268,7 +270,7 @@ export class SlangContext
 		}
 		this.getComposite = (handle) => {
 			const handle_bg = Number(handle);
-			const composite = this.entryPoints.get(handle_bg);
+			const composite = this.composites.get(handle_bg);
 			if (composite === undefined)
 				console.error("Invalid Composite handle: "+handle_bg);
 			return composite;
@@ -381,12 +383,10 @@ export default async function slang_setupAndAddInterface (targetObj)
 
 	// Set up bridging interface
 	targetObj.slangjs_createGlobalSession = function () {
-		let ctx = targetObj.slangCtx;
-		return ctx.createGlobalSession();
+		return targetObj.slangCtx.createGlobalSession();
 	};
 	targetObj.slangjs_dropGlobalSession = function (handle) {
-		let ctx = targetObj.slangCtx;
-		ctx.dropGlobalSession(handle);
+		targetObj.slangCtx.dropGlobalSession(handle);
 	};
 	targetObj.slangjs_GlobalSession_createSession = function (globalSessionHandle) {
 		let globalSession = targetObj.slangCtx.getGlobalSession(globalSessionHandle);
@@ -396,12 +396,10 @@ export default async function slang_setupAndAddInterface (targetObj)
 		targetObj.slangCtx.dropSession(handle);
 	};
 	targetObj.slangjs_createComponentList = function () {
-		let ctx = targetObj.slangCtx;
-		return ctx.createComponentList();
+		return targetObj.slangCtx.createComponentList();
 	};
 	targetObj.slangjs_dropComponentList = function (handle) {
-		let ctx = targetObj.slangCtx;
-		ctx.dropComponentList(handle);
+		targetObj.slangCtx.dropComponentList(handle);
 	};
 	targetObj.slangjs_ComponentList_addModule = function (componentListHandle, handle) {
 		let ctx = targetObj.slangCtx;
@@ -426,7 +424,8 @@ export default async function slang_setupAndAddInterface (targetObj)
 		return session.loadModuleFromSource(moduleName, modulePath, moduleSourceCode);
 	};
 	targetObj.slangjs_Session_createComposite = function (sessionHandle, componentListHandle) {
-		let session = targetObj.slangCtx.getSession(sessionHandle);
+		let ctx = targetObj.slangCtx;
+		let session = ctx.getSession(sessionHandle);
 		const componentList = ctx.getComponentList(componentListHandle);
 		return session.createComposite(componentList);
 	};
