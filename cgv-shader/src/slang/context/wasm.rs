@@ -5,8 +5,8 @@
 //
 
 // Standard library
-use std::{path::{PathBuf, Path}, collections::BTreeSet, sync::LazyLock, cell::RefCell};
-use shader_slang::SourceLanguage::Slang;
+use std::{path::{PathBuf, Path}, sync::LazyLock};
+
 // Wasm-bindgen library
 use wasm_bindgen::prelude::*;
 
@@ -32,43 +32,26 @@ pub static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(|| GlobalSess
 //
 
 /// Alias for our `compile::ComponentRef`.
-type ComponentRef<'sess, 'gs> = compile::ComponentRef<
-	'sess, JsSlangModule<'sess, 'gs>, SlangEntryPoint<'sess, 'gs>, SlangComposite<'sess, 'gs>
+type ComponentRef<'sess> = compile::ComponentRef<
+	'sess, JsSlangModule<'sess>, SlangEntryPoint<'sess>, SlangComposite<'sess>
 >;
 
-/// The mutable state of a [`GlobalSession`] instance.
-struct GlobalSessionState {
-	pub(crate) handle: u64,
-	pub(crate) sessions: BTreeSet<u64>
-}
 /// A handle for a JavaScript-side `slang::GlobalSession` instance.
-pub struct GlobalSession{
-	state: RefCell<GlobalSessionState>
-}
+pub struct GlobalSession(u64);
 impl GlobalSession {
 	pub(crate) fn new () -> Option<Self> {
 		let handle = slangjs_createGlobalSession();
 		if handle > 0 {
-			Some(Self {
-				state: RefCell::new(GlobalSessionState{ handle: handle as u64, sessions: BTreeSet::new() })
-			})
+			Some(Self(handle as u64))
 		}
-		else          { None }
+		else { None }
 	}
 
-	pub(crate) fn dropSession (&self, handle: u64) {
-		let mut state = self.state.borrow_mut();
-		slangjs_GlobalSession_dropSession(handle);
-		state.sessions.remove(&handle);
-	}
-
-	pub fn createSession (&self) -> Result<Session<'_, '_>, CreateSessionError>
+	pub fn createSession (&self) -> Result<Session<'_>, CreateSessionError>
 	{
-		let mut state = self.state.borrow_mut();
-		let handle = slangjs_GlobalSession_createSession(state.handle);
+		let handle = slangjs_GlobalSession_createSession(self.0);
 		if handle > 0 {
-			state.sessions.insert(handle as u64);
-			Ok(Session { handle: handle as u64, globalSession: self, sessionPhantom: std::marker::PhantomData })
+			Ok(Session { handle: handle as u64, sessionPhantom: std::marker::PhantomData })
 		}
 		else {
 			Err(CreateSessionError::Generic)
@@ -76,31 +59,10 @@ impl GlobalSession {
 	}
 }
 impl Drop for GlobalSession {
-	fn drop (&mut self)
-	{
-		tracing::warn!("Dropping global session #{}", self.state.borrow().handle);
-		/* debug info */ {
-			let state = self.state.borrow();
-			if !state.sessions.is_empty() {
-				tracing::warn!("Dropping global session #{} with active child sessions", state.handle);
-			}
-		}
-		while let Some(handle) = self.state.borrow().sessions.iter().next().map(|&h| h) {
-			self.dropSession(handle);
-		}
-		let state = self.state.borrow();
-		if !state.sessions.is_empty() {
-			let msg = format!(
-				"INTERNAL LOGIC ERROR: dropped global session #{} still contains child sessions", state.handle
-			);
-			tracing::error!("{msg}");
-			panic!("{msg}");
-		}
-		slangjs_dropGlobalSession(state.handle);
+	fn drop (&mut self) {
+		slangjs_dropGlobalSession(self.0);
 	}
 }
-unsafe // SAFETY: `GlobalSession` stores all its state in a RefCell, which prevents concurrent mutable access.
-impl Sync for GlobalSession {}
 
 /// A handle for a JavaScript-side `ComponentList` instance.
 struct ComponentList(u64);
@@ -110,11 +72,11 @@ impl ComponentList
 		slangjs_createComponentList()
 	)}
 
-	pub fn addModule (&self, module: &JsSlangModule<'_, '_>) {
+	pub fn addModule (&self, module: &JsSlangModule<'_>) {
 		slangjs_ComponentList_addModule(self.0, module.handle);
 	}
 
-	pub fn addEntryPoint (&self, entryPoint: &SlangEntryPoint<'_, '_>) {
+	pub fn addEntryPoint (&self, entryPoint: &SlangEntryPoint<'_>) {
 		slangjs_ComponentList_addEntryPoint(self.0, entryPoint.handle);
 	}
 
@@ -129,14 +91,13 @@ impl Drop for ComponentList {
 }
 
 /// A handle for a JavaScript-side `slang::Session` instance.
-pub struct Session<'sess, 'gs> {
-	pub(crate) globalSession: &'gs GlobalSession,
+pub struct Session<'sess> {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess, 'gs>>
+	sessionPhantom: std::marker::PhantomData<&'sess ()>
 }
-impl<'sess, 'gs> Session<'sess, 'gs> {
-	pub fn loadModuleFromSourceString (&self, virtualFilepath: &str, sourceCode: &str)
-		-> Result<JsSlangModule<'_, '_>, LoadModuleError>
+impl<'sess> Session<'sess> {
+	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<JsSlangModule<'_>, LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
@@ -149,13 +110,13 @@ impl<'sess, 'gs> Session<'sess, 'gs> {
 		}
 
 		// Return resulting module
-		JsSlangModule::new(moduleHandle as u64)
+		JsSlangModule::new(moduleHandle as u64, targetPath)
 	}
 
-	pub fn createComposite (&self, components: &[ComponentRef<'sess, 'gs>])
-		-> Result<SlangComposite<'_, '_>, compile::CreateCompositeError>
+	pub fn createComposite (&self, components: &[ComponentRef<'sess>])
+		-> Result<SlangComposite<'_>, compile::CreateCompositeError>
 	{
-		/// Build JavaScript-side component list
+		// Build JavaScript-side component list
 		let componentList = ComponentList::new();
 		for component in components {
 			match component {
@@ -175,97 +136,119 @@ impl<'sess, 'gs> Session<'sess, 'gs> {
 		Ok(SlangComposite::new(compositeHandle as u64))
 	}
 }
-impl Drop for Session<'_, '_> {
+impl Drop for Session<'_> {
 	fn drop (&mut self) {
-		self.globalSession.dropSession(self.handle);
+		slangjs_GlobalSession_dropSession(self.handle);
 	}
 }
 
 /// A handle for a JavaScript-side `slang::Module` instance.
-pub struct JsSlangModule<'sess, 'gs> {
+pub struct JsSlangModule<'sess> {
 	handle: u64,
-	entryPoints: Vec<SlangEntryPoint<'sess, 'gs>>,
-	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess, 'gs>>
+	virtualFilepath: PathBuf,
+	entryPoints: Vec<SlangEntryPoint<'sess>>,
+	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess>>
 }
-impl JsSlangModule<'_, '_> {
-	pub(crate) fn new (handle: u64) -> Result<Self, LoadModuleError>
+impl JsSlangModule<'_> {
+	pub(crate) fn new (handle: u64, virtualFilepath: impl AsRef<Path>) -> Result<Self, LoadModuleError>
 	{
 		let entryPoints = slangjs_Module_getEntryPoints(handle).into_iter().map(
 			|epHandle| SlangEntryPoint::new(epHandle)
 		).collect();
-		Ok(Self { handle, entryPoints, sessionPhantom: std::marker::PhantomData })
+		Ok(Self {
+			handle, virtualFilepath: virtualFilepath.as_ref().to_owned(),
+			entryPoints, sessionPhantom: std::marker::PhantomData
+		})
 	}
 
 	#[inline(always)]
-	pub fn enter(&self) -> ComponentRef<'_, '_> {
+	pub fn enter(&self) -> ComponentRef<'_> {
 		ComponentRef::Module(self)
 	}
 }
-impl<'sess, 'gs> compile::Module<SlangEntryPoint<'sess, 'gs>> for JsSlangModule<'sess, 'gs> {
-	fn entryPoints (&self) -> &[SlangEntryPoint<'sess, 'gs>] {
+impl<'sess> compile::Module<SlangEntryPoint<'sess>> for JsSlangModule<'sess>
+{
+	fn virtualFilepath (&self) -> &Path {
+		&self.virtualFilepath
+	}
+
+	fn entryPoint (&self, name: &str) -> Option<&SlangEntryPoint<'sess>> {
+		self.entryPoints.iter().find(|ep| ep.name == name)
+	}
+
+	fn entryPoints (&self) -> &[SlangEntryPoint<'sess>] {
 		&self.entryPoints
 	}
 }
-impl compile::Component for JsSlangModule<'_, '_> {
-	fn handle (&self) -> util::Handle {
-		self.handle.into()
+impl compile::Component for JsSlangModule<'_> {
+	type Id = u64;
+
+	#[inline(always)]
+	fn id (&self) -> Self::Id {
+		self.handle
 	}
 }
 
 /// A handle for a JavaScript-side `slang::EntryPoint` instance.
-pub struct SlangEntryPoint<'sess, 'gs> {
+pub struct SlangEntryPoint<'m> {
 	handle: u64,
 	name: String,
-	modulePhantom: std::marker::PhantomData<&'sess JsSlangModule<'sess, 'gs>>
+	modulePhantom: std::marker::PhantomData<&'m JsSlangModule<'m>>
 }
-impl SlangEntryPoint<'_, '_> {
+impl SlangEntryPoint<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
 		handle, name: slangjs_EntryPoint_name(handle), modulePhantom: std::marker::PhantomData
 	}}
 
 	#[inline(always)]
-	pub fn enter(&self) -> ComponentRef<'_, '_> {
+	pub fn enter(&self) -> ComponentRef<'_> {
 		ComponentRef::EntryPoint(self)
 	}
 }
-impl compile::EntryPoint for SlangEntryPoint<'_, '_> {
+impl compile::EntryPoint for SlangEntryPoint<'_> {
 	fn name (&self) -> &str {
 		&self.name
 	}
 }
-impl compile::Component for SlangEntryPoint<'_, '_> {
-	fn handle (&self) -> util::Handle {
-		self.handle.into()
+impl compile::Component for SlangEntryPoint<'_> {
+	type Id = u64;
+
+	#[inline(always)]
+	fn id (&self) -> Self::Id {
+		self.handle
 	}
 }
 
 /// A handle for a JavaScript-side *Slang* *composite component* instance.
-pub struct SlangComposite<'sess, 'gs> {
+pub struct SlangComposite<'sess> {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess, 'gs>>
+	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess>>
 }
-impl SlangComposite<'_, '_> {
+impl SlangComposite<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
 		handle, sessionPhantom: std::marker::PhantomData
 	}}
 
 	#[inline(always)]
-	pub	fn enter(&self) -> ComponentRef<'_, '_> {
+	pub	fn enter(&self) -> ComponentRef<'_> {
 		ComponentRef::Composite(self)
 	}
 }
-impl Drop for SlangComposite<'_, '_> {
+impl Drop for SlangComposite<'_> {
 	fn drop (&mut self) {
-		tracing::warn!("Dropping composite #{}", self.handle);
+		tracing::warn!("Dropping composite #{}",self.handle);
 		slangjs_Session_dropComposite(self.handle);
 	}
 }
-impl compile::Component for SlangComposite<'_, '_> {
-	fn handle (&self) -> util::Handle {
-		self.handle.into()
+impl compile::Component for SlangComposite<'_> {
+	type Id = u64;
+
+	#[inline(always)]
+	fn id (&self) -> Self::Id {
+		self.handle
 	}
 }
-impl compile::Composite for SlangComposite<'_, '_> {}
+impl compile::Composite for SlangComposite<'_> {}
 
 
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
@@ -273,14 +256,14 @@ impl compile::Composite for SlangComposite<'_, '_> {}
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
 /// significantly, but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.
 pub struct Context<'this> {
-	session: Session<'this, 'this>,
+	session: Session<'this>,
 	compatHash: u64,
 	environment: Option<compile::Environment<Module>>
 }
 impl<'this> Context<'this>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_, '_>, CreateSessionError> {
+	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
 		globalSession.createSession()
 	}
 
@@ -325,14 +308,14 @@ impl<'this> Context<'this>
 
 	///
 	#[inline]
-	pub fn compileFromSource (&self, sourceCode: &str) -> Result<JsSlangModule<'_, '_>, LoadModuleError> {
+	pub fn compileFromSource (&self, sourceCode: &str) -> Result<JsSlangModule<'_>, LoadModuleError> {
 		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
 	///
 	pub fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<JsSlangModule<'_, '_>, LoadModuleError>
+		-> Result<JsSlangModule<'_>, LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(targetPath.as_ref())?;
@@ -381,11 +364,11 @@ impl<'this> Context<'this>
 	}
 }
 impl<'this> compile::Context<
-	'this, JsSlangModule<'this, 'this>, SlangEntryPoint<'this, 'this>, SlangComposite<'this, 'this>
+	'this, JsSlangModule<'this>, SlangEntryPoint<'this>, SlangComposite<'this>
 > for Context<'this>
 {
-	fn createComposite (&'this self, components: &[ComponentRef<'this, 'this>])
-	-> Result<SlangComposite<'this, 'this>, compile::CreateCompositeError> {
+	fn createComposite (&'this self, components: &[ComponentRef<'this>])
+	-> Result<SlangComposite<'this>, compile::CreateCompositeError> {
 		self.session.createComposite(components)
 	}
 }
@@ -410,11 +393,10 @@ impl compile::EnvironmentEnabled<Module> for Context<'_>
 		{
 			for module in newEnv.modules()
 			{
-				let path = encodeValidModulePath(&module.path);
 				match &module.module
 				{
 					Module::SourceCode(sourceCode) =>
-						newSession.loadModuleFromSourceString(&path, sourceCode).or_else(|err| Err(
+						newSession.loadModuleFromSourceString(&module.path, sourceCode).or_else(|err| Err(
 							SetEnvironmentError::ImplementationSpecific(err.into())
 						))?,
 

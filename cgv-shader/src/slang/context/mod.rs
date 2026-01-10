@@ -24,7 +24,7 @@ pub use wasm::Context; // re-export
 //
 
 // Standard library
-use std::{error::Error, borrow::Cow, path::{PathBuf, Path}, fmt::{Display, Formatter}};
+use std::{error::Error, path::{PathBuf, Path}, fmt::{Display, Formatter}};
 
 // Serde library
 use serde;
@@ -191,20 +191,6 @@ fn validateModulePath (targetPath: &Path) -> Result<&str, LoadModuleError>
 	Ok(targetPath.as_os_str().to_str().ok_or(
 		LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	)?)
-}
-
-///
-#[inline]
-fn /*decompose*/encodeValidModulePath (targetPath: &Path) -> /*(*/Cow<'_, str>//, Cow<'_, str>)
-{
-	targetPath.parent().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	).unwrap();
-	targetPath.file_stem().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
-	).unwrap();
-
-	targetPath.as_os_str().to_string_lossy()
 }
 
 ///

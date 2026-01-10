@@ -4,6 +4,10 @@
 // Module definitions
 //
 
+// Submodule defining the compilation model.
+mod model;
+pub use model::{Module, EntryPoint, Component, Composite, ComponentRef}; // re-export
+
 // Submodule implementing compilation environments.
 mod environment;
 pub use environment::{Environment, AddModuleError}; // re-export
@@ -16,7 +20,7 @@ pub mod env {
 
 /// The module prelude.
 pub mod prelude {
-	pub use super::{Context, EnvironmentEnabled, Module, EntryPoint, Component};
+	pub use super::{Context, EnvironmentEnabled, Module, EntryPoint, Component, Composite};
 }
 
 
@@ -28,9 +32,6 @@ pub mod prelude {
 
 // Standard library
 use std::{error::Error, fmt::{Display, Formatter}};
-
-// Local imports
-use crate::util;
 
 
 
@@ -75,30 +76,6 @@ impl Error for SetEnvironmentError {}
 //
 // Traits
 //
-
-/// The trait of re-usable snippets of shader program code with granularity of at most (but potentially smaller than) a
-/// single [`compile::Module`].
-pub trait Component {
-	fn handle (&self) -> util::Handle;
-}
-
-
-/// The trait of entry points in a [`compile::Module`].
-pub trait EntryPoint: Component {
-	fn name (&self) -> &str;
-}
-
-
-/// The trait of modules that contain shader program code managed by a [`compile::Context`].
-pub trait Module<EntryPointType: EntryPoint>: Component {
-	fn entryPoints (&self) -> &[EntryPointType];
-}
-
-
-/// The trait of a combination of program snippets from whole [`compile::Module`]s and/or individual
-/// [`EntryPoint`]s.
-pub trait Composite: Component {}
-
 
 ///
 pub trait Context<'this, ModuleType, EntryPointType, CompositeType>
@@ -168,21 +145,4 @@ pub trait EnvironmentEnabled<ModuleType: env::Module>
 
 	///
 	fn environmentCompatHash (&self) -> u64;
-}
-
-
-
-//////
-//
-// Structs
-//
-
-///
-pub enum ComponentRef<'c, ModuleType, EntryPointType, CompositeType>
-where
-	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite
-{
-	Module(&'c ModuleType),
-	EntryPoint(&'c EntryPointType),
-	Composite(&'c CompositeType)
 }

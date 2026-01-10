@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{sync::{Mutex, LazyLock}, path::{PathBuf, Path}};
+use std::{sync::{Mutex, LazyLock}, borrow::Cow, path::{PathBuf, Path}};
 
 // Anyhow library
 use anyhow::anyhow;
@@ -355,4 +355,18 @@ fn constructTargetDesc<'caller> (globalSession: &slang::GlobalSession, sessionCo
 		CompilationTarget::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
 		CompilationTarget::WGSL => targetDesc.format(slang::CompileTarget::Wgsl)
 	}
+}
+
+///
+#[inline]
+fn encodeValidModulePath (targetPath: &Path) -> Cow<'_, str>
+{
+	targetPath.parent().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	).unwrap();
+	targetPath.file_stem().ok_or(
+		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+	).unwrap();
+
+	targetPath.as_os_str().to_string_lossy()
 }
