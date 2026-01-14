@@ -6,7 +6,7 @@
 
 // Submodule defining the compilation model.
 mod model;
-pub use model::{Module, EntryPoint, Component, Composite, ComponentRef}; // re-export
+pub use model::{Module, EntryPoint, Component, Composite, LinkedComposite, ComponentRef}; // re-export
 
 // Submodule implementing compilation environments.
 mod environment;
@@ -55,6 +55,20 @@ impl Display for CreateCompositeError {
 impl Error for CreateCompositeError {}
 
 #[derive(Debug)]
+pub enum LinkError {
+	ImplementationSpecific(anyhow::Error)
+}
+impl Display for LinkError {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::ImplementationSpecific(st) => &format!("nested implementation error: {st}"),
+		};
+		write!(formatter, "LinkError[{desc}]")
+	}
+}
+impl Error for LinkError {}
+
+#[derive(Debug)]
 pub enum SetEnvironmentError {
 	IncompatibleEnvironment,
 	ImplementationSpecific(anyhow::Error)
@@ -78,12 +92,17 @@ impl Error for SetEnvironmentError {}
 //
 
 ///
-pub trait Context<'this, ModuleType, EntryPointType, CompositeType>
+pub trait Context<'this, ModuleType, EntryPointType, CompositeType, LinkedCompositeType>
 where
-	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite
+	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite,
+	LinkedCompositeType: LinkedComposite
 {
+	///
 	fn createComposite (&'this self, components: &[ComponentRef<'this, ModuleType, EntryPointType, CompositeType>])
 		-> Result<CompositeType, CreateCompositeError>;
+
+	///
+	fn linkComposite (&'this self, composite: &CompositeType) -> Result<LinkedCompositeType, LinkError>;
 }
 
 

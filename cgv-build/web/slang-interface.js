@@ -12,6 +12,21 @@ export class SlangComposite
 		this.cleanup = () => {
 			this.object = null;
 		}
+
+		// API methods
+		this.link = () => {
+			const linkedProg = this.object.link();
+			if (!linkedProg)
+				return slangContext.handleContextError();
+			const handle = SlangContext.getUniqueNumber();
+			slangContext.composites.set(handle, new SlangComposite(slangContext, this.session, handle, linkedProg));
+			this.session.composites.add(handle);
+			console.debug("Session #"+this.session+": linked to new composite #."+handle+":");
+			console.debug(linkedProg);
+			console.debug("Session #"+this.session+" composites now:");
+			console.debug(this.session.composites);
+			return BigInt(handle);
+		}
 	}
 }
 
@@ -118,7 +133,7 @@ export class SlangSession
 			return BigInt(handle);
 		}
 		this.createComposite = (componentList) => {
-			const newComposite = this.object.createCompositeComponentType(componentList);
+			let newComposite = this.object.createCompositeComponentType(componentList);
 			if (!newComposite)
 				return slangContext.handleContextError();
 			const handle = SlangContext.getUniqueNumber();
@@ -439,5 +454,8 @@ export default async function slang_setupAndAddInterface (targetObj)
 	targetObj.slangjs_EntryPoint_name = function (entryPointHandle) {
 		let entryPoint = targetObj.slangCtx.getEntryPoint(entryPointHandle);
 		return entryPoint.name();
+	};
+	targetObj.slangjs_Composite_link = function (handle) {
+		return targetObj.slangCtx.getComposite(handle).link();
 	};
 }

@@ -13,9 +13,7 @@ use wasm_bindgen::prelude::*;
 // Local imports
 use crate::*;
 use crate::{compile::{SetEnvironmentError, AddModuleError}, /*slang::Program, */slang::context::*};
-
-
-
+use crate::compile::LinkError;
 //////
 //
 // Globals
@@ -162,7 +160,7 @@ impl JsSlangModule<'_> {
 	}
 
 	#[inline(always)]
-	pub fn enter(&self) -> ComponentRef<'_> {
+	pub fn enter (&self) -> ComponentRef<'_> {
 		ComponentRef::Module(self)
 	}
 }
@@ -201,7 +199,7 @@ impl SlangEntryPoint<'_> {
 	}}
 
 	#[inline(always)]
-	pub fn enter(&self) -> ComponentRef<'_> {
+	pub fn enter (&self) -> ComponentRef<'_> {
 		ComponentRef::EntryPoint(self)
 	}
 }
@@ -230,7 +228,7 @@ impl SlangComposite<'_> {
 	}}
 
 	#[inline(always)]
-	pub	fn enter(&self) -> ComponentRef<'_> {
+	pub	fn enter (&self) -> ComponentRef<'_> {
 		ComponentRef::Composite(self)
 	}
 }
@@ -249,6 +247,24 @@ impl compile::Component for SlangComposite<'_> {
 	}
 }
 impl compile::Composite for SlangComposite<'_> {}
+
+/// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
+pub struct SlangLinkedComposite<'sess> {
+	handle: u64,
+	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess>>
+}
+impl SlangLinkedComposite<'_> {
+	pub(crate) fn new (handle: u64) -> Self { Self {
+		handle, sessionPhantom: std::marker::PhantomData
+	}}
+}
+impl Drop for SlangLinkedComposite<'_> {
+	fn drop (&mut self) {
+		tracing::warn!("Dropping linked composite #{}",self.handle);
+		slangjs_Session_dropComposite(self.handle);
+	}
+}
+impl compile::LinkedComposite for SlangLinkedComposite<'_> {}
 
 
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
@@ -364,12 +380,24 @@ impl<'this> Context<'this>
 	}
 }
 impl<'this> compile::Context<
-	'this, JsSlangModule<'this>, SlangEntryPoint<'this>, SlangComposite<'this>
+	'this, JsSlangModule<'this>, SlangEntryPoint<'this>, SlangComposite<'this>, SlangLinkedComposite<'this>
 > for Context<'this>
 {
 	fn createComposite (&'this self, components: &[ComponentRef<'this>])
 	-> Result<SlangComposite<'this>, compile::CreateCompositeError> {
 		self.session.createComposite(components)
+	}
+
+	fn linkComposite (&'this self, composite: &SlangComposite) -> Result<SlangLinkedComposite<'this>, LinkError>
+	{
+		let handle = slangjs_Composite_link(composite.handle);
+		if handle > 0 {
+			Ok(SlangLinkedComposite::new(handle as u64))
+		}
+		else {
+			Err(LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")))
+		}
+
 	}
 }
 impl compile::EnvironmentEnabled<Module> for Context<'_>
@@ -455,4 +483,6 @@ extern "C" {
 	fn slangjs_Module_getEntryPoints (moduleHandle: u64) -> Vec<u64>;
 
 	fn slangjs_EntryPoint_name (entryPointHandle: u64) -> String;
+
+	fn slangjs_Composite_link (handle: u64) -> i64;
 }

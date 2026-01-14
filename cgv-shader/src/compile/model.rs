@@ -45,6 +45,10 @@ pub trait Module<EntryPointType: EntryPoint>: Component
 pub trait Composite: Component {}
 
 
+/// The trait of a [`Composite`] that has been linked into a functional shader program.
+pub trait LinkedComposite {}
+
+
 
 //////
 //

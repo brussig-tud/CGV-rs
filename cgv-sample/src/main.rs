@@ -171,6 +171,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			let program = slangCtx.createComposite(
 				&[composite.enter(), ep1.enter()]
 			)?;
+			let linkedComposite = slangCtx.linkComposite(&program)?;
 			cgv::shader::Package::deserialize(
 				util::sourceGeneratedBytes!("/shader/example.spk")
 			)?
