@@ -15,7 +15,8 @@ use shader_slang as slang;
 
 // Local imports
 use crate::*;
-use crate::{compile::{SetEnvironmentError, AddModuleError}, slang::Program, slang::context::*};
+use crate::{compile, slang::Program, slang::context::*};
+use compile::{SetEnvironmentError, AddModuleError};
 
 
 
@@ -63,7 +64,7 @@ unsafe impl Sync for NativeGlobalSessionContainer {
 #[derive(Clone)]
 struct SlangSessionConfig {
 	searchPaths: Vec<std::ffi::CString>,
-	target: CompilationTarget,
+	target: compile::Target,
 	compilerOptions: slang::CompilerOptions,
 	profile: String,
 }
@@ -104,7 +105,7 @@ impl Context<'_>
 	///
 	/// * `target` – The target representation this `Context` will compile/transpile to.
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forTarget (target: CompilationTarget, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
+	pub fn forTarget (target: compile::Target, searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
 	{
 		// Obtain the global session
 		let globalSession = obtainGlobalSession().lock().unwrap();
@@ -119,7 +120,7 @@ impl Context<'_>
 			.language(slang::SourceLanguage::Glsl);
 		let compilerOptions = match target
 		{
-			CompilationTarget::SPIRV(debug) => compilerOptions
+			compile::Target::SPIRV(debug) => compilerOptions
 				.emit_spirv_directly(true)
 				.optimization(
 					if debug {compatOptions.optimize(false)} else { compatOptions.optimize(true)}
@@ -128,9 +129,11 @@ impl Context<'_>
 					if debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
 				),
 
-			CompilationTarget::WGSL => compilerOptions
+			compile::Target::WGSL => compilerOptions
 				.optimization(slang::OptimizationLevel::Maximal)
-				.debug_information(slang::DebugInfoLevel::None)
+				.debug_information(slang::DebugInfoLevel::None),
+
+			_ => return Err(anyhow!("Unsupported target type"))
 		};
 		// - store
 		let sessionConfig = SlangSessionConfig {
@@ -161,14 +164,15 @@ impl Context<'_>
 	///
 	/// * `searchPath` – The module search path for the *Slang* compiler.
 	pub fn new (searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self> {
-		Self::forTarget(CompilationTarget::SPIRV(cfg!(debug_assertions)), searchPath)
+		Self::forTarget(compile::Target::SPIRV(cfg!(debug_assertions)), searchPath)
 	}
 
 	///
-	pub fn targetType (&self) -> WgpuSourceType {
+	pub fn targetType (&self) -> Option<WgpuSourceType> {
 		match self.sessionConfig.target {
-			CompilationTarget::SPIRV(_) => WgpuSourceType::SPIRV,
-			CompilationTarget::WGSL => WgpuSourceType::WGSL
+			compile::Target::SPIRV(_) => Some(WgpuSourceType::SPIRV),
+			compile::Target::WGSL => Some(WgpuSourceType::WGSL),
+			_ => None
 		}
 	}
 
@@ -352,8 +356,14 @@ fn constructTargetDesc<'caller> (globalSession: &slang::GlobalSession, sessionCo
 		globalSession.find_profile(&sessionConfig.profile)
 	);
 	match sessionConfig.target {
-		CompilationTarget::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
-		CompilationTarget::WGSL => targetDesc.format(slang::CompileTarget::Wgsl)
+		compile::Target::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
+		compile::Target::WGSL => targetDesc.format(slang::CompileTarget::Wgsl),
+		compile::Target::DXIL(_) => targetDesc.format(slang::CompileTarget::Dxil),
+		compile::Target::GLSL => targetDesc.format(slang::CompileTarget::Glsl),
+		compile::Target::HLSL => targetDesc.format(slang::CompileTarget::Hlsl),
+		compile::Target::CudaCpp => targetDesc.format(slang::CompileTarget::CudaSource),
+		compile::Target::Metal => targetDesc.format(slang::CompileTarget::Metal),
+		_ => unimplemented!("unsupported target type")
 	}
 }
 

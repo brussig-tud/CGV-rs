@@ -70,7 +70,7 @@ impl<'this, 'ctx> EnvironmentBuilder<'this, 'ctx>
 
 /// Prepare the shaders in the given directory, skipping indicated directory sub-trees.
 pub fn prepareShaders (
-	buildSetup: &Setup, moduleSourceTargets: Option<&[cgv_shader::CompilationTarget]>,
+	buildSetup: &Setup, moduleSourceTargets: Option<&[shader::compile::Target]>,
 	shaderDirectory: impl AsRef<Path>, skipSubDirs: Option<&[impl AsRef<Path>]>
 ) -> Result<()>
 {

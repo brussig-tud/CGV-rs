@@ -7,6 +7,35 @@
 // Standard library
 use std::path::Path;
 
+// Local imports
+use super::compile;
+
+
+
+//////
+//
+// Errors
+//
+
+///
+pub enum TranslateError {
+	UnsupportedTarget,
+	ImplementationSpecific(anyhow::Error)
+}
+
+
+
+//////
+//
+// Enums
+//
+
+///
+pub enum ProgramCode {
+	Text(String),
+	Binary(Vec<u8>)
+}
+
 
 
 //////
@@ -19,12 +48,14 @@ use std::path::Path;
 pub trait Component {
 	type Id: Clone+PartialOrd;
 
+	///
 	fn id (&self) -> Self::Id;
 }
 
 
 /// The trait of entry points in a [`compile::Module`].
 pub trait EntryPoint: Component {
+	///
 	fn name (&self) -> &str;
 }
 
@@ -32,10 +63,13 @@ pub trait EntryPoint: Component {
 /// The trait of modules that contain shader program code managed by a [`compile::Context`].
 pub trait Module<EntryPointType: EntryPoint>: Component
 {
+	///
 	fn virtualFilepath (&self) -> &Path;
 
+	///
 	fn entryPoint (&self, name: &str) -> Option<&EntryPointType>;
 
+	///
 	fn entryPoints (&self) -> &[EntryPointType];
 }
 
@@ -46,7 +80,13 @@ pub trait Composite: Component {}
 
 
 /// The trait of a [`Composite`] that has been linked into a functional shader program.
-pub trait LinkedComposite {}
+pub trait LinkedComposite {
+	///
+	fn allEntryPointsCode (target: compile::Target) -> Result<ProgramCode, TranslateError>;
+
+	///
+	fn entryPointCode (target: compile::Target, entryPointIdx: u32) -> Option<Result<ProgramCode, TranslateError>>;
+}
 
 
 

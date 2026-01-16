@@ -75,6 +75,10 @@ impl std::error::Error for CreateShaderModuleError {}
 #[derive(Debug)]
 pub enum ProgramInstanceBuildError
 {
+	/// A [`compile::Context`] that was supposed to compile a program instance does not support a target compatible with
+	/// any of the [`WgpuSourceType`]s.
+	IncompatibleContext,
+
 	#[doc=include_str!("_doc/_InvalidEntryPoint_withString.md")]
 	InvalidEntryPoint(String),
 
@@ -85,8 +89,13 @@ impl Display for ProgramInstanceBuildError {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
 	{
 		match self {
-			Self::InvalidEntryPoint(ep)
-				=> write!(formatter, "ProgramInstanceBuildError[invalid entry point: `{ep}`]"),
+			Self::IncompatibleContext => write!(formatter,
+				"ProgramInstanceBuildError[compile context does not support a compatible compilation target]"
+			),
+
+			Self::InvalidEntryPoint(ep) => write!(
+				formatter, "ProgramInstanceBuildError[invalid entry point: `{ep}`]"
+			),
 
 			Self::External(e) => {
 				writeln!(formatter, "ProgramInstanceBuildError[<Nested>]:")?;
@@ -180,6 +189,14 @@ impl Package
 		slangContext: &slang::Context, filepath: impl AsRef<Path>, entryPoints: Option<&BTreeSet<Option<&str>>>
 	) -> Result<(Program, WgpuSourceType), ProgramInstanceBuildError>
 	{
+		// Check compilation target
+		let wgpuSourceType = if let Some(srtType) = slangContext.targetType() {
+			srtType
+		}
+		else {
+			return Err(ProgramInstanceBuildError::IncompatibleContext);
+		};
+
 		// Compile Slang code
 		let slangProg = slangContext.buildProgram(filepath).or_else(
 			|e| Err(ProgramInstanceBuildError::External(e))
@@ -207,12 +224,12 @@ impl Package
 					progInstance.addEntryPoint(None, slangProg.allEntryPointsProg().to_owned());
 				}
 			}
-			Ok((progInstance, slangContext.targetType()))
+			Ok((progInstance, wgpuSourceType))
 		}
 		else {
 			// Only include the generic program that includes code paths from all entry points
 			Ok((
-				Program::generic(slangProg.allEntryPointsProg().to_owned()),  slangContext.targetType()
+				Program::generic(slangProg.allEntryPointsProg().to_owned()), wgpuSourceType
 			))
 		}
 	}
@@ -325,7 +342,11 @@ impl Package
 				device.create_shader_module(wgpu::ShaderModuleDescriptor {
 					label, source: wgpu::ShaderSource::Wgsl(str::from_utf8(code).unwrap().into()),
 				})
-			}
+			},
+
+			WgpuSourceType::GLSL => unimplemented!(
+				"GLSL source type not yet supported pending more complete implementation in upstream WGPU"
+			)
 		};
 
 		// Done!

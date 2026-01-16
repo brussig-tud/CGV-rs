@@ -33,7 +33,7 @@ use shader_slang as slang;
 
 // Local imports
 use cgv_util as util;
-use crate::CompilationTarget;
+use crate::compile;
 
 
 
@@ -71,7 +71,7 @@ impl EntryPoint
 
 /// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
 /// these targets.
-pub fn createContextsForTargets<'a> (targets: &[CompilationTarget], shaderPath: &[impl AsRef<Path>])
+pub fn createContextsForTargets<'a> (targets: &[compile::Target], shaderPath: &[impl AsRef<Path>])
 -> anyhow::Result<cgv_util::BorrowVec<'a, Context<'a>>> {
 	let mut contexts = Vec::<Context>::with_capacity(targets.len());
 	for &target in targets {

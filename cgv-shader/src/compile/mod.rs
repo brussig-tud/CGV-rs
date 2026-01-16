@@ -6,7 +6,9 @@
 
 // Submodule defining the compilation model.
 mod model;
-pub use model::{Module, EntryPoint, Component, Composite, LinkedComposite, ComponentRef}; // re-export
+pub use model::{
+	Module, EntryPoint, Component, Composite, LinkedComposite, ProgramCode, ComponentRef, TranslateError
+}; // re-export
 
 // Submodule implementing compilation environments.
 mod environment;
@@ -32,6 +34,12 @@ pub mod prelude {
 
 // Standard library
 use std::{error::Error, fmt::{Display, Formatter}};
+
+// GUID library
+use cgv_util::uuid;
+
+// Local imports
+use crate::{compile, WgpuSourceType};
 
 
 
@@ -83,6 +91,91 @@ impl Display for SetEnvironmentError {
 	}
 }
 impl Error for SetEnvironmentError {}
+
+
+
+//////
+//
+// Enums
+//
+
+/// Enum describing possible shader compilation targets known to *CGV-rs*
+#[derive(Debug,Clone,Copy)]
+pub enum Target
+{
+	/// Compile shaders to *SPIR-V*, specifying whether they should be debuggable or not.
+	SPIRV(/* debug: */bool),
+
+	/// Transpile shaders to *WebGPU Shading Language*.
+	WGSL,
+
+	/// Transpile shaders to *DirectX Intermediate Language*.
+	DXIL(/* debug: */bool),
+
+	/// Transpile shaders to *GL Shading Language*.
+	GLSL,
+
+	/// Transpile shaders to *High-level Shading Language*.
+	HLSL,
+
+	/// Transpile shaders to *Cuda-C++*.
+	CudaCpp,
+
+	/// Transpile shaders to the *Metal* shading language.
+	Metal,
+
+	/// Compile to another target that the [`compile::Context`] supports.
+	Custom(uuid::Uuid)
+}
+impl Target
+{
+	/// Yields a value of [`compile::Target::SPIRV`] with the debug flag set to an unspecified value. Use this if you
+	/// want to indicate *SPIR-V* and don't care about the debug flag, e.g., when choosing the type of target code to
+	/// fetch for a fully built shader from [`compile::LinkedComposite::entryPointCode`].
+	#[inline(always)]
+	pub fn spirv () -> Self {
+		Self::SPIRV(false)
+	}
+
+	///
+	#[inline(always)]
+	pub fn fromWgpuSourceType (wgpuSourceType: WgpuSourceType, debugInfoIfApplicable: bool) -> Self {
+		match wgpuSourceType {
+			WgpuSourceType::SPIRV => Self::SPIRV(debugInfoIfApplicable),
+			WgpuSourceType::WGSL => Self::WGSL,
+			WgpuSourceType::GLSL => Self::GLSL
+		}
+	}
+
+	#[inline(always)]
+	pub fn isSPIRV (&self) -> bool {
+		std::mem::discriminant(self) == std::mem::discriminant(&Self::spirv())
+	}
+
+	#[inline(always)]
+	pub fn isWGSL (&self) -> bool {
+		std::mem::discriminant(self) == std::mem::discriminant(&Self::WGSL)
+	}
+
+	#[inline(always)]
+	pub fn isGLSL (&self) -> bool {
+		std::mem::discriminant(self) == std::mem::discriminant(&Self::GLSL)
+	}
+}
+impl Display for Target {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::SPIRV(debug) => write!(f, "SPIR-V(debug={debug}"),
+			Self::WGSL => write!(f, "WGSL"),
+			Self::DXIL(debug) => write!(f, "DXIL(debug={debug}"),
+			Self::GLSL => write!(f, "GLSL"),
+			Self::HLSL => write!(f, "HLSL"),
+			Self::CudaCpp => write!(f, "Cuda-C++"),
+			Self::Metal => write!(f, "Metal"),
+			Self::Custom(uuid) => write!(f, "Custom(uuid={uuid})")
+		}
+	}
+}
 
 
 

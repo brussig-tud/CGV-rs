@@ -25,7 +25,7 @@ use crate::slang::{Context, EntryPoint};
 
 ///
 pub struct Program {
-	linkedProg: slang::ComponentType,
+	_linkedProg: slang::ComponentType,
 	allEntryPointsProg: slang::Blob,
 	entryPointProgs: Vec<EntryPoint>
 }
@@ -75,7 +75,7 @@ impl Program
 		};
 
 		// Done!
-		Ok(Self { linkedProg, allEntryPointsProg, entryPointProgs })
+		Ok(Self { _linkedProg: linkedProg, allEntryPointsProg, entryPointProgs })
 	}
 
 	#[cfg(not(target_arch="wasm32"))]

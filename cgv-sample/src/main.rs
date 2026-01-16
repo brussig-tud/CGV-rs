@@ -178,7 +178,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		};
 		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
 			let mut slangCtx = cgv::shader::slang::Context::forTarget(
-				cgv::shader::CompilationTarget::SPIRV(cfg!(debug_assertions)), &environment.shaderPath
+				cgv::shader::compile::Target::SPIRV(cfg!(debug_assertions)), &environment.shaderPath
 			)?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;

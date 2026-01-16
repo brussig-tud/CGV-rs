@@ -251,11 +251,11 @@ impl compile::Composite for SlangComposite<'_> {}
 /// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
 pub struct SlangLinkedComposite<'sess> {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess>>
+	session: &'sess Session<'sess>,
 }
-impl SlangLinkedComposite<'_> {
-	pub(crate) fn new (handle: u64) -> Self { Self {
-		handle, sessionPhantom: std::marker::PhantomData
+impl<'sess> SlangLinkedComposite<'sess> {
+	pub(crate) fn new (handle: u64, session: &'sess Session) -> Self { Self {
+		handle, session
 	}}
 }
 impl Drop for SlangLinkedComposite<'_> {
@@ -264,7 +264,17 @@ impl Drop for SlangLinkedComposite<'_> {
 		slangjs_Session_dropComposite(self.handle);
 	}
 }
-impl compile::LinkedComposite for SlangLinkedComposite<'_> {}
+impl compile::LinkedComposite for SlangLinkedComposite<'_> {
+	fn allEntryPointsCode (target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
+		Err(compile::TranslateError::ImplementationSpecific(anyhow::anyhow!("Not yet implemented")))
+	}
+
+	fn entryPointCode (target: compile::Target, entryPointIdx: u32)
+		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
+	{
+		None
+	}
+}
 
 
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
@@ -289,7 +299,7 @@ impl<'this> Context<'this>
 	///
 	/// * `target` – The target representation this `Context` will compile/transpile to.
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forTarget (target: CompilationTarget, _searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
+	pub fn forTarget (target: compile::Target, _searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
 	{
 		if target.isWGSL()
 		{
@@ -310,7 +320,7 @@ impl<'this> Context<'this>
 	///
 	/// * `searchPath` – The module search path for the *Slang* compiler.
 	pub fn new (_searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self> {
-		Self::forTarget(CompilationTarget::WGSL, _searchPath)
+		Self::forTarget(compile::Target::WGSL, _searchPath)
 	}
 
 	/*/// Build a shader program from the given *Slang* source file.
@@ -392,7 +402,7 @@ impl<'this> compile::Context<
 	{
 		let handle = slangjs_Composite_link(composite.handle);
 		if handle > 0 {
-			Ok(SlangLinkedComposite::new(handle as u64))
+			Ok(SlangLinkedComposite::new(handle as u64, &self.session))
 		}
 		else {
 			Err(LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")))
