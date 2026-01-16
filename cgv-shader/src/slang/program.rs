@@ -39,10 +39,6 @@ impl Program
 		// Specialize program instances for each entry point
 		// - gather components
 		let components = {
-			let wholeMod: slang::ComponentType = module.clone().into();
-			wholeMod.link().expect("Failed to link whole module component");
-			let wholeModBytecode = wholeMod.target_code(0).expect("Failed to generate whole module target bytecode");
-			eprintln!("SINGLE EP (len={}): {}", wholeModBytecode.as_slice().len(), String::from_utf8_lossy(wholeModBytecode.as_slice()));
 			let mut components = vec![module.clone().into()];
 			for ep in module.entry_points() {
 				components.push(ep.clone().into());
