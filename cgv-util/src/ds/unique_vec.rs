@@ -276,6 +276,12 @@ impl<K: Eq + Hash> UniqueSet<K> for HashSet<K> {
 }
 
 
+
+//////
+//
+// Structs
+//
+
 /// A wrapper around an element's key used for storage in a [`UniqueSet`].
 ///
 /// `KeyWrapper` allows [`UniqueVec`] to store keys with a `'static` lifetime internally,
@@ -357,12 +363,6 @@ impl<T: UniqueVecElement> Hash for KeyWrapper<T> {
 	}
 }
 
-
-
-//////
-//
-// Structs
-//
 
 /// A vector that maintains uniqueness of its elements based on a key.
 ///
