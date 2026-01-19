@@ -46,6 +46,10 @@ pub mod path;
 /// Submodule providing unique entity generators (IDs etc.)
 pub mod unique;
 
+/// Unit tests
+#[cfg(test)]
+mod tests;
+
 
 
 //////

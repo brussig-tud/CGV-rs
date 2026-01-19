@@ -102,14 +102,14 @@ pub enum EnvironmentStorage {
 
 ///
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
-pub enum Module {
+pub enum EnvModule {
 	/// The module is provided as source code.
 	SourceCode(String),
 
 	/// The module is provided in *Slang*-IR form.
 	IR(Vec<u8>)
 }
-impl Module
+impl EnvModule
 {
 	///
 	#[cfg(not(target_arch="wasm32"))]
@@ -130,7 +130,7 @@ impl Module
 		Self::SourceCode(sourceCode.to_owned())
 	}
 }
-impl compile::env::Module for Module {}
+impl compile::env::Module for EnvModule {}
 
 
 
@@ -196,7 +196,7 @@ fn validateModulePath (targetPath: &Path) -> Result<&str, LoadModuleError>
 ///
 #[inline]
 fn storeInEnvironment (
-	environment: Option<&mut compile::Environment<Module>>, atPath: impl AsRef<Path>, module: Module
+	environment: Option<&mut compile::Environment<EnvModule>>, atPath: impl AsRef<Path>, module: EnvModule
 ) -> Result<(), AddModuleError>
 {
 	if let Some(env) = environment {

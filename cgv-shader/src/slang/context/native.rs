@@ -37,7 +37,7 @@ static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::
 // Structs
 //
 
-impl From<&slang::Module> for Module {
+impl From<&slang::Module> for EnvModule {
 	fn from (value: &shader_slang::Module) -> Self {
 		Self::fromSlangIRBytes(
 			value.serialize().expect("Slang failed to serialize a pre-compiled module").as_slice()
@@ -81,7 +81,7 @@ pub struct Context<'this> {
 	pub(crate)session: slang::Session,
 
 	compatHash: u64,
-	environment: Option<compile::Environment<Module>>,
+	environment: Option<compile::Environment<EnvModule>>,
 
 	_phantomData: std::marker::PhantomData<&'this ()>
 }
@@ -224,7 +224,7 @@ impl Context<'_>
 	///
 	pub fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), LoadModuleError>
 	{
-		let module = Module::fromSlangModule(self.compile(&filename)?).map_err(
+		let module = EnvModule::fromSlangModule(self.compile(&filename)?).map_err(
 			|err| LoadModuleError::CompilationError(format!("{err}"))
 		)?;
 		storeInEnvironment(self.environment.as_mut(), filename, module).map_err(|err| match err {
@@ -240,8 +240,8 @@ impl Context<'_>
 		// Compile the source code inside the Slang session
 		let slangModule = self.compileFromNamedSource(&virtualFilepath, sourceCode)?;
 		let module = match envStorage {
-			EnvironmentStorage::SourceCode => Module::fromSlangSourceCode(sourceCode),
-			EnvironmentStorage::IR => Module::fromSlangModule(slangModule).map_err(
+			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
+			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule).map_err(
 				|err| LoadModuleError::CompilationError(format!("{err}"))
 			)?
 		};
@@ -266,17 +266,17 @@ impl Context<'_>
 		)?;
 
 		// Store the IR module in the environment
-		storeInEnvironment(self.environment.as_mut(), targetPath, Module::IR(bytes.to_owned())).map_err(
+		storeInEnvironment(self.environment.as_mut(), targetPath, EnvModule::IR(bytes.to_owned())).map_err(
 			|err| match err {
 				AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
 			}
 		)
 	}
 }
-impl compile::EnvironmentEnabled<Module> for Context<'_>
+impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
 {
-	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
-		-> Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
+	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<EnvModule>>)
+		-> Result<Option<compile::Environment<EnvModule>>, compile::SetEnvironmentError>
 	{
 		// Check if the new environment is compatible (in case it's `Some`)
 		if let Some(newEnv) = &environment && self.compatHash != newEnv.compatHash() {
@@ -297,14 +297,14 @@ impl compile::EnvironmentEnabled<Module> for Context<'_>
 				let path = encodeValidModulePath(&module.path);
 				match &module.module
 				{
-					Module::SourceCode(sourceCode) =>
+					EnvModule::SourceCode(sourceCode) =>
 						newSession.load_module_from_source_string(&path, "", sourceCode).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
 								LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?,
 
-					Module::IR(bytes) => {
+					EnvModule::IR(bytes) => {
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 						newSession.load_module_from_ir_blob(&path, "", &irBlob).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
@@ -325,7 +325,7 @@ impl compile::EnvironmentEnabled<Module> for Context<'_>
 		Ok(oldEnv)
 	}
 
-	fn finishEnvironment (self) -> Option<compile::Environment<Module>> {
+	fn finishEnvironment (self) -> Option<compile::Environment<EnvModule>> {
 		self.environment
 	}
 

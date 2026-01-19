@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 // Local imports
 use crate::compile;
-use crate::util;
+use crate::util::{self, ds::UniqueVecElement};
 
 
 
@@ -114,8 +114,10 @@ pub struct ModuleEntry<ModuleType: Module> {
 	pub module: ModuleType,
 	pub sourceEnv: Option<Uuid>
 }
-impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<ModuleType> {
-	fn key (&self) -> &PathBuf {
+impl<ModuleType: Module> util::ds::UniqueVecElement for ModuleEntry<ModuleType> {
+	type Key<'a> = &'a Path where ModuleType: 'a;
+
+	fn key (&self) -> Self::Key<'_> {
 		&self.path
 	}
 }
@@ -137,6 +139,19 @@ impl<ModuleType: Module> util::ds::UniqueArrayElement<PathBuf> for ModuleEntry<M
 /// which crates using the environment can check to make sure that they are compatible. The crate exporting the
 /// environment should naturally provide a way for clients to find and use compatible settings.
 ///
+/// ##### Providing shader environments
+///
+/// A convenient way for crates to serve their shader environments is to provide a function that returns a `'static`
+/// reference to a singleton [`Environment`] instance. The `cgv` core crate does this via its
+/// `cgv::obtainShaderCompileEnvironment`, where the environment – as compiled, serialized and baked into its object
+/// code during build time – is lazily deserialized from memory via an internal [`LazyLock`] static. This only works if
+/// the underlying [module type](Module) is [`Send`] and [`Sync`].
+///
+/// This is the case for the `slang::EnvModule` provided by the `cgv_shader` crate with the `slang_runtime` feature
+/// enabled. *CGV-rs* promotes and actively facilitates the use of the *Slang* shading language, but if custom
+/// [module types](Module) are to be used (e.g., when using other shading languages), clients are advised to ensure
+/// their implementations of [`env::Module`](Module) are [`Send`] and [`Sync`] if they want to use this method.
+///
 /// ##### Footnotes
 ///
 /// \*This is merely *CGV-rs* **convention**, in principle crates could require clients to merge in a list of stated
@@ -146,7 +161,7 @@ pub struct Environment<ModuleType: Module> {
 	uuid: Uuid,
 	label: String,
 	compatHash: u64,
-	modules: util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>>
+	modules: util::ds::BTreeUniqueVec<ModuleEntry<ModuleType>>
 }
 impl<ModuleType> Environment<ModuleType>
 	where ModuleType: Module + serde::Serialize+(for<'de> serde::Deserialize<'de>)
@@ -166,12 +181,13 @@ impl<ModuleType> Environment<ModuleType>
 	}
 
 	#[inline]
-	fn externalizeModules (&self) -> util::ds::UniqueArray<PathBuf, ModuleEntry<ModuleType>> {
-		let mut newModules = util::ds::UniqueArray::withCapacity(
+	fn externalizeModules (&self) -> util::ds::BTreeUniqueVec<ModuleEntry<ModuleType>>
+	{
+		let mut newModules = util::ds::BTreeUniqueVec::withCapacity(
 			self.modules.len()
 		);
 		for entry in self.modules.iter() {
-			newModules.push(self.externalizeModule(&entry)).unwrap()
+			assert!(newModules.push(self.externalizeModule(&entry)));
 		}
 		newModules
 	}
@@ -194,21 +210,22 @@ impl<ModuleType> Environment<ModuleType>
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier).
 	pub fn withUuid (uuid: Uuid, label: &str) -> Self { Self {
-		uuid, label: label.to_owned(), compatHash: 0, modules: util::ds::UniqueArray::new()
+		uuid, label: label.to_owned(), compatHash: 0, modules: util::ds::BTreeUniqueVec::new()
 	}}
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
 	/// [`compile::EnvironmentEnabled`]
 	pub fn forContextWithUuid (context: &impl compile::EnvironmentEnabled<ModuleType>, uuid: Uuid, label: &str)
-	                           -> Self { Self {
-		uuid, label: label.to_owned(), compatHash: context.environmentCompatHash(), modules: util::ds::UniqueArray::new()
+	-> Self { Self {
+		uuid, label: label.to_owned(), compatHash: context.environmentCompatHash(),
+		modules: util::ds::BTreeUniqueVec::new()
 	}}
 
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and an initial compatibility hash.
 	pub fn withUuidAndCompatHash (uuid: Uuid, label: &str, compatHash: u64) -> Self { Self {
-		uuid, label: label.to_owned(), compatHash, modules: util::ds::UniqueArray::new()
+		uuid, label: label.to_owned(), compatHash, modules: util::ds::BTreeUniqueVec::new()
 	}}
 
 
@@ -295,8 +312,8 @@ impl<ModuleType> Environment<ModuleType>
 	///
 	/// # Example
 	///
-	/// ```rust
-	/// use {uuid::Uuid, cgv_util as util};
+	/// ```ignore
+	/// use {cgv_util::uuid::Uuid, cgv_util as util};
 	///
 	/// let mut env = Environment::<BytesModule>::withUuid(
 	/// 	Uuid::from_u64_pair(util::unique::uint64(), util::unique::uint64()), "testEnvironment"
@@ -307,12 +324,14 @@ impl<ModuleType> Environment<ModuleType>
 	/// assert!(env.addModule("/namespace/mymodule", module1).is_ok());
 	/// assert!(env.addModule("/namespace/mymodule", module2).is_err()); // duplicate module path
 	/// ```
-	pub fn addModule (&mut self, path: impl AsRef<Path>, module: ModuleType) -> Result<(), AddModuleError> {
-		self.modules.push(
-			ModuleEntry { path: path.as_ref().to_owned(), module, sourceEnv: None }
-		).map_err(
-			|_| AddModuleError::DuplicateModulePaths(path.as_ref().to_owned())
-		)
+	pub fn addModule (&mut self, path: impl AsRef<Path>, module: ModuleType) -> Result<(), AddModuleError>
+	{
+		if self.modules.push(ModuleEntry { path: path.as_ref().to_owned(), module, sourceEnv: None }) {
+			Ok(())
+		}
+		else {
+			Err(AddModuleError::DuplicateModulePaths(path.as_ref().to_owned()))
+		}
 	}
 
 	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.
@@ -362,14 +381,14 @@ impl<ModuleType> Environment<ModuleType>
 		}
 
 		// Compile list of foreign modules to incorporate
-		let mut newModules = util::ds::UniqueArray::withCapacity(other.modules.len());
+		let mut newModules = util::ds::BTreeUniqueVec::withCapacity(other.modules.len());
 		for otherEntry in other.modules.iter()
 		{
 			// Decide what to do with this module
-			match self.modules.get(&otherEntry.path)
+			match self.modules.fetch(&otherEntry.key())
 			{
 				// Case 1: this is an unseen module, include
-				None => newModules.push(other.externalizeModule(otherEntry)).unwrap(),
+				None => assert!(newModules.push(other.externalizeModule(otherEntry))),
 
 				Some(ownEntry) => {
 					// Case 2: one of the envs has introduced this module, and the other imported it - don't (re-)import
@@ -397,12 +416,12 @@ impl<ModuleType> Environment<ModuleType>
 		}
 
 		// Incorporate the new modules
-		unsafe {
-			// SAFETY: we guaranteed above that the new modules will be unique after merging
-			self.modules.join_unchecked(&newModules);
-		}
+		self.modules.extend(newModules);
 
 		// Done!
 		Ok(())
 	}
 }
+
+unsafe impl<ModuleType: Module+Send> Send for Environment<ModuleType> {}
+unsafe impl<ModuleType: Module+Sync> Sync for Environment<ModuleType> {}

@@ -14,6 +14,9 @@ nalgebra-glm = "*"
 [target.'cfg(target_arch="wasm32")'.dependencies]
 uuid = {version="*", features=["v4", "v5", "js"]}
 
+[dev-dependencies]
+serde_json = "*"
+
 [features]
 default = []
 serde = ["dep:serde", "uuid/serde"]

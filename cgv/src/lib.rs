@@ -360,9 +360,9 @@ pub trait ApplicationFactory
 
 ///
 #[cfg(feature="slang_runtime")]
-pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader::slang::Module>
+pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader::slang::EnvModule>
 {
-	static SHADER_LIB_ENVIRONMENT: LazyLock<shader::compile::Environment<shader::slang::Module>> = LazyLock::new(||
+	static SHADER_LIB_ENVIRONMENT: LazyLock<shader::compile::Environment<shader::slang::EnvModule>> = LazyLock::new(||
 		shader::compile::Environment::deserialize(util::sourceGeneratedBytes!("/coreshaderlib.env")).expect(
 			"core shader library environment could not be deserialized"
 		)

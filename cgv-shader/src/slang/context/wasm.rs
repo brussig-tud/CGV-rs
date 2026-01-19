@@ -284,7 +284,7 @@ impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 pub struct Context<'this> {
 	session: Session<'this>,
 	compatHash: u64,
-	environment: Option<compile::Environment<Module>>
+	environment: Option<compile::Environment<EnvModule>>
 }
 impl<'this> Context<'this>
 {
@@ -367,7 +367,7 @@ impl<'this> Context<'this>
 		// Compile the source code inside the Slang session
 		self.compileFromNamedSource(&targetPath, sourceCode)?;
 		let module = match envStorage {
-			EnvironmentStorage::SourceCode => Module::fromSlangSourceCode(sourceCode),
+			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
 			EnvironmentStorage::IR => unimplemented!(
 				"IR bytecode modules are not currently supported by WASM Slang"
 			)
@@ -410,10 +410,10 @@ impl<'this> compile::Context<
 
 	}
 }
-impl compile::EnvironmentEnabled<Module> for Context<'_>
+impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
 {
-	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<Module>>)
-		-> Result<Option<compile::Environment<Module>>, compile::SetEnvironmentError>
+	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<EnvModule>>)
+		-> Result<Option<compile::Environment<EnvModule>>, compile::SetEnvironmentError>
 	{
 		// Check if the new environment is compatible (in case it's `Some`)
 		/*if let Some(newEnv) = &environment && self.compatHash != newEnv.compatHash() {
@@ -433,12 +433,12 @@ impl compile::EnvironmentEnabled<Module> for Context<'_>
 			{
 				match &module.module
 				{
-					Module::SourceCode(sourceCode) =>
+					EnvModule::SourceCode(sourceCode) =>
 						newSession.loadModuleFromSourceString(&module.path, sourceCode).or_else(|err| Err(
 							SetEnvironmentError::ImplementationSpecific(err.into())
 						))?,
 
-					Module::IR(_) =>
+					EnvModule::IR(_) =>
 						unimplemented!("IR bytecode loading is not currently supported by WASM Slang")
 				};
 			}
@@ -453,7 +453,7 @@ impl compile::EnvironmentEnabled<Module> for Context<'_>
 		Ok(oldEnv)
 	}
 
-	fn finishEnvironment (self) -> Option<compile::Environment<Module>> {
+	fn finishEnvironment (self) -> Option<compile::Environment<EnvModule>> {
 		self.environment
 	}
 
