@@ -46,9 +46,13 @@ static TARGET_TRIPLE_CARGO: LazyLock<TargetTriple> = LazyLock::new(||
 
 /// Typed description of the platform the module was built for according to the build-time values of the *Cargo*
 /// `TARGET` environment variable.
-static CGV_PLATFORM: LazyLock<SupportedPlatform> = LazyLock::new(||
-	SupportedPlatform::fromTargetTriple(&TARGET_TRIPLE_CARGO, None).unwrap_or_else(|err| panic!("{}", err))
-);
+static CGV_PLATFORM: LazyLock<SupportedPlatform> = LazyLock::new(|| {
+	#[cfg(debug_assertions)]
+	const DEBUG: Option<bool> = Some(true);
+	#[cfg(not(debug_assertions))]
+	const DEBUG: Option<bool> = Some(false);
+	SupportedPlatform::fromTargetTriple(&TARGET_TRIPLE_CARGO, DEBUG).unwrap_or_else(|err| panic!("{}", err))
+});
 
 
 

@@ -277,6 +277,53 @@ impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 }
 
 
+///
+pub struct ContextBuilder {
+	targets: util::ds::BTreeUniqueVec<compile::Target>,
+}
+impl ContextBuilder {
+	#[inline(always)]
+	pub fn withTarget (target: compile::Target) -> Self { Self {
+		targets: vec![target].into()
+	}}
+
+	#[inline(always)]
+	pub fn withTargets (targets: &[compile::Target]) -> Self { Self {
+		targets: targets.into()
+	}}
+
+	#[inline(always)]
+	pub fn addTarget (&mut self, target: compile::Target) -> &mut Self {
+		self.targets.push(target);
+		self
+	}
+
+	#[inline(always)]
+	pub fn addTargets (&mut self, targets: &[compile::Target]) -> &mut Self {
+		self.targets.extend(targets.iter().copied());
+		self
+	}
+
+	#[inline(always)]
+	pub fn buildWithGlobalSession<'gs> (self, globalSession: &'gs GlobalSession)
+		-> Result<Context<'gs>, compile::CreateContextError>
+	{
+		let session = globalSession.createSession().map_err(
+			|err| compile::CreateContextError::ImplementationDefined(err.into())
+		)?;
+		Ok(Context { session, compatHash: 123, environment: None })
+	}
+
+	#[inline(always)]
+	pub fn build<'ctx> (self) -> Result<Context<'ctx>, compile::CreateContextError> {
+		self.buildWithGlobalSession(&GLOBAL_SESSION)
+	}
+}
+impl Default for ContextBuilder {
+	fn default () -> Self { Self::withTarget(compile::Target::WGSL) }
+}
+
+
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
@@ -289,7 +336,7 @@ pub struct Context<'this> {
 impl<'this> Context<'this>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
+	pub(crate) fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
 		globalSession.createSession()
 	}
 
@@ -299,19 +346,19 @@ impl<'this> Context<'this>
 	///
 	/// * `target` – The target representation this `Context` will compile/transpile to.
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forTarget (target: compile::Target, _searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self>
+	pub fn forTarget (target: compile::Target, _searchPath: &[impl AsRef<Path>])
+		-> Result<Self, compile::CreateContextError>
 	{
-		if target.isWGSL()
-		{
-			let session = Self::freshSession(&GLOBAL_SESSION).map_err(
-				|_| anyhow::anyhow!("Failed to create Slang session")
-			)?;
+		// Sanity-check the target
+		if !target.isWGSL() {
+			return Err(compile::CreateContextError::UnsupportedTarget(target));
+		}
 
-			Ok(Self { session, compatHash: 123, environment: None })
-		}
-		else {
-			Err(anyhow::anyhow!("Unsupported compilation target: {target}"))
-		}
+		// Setup builder for desired Context properties
+		let mut builder = ContextBuilder::withTarget(target);
+
+		// Done!
+		builder.build()
 	}
 
 	/// Create a new *Slang* context for the *WGSL* target with the given module search path.
@@ -319,8 +366,8 @@ impl<'this> Context<'this>
 	/// # Arguments
 	///
 	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn new (_searchPath: &[impl AsRef<Path>]) -> anyhow::Result<Self> {
-		Self::forTarget(compile::Target::WGSL, _searchPath)
+	pub fn new (searchPath: &[impl AsRef<Path>]) -> Result<Self, compile::CreateContextError> {
+		Self::forTarget(compile::Target::WGSL, searchPath)
 	}
 
 	/*/// Build a shader program from the given *Slang* source file.

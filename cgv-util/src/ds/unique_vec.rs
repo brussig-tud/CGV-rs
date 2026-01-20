@@ -741,7 +741,6 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.checkLenConsistency()
 	}
 }
-
 impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> From<Vec<T>> for UniqueVec<T, S>
 {
 	/// Creates a `UniqueVec` from a [`Vec`].
@@ -754,7 +753,18 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> From<Vec<T>> for UniqueVe
 		result
 	}
 }
-
+impl<T: UniqueVecElement+Copy, S: UniqueSet<KeyWrapper<T>>> From<&[T]> for UniqueVec<T, S>
+{
+	/// Creates a `UniqueVec` from a [`Vec`].
+	///
+	/// Duplicate elements in the vector will be ignored. Only the first occurrence
+	/// of each key will be kept.
+	fn from (slice: &[T]) -> Self {
+		let mut result = Self::new();
+		result.extend(slice.iter().copied());
+		result
+	}
+}
 impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>, I: SliceIndex<[T]>> Index<I> for UniqueVec<T, S>
 {
 	type Output = I::Output;
@@ -769,7 +779,6 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>, I: SliceIndex<[T]>> Index
 		&self.storage[index]
 	}
 }
-
 impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Deref for UniqueVec<T, S>
 {
 	type Target = [T];
@@ -780,7 +789,6 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Deref for UniqueVec<T, S>
 		&self.storage
 	}
 }
-
 impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> IntoIterator for UniqueVec<T, S>
 {
 	type Item = T;
@@ -792,7 +800,6 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> IntoIterator for UniqueVe
 		self.storage.into_iter()
 	}
 }
-
 impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Extend<T> for UniqueVec<T, S> {
 	/// Extends the collection with elements from an iterator.
 	///
@@ -804,14 +811,12 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Extend<T> for UniqueVec<T
 		}
 	}
 }
-
 impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Default for UniqueVec<T, S> {
 	#[inline(always)]
 	fn default () -> Self {
 		Self::new()
 	}
 }
-
 impl<T: UniqueVecElement+Clone, S: UniqueSet<KeyWrapper<T>>> Clone for UniqueVec<T, S>
 {
 	#[inline(always)]
@@ -860,6 +865,7 @@ impl<'de, T, S> serde::Deserialize<'de> for UniqueVec<T, S>
 		Ok(Self { storage, keys })
 	}
 }
+
 #[cfg(feature="serde")]
 struct VecVisitor<E> {
 	marker: std::marker::PhantomData<fn() -> Vec<E>>

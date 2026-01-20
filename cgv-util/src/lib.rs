@@ -60,6 +60,10 @@ mod tests;
 // Standard library
 use std::ops::{Deref, DerefMut};
 
+// static_assertions
+pub use static_assertions;
+pub use static_assertions::*; // re-export
+
 // Uuid library
 pub use uuid; // re-export
 

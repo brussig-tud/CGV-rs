@@ -40,6 +40,7 @@ use cgv_util::uuid;
 
 // Local imports
 use crate::{compile, WgpuSourceType};
+use cgv_util as util;
 
 
 
@@ -47,6 +48,22 @@ use crate::{compile, WgpuSourceType};
 //
 // Errors
 //
+
+#[derive(Debug)]
+pub enum CreateContextError {
+	UnsupportedTarget(compile::Target),
+	ImplementationDefined(anyhow::Error),
+}
+impl Display for CreateContextError {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::UnsupportedTarget(target) => format!("unsupported target: {target}"),
+			Self::ImplementationDefined(err) => format!("implementation-specific: {err}")
+		};
+		write!(formatter, "CreateContextError[{desc}]")
+	}
+}
+impl Error for CreateContextError {}
 
 #[derive(Debug)]
 pub enum CreateCompositeError {
@@ -176,6 +193,18 @@ impl Display for Target {
 		}
 	}
 }
+impl util::ds::UniqueVecElement for Target {
+	type Key<'k> = usize;
+
+	fn key (&self) -> Self::Key<'_> {
+		util::assert_eq_size!(std::mem::Discriminant<Target>, usize);
+		unsafe {
+			// SAFETY: `Discriminant<Target>` has the same size as `usize` (statically asserted above), and all possible
+			//          bit patterns form a valid `usize` value.
+			std::mem::transmute(std::mem::discriminant(self))
+		}
+	}
+}
 
 
 
@@ -257,4 +286,84 @@ pub trait EnvironmentEnabled<ModuleType: env::Module>
 
 	///
 	fn environmentCompatHash (&self) -> u64;
+}
+
+
+
+//////
+//
+// Functions
+//
+
+/// Determine the most suitable shader compilation target for the platform the module was built for.
+#[inline(always)]
+pub fn mostSuitableTarget() -> compile::Target
+{
+	// WebGPU/WASM
+	#[cfg(target_arch="wasm32")] {
+		compile::Target::WGSL
+	}
+	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
+	#[cfg(not(target_arch="wasm32"))] {
+		#[cfg(debug_assertions)] {
+			compile::Target::SPIRV(true)
+		}
+		#[cfg(not(debug_assertions))] {
+			compile::Target::SPIRV(false)
+		}
+	}
+}
+
+/// Determine the most suitable shader compilation target for the given platform.
+pub fn mostSuitableTargetForPlatform(platform: &util::meta::SupportedPlatform) -> compile::Target
+{
+	// WebGPU/WASM
+	if platform.isWasm() {
+		compile::Target::WGSL
+	}
+	// All native backends
+	else {
+		// Currently always considers SPIR-V preferable even on non-Vulkan backends
+		compile::Target::SPIRV(platform.isDebug())
+	}
+}
+
+/// Return a list of feasible shader compilation target for the platform the module was built for, from most to least
+/// suitable.
+#[inline(always)]
+pub fn feasibleTargets() -> &'static [compile::Target]
+{
+	// WebGPU/WASM
+	#[cfg(target_arch="wasm32")]
+	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV(false)];
+
+	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
+	#[cfg(all(not(target_arch="wasm32"),debug_assertions))]
+	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(true), compile::Target::WGSL];
+	#[cfg(all(not(target_arch="wasm32"),not(debug_assertions)))]
+	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(false), compile::Target::WGSL];
+
+	&COMPILATION_TARGETS
+}
+
+/// Return a list of feasible shader compilation target for the given platform, from most to least suitable.
+pub fn feasibleTargetsForPlatform(platform: &util::meta::SupportedPlatform) -> &'static [compile::Target]
+{
+	// WebGPU/WASM
+	if platform.isWasm() {
+		const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV(false)];
+		&COMPILATION_TARGETS
+	}
+	// All native backends
+	else {
+		// Currently always considers SPIR-V preferable even on non-Vulkan backends
+		if !platform.isDebug() {
+			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(false), compile::Target::WGSL];
+			&COMPILATION_TARGETS
+		}
+		else {
+			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(true), compile::Target::WGSL];
+			&COMPILATION_TARGETS
+		}
+	}
 }

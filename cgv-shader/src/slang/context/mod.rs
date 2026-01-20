@@ -144,8 +144,7 @@ impl compile::env::Module for EnvModule {}
 #[cfg(not(target_arch="wasm32"))]
 struct CompatOptions {
 	matrixLayoutColumn: bool,
-	matrixLayoutRow: bool,
-	optimize: bool
+	matrixLayoutRow: bool
 }
 #[cfg(not(target_arch="wasm32"))]
 impl CompatOptions {
@@ -157,11 +156,6 @@ impl CompatOptions {
 	pub fn matrixLayoutRow(&mut self, enable: bool) -> bool {
 		self.matrixLayoutRow = enable;
 		enable
-	}
-
-	pub fn optimize(&mut self, enable: bool) -> slang::OptimizationLevel {
-		self.optimize = enable;
-		if enable { slang::OptimizationLevel::Maximal } else { slang::OptimizationLevel::None }
 	}
 
 	pub fn digest (self) -> u64 {

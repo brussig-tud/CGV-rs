@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+static_assertions = "*"
 ordered-float = "*"
 anyhow = "*"
 normalize-path = "*"
