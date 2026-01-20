@@ -15,35 +15,39 @@ use std::ops::Deref;
 //
 
 /// A zero-cost* convenience wrapper around [`Vec`] that [derefs](Deref) to a slice of references to the stored
-/// elements. Very useful in places where you need to call a function that needs such a slice of references. If you
-/// borrow this slice more than once, it naturally saves conversion costs without additional effort on your part as the
-/// slice of references is created only once [during construction](BorrowVec::new).
+/// elements. Very useful in places where you need to call a function that needs such a slice of references (as is often
+/// the case when interacting with C libraries). If you borrow this slice more than once, it naturally saves conversion
+/// costs without additional effort on your part as the slice of references is created only once
+/// [during construction](BorrowVec::new).
 ///
 /// # Example
 ///
 /// ```
 /// use cgv_util::ds::BorrowVec;
 ///
-/// fn workOnStrings (strings: &[impl AsRef<str>]) {
-///     for string in strings {
-///         println!("worked on '{}'", string.as_ref());
+/// #[derive(Debug)]
+/// struct LargeStruct(u128);
+///
+/// fn workOnThings (things: &[&LargeStruct]) {
+///     for thing in things {
+///         println!("worked on '{thing:?}'");
 ///     }
 /// }
-/// fn workMoreOnStrings (strings: &[impl AsRef<str>]) {
-///     for string in strings {
-///         println!("worked some more on '{}'", string.as_ref());
+/// fn workMoreOnThings (things: &[&LargeStruct]) {
+///     for thing in things {
+///         println!("worked some more on '{thing:?}'");
 ///     }
 /// }
 ///
-/// let strings = BorrowVec::new(vec!["foo".to_string(), "bar".into(), "baz".into()]);
-/// workOnStrings(&*strings);
-/// workMoreOnStrings(&*strings); // <- saved one conversion
+/// let things = BorrowVec::new(vec![LargeStruct(0), LargeStruct(1), LargeStruct(2), LargeStruct(3)]);
+/// workOnThings(&things);
+/// workMoreOnThings(&things); // <- saved one conversion
 /// ```
 ///
 /// ##### Footnotes
 ///
-/// \*It is zero-cost only if you actually use the slice of references it derefs to, otherwise you incur a small
-/// construction overhead that serves you no practical purpose.
+/// \*It is zero-cost only if you actually use the slice of references it derefs to, otherwise the construction overhead
+/// is not amortized.
 pub struct BorrowVec<'this, T: 'this> {
 	vec: Vec<T>,
 	borrowVec: Vec<&'this T>,
@@ -72,15 +76,15 @@ impl<'this, T: 'this> BorrowVec<'this, T>
 		Self { vec, borrowVec: slice.into_iter().map(|elem| elem).collect() }
 	}
 
-	/// Borrow a slice of the Vector of **owned** elements.
+	/// Borrow a slice over the Vector of **owned** elements.
 	#[inline(always)]
-	pub fn owned (&self) -> &[T] {
+	pub fn elements (&self) -> &[T] {
 		self.vec.as_slice()
 	}
 
-	/// Obtain a slice of the Vector of **borrowed** elements.
+	/// Borrow a slice over the Vector of **references** to the elements.
 	#[inline(always)]
-	pub fn borrowed (&self) -> &[&'this T] {
+	pub fn references (&self) -> &[&'this T] {
 		self.borrowVec.as_slice()
 	}
 }
@@ -95,6 +99,6 @@ impl<'this, T: 'this> Deref for BorrowVec<'this, T> {
 
 	#[inline(always)]
 	fn deref (&self) -> &Self::Target {
-		self.borrowed()
+		self.references()
 	}
 }
