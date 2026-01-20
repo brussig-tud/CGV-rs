@@ -80,7 +80,7 @@ pub fn createContextsForTargets<'a> (targets: &[compile::Target], shaderPath: &[
 	Ok(contexts.into())
 }
 
-/// Report the most suitable storagy type for Slang-sourced compilation enviorment modules.
+/// Report the most suitable storage type for Slang-sourced compilation environment modules.
 pub fn mostSuitableEnvironmentStorageForPlatform (platform: &util::meta::SupportedPlatform) -> EnvironmentStorage
 {
 	// WebGPU/WASM
