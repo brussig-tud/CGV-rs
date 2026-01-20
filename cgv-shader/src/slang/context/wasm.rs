@@ -279,17 +279,18 @@ impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 
 ///
 pub struct ContextBuilder {
-	targets: util::ds::BTreeUniqueVec<compile::Target>,
+	targets: util::ds::BTreeUniqueVec<compile::Target>
 }
 impl ContextBuilder {
 	#[inline(always)]
-	pub fn withTarget (target: compile::Target) -> Self { Self {
-		targets: vec![target].into()
-	}}
+	pub fn withTarget (target: compile::Target) -> Self {
+		Self::withTargets(&[target])
+	}
 
 	#[inline(always)]
-	pub fn withTargets (targets: &[compile::Target]) -> Self { Self {
-		targets: targets.into()
+	pub fn withTargets (targets: impl AsRef<[compile::Target]>) -> Self { Self {
+		targets: targets.as_ref().into(),
+		..Default::default()
 	}}
 
 	#[inline(always)]
@@ -320,7 +321,9 @@ impl ContextBuilder {
 	}
 }
 impl Default for ContextBuilder {
-	fn default () -> Self { Self::withTarget(compile::Target::WGSL) }
+	fn default () -> Self { Self {
+		targets: vec![compile::Target::WGSL].into()
+	}}
 }
 
 

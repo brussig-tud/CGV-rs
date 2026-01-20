@@ -86,20 +86,20 @@ impl SlangSessionConfig {
 
 ///
 pub struct ContextBuilder {
-	searchPath:  util::ds::HashUniqueVec<PathBuf>,
 	targets: util::ds::BTreeUniqueVec<compile::Target>,
+	debug: bool,
+	searchPath: util::ds::HashUniqueVec<PathBuf>
 }
 impl ContextBuilder {
 	#[inline(always)]
-	pub fn withTarget (target: compile::Target) -> Self { Self {
-		searchPath: util::ds::UniqueVec::new(),
-		targets: vec![target].into()
-	}}
+	pub fn withTarget (target: compile::Target) -> Self {
+		Self::withTargets(&[target])
+	}
 
 	#[inline(always)]
-	pub fn withTargets (targets: &[compile::Target]) -> Self { Self {
-		searchPath: util::ds::UniqueVec::new(),
-		targets: targets.into()
+	pub fn withTargets (targets: impl AsRef<[compile::Target]>) -> Self { Self {
+		targets: targets.as_ref().into(),
+		..Default::default()
 	}}
 
 	#[inline(always)]
@@ -192,7 +192,11 @@ impl ContextBuilder {
 	}
 }
 impl Default for ContextBuilder {
-	fn default () -> Self { Self::withTarget(compile::Target::SPIRV(cfg!(debug_assertions))) }
+	fn default () -> Self { Self {
+		targets: vec![compile::Target::SPIRV(cfg!(debug_assertions))].into(),
+		debug: cfg!(debug_assertions),
+		searchPath: Default::default(),
+	}}
 }
 
 
