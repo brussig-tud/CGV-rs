@@ -72,7 +72,7 @@ impl EntryPoint
 /// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
 /// these targets.
 pub fn createContextsForTargets<'a> (targets: &[compile::Target], shaderPath: &[impl AsRef<Path>])
--> anyhow::Result<util::ds::BorrowVec<'a, Context<'a>>> {
+-> anyhow::Result<util::ds::RefVec<'a, Context<'a>>> {
 	let mut contexts = Vec::<Context>::with_capacity(targets.len());
 	for &target in targets {
 		contexts.push(Context::forTarget(target, shaderPath)?);
