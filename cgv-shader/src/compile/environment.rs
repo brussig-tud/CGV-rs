@@ -89,7 +89,7 @@ impl BytesModule
 {
 	///
 	#[inline(always)]
-	pub fn fromVec (bytes: Vec<u8>) -> Self {
+	pub fn new (bytes: Vec<u8>) -> Self {
 		Self(bytes)
 	}
 
@@ -106,6 +106,10 @@ impl BytesModule
 	}
 }
 impl Module for BytesModule {}
+impl<Bytes: AsRef<[u8]>> From<Bytes> for BytesModule {
+	#[inline(always)]
+	fn from (bytes: Bytes) -> Self { Self::fromSlice(bytes.as_ref()) }
+}
 
 ///
 #[derive(Clone,serde::Serialize,serde::Deserialize)]
@@ -295,7 +299,7 @@ impl<ModuleType> Environment<ModuleType>
 
 	/// Adds a new module to the collection of modules in the current context.
 	///
-	/// **Note**: that by convention, modules added this way will **always** be considered to be introduced by *this*
+	/// **Note**: By convention, modules added this way will **always** be considered to be introduced by *this*
 	/// environment. Externally sourced modules can only be added via [merging](Environment::mergeWith) with other
 	/// environments.
 	///
@@ -312,17 +316,19 @@ impl<ModuleType> Environment<ModuleType>
 	///
 	/// # Example
 	///
-	/// ```ignore
-	/// use {cgv_util::uuid::Uuid, cgv_util as util};
+	/// ```
+	/// use cgv_util::{self as util, uuid::Uuid};
+	/// use cgv_shader::compile;
 	///
-	/// let mut env = Environment::<BytesModule>::withUuid(
+	/// let mut env = compile::Environment::<compile::env::BytesModule>::withUuid(
 	/// 	Uuid::from_u64_pair(util::unique::uint64(), util::unique::uint64()), "testEnvironment"
 	/// );
-	/// let module1 = BytesModule::fromVec(vec![0, 1, 2]/* ← dummy bytecode */);
-	/// let module2 = BytesModule::fromVec(vec![3, 4, 5]/* ← dummy bytecode */);
+	/// let module = compile::env::BytesModule::new(vec![0, 1, 2]);
+	/// let module1 = vec![0, 1, 2].into(); // dummy
+	/// let module2 = vec![3, 4, 5].into(); // bytecodes
 	///
 	/// assert!(env.addModule("/namespace/mymodule", module1).is_ok());
-	/// assert!(env.addModule("/namespace/mymodule", module2).is_err()); // duplicate module path
+	/// assert!(env.addModule("/namespace/mymodule", module2).is_err()); // <- duplicate module path
 	/// ```
 	pub fn addModule (&mut self, path: impl AsRef<Path>, module: ModuleType) -> Result<(), AddModuleError>
 	{

@@ -1,15 +1,10 @@
-/// iOS-style toggle switch:
+/// An *iOS*-style toggle switch:
 ///
-/// ``` text
+/// ```text
 ///      _____________
 ///     /       /.....\
 ///    |       |.......|
 ///     \_______\_____/
-/// ```
-///
-/// ## Example:
-/// ``` ignore
-/// toggle_ui(ui, &mut my_bool);
 /// ```
 pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 	// Widget code can be broken up in four steps:
@@ -106,13 +101,8 @@ fn toggle_ui_compact(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 	response
 }
 
-// A wrapper that allows the more idiomatic usage pattern: `ui.add(toggle(&mut my_bool))`
-/// iOS-style toggle switch.
-///
-/// ## Example:
-/// ``` ignore
-/// ui.add(toggle(&mut my_bool));
-/// ```
+/// A wrapper that allows the more idiomatic usage pattern `ui.add(toggle(&mut my_bool))`.
+#[inline(always)]
 pub fn toggle(on: &mut bool) -> impl egui::Widget + '_ {
 	move |ui: &mut egui::Ui| toggle_ui(ui, on)
 }
