@@ -339,7 +339,7 @@ pub struct Context<'this> {
 impl<'this> Context<'this>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	pub(crate) fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
+	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
 		globalSession.createSession()
 	}
 
