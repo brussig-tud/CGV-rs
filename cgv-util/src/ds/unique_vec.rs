@@ -103,8 +103,7 @@ pub trait UniqueVecElement
 
 	/// Returns the key for this element.
 	///
-	/// This key is used by [`UniqueVec`] to ensure that no two elements with the same key
-	/// are present in the collection.
+	/// This key is used by [`UniqueVec`] to determine the uniqueness of elements.
 	fn key (&self) -> Self::Key<'_>;
 }
 impl UniqueVecElement for bool {
@@ -306,7 +305,7 @@ pub struct KeyWrapper<T: UniqueVecElement> {
 }
 impl<T: UniqueVecElement> KeyWrapper<T>
 {
-	#[inline(always)]
+	#[inline]
 	fn new (key: T::Key<'_>) -> Self
 	{
 		// We move the key to the heap and forget about its lifetime.
@@ -329,6 +328,16 @@ impl<T: UniqueVecElement> KeyWrapper<T>
 				keyPhantom: std::marker::PhantomData,
 			}
 		}
+	}
+
+	#[inline(always)]
+	fn shallow (key: &T::Key<'_>) -> std::mem::ManuallyDrop<Self> {
+		std::mem::ManuallyDrop::new(Self::new(unsafe {
+			// SAFETY: The transmute operation itself is sane as we don't change the type. However, shallow-copying the
+			// key instance could result in a double free if the key owns resources. The `ManuallyDrop` wrapper averts
+			// this.
+			std::mem::transmute_copy(key)
+		}))
 	}
 }
 impl<T: UniqueVecElement> Drop for KeyWrapper<T> {
@@ -366,17 +375,15 @@ impl<T: UniqueVecElement> Hash for KeyWrapper<T> {
 
 /// A vector that maintains uniqueness of its elements based on a key.
 ///
-/// `UniqueVec` is a collection that behaves similarly to a standard [`Vec`], but it ensures
-/// that no two elements in the collection have the same key, as defined by the
-/// [`UniqueVecElement`] trait.
+/// `UniqueVec` is a collection that behaves similarly to a standard [`Vec`], but it ensures that no two elements in the
+/// collection have the same key, as defined by the [`UniqueVecElement`] trait.
 ///
-/// It uses a internal [`Vec`] for storage and a [`UniqueSet`] (like [`BTreeSet`] or [`HashSet`])
-/// to track uniqueness.
+/// It uses a internal [`Vec`] for storage and a [`UniqueSet`] (like [`BTreeSet`] or [`HashSet`]) to track uniqueness.
 ///
 /// # Type Parameters
 ///
-/// * `T`: The type of elements stored in the vector. Must implement [`UniqueVecElement`].
-/// * `S`: The type of the set used for uniqueness tracking.
+/// * `T` – The type of elements stored in the vector.
+/// * `S` – The type of the set data structure used for uniqueness tracking.
 pub struct UniqueVec<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>>
 {
 	// Stores the actual elements of the collection in a `Vec`. This is why `UniqueVec`'s runtime characteristics and
@@ -404,15 +411,18 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		storage: Vec::new(), keys: S::default(),
 	}}
 
-	/// Creates a new, empty `UniqueVec` with the specified capacity.
+	/// Creates a new, empty `UniqueVec` with the specified minimum capacity. The `UniqueVec` will be able to hold at
+	/// least `capacity` elements without reallocating its contiguous storage.
 	///
-	/// The vector will be able to hold at least `capacity` elements without reallocating.
+	/// # Arguments
+	///
+	/// * `capacity` – The desired minimum number of elements that should fit into the allocated contiguous storage.
 	///
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let v: BTreeUniqueVec<i32> = BTreeUniqueVec::withCapacity(10);
+	/// use cgv_util::ds::*;
+	/// let v: BTreeUniqueVec<u32> = UniqueVec::withCapacity(10);
 	/// assert!(v.capacity() >= 10);
 	/// ```
 	#[inline(always)]
@@ -420,12 +430,16 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		storage: Vec::with_capacity(capacity), keys: S::default(),
 	}}
 
-	/// Creates a `UniqueVec` from a [`Vec`] without checking for uniqueness.
+	/// Creates a `UniqueVec` around the given [`Vec`] without checking for uniqueness.
 	///
 	/// # Safety
 	///
-	/// The caller must ensure that all elements in the provided vector have unique keys.
-	/// If there are duplicate keys, the internal consistency of the `UniqueVec` will be broken.
+	/// The caller must ensure that all elements in the provided vector have unique keys. If there are duplicate keys,
+	/// the internal consistency of the `UniqueVec` will be compromised.
+	///
+	/// # Arguments
+	///
+	/// * `vec` – The vector that should become the contiguous storage of the `UniqueVec`.
 	///
 	/// # Examples
 	///
@@ -434,7 +448,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// let v = unsafe { BTreeUniqueVec::fromVec_unchecked(vec![1, 2, 3]) };
 	/// assert_eq!(v.len(), 3);
 	/// ```
-	pub unsafe fn fromVec_unchecked (vec: Vec<T>) -> Self {
+	pub unsafe fn fromVec_unchecked(vec: Vec<T>) -> Self {
 		let mut keys = S::default();
 		for element in &vec {
 			keys.insert(KeyWrapper::new(element.key()));
@@ -443,10 +457,17 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		Self { storage: vec, keys }
 	}
 
-	/// Appends an element to the back of the collection if its key is unique.
+	/// Appends an element to the back of the collection if no element with the same [key](UniqueVecElement::key) is
+	/// currently present.
 	///
-	/// Returns `true` if the element was added (its key was unique), or `false` if it was not
-	/// added because an element with the same key already exists in the collection.
+	/// # Arguments
+	///
+	/// * `element` – The new element to be appended.
+	///
+	/// # Returns
+	///
+	/// `true` if the element was added (its key was unique), or `false` if it was not added because it would be
+	/// considered a duplicate as per its key.
 	///
 	/// # Examples
 	///
@@ -468,7 +489,11 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		}
 	}
 
-	/// Removes the last element from the collection and returns it, or [`None`] if it is empty.
+	/// Removes the element at the back of the `UniqueVec` and returns it to the caller.
+	///
+	/// # Returns
+	///
+	/// `Some(T)` if the collection still had at least one element, `None` otherwise.
 	///
 	/// # Examples
 	///
@@ -487,8 +512,16 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		Some(element)
 	}
 
-	/// Removes and returns the element at position `index` within the vector, shifting all
-	/// elements after it to the left.
+	/// Removes and returns the element at position `index` within the contiguous storage, shifting all elements after
+	/// it to the left.
+	///
+	/// # Arguments
+	///
+	/// * `index` – The index inside the contiguous storage of the element to remove.
+	///
+	/// # Returns
+	///
+	/// The element that was moved out of the `UniqueVec`.
 	///
 	/// # Panics
 	///
@@ -497,14 +530,13 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v = BTreeUniqueVec::new();
+	/// let mut v = cgv_util::ds::BTreeUniqueVec::new();
 	/// v.push(1);
 	/// v.push(2);
-	/// assert_eq!(v.removeAt(0), 1);
+	/// assert_eq!(v.remove(0), 1);
 	/// assert_eq!(v[0], 2);
 	/// ```
-	pub fn removeAt (&mut self, index: usize) -> T {
+	pub fn remove (&mut self, index: usize) -> T {
 		let element = self.storage.remove(index);
 		let key = element.key();
 		let key_wrapper = KeyWrapper::new(key);
@@ -512,31 +544,20 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		element
 	}
 
-	/// Returns `true` if the collection contains an element with the same key as `elem`.
+	/// References an element or subslice depending on the type of index.
+	///
+	/// # Arguments
+	///
+	/// * `index` – An index into the contiguous element storage of the `UniqueVec`.
+	///
+	/// # Returns
+	///
+	/// `Some` reference to the requested element or subslice, or `None` if `index` is out of bounds.
 	///
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v = BTreeUniqueVec::new();
-	/// v.push(1);
-	/// assert!(v.contains(&1));
-	/// assert!(!v.contains(&2));
-	/// ```
-	#[inline(always)]
-	pub fn contains (&self, elem: &T) -> bool {
-		self.keys.contains(&KeyWrapper::new(elem.key()))
-	}
-
-	/// Returns a reference to an element or subslice depending on the type of index.
-	///
-	/// Returns [`None`] if the index is out of bounds.
-	///
-	/// # Examples
-	///
-	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v = BTreeUniqueVec::new();
+	/// let mut v = cgv_util::ds::BTreeUniqueVec::new();
 	/// v.push(1);
 	/// assert_eq!(v.get(0), Some(&1));
 	/// assert_eq!(v.get(1), None);
@@ -546,7 +567,11 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.storage.get(index)
 	}
 
-	/// Returns a reference to the first element of the collection, or [`None`] if it is empty.
+	/// References the element at the front of the `UniqueVec`.
+	///
+	/// # Returns
+	///
+	/// `Some(&T)` referencing the first element if the collection still had at least one, `None` otherwise.
 	///
 	/// # Examples
 	///
@@ -562,7 +587,11 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.storage.first()
 	}
 
-	/// Returns a reference to the last element of the collection, or [`None`] if it is empty.
+	/// References the element at the back of the `UniqueVec`.
+	///
+	/// # Returns
+	///
+	/// `Some(&T)` referencing the last element if the collection still had at least one, `None` otherwise.
 	///
 	/// # Examples
 	///
@@ -578,15 +607,81 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.storage.last()
 	}
 
+	/// Checks if the `UniqueVec` already contains an entry with the same key as `element`.
 	///
-	pub fn fetch<'this> (&'this self, key: &<T as UniqueVecElement>::Key<'this>) -> Option<&'this T>
+	/// # Arguments
+	///
+	/// * `element` – Reference to an instance of the [element type](T) to check against.
+	///
+	/// # Returns
+	///
+	/// `true` if the collection contains an entry with the same key as `element`, `false` otherwise.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use cgv_util::ds::BTreeUniqueVec;
+	/// let mut v = BTreeUniqueVec::new();
+	/// v.push(1);
+	/// assert!(v.contains(&1));
+	/// assert!(!v.contains(&2));
+	/// ```
+	#[inline(always)]
+	pub fn contains (&self, element: &T) -> bool {
+		self.keys.contains(&KeyWrapper::new(element.key()))
+	}
+	
+	/// Check if the collection contains an element with the given [key](UniqueVecElement::key).
+	///
+	/// # Arguments
+	///
+	/// * `key` – Reference to a key to check against.
+	///
+	/// # Returns
+	///
+	/// `true` if the collection contains an entry that corresponds to `key`, `false` otherwise.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// let v = cgv_util::ds::BTreeUniqueVec::from(vec![1,3]);
+	/// assert!(v.containsKey(&1));
+	/// assert!(!v.containsKey(&2));
+	/// ```
+	#[inline(always)]
+	pub fn containsKey (&self, key: &T::Key<'_>) -> bool {
+		self.keys.contains(&KeyWrapper::shallow(key))
+	}
+
+	/// Reference the element with the given [key](UniqueVecElement::Key).
+	///
+	/// **NOTE**: `UniqueVec` is **not** a map! Only *checking* for a key is fast (so this method returns quickly if the
+	/// key is not in the collection). Actually *finding* the entry that corresponds to a key that passed the initial
+	/// check requires iteration and is thus $O(n)$ in the worst case.
+	///
+	/// # Arguments
+	///
+	/// * `key` – Reference to a key that the element should correspond to.
+	///
+	/// # Returns
+	///
+	/// `Some(&T)` referencing the requested element if contained in the collection, `None` otherwise.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// let v = cgv_util::ds::BTreeUniqueVec::from(vec![1, 3]);
+	/// assert_eq!(v.fetch(&1), Some(&1));
+	/// assert_eq!(v.fetch(&2), None);
+	/// ```
+	#[inline]
+	pub fn fetch<'key> (&'key self, key: &'key T::Key<'key>) -> Option<&'key T>
 	{
-		let key_transmuted: <T as UniqueVecElement>::Key<'_> = unsafe {std::mem::transmute_copy(key)};
-		if !self.keys.contains(&KeyWrapper::<T>::new(key_transmuted)) {
+		if !self.containsKey(key) {
 			None
 		}
 		else {
-			self.storage.iter().find(|elem| elem.key() == *key)
+			self.storage.iter().find(|elem| elem.key().cmp(key) == std::cmp::Ordering::Equal)
 		}
 	}
 
@@ -595,8 +690,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v = BTreeUniqueVec::new();
+	/// let mut v = cgv_util::ds::BTreeUniqueVec::new();
 	/// v.push(1);
 	/// assert_eq!(v.len(), 1);
 	/// ```
@@ -605,21 +699,20 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.storage.len()
 	}
 
-	/// Returns the maximum number of elements the collection can hold without reallocating.
+	/// Returns the maximum number of elements the collection can hold without reallocating the contiguous storage.
 	///
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let v: BTreeUniqueVec<i32> = BTreeUniqueVec::withCapacity(10);
-	/// assert!(v.capacity() >= 10);
+	/// let v = cgv_util::ds::BTreeUniqueVec::<u32>::withCapacity(11);
+	/// assert!(v.capacity() >= 11);
 	/// ```
 	#[inline(always)]
 	pub fn capacity (&self) -> usize {
 		self.storage.capacity()
 	}
 
-	/// Returns `true` if the collection contains no elements.
+	/// Returns `true` if the collection contains no elements, `false` otherwise.
 	///
 	/// # Examples
 	///
@@ -638,8 +731,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v = BTreeUniqueVec::new();
+	/// let mut v = cgv_util::ds::BTreeUniqueVec::new();
 	/// v.push(1);
 	/// v.push(2);
 	/// let mut it = v.iter();
@@ -652,21 +744,26 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.storage.iter()
 	}
 
-	/// Joins two `UniqueVec`s by cloning elements from `other` and pushing them into a clone of `self`.
+	/// Joins two `UniqueVec`s by cloning elements from `self` and `other` into a new `UniqueVec` instance, preserving
+	/// the original insertion order within both operands.
 	///
-	/// Only elements from `other` with keys not already present in `self` will be added.
+	/// # Arguments
+	///
+	/// * `other` – The over `UniqueVec` to join with. Only elements with keys not already present in `self` will be
+	///             included.
+	///
+	/// # Returns
+	///
+	/// The new joined `UniqueVec` instance.
 	///
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v1 = BTreeUniqueVec::new();
-	/// v1.push(1);
-	/// let mut v2 = BTreeUniqueVec::new();
-	/// v2.push(1);
-	/// v2.push(2);
-	/// let joined = v1.join(&v2);
-	/// assert_eq!(joined.len(), 2);
+	/// use cgv_util::ds::*;
+	/// let v1 = BTreeUniqueVec::from(vec![1, 2]);
+	/// let v2 = BTreeUniqueVec::from(vec![2, 3]);
+	/// let joined = UniqueVec::join(&v1, &v2);
+	/// assert_eq!(joined.len(), 3);
 	/// ```
 	pub fn join<S1: UniqueSet<KeyWrapper<T>>> (&self, other: &UniqueVec<T, S1>) -> UniqueVec<T, S> where T: Clone {
 		let mut result = self.clone();
@@ -676,30 +773,77 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		result
 	}
 
-	/// Joins two `UniqueVec`s by moving elements from `other` into `self`.
+	/// Joins two `UniqueVec`s into a new single `UniqueVec` instance, preserving the original insertion order within
+	/// both operands. This results in an identical `UniqueVec` to using [`join`], but the storage of `self` and the
+	/// elements therein are fully reused, and the contents of `other` are moved to the new instance instead of
+	/// producing clones.
 	///
-	/// Only elements from `other` with keys not already present in `self` will be added.
+	/// # Arguments
+	///
+	/// * `other` – The over `UniqueVec` to join with. Only elements with keys not already present in `self` will be
+	///             included. Elements are moved to the joined `UniqueVec`.
+	///
+	/// # Returns
+	///
+	/// The new joined `UniqueVec` instance.
 	///
 	/// # Examples
 	///
-	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v1 = BTreeUniqueVec::new();
-	/// v1.push(1);
-	/// let mut v2 = BTreeUniqueVec::new();
-	/// v2.push(1);
-	/// v2.push(2);
-	/// let joined = v1.join_move(v2);
-	/// assert_eq!(joined.len(), 2);
+	/// ```compile_fail
+	/// use cgv_util::ds::*;
+	/// let v1 = BTreeUniqueVec::from(vec![1, 2]);
+	/// let v2 = BTreeUniqueVec::from(vec![2, 3]);
+	///
+	/// let joined = UniqueVec::join_move(v1, v2);
+	///
+	/// assert_eq!(joined.len(), 3);
+	/// assert_eq!(v1.len(), 2); // <- COMPILE ERROR:
+	/// assert_eq!(v2[1], 3);    // <- v1 and v2 were moved
 	/// ```
 	pub fn join_move<S1: UniqueSet<KeyWrapper<T>>> (mut self, other: UniqueVec<T, S1>) -> UniqueVec<T, S> {
 		self.extend(other);
 		self
 	}
 
+	/// Joins two `UniqueVec`s into a new single `UniqueVec` instance, preserving the original insertion order within
+	/// both operands. This results in an identical `UniqueVec` to using [`join`], but the storage of `self` and the
+	/// elements therein are fully reused, while only the contents of `other` are cloned.
+	///
+	/// # Arguments
+	///
+	/// * `other` – The over `UniqueVec` to join with. Only elements with keys not already present in `self` will be
+	///             included.
+	///
+	/// # Returns
+	///
+	/// The new joined `UniqueVec` instance.
+	///
+	/// # Examples
+	///
+	/// ```compile_fail
+	/// use cgv_util::ds::*;
+	/// let v1 = BTreeUniqueVec::from(vec![1, 2]);
+	/// let v2 = BTreeUniqueVec::from(vec![2, 3]);
+	///
+	/// let joined = UniqueVec::join_moveLhs(v1, &v2);
+	///
+	/// assert_eq!(joined.len(), 3);
+	/// assert_eq!(v2.len(), 2); // <- OK, v2 was not moved
+	/// assert_eq!(v1[0], 1);    // <- COMPILE ERROR: v1 was moved!
+	/// ```
+	pub fn join_moveLhs<S1: UniqueSet<KeyWrapper<T>>> (mut self, other: &UniqueVec<T, S1>) -> UniqueVec<T, S>
+	where T: Clone {
+		self.extend(other.iter().cloned());
+		self
+	}
+
 	/// Checks if the number of elements in storage matches the number of keys in the uniqueness set.
 	///
 	/// This is a lightweight consistency check.
+	///
+	/// # Returns
+	///
+	/// `true` if the check found no inconsistency, `false` otherwise.
 	///
 	/// # Examples
 	///
@@ -709,7 +853,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert!(v.checkLenConsistency());
 	/// ```
 	#[inline(always)]
-	pub fn checkLenConsistency(&self) -> bool {
+	pub fn checkLenConsistency (&self) -> bool {
 		self.storage.len() == self.keys.len()
 	}
 
@@ -719,9 +863,9 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// uniqueness set, and (vice versa) that no keys other than those from the stored elements are present
 	/// in the uniqueness set.
 	///
-	/// # Panics
+	/// # Returns
 	///
-	/// Panics if an element is found that does not have its corresponding key in the set.
+	/// `true` if the `UniqueVec` is perfectly consistent, `false` otherwise.
 	///
 	/// # Examples
 	///
@@ -731,10 +875,12 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert!(v.checkConsistency());
 	/// ```
 	#[inline]
-	pub fn checkConsistency(&self) -> bool {
+	pub fn checkConsistency (&self) -> bool {
 		// 1: Check if every element has its corresponding key stored
 		for element in &self.storage {
-			assert!(self.keys.contains(&KeyWrapper::new(element.key())));
+			if !self.keys.contains(&KeyWrapper::new(element.key())) {
+				return false;
+			};
 		}
 
 		// 2: Check if no keys other than those from the stored elements are present in the uniqueness set
@@ -755,13 +901,25 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> From<Vec<T>> for UniqueVe
 }
 impl<T: UniqueVecElement+Copy, S: UniqueSet<KeyWrapper<T>>> From<&[T]> for UniqueVec<T, S>
 {
-	/// Creates a `UniqueVec` from a [`Vec`].
+	/// Creates a `UniqueVec` from a slice of `T`.
 	///
-	/// Duplicate elements in the vector will be ignored. Only the first occurrence
+	/// Duplicate elements in the slice will be ignored. Only the first occurrence
 	/// of each key will be kept.
 	fn from (slice: &[T]) -> Self {
 		let mut result = Self::new();
 		result.extend(slice.iter().copied());
+		result
+	}
+}
+impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> FromIterator<T> for UniqueVec<T, S>
+{
+	/// Creates a `UniqueVec` from the given iterable.
+	///
+	/// Duplicate elements in the vector will be ignored. Only the first occurrence
+	/// of each key will be kept.
+	fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self {
+		let mut result = Self::new();
+		result.extend(iter);
 		result
 	}
 }

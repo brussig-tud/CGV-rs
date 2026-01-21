@@ -16,15 +16,29 @@ use crate::ds::unique_vec::*;
 
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default,Debug,PartialEq,Eq)]
-struct MyElement {
+struct LargeKeyElement {
 	id: String,
 	data: i32,
 }
-impl UniqueVecElement for MyElement {
+impl UniqueVecElement for LargeKeyElement {
 	type Key<'a> = String;
 
 	fn key(&self) -> Self::Key<'_> {
 		self.id.clone()
+	}
+}
+
+#[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Default,Debug,PartialEq,Eq)]
+struct RefKeyElement {
+	id: String,
+	data: i32,
+}
+impl UniqueVecElement for RefKeyElement {
+	type Key<'a> = &'a str;
+
+	fn key (&self) -> Self::Key<'_> {
+		&self.id
 	}
 }
 
@@ -58,9 +72,9 @@ impl UniqueVecElement for HashElement
 fn test_from_vec()
 {
 	let mut v: BTreeUniqueVec<_> = vec![
-		MyElement { id: "a".into(), data: 1 },
-		MyElement { id: "b".into(), data: 2 },
-		MyElement { id: "a".into(), data: 3 }
+		LargeKeyElement { id: "a".into(), data: 1 },
+		LargeKeyElement { id: "b".into(), data: 2 },
+		LargeKeyElement { id: "a".into(), data: 3 }
 	].into();
 
 	assert_eq!(v.len(), 2);
@@ -68,15 +82,15 @@ fn test_from_vec()
 	assert_eq!(v[1].id, "b");
 
 	// Ensure keys were actually populated
-	assert!(!v.push(MyElement { id: "b".into(), data: 4 } /* <- duplicate, should "fail" */));
+	assert!(!v.push(LargeKeyElement { id: "b".into(), data: 4 } /* <- duplicate, should "fail" */));
 }
 #[test]
 fn test_hash_from_vec()
 {
 	let mut v: HashUniqueVec<_> = vec![
-		MyElement { id: "a".into(), data: 1 },
-		MyElement { id: "b".into(), data: 2 },
-		MyElement { id: "a".into(), data: 3 }
+		LargeKeyElement { id: "a".into(), data: 1 },
+		LargeKeyElement { id: "b".into(), data: 2 },
+		LargeKeyElement { id: "a".into(), data: 3 }
 	].into();
 
 	assert_eq!(v.len(), 2);
@@ -84,7 +98,7 @@ fn test_hash_from_vec()
 	assert_eq!(v[1].id, "b");
 
 	// Ensure keys were actually populated
-	assert!(!v.push(MyElement { id: "b".into(), data: 4 } /* <- duplicate, should "fail" */));
+	assert!(!v.push(LargeKeyElement { id: "b".into(), data: 4 } /* <- duplicate, should "fail" */));
 }
 
 #[test]
@@ -92,8 +106,8 @@ fn test_from_vec_unchecked()
 {
 	let mut v = unsafe {
 		BTreeUniqueVec::fromVec_unchecked(vec![
-			MyElement { id: "a".into(), data: 1 },
-			MyElement { id: "b".into(), data: 2 },
+			LargeKeyElement { id: "a".into(), data: 1 },
+			LargeKeyElement { id: "b".into(), data: 2 },
 		])
 	};
 
@@ -102,15 +116,15 @@ fn test_from_vec_unchecked()
 	assert_eq!(v[1].id, "b");
 
 	// Ensure keys were actually populated
-	assert!(!v.push(MyElement { id: "a".into(), data: 3 } /* <- duplicate, should "fail" */));
+	assert!(!v.push(LargeKeyElement { id: "a".into(), data: 3 } /* <- duplicate, should "fail" */));
 }
 #[test]
 fn test_hash_from_vec_unchecked()
 {
 	let mut v = unsafe {
 		HashUniqueVec::fromVec_unchecked(vec![
-			MyElement { id: "a".into(), data: 1 },
-			MyElement { id: "b".into(), data: 2 },
+			LargeKeyElement { id: "a".into(), data: 1 },
+			LargeKeyElement { id: "b".into(), data: 2 },
 		])
 	};
 
@@ -119,16 +133,16 @@ fn test_hash_from_vec_unchecked()
 	assert_eq!(v[1].id, "b");
 
 	// Ensure keys were actually populated
-	assert!(!v.push(MyElement { id: "a".into(), data: 3 } /* <- duplicate, should "fail" */));
+	assert!(!v.push(LargeKeyElement { id: "a".into(), data: 3 } /* <- duplicate, should "fail" */));
 }
 
 #[test]
 fn test_push_and_get()
 {
 	let mut v = BTreeUniqueVec::default();
-	assert!(v.push(MyElement { id: "a".into(), data: 1 }));
-	assert!(v.push(MyElement { id: "b".into(), data: 2 }));
-	assert!(!v.push(MyElement { id: "a".into(), data: 3 }));
+	assert!(v.push(LargeKeyElement { id: "a".into(), data: 1 }));
+	assert!(v.push(LargeKeyElement { id: "b".into(), data: 2 }));
+	assert!(!v.push(LargeKeyElement { id: "a".into(), data: 3 }));
 
 	assert_eq!(v.len(), 2);
 	assert_eq!(v[0].id, "a");
@@ -144,9 +158,9 @@ fn test_push_and_get()
 fn test_hash_push_and_get()
 {
 	let mut v = HashUniqueVec::new();
-	assert!(v.push(MyElement { id: "a".into(), data: 1 }));
-	assert!(v.push(MyElement { id: "b".into(), data: 2 }));
-	assert!(!v.push(MyElement { id: "a".into(), data: 3 }));
+	assert!(v.push(LargeKeyElement { id: "a".into(), data: 1 }));
+	assert!(v.push(LargeKeyElement { id: "b".into(), data: 2 }));
+	assert!(!v.push(LargeKeyElement { id: "a".into(), data: 3 }));
 
 	assert_eq!(v.len(), 2);
 	assert_eq!(v[0].id, "a");
@@ -163,7 +177,7 @@ fn test_hash_push_and_get()
 fn test_first_and_last()
 {
 	let mut v = BTreeUniqueVec::new();
-	v.push(MyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
 	let first = v.first().unwrap();
 	let last = v.last().unwrap();
 	assert_eq!(first.id, "a");
@@ -171,7 +185,7 @@ fn test_first_and_last()
 	assert_eq!(last.id, "a");
 	assert_eq!(last.data, 1);
 
-	v.push(MyElement { id: "b".into(), data: 2 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
 	assert!(v.checkConsistency());
 
 	let first = v.first().unwrap();
@@ -185,7 +199,7 @@ fn test_first_and_last()
 fn test_hash_first_and_last()
 {
 	let mut v = HashUniqueVec::new();
-	v.push(MyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
 	let first = v.first().unwrap();
 	let last = v.last().unwrap();
 	assert_eq!(first.id, "a");
@@ -193,7 +207,7 @@ fn test_hash_first_and_last()
 	assert_eq!(last.id, "a");
 	assert_eq!(last.data, 1);
 
-	v.push(MyElement { id: "b".into(), data: 2 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
 	assert!(v.checkConsistency());
 
 	let first = v.first().unwrap();
@@ -208,15 +222,15 @@ fn test_hash_first_and_last()
 fn test_pop()
 {
 	let mut v = BTreeUniqueVec::new();
-	v.push(MyElement { id: "a".into(), data: 1 });
-	v.push(MyElement { id: "b".into(), data: 2 });
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
 	assert!(v.checkConsistency());
 
-	assert_eq!(v.pop(), Some(MyElement { id: "b".into(), data: 2 }));
+	assert_eq!(v.pop(), Some(LargeKeyElement { id: "b".into(), data: 2 }));
 	assert_eq!(v.len(), 1);
 	assert!(v.checkConsistency());
 
-	assert!(v.push(MyElement { id: "b".into(), data: 3 }));
+	assert!(v.push(LargeKeyElement { id: "b".into(), data: 3 }));
 	assert!(v.checkConsistency());
 	assert_eq!(v[1].data, 3)
 }
@@ -224,56 +238,87 @@ fn test_pop()
 fn test_hash_pop()
 {
 	let mut v = HashUniqueVec::new();
-	v.push(MyElement { id: "a".into(), data: 1 });
-	v.push(MyElement { id: "b".into(), data: 2 });
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
 	assert!(v.checkConsistency());
 
-	assert_eq!(v.pop(), Some(MyElement { id: "b".into(), data: 2 }));
+	assert_eq!(v.pop(), Some(LargeKeyElement { id: "b".into(), data: 2 }));
 	assert_eq!(v.len(), 1);
 	assert!(v.checkConsistency());
 
-	assert!(v.push(MyElement { id: "b".into(), data: 3 }));
+	assert!(v.push(LargeKeyElement { id: "b".into(), data: 3 }));
 	assert!(v.checkConsistency());
 	assert_eq!(v[1].data, 3)
 }
 
 #[test]
-fn test_remove_at()
+fn test_contains_key_and_fetch()
 {
 	let mut v = BTreeUniqueVec::new();
-	v.push(MyElement { id: "a".into(), data: 1 });
-	v.push(MyElement { id: "b".into(), data: 2 });
-	v.push(MyElement { id: "c".into(), data: 3 });
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
 
-	assert_eq!(v.removeAt(1).id, "b");
-	assert_eq!(v.len(), 2);
-	assert!(v.checkConsistency());
-	assert_eq!(v[1].id, "c");
+	assert!(v.containsKey(&"a".to_string()));
+	assert!(v.containsKey(&"b".to_string()));
+	assert!(!v.containsKey(&"c".to_string()));
 
-	assert!(v.push(MyElement { id: "b".into(), data: 4 }));
-	assert!(v.checkConsistency());
-	assert_eq!(v[2].data, 4);
+	assert_eq!(v.fetch(&"a".to_string()), Some(&LargeKeyElement { id: "a".into(), data: 1 }));
+	assert_eq!(v.fetch(&"b".to_string()), Some(&LargeKeyElement { id: "b".into(), data: 2 }));
+	assert_eq!(v.fetch(&"c".to_string()), None);
 }
 #[test]
-fn test_hash_remove_at()
+fn test_hash_contains_key_and_fetch()
 {
 	let mut v = HashUniqueVec::new();
-	v.push(MyElement { id: "a".into(), data: 1 });
-	v.push(MyElement { id: "b".into(), data: 2 });
-	v.push(MyElement { id: "c".into(), data: 3 });
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
 
-	assert_eq!(v.removeAt(1).id, "b");
+	assert!(v.containsKey(&"a".to_string()));
+	assert!(v.containsKey(&"b".to_string()));
+	assert!(!v.containsKey(&"c".to_string()));
+
+	assert_eq!(v.fetch(&"a".to_string()), Some(&LargeKeyElement { id: "a".into(), data: 1 }));
+	assert_eq!(v.fetch(&"b".to_string()), Some(&LargeKeyElement { id: "b".into(), data: 2 }));
+	assert_eq!(v.fetch(&"c".to_string()), None);
+}
+
+#[test]
+fn test_remove()
+{
+	let mut v = BTreeUniqueVec::new();
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
+	v.push(LargeKeyElement { id: "c".into(), data: 3 });
+
+	assert_eq!(v.remove(1).id, "b");
 	assert_eq!(v.len(), 2);
 	assert!(v.checkConsistency());
 	assert_eq!(v[1].id, "c");
 
-	assert!(v.push(MyElement { id: "b".into(), data: 4 }));
+	assert!(v.push(LargeKeyElement { id: "b".into(), data: 4 }));
+	assert!(v.checkConsistency());
+	assert_eq!(v[2].data, 4);
+}
+#[test]
+fn test_hash_remove()
+{
+	let mut v = HashUniqueVec::new();
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.push(LargeKeyElement { id: "b".into(), data: 2 });
+	v.push(LargeKeyElement { id: "c".into(), data: 3 });
+
+	assert_eq!(v.remove(1).id, "b");
+	assert_eq!(v.len(), 2);
+	assert!(v.checkConsistency());
+	assert_eq!(v[1].id, "c");
+
+	assert!(v.push(LargeKeyElement { id: "b".into(), data: 4 }));
 	assert!(v.checkConsistency());
 	assert_eq!(v[2].data, 4);
 }
 
 #[test]
-fn test_on_the_fly_key()
+fn test_adhoc_key()
 {
 	let mut v = BTreeUniqueVec::new();
 	assert!(v.push(HashElement { name: "a".into(), data: 1 }));
@@ -282,7 +327,7 @@ fn test_on_the_fly_key()
 	assert_eq!(v.len(), 2);
 }
 #[test]
-fn test_hash_on_the_fly_key()
+fn test_hash_adhoc_key()
 {
 	let mut v = HashUniqueVec::new();
 	assert!(v.push(HashElement { name: "a".into(), data: 1 }));
@@ -292,43 +337,112 @@ fn test_hash_on_the_fly_key()
 }
 
 #[test]
-fn test_ref_keys()
+fn stresstest_large_keys()
 {
 	let mut v = BTreeUniqueVec::new();
-	v.push("hello".to_string());
-	v.push("world".into());
+	v.push(LargeKeyElement { id: "hello".into(), data: 0 });
+	v.push(LargeKeyElement { id: "world".into(), data: 1 });
 
 	// We push many elements to force reallocation
 	for i in 0..1000 {
-		v.push(format!("element{}", i));
+		v.push(LargeKeyElement { id: format!("additional element {}", 1+i), data: 2+i });
 	}
 
-	assert_eq!(v[0], "hello");
-	assert_eq!(v[1], "world");
+	// Check consistency after many pushes
+	assert!(v.checkConsistency());
+	assert_eq!(v[0].id, "hello");
+	assert_eq!(v[1].data, 1);
+	assert_eq!(v[2].id, "additional element 1");
+	assert_eq!(v[3].data, 3);
 	assert_eq!(v.len(), 1002);
+	assert!(v.containsKey(&"world".to_string()));
+	assert!(v.containsKey(&"additional element 256".to_string()));
 
 	// Check uniqueness still works after many pushes
-	assert!(!v.push("hello".into()));
+	assert!(!v.push(LargeKeyElement { id: "world".into(), data: 123 }));
+	assert!(!v.push(LargeKeyElement { id: "additional element 128".into(), data: 321 }));
 	assert_eq!(v.len(), 1002);
 }
 #[test]
-fn test_hash_ref_keys()
+fn stresstest_hash_large_keys()
 {
 	let mut v = HashUniqueVec::new();
-	v.push("hello".to_string());
-	v.push("world".into());
+	v.push(LargeKeyElement { id: "hello".into(), data: 0 });
+	v.push(LargeKeyElement { id: "world".into(), data: 1 });
 
 	// We push many elements to force reallocation
 	for i in 0..1000 {
-		v.push(format!("element{}", i));
+		v.push(LargeKeyElement { id: format!("additional element {}", 1+i), data: 2+i });
 	}
 
-	assert_eq!(v[0], "hello");
-	assert_eq!(v[1], "world");
+	// Check consistency after many pushes
+	assert!(v.checkConsistency());
+	assert_eq!(v[0].id, "hello");
+	assert_eq!(v[1].data, 1);
+	assert_eq!(v[2].id, "additional element 1");
+	assert_eq!(v[3].data, 3);
 	assert_eq!(v.len(), 1002);
+	assert!(v.containsKey(&"world".to_string()));
+	assert!(v.containsKey(&"additional element 256".to_string()));
 
 	// Check uniqueness still works after many pushes
-	assert!(!v.push("hello".into()));
+	assert!(!v.push(LargeKeyElement { id: "world".into(), data: 123 }));
+	assert!(!v.push(LargeKeyElement { id: "additional element 128".into(), data: 321 }));
+	assert_eq!(v.len(), 1002);
+}
+
+#[test]
+fn stresstest_ref_keys()
+{
+	let mut v = BTreeUniqueVec::new();
+	v.push(RefKeyElement { id: "hello".into(), data: 0 });
+	v.push(RefKeyElement { id: "world".into(), data: 1 });
+
+	// We push many elements to force reallocation
+	for i in 0..1000 {
+		v.push(RefKeyElement { id: format!("additional element {}", 1+i), data: 2+i });
+	}
+
+	// Check consistency after many pushes
+	assert!(v.checkConsistency());
+	assert_eq!(v[0].id, "hello");
+	assert_eq!(v[1].data, 1);
+	assert_eq!(v[2].id, "additional element 1");
+	assert_eq!(v[3].data, 3);
+	assert_eq!(v.len(), 1002);
+	assert!(v.containsKey(&"world"));
+	assert!(v.containsKey(&"additional element 256"));
+
+	// Check uniqueness still works after many pushes
+	assert!(!v.push(RefKeyElement { id: "world".into(), data: 123 }));
+	assert!(!v.push(RefKeyElement { id: "additional element 128".into(), data: 321 }));
+	assert_eq!(v.len(), 1002);
+}
+#[test]
+fn stresstest_hash_ref_keys()
+{
+	let mut v = HashUniqueVec::new();
+	v.push(RefKeyElement { id: "hello".into(), data: 0 });
+	v.push(RefKeyElement { id: "world".into(), data: 1 });
+
+	// We push many elements to force reallocation
+	for i in 0..1000 {
+		v.push(RefKeyElement { id: format!("additional element {}", 1+i), data: 2+i });
+	}
+
+	// Check consistency after many pushes
+	assert!(v.checkConsistency());
+	assert_eq!(v[0].id, "hello");
+	assert_eq!(v[1].data, 1);
+	assert_eq!(v[2].id, "additional element 1");
+	assert_eq!(v[3].data, 3);
+	assert_eq!(v.len(), 1002);
+	assert!(v.containsKey(&"world"));
+	assert!(v.containsKey(&"additional element 256"));
+
+	// Check uniqueness still works after many pushes
+	assert!(!v.push(RefKeyElement { id: "world".into(), data: 123 }));
+	assert!(!v.push(RefKeyElement { id: "additional element 128".into(), data: 321 }));
 	assert_eq!(v.len(), 1002);
 }
 
@@ -341,7 +455,7 @@ fn test_move_collection()
 	// Move v to a new location
 	let mut v2 = v;
 
-	// This should trigger refresh_pointers because v2 is at a different address than v
+	// As the keys can only reference the heap, the move should not cause dangling pointers
 	assert!(!v2.push("a".into()));
 	assert!(v2.push("b".into()));
 	assert_eq!(v2.len(), 2);
@@ -355,7 +469,7 @@ fn test_hash_move_collection()
 	// Move v to a new location
 	let mut v2 = v;
 
-	// This should trigger refresh_pointers because v2 is at a different address than v
+	// As the keys can only reference the heap, the move should not cause dangling pointers
 	assert!(!v2.push("a".into()));
 	assert!(v2.push("b".into()));
 	assert_eq!(v2.len(), 2);
@@ -474,11 +588,11 @@ fn test_hash_join_move()
 fn test_serde()
 {
 	let mut orig = BTreeUniqueVec::new();
-	orig.push(MyElement { id: "a".into(), data: 1 });
-	orig.push(MyElement { id: "b".into(), data: 2 });
+	orig.push(LargeKeyElement { id: "a".into(), data: 1 });
+	orig.push(LargeKeyElement { id: "b".into(), data: 2 });
 
 	let json = serde_json::to_string(&orig).unwrap();
-	let deser: BTreeUniqueVec<MyElement> = serde_json::from_str(&json).unwrap();
+	let deser: BTreeUniqueVec<LargeKeyElement> = serde_json::from_str(&json).unwrap();
 
 	assert_eq!(orig.len(), deser.len());
 	assert_eq!(orig[0], deser[0]);
@@ -489,11 +603,11 @@ fn test_serde()
 fn test_hash_serde()
 {
 	let mut orig = HashUniqueVec::new();
-	orig.push(MyElement { id: "a".into(), data: 1 });
-	orig.push(MyElement { id: "b".into(), data: 2 });
+	orig.push(LargeKeyElement { id: "a".into(), data: 1 });
+	orig.push(LargeKeyElement { id: "b".into(), data: 2 });
 
 	let json = serde_json::to_string(&orig).unwrap();
-	let deser: HashUniqueVec<MyElement> = serde_json::from_str(&json).unwrap();
+	let deser: HashUniqueVec<LargeKeyElement> = serde_json::from_str(&json).unwrap();
 
 	assert_eq!(orig.len(), deser.len());
 	assert_eq!(orig[0], deser[0]);
@@ -505,7 +619,7 @@ fn test_hash_serde()
 fn test_serde_duplicate()
 {
 	let json = r#"[{"id": "a", "data": 1}, {"id": "a", "data": 2}]"#;
-	let result: Result<BTreeUniqueVec<MyElement>, serde_json::Error> = serde_json::from_str(json);
+	let result: Result<BTreeUniqueVec<LargeKeyElement>, serde_json::Error> = serde_json::from_str(json);
 
 	match result {
 		Err(e) => assert!(e.to_string().contains("duplicate element")),
@@ -517,7 +631,7 @@ fn test_serde_duplicate()
 fn test_hash_serde_duplicate()
 {
 	let json = r#"[{"id": "a", "data": 1}, {"id": "a", "data": 2}]"#;
-	let result: Result<HashUniqueVec<MyElement>, serde_json::Error> = serde_json::from_str(json);
+	let result: Result<HashUniqueVec<LargeKeyElement>, serde_json::Error> = serde_json::from_str(json);
 
 	match result {
 		Err(e) => assert!(e.to_string().contains("duplicate element")),
