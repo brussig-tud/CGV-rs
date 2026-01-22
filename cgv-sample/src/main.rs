@@ -18,7 +18,7 @@
 use std::default::Default;
 
 // CGV re-imports
-use cgv::{wgpu, glm, egui};
+use cgv::{wgpu, glm, egui, tracing};
 
 // WGPU API
 use wgpu::util::DeviceExt;
@@ -132,6 +132,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
 		-> cgv::Result<Box<dyn cgv::Application>>
 	{
+		tracing::info!("Creating Example application\n{:?}", environment);
+
+
 		////
 		// Prepare buffers
 
@@ -159,7 +162,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 
 		// Test Slang runtime compilation
 		#[cfg(target_arch="wasm32")] let shaderPackage = {
-			let mut slangCtx = cgv::shader::slang::Context::new(&environment.shaderPath)?;
+			let mut slangCtx = cgv::shader::slang::ContextBuilder::default().build()?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
 			let module = slangCtx.compileFromNamedSource("example.slang", util::sourceFile!("/shader/example.slang"))?;
@@ -177,9 +180,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			)?
 		};
 		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
-			let mut slangCtx = cgv::shader::slang::Context::forTarget(
-				cgv::shader::compile::Target::SPIRV(cfg!(debug_assertions)), &environment.shaderPath
-			)?;
+			let mut slangCtx = cgv::shader::slang::ContextBuilder::withSearchPaths(
+				&environment.shaderPath
+			).build()?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
 			cgv::shader::Package::fromSlangSourceFile(
@@ -300,6 +303,8 @@ impl SampleApplication
 		&self, context: &cgv::Context, renderState: &cgv::RenderState, renderSetup: &cgv::RenderSetup
 	) -> wgpu::RenderPipeline
 	{
+		tracing::info!("Creating pipelines");
+
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("Example__RenderPipelineLayout"),
@@ -342,11 +347,8 @@ impl cgv::Application for SampleApplication
 		"Example App"
 	}
 
-	fn preInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()> {
-		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
-		let cam = player.activeCamera_mut().parameters_mut();
-		cam.intrinsics.f = 2.;
-		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
+	fn preInit (&mut self, _: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
+		// We don't have any pre-initialization to do
 		Ok(())
 	}
 
@@ -364,8 +366,13 @@ impl cgv::Application for SampleApplication
 		}
 	}
 
-	fn postInit (&mut self, _: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
-		// We don't have any post-initialization to do
+	fn postInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()>
+	{
+		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
+		tracing::info!("PostInit: positioning intial camera");
+		let cam = player.activeCamera_mut().parameters_mut();
+		cam.intrinsics.f = 2.;
+		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
 		Ok(())
 	}
 
