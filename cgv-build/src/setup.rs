@@ -45,7 +45,7 @@ impl CgvFeatures {
 pub struct Setup {
 	pub cgvFeatures: CgvFeatures,
 	additionalLinkerFlags: BTreeSet<String>,
-	shaderPath: BTreeSet<PathBuf>,
+	shaderPath: util::ds::BTreeUniqueVec<PathBuf>,
 }
 impl Setup
 {
@@ -120,7 +120,7 @@ impl Setup
 		if path.as_ref().canonicalize().is_err() {
 			println!("cargo::warning=Unaccessible shader path directory: '{}'", path.as_ref().display());
 		}
-		self.shaderPath.insert(util::path::normalize(path));
+		self.shaderPath.push(util::path::normalize(path));
 	}
 
 	///
@@ -138,8 +138,8 @@ impl Setup
 	}
 
 	///
-	pub fn shaderPath (&self) -> Vec<&Path> {
-		self.shaderPath.iter().map(|path| path.as_path()).collect()
+	pub fn shaderPath (&self) -> &[PathBuf] {
+		&self.shaderPath
 	}
 
 	///

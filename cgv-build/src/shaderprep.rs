@@ -31,33 +31,38 @@ use crate::*;
 //
 
 ///
-pub struct EnvironmentBuilder<'this, 'ctx> {
-	slangContext: &'this mut shader::slang::Context<'ctx>,
+pub struct EnvironmentBuilder<'this, CompileContext>
+where
+	CompileContext: shader::compile::Context + EnvironmentEnabled
+{
+	context: &'this mut CompileContext,
 	addModulesRoot: PathBuf,
 }
-impl<'this, 'ctx> EnvironmentBuilder<'this, 'ctx>
+impl<'this, CompileContext> EnvironmentBuilder<'this, CompileContext>
+where
+	CompileContext: shader::compile::Context + EnvironmentEnabled
 {
 	///
-	pub fn new(slangContext: &'this mut shader::slang::Context<'ctx>, addModulesRoot: impl AsRef<Path>) -> Self {
-		Self { slangContext, addModulesRoot: addModulesRoot.as_ref().to_owned() }
+	pub fn new(context: &'this mut CompileContext, addModulesRoot: impl AsRef<Path>) -> Self {
+		Self { context, addModulesRoot: addModulesRoot.as_ref().to_owned() }
 	}
 
 	///
 	pub fn addModule (
-		&mut self, envStorage: shader::slang::EnvironmentStorage,
+		&mut self, envStorage: CompileContext::EnvStorageHint,
 		sourceFilePath: impl AsRef<Path>
 	) -> Result<()> {
 		let contents = std::fs::read_to_string(self.addModulesRoot.join(sourceFilePath.as_ref()))?;
-		Ok(self.slangContext.loadModuleFromSource(envStorage, sourceFilePath.as_ref(), &contents)?)
+		Ok(self.context.loadModuleFromSource(envStorage, sourceFilePath.as_ref(), &contents)?)
 	}
 
 	///
 	pub fn addModuleAtPath (
-		&mut self, environmentPath: impl AsRef<Path>, envStorage: shader::slang::EnvironmentStorage,
+		&mut self, environmentPath: impl AsRef<Path>, envStorage: CompileContext::EnvStorageHint,
 		sourceFile: impl AsRef<Path>
 	) -> Result<()> {
 		let contents = std::fs::read_to_string(sourceFile.as_ref())?;
-		Ok(self.slangContext.loadModuleFromSource(envStorage, environmentPath.as_ref(), &contents)?)
+		Ok(self.context.loadModuleFromSource(envStorage, environmentPath.as_ref(), &contents)?)
 	}
 }
 
@@ -103,11 +108,11 @@ pub fn prepareShaders (
 	let targetDir = std::path::absolute(getCargoOutDir().join(shaderDirectory))?;
 
 	// Determine module source types if none were specified
-	let slangContexts = shader::slang::createContextsForTargets(
+	let slangContexts = shader::compile::createContextsForTargets(
 		moduleSourceTargets.unwrap_or(&[shader::compile::mostSuitableTargetForPlatform(
 			cargoBuildTargetPlatform()
 		)]),
-		buildSetup.shaderPath().as_slice()
+		buildSetup.shaderPath()
 	)?;
 
 	// Recurse through provided shader directory and package each .slang shader encountered that is not in a skipped
@@ -143,30 +148,33 @@ pub fn prepareShaders (
 }
 
 ///
-pub fn generateShaderEnvironment (
-	environmentFilename: impl AsRef<Path>, addModulesRoot: impl AsRef<Path>, shaderPath: Option<&[impl AsRef<Path>]>,
-	label: &str, addModules: impl FnOnce(&mut EnvironmentBuilder, shader::slang::EnvironmentStorage)->Result<()>
-) -> Result<()> {
+pub fn generateShaderEnvironment<CompileContextBuilder> (
+	contextBuilder: CompileContextBuilder, environmentFilename: impl AsRef<Path>, addModulesRoot: impl AsRef<Path>,
+	label: &str, addModules: impl FnOnce(
+		EnvironmentBuilder<CompileContextBuilder::Context>, shader::slang::EnvironmentStorage
+	)->Result<()>
+) -> Result<()>
+where
+	CompileContextBuilder: shader::compile::ContextBuilder,
+	CompileContextBuilder::Context: shader::compile::EnvironmentEnabled
+{
 	// Create Slang compilation context
-	let mut slangContext = shader::slang::Context::forTarget(
-		shader::compile::mostSuitableTargetForPlatform(cargoBuildTargetPlatform()),
-		shaderPath.unwrap_or_default(),
-	)?;
+	let mut context = contextBuilder.build()?;
 
 	// Create and set target environment
 	let env = shader::compile::Environment::forContextWithUuid(
-		&slangContext, util::unique::uuidFromUserString(label), label
+		&context, util::unique::uuidFromUserString(label), label
 	);
-	slangContext.replaceEnvironment(Some(env))?;
+	context.replaceEnvironment(Some(env))?;
 
 	// Dispatch the builder
 	addModules(
-		&mut EnvironmentBuilder::new(&mut slangContext, addModulesRoot),
+		EnvironmentBuilder::new(&mut context, addModulesRoot),
 		shader::slang::mostSuitableEnvironmentStorageForPlatform(cargoBuildTargetPlatform())
 	)?;
 
 	// Retrieve environment and generate
-	let env = slangContext.finishEnvironment().unwrap();
+	let env = context.finishEnvironment().unwrap();
 	let actualFilename = getCargoOutDir().join(environmentFilename);
 	env.serializeToFile(&actualFilename)?;
 	dependOnGeneratedFile(actualFilename)?;

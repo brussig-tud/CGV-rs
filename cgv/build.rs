@@ -11,6 +11,16 @@
 
 //////
 //
+// Imports
+//
+
+// CGV-rs
+use cgv_build::shader::compile::prelude::*;
+
+
+
+// ////
+//
 // Functions
 //
 
@@ -50,8 +60,10 @@ fn main() -> cgv_build::Result<()>
 
 	// Generate the runtime shader compilation environment exposing the core CGV shader library
 	cgv_build::generateShaderEnvironment(
-		"coreshaderlib.env", "shader/lib", Some(&buildSetup.shaderPath()),
-		"CgvCoreShaderLib", |env, recommendedStorage| {
+		cgv_build::shader::slang::ContextBuilder::defaultForPlatform(cgv_build::cargoBuildTargetPlatform())
+			.addSearchPaths(buildSetup.shaderPath()),
+		"coreshaderlib.env", "shader/lib",
+		"CgvCoreShaderLib", |mut env, recommendedStorage| {
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/operators.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/transform.slang")?;
@@ -60,8 +72,10 @@ fn main() -> cgv_build::Result<()>
 		}
 	)?;
 
-	// Compile our shaders
-	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["common", "gpu", "lib"]))?;
+	// Compile our internally used shaders
+	cgv_build::prepareShaders(
+		&buildSetup, None, "shader", /* exclude: */Some(&["common", "gpu", "lib"])
+	)?;
 
 	// Done!
 	Ok(())

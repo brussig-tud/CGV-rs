@@ -37,14 +37,6 @@ static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::
 // Structs
 //
 
-impl From<&slang::Module> for EnvModule {
-	fn from (value: &shader_slang::Module) -> Self {
-		Self::fromSlangIRBytes(
-			value.serialize().expect("Slang failed to serialize a pre-compiled module").as_slice()
-		)
-	}
-}
-
 ///
 pub struct NativeGlobalSessionContainer {
 	globalSession: Mutex<slang::GlobalSession>
@@ -69,6 +61,75 @@ unsafe impl Sync for NativeGlobalSessionContainer {
 	// enforces serial access to the global session after initialization.
 }
 
+
+///
+pub struct EntryPoint(pub slang::EntryPoint);
+impl compile::Component for EntryPoint {
+	type Id = std::ptr::NonNull<std::ffi::c_void>;
+	fn id (&self) -> Self::Id {
+		extractSlangObjectInstancePointer(&self.0)
+	}
+}
+impl compile::EntryPoint for EntryPoint {
+	fn name (&self) -> &str {
+		todo!()
+	}
+}
+
+///
+pub struct Module(pub slang::Module);
+impl compile::Component for Module {
+	type Id = std::ptr::NonNull<std::ffi::c_void>;
+	fn id (&self) -> Self::Id {
+		extractSlangObjectInstancePointer(&self.0)
+	}
+}
+impl compile::Module<EntryPoint> for Module {
+	fn virtualFilepath (&self) -> &Path {
+		todo!()
+	}
+
+	fn entryPoint (&self, _name: &str) -> Option<&EntryPoint> {
+		todo!()
+	}
+
+	fn entryPoints (&self) -> &[EntryPoint] {
+		todo!()
+	}
+}
+
+///
+pub struct Composite(pub slang::ComponentType);
+impl compile::Component for Composite {
+	type Id = std::ptr::NonNull<std::ffi::c_void>;
+	fn id (&self) -> Self::Id {
+		extractSlangObjectInstancePointer(&self.0)
+	}
+}
+impl compile::Composite for Composite {}
+
+///
+pub struct LinkedComposite;
+impl compile::LinkedComposite for LinkedComposite {
+	fn allEntryPointsCode (_target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
+		todo!()
+	}
+
+	fn entryPointCode (_target: compile::Target, _entryPointIdx: u32)
+		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
+	{
+		todo!()
+	}
+}
+
+impl From<&slang::Module> for EnvModule {
+	fn from (value: &shader_slang::Module) -> Self {
+		Self::fromSlangIRBytes(
+			value.serialize().expect("Slang failed to serialize a pre-compiled module").as_slice()
+		)
+	}
+}
+
 /// Helper struct storing session configuration info to facilitate [`compile::Environment`] compatibility checking.
 #[derive(Clone)]
 struct SlangSessionConfig {
@@ -90,45 +151,11 @@ pub struct ContextBuilder {
 	debug: bool,
 	searchPath: util::ds::HashUniqueVec<PathBuf>
 }
-impl ContextBuilder {
+impl ContextBuilder
+{
 	#[inline(always)]
-	pub fn withTarget (target: compile::Target) -> Self {
-		Self::withTargets(&[target])
-	}
-
-	#[inline(always)]
-	pub fn withTargets (targets: impl AsRef<[compile::Target]>) -> Self { Self {
-		targets: targets.as_ref().into(),
-		..Default::default()
-	}}
-
-	#[inline(always)]
-	pub fn addTarget (&mut self, target: compile::Target) -> &mut Self {
-		self.targets.push(target);
-		self
-	}
-
-	#[inline(always)]
-	pub fn addTargets (&mut self, targets: &[compile::Target]) -> &mut Self {
-		self.targets.extend(targets.iter().copied());
-		self
-	}
-
-	#[inline(always)]
-	pub fn addSearchPath (&mut self, path: impl AsRef<Path>) -> &mut Self {
-		self.searchPath.push(path.as_ref().to_owned());
-		self
-	}
-
-	#[inline(always)]
-	pub fn addSearchPaths (&mut self, paths: &[impl AsRef<Path>]) -> &mut Self {
-		self.searchPath.extend(paths.iter().map(|p| p.as_ref().to_owned()));
-		self
-	}
-
-	#[inline(always)]
-	pub fn buildWithGlobalSession<'gs, 'ctx> (self, globalSession: &'gs slang::GlobalSession)
-		-> Result<Context<'ctx>, compile::CreateContextError>
+	pub fn buildWithGlobalSession (self, globalSession: &slang::GlobalSession)
+		-> Result<Context, compile::CreateContextError>
 	{
 		// Finalize the Slang session configuration
 		// - initialize compat-relevant settings
@@ -137,29 +164,16 @@ impl ContextBuilder {
 		let compilerOptions = slang::CompilerOptions::default()
 			.matrix_layout_column(compatOptions.matrixLayoutColumn(true))
 			.matrix_layout_row(compatOptions.matrixLayoutRow(false));
-		let mut debug = false;
-		let spirv = self.targets.iter().find(|t| {
-			match t {
-				compile::Target::SPIRV(spv_debug) => { debug = *spv_debug; true },
-				_ => false
-			}
-		}).is_some();
-		self.targets.iter().find(|t| {
-			match t {
-				compile::Target::DXIL(dxil_debug) => { debug = debug || *dxil_debug; true },
-				_ => false
-			}
-		});
-		let compilerOptions = if spirv {
+		let compilerOptions = if self.targets.contains(&compile::Target::SPIRV) {
 			compilerOptions.emit_spirv_directly(true)
 		}
 		else { compilerOptions };
 		let compilerOptions = compilerOptions
 			.optimization(
-				if debug { slang::OptimizationLevel::None } else { slang::OptimizationLevel::Maximal }
+				if self.debug { slang::OptimizationLevel::None } else { slang::OptimizationLevel::Maximal }
 			)
 			.debug_information(
-				if debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
+				if self.debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
 			);
 
 		// - store
@@ -182,36 +196,70 @@ impl ContextBuilder {
 		let compatHash = compatOptions.digest();
 
 		// Done!
-		Ok(Context { sessionConfig, session, compatHash, environment: None, _phantomData: Default::default() })
-	}
-
-	#[inline(always)]
-	pub fn build<'ctx> (self) -> Result<Context<'ctx>, compile::CreateContextError> {
-		let gs = obtainGlobalSession().lock().unwrap();
-		self.buildWithGlobalSession(&gs)
+		Ok(Context { sessionConfig, session, compatHash, environment: None })
 	}
 }
 impl Default for ContextBuilder {
 	fn default () -> Self { Self {
-		targets: vec![compile::Target::SPIRV(cfg!(debug_assertions))].into(),
+		targets: vec![compile::mostSuitableTarget()].into(),
 		debug: cfg!(debug_assertions),
 		searchPath: Default::default(),
 	}}
 }
+impl compile::ContextBuilder for ContextBuilder
+{
+	type Context = Context;
+
+	#[inline(always)]
+	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self { Self {
+		targets: vec![compile::mostSuitableTargetForPlatform(platform)].into(),
+		debug: platform.isDebug(),
+		..Default::default()
+	}}
+
+	#[inline(always)]
+	fn withTargets (targets: impl AsRef<[compile::Target]>) -> Self { Self {
+		targets: targets.as_ref().into(),
+		..Default::default()
+	}}
+
+	#[inline(always)]
+	fn addTargets (mut self, targets: &[compile::Target]) -> Self {
+		self.targets.extend(targets.iter().copied());
+		self
+	}
+
+	#[inline(always)]
+	fn build (self) -> Result<Self::Context, compile::CreateContextError> {
+		let gs = obtainGlobalSession().lock().unwrap();
+		self.buildWithGlobalSession(&gs)
+	}
+}
+impl compile::WithFilesystemAccess for ContextBuilder {
+	#[inline(always)]
+	fn withSearchPaths (paths: &[impl AsRef<Path>]) -> Self { Self {
+		searchPath: paths.iter().map(|p| p.as_ref().to_owned()).collect(),
+		..Default::default()
+	}}
+
+	#[inline(always)]
+	fn addSearchPaths (mut self, paths: &[impl AsRef<Path>]) -> Self {
+		self.searchPath.extend(paths.iter().map(|p| p.as_ref().to_owned()));
+		self
+	}
+}
 
 
 /// A *Slang* [compilation context](compile::EnvironmentEnabled).
-pub struct Context<'this> {
+pub struct Context {
 	sessionConfig: SlangSessionConfig,
 
 	pub(crate)session: slang::Session,
 
 	compatHash: u64,
-	environment: Option<compile::Environment<EnvModule>>,
-
-	_phantomData: std::marker::PhantomData<&'this ()>
+	environment: Option<compile::Environment<EnvModule>>
 }
-impl Context<'_>
+impl Context
 {
 	/// Helper for obtaining a fresh *Slang* session.
 	fn freshSession (globalSession: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
@@ -225,43 +273,10 @@ impl Context<'_>
 		).ok_or(())
 	}
 
-	/// Create a new *Slang* context for the given compilation target using the given module search path.
-	///
-	/// # Arguments
-	///
-	/// * `target` – The target representation this `Context` will compile/transpile to.
-	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forTarget (target: compile::Target, searchPath: &[impl AsRef<Path>])
-		-> Result<Self, compile::CreateContextError>
-	{
-		// Sanity-check the target
-		if !target.isWGSL() && !target.isSPIRV() {
-			return Err(compile::CreateContextError::UnsupportedTarget(target));
-		}
-
-		// Setup builder for desired Context properties
-		let mut builder = ContextBuilder::withTarget(target);
-		builder.addSearchPaths(searchPath);
-
-		// Done!
-		builder.build()
-	}
-
-	/// Create a new *Slang* context for the *SPIR-V* target with the given module search path. The actual creation is
-	/// delegated to [`Self::forTarget`] using the default shader compilation target, this function merely decides
-	/// whether to enable debug information in the *SPIR-V* target based on `cfg!(debug_assertions)`.
-	///
-	/// # Arguments
-	///
-	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn new (searchPath: &[impl AsRef<Path>]) -> Result<Self, compile::CreateContextError> {
-		Self::forTarget(compile::Target::SPIRV(cfg!(debug_assertions)), searchPath)
-	}
-
 	///
 	pub fn targetType (&self) -> Option<WgpuSourceType> {
 		match self.sessionConfig.targets.first()? {
-			compile::Target::SPIRV(_) => Some(WgpuSourceType::SPIRV),
+			compile::Target::SPIRV => Some(WgpuSourceType::SPIRV),
 			compile::Target::WGSL => Some(WgpuSourceType::WGSL),
 			_ => None
 		}
@@ -277,75 +292,93 @@ impl Context<'_>
 	}
 
 	///
-	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<slang::Module, LoadModuleError>
+	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<slang::Module, compile::LoadModuleError>
 	{
 		// Let slang load and compile the module
 		let module =  self.session.load_module(
 			sourcefile.as_ref().to_string_lossy().as_ref()
 		).or_else(|err|
-			Err(LoadModuleError::CompilationError(format!("File {} – {err}", sourcefile.as_ref().display())))
+			Err(compile::LoadModuleError::CompilationError(format!("File {} – {err}", sourcefile.as_ref().display())))
 		)?;
 
 		// Done!
 		Ok(module)
 	}
+}
+impl compile::Context for Context
+{
+	type ModuleType<'sess> = Module;
+	type EntryPointType<'module> = EntryPoint;
+	type CompositeType<'sess> = Composite;
+	type LinkedCompositeType<'sess> = LinkedComposite;
+	type Builder = ContextBuilder;
 
-	///
 	#[inline]
-	pub fn compileFromSource (&self, sourceCode: &str) -> Result<slang::Module, LoadModuleError> {
+	fn compileFromSource (&self, sourceCode: &str) -> Result<Module, compile::LoadModuleError> {
 		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
-	///
-	pub fn compileFromNamedSource (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
-	                               -> Result<slang::Module, LoadModuleError>
+	fn compileFromNamedSource (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<Module, compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
 
 		// Let slang compile the module
 		let module =  self.session.load_module_from_source_string(targetPath, targetPath, sourceCode)
-			.or_else(|err| Err(LoadModuleError::CompilationError(format!("{err}"))))?;
+			.or_else(|err| Err(compile::LoadModuleError::CompilationError(format!("{err}"))))?;
 
 		// Done!
-		Ok(module)
+		Ok(Module(module))
 	}
 
-	///
-	pub fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), LoadModuleError>
+	fn createComposite<'this> (
+		&'this self, _components: &[compile::ComponentRef<'this, Module, EntryPoint, Composite>]
+	) -> Result<Composite, compile::CreateCompositeError> {
+		todo!("implement via to-be-completed unified Slang interface")
+	}
+
+	fn linkComposite (&self, _composite: &Composite) -> Result<LinkedComposite, compile::LinkError> {
+		todo!("implement via to-be-completed unified Slang interface")
+	}
+}
+impl compile::EnvironmentEnabled for Context
+{
+	type ModuleType = EnvModule;
+	type EnvStorageHint = EnvironmentStorage;
+
+	fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), compile::LoadModuleError>
 	{
 		let module = EnvModule::fromSlangModule(self.compile(&filename)?).map_err(
-			|err| LoadModuleError::CompilationError(format!("{err}"))
+			|err| compile::LoadModuleError::CompilationError(format!("{err}"))
 		)?;
 		storeInEnvironment(self.environment.as_mut(), filename, module).map_err(|err| match err {
-			AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
+			AddModuleError::DuplicateModulePaths(path) => compile::LoadModuleError::DuplicatePath(path)
 		})
 	}
 
-	///
-	pub fn loadModuleFromSource (
+	fn loadModuleFromSource (
 		&mut self, envStorage: EnvironmentStorage, virtualFilepath: impl AsRef<Path>, sourceCode: &str
-	) -> Result<(), LoadModuleError>
+	) -> Result<(), compile::LoadModuleError>
 	{
 		// Compile the source code inside the Slang session
+		use compile::Context;
 		let slangModule = self.compileFromNamedSource(&virtualFilepath, sourceCode)?;
 		let module = match envStorage {
 			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
-			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule).map_err(
-				|err| LoadModuleError::CompilationError(format!("{err}"))
+			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule.0).map_err(
+				|err| compile::LoadModuleError::CompilationError(format!("{err}"))
 			)?
 		};
 
 		// Store the module in the environment
 		storeInEnvironment(self.environment.as_mut(), virtualFilepath, module).map_err(|err| match err {
-			AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
+			AddModuleError::DuplicateModulePaths(path) => compile::LoadModuleError::DuplicatePath(path)
 		})
 	}
 
-	///
-	pub fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, bytes: &[u8])
-	                         -> Result<(), LoadModuleError>
+	fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, bytes: &[u8]) -> Result<(), compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath_str = validateModulePath(targetPath.as_ref())?;
@@ -353,19 +386,17 @@ impl Context<'_>
 		// Load the IR bytecode blob into the Slang session
 		let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 		self.session.load_module_from_ir_blob(targetPath_str, targetPath_str, &irBlob).or_else(
-			|err| Err(LoadModuleError::CompilationError(format!("{err}")))
+			|err| Err(compile::LoadModuleError::CompilationError(format!("{err}")))
 		)?;
 
 		// Store the IR module in the environment
 		storeInEnvironment(self.environment.as_mut(), targetPath, EnvModule::IR(bytes.to_owned())).map_err(
 			|err| match err {
-				AddModuleError::DuplicateModulePaths(path) => LoadModuleError::DuplicatePath(path)
+				AddModuleError::DuplicateModulePaths(path) => compile::LoadModuleError::DuplicatePath(path)
 			}
 		)
 	}
-}
-impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
-{
+
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<EnvModule>>)
 		-> Result<Option<compile::Environment<EnvModule>>, compile::SetEnvironmentError>
 	{
@@ -391,7 +422,7 @@ impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
 					EnvModule::SourceCode(sourceCode) =>
 						newSession.load_module_from_source_string(&path, "", sourceCode).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
-								LoadModuleError::CompilationError(format!("{err}")).into()
+								compile::LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?,
 
@@ -399,7 +430,7 @@ impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 						newSession.load_module_from_ir_blob(&path, "", &irBlob).or_else(|err|Err(
 							SetEnvironmentError::ImplementationSpecific(
-								LoadModuleError::CompilationError(format!("{err}")).into()
+								compile::LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?
 					}
@@ -432,6 +463,19 @@ impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
 // Functions
 //
 
+///
+#[inline(always)]
+fn extractSlangObjectInstancePointer (slangObject: &impl slang::Interface) -> std::ptr::NonNull<std::ffi::c_void> {
+	util::static_assertions::assert_eq_size!(slang::IUnknown, std::ptr::NonNull<std::ffi::c_void>);
+	unsafe {
+		// SAFETY:
+		// A `slang::IUnknown` is a 1-element tuple struct wrapping a C pointer (asserted above), so we can safely
+		// transmute-copy it to a new pointer variable (the Rust standard says that single element tuple-structs are
+		// guaranteed to have the exact same memory layout as their sole element).
+		std::mem::transmute_copy(slangObject.as_unknown())
+	}
+}
+
 /// Obtain a reference to the singleton [`slang::GlobalSession`](slang::GlobalSession) from which actual, stateful
 /// compiler sessions can be created.
 #[inline(always)]
@@ -446,9 +490,9 @@ fn constructTargetDescs<'td> (sessionConfig: &SlangSessionConfig)
 	sessionConfig.targets.iter().map(|target| {
 		let targetDesc = slang::TargetDesc::default().profile(sessionConfig.profile);
 		match target {
-			compile::Target::SPIRV(_) => targetDesc.format(slang::CompileTarget::Spirv),
+			compile::Target::SPIRV => targetDesc.format(slang::CompileTarget::Spirv),
 			compile::Target::WGSL => targetDesc.format(slang::CompileTarget::Wgsl),
-			compile::Target::DXIL(_) => targetDesc.format(slang::CompileTarget::Dxil),
+			compile::Target::DXIL => targetDesc.format(slang::CompileTarget::Dxil),
 			compile::Target::GLSL => targetDesc.format(slang::CompileTarget::Glsl),
 			compile::Target::HLSL => targetDesc.format(slang::CompileTarget::Hlsl),
 			compile::Target::CudaCpp => targetDesc.format(slang::CompileTarget::CudaSource),
@@ -463,10 +507,10 @@ fn constructTargetDescs<'td> (sessionConfig: &SlangSessionConfig)
 fn encodeValidModulePath (targetPath: &Path) -> Cow<'_, str>
 {
 	targetPath.parent().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	).unwrap();
 	targetPath.file_stem().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	).unwrap();
 
 	targetPath.as_os_str().to_string_lossy()

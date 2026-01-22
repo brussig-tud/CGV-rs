@@ -6,7 +6,7 @@
 
 /// Submodule implementing the Slang runtime context.
 mod context;
-pub use context::{Context, EnvModule, EnvironmentStorage}; // re-export
+pub use context::{Context, ContextBuilder, EnvModule, EnvironmentStorage}; // re-export
 
 /// Submodule implementing the Slang shader program representation.
 #[cfg(not(target_arch="wasm32"))]
@@ -22,18 +22,14 @@ pub use program::Program; // re-export
 //
 
 // Standard library
-use std::path::Path;
-
-// Anyhow library
-use anyhow;
+/* nothing here yet */
 
 // Slang library
 #[cfg(not(target_arch="wasm32"))]
-use shader_slang as slang;
+use shader_slang as slang_native;
 
 // Local imports
 use cgv_util as util;
-use crate::compile;
 
 
 
@@ -45,14 +41,14 @@ use crate::compile;
 ///
 #[cfg(not(target_arch="wasm32"))]
 pub struct EntryPoint {
-	slang: slang::EntryPoint,
-	progBytecode: slang::Blob,
+	slang: slang_native::EntryPoint,
+	progBytecode: slang_native::Blob,
 }
 #[cfg(not(target_arch="wasm32"))]
 impl EntryPoint
 {
 	#[inline]
-	pub fn slangEntryPoint (&self) -> &slang::EntryPoint {
+	pub fn slangEntryPoint (&self) -> &slang_native::EntryPoint {
 		&self.slang
 	}
 
@@ -68,17 +64,6 @@ impl EntryPoint
 //
 // Functions
 //
-
-/// Turn a list of [compilation targets](CompilationTarget) into a list of [*Slang* contexts](Context) for compiling to
-/// these targets.
-pub fn createContextsForTargets<'a> (targets: &[compile::Target], shaderPath: &[impl AsRef<Path>])
--> anyhow::Result<util::ds::RefVec<'a, Context<'a>>> {
-	let mut contexts = Vec::<Context>::with_capacity(targets.len());
-	for &target in targets {
-		contexts.push(Context::forTarget(target, shaderPath)?);
-	}
-	Ok(contexts.into())
-}
 
 /// Report the most suitable storage type for Slang-sourced compilation environment modules.
 pub fn mostSuitableEnvironmentStorageForPlatform (platform: &util::meta::SupportedPlatform) -> EnvironmentStorage

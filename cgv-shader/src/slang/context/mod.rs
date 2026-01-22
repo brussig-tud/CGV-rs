@@ -8,13 +8,13 @@
 #[cfg(not(target_arch="wasm32"))]
 mod native;
 #[cfg(not(target_arch="wasm32"))]
-pub use native::Context; // re-export
+pub use native::{Context, ContextBuilder}; // re-export
 
 /// Submodule implementing the WASM version of the *Slang* compilation context.
 #[cfg(target_arch="wasm32")]
 mod wasm;
 #[cfg(target_arch="wasm32")]
-pub use wasm::Context; // re-export
+pub use wasm::{Context, ContextBuilder}; // re-export
 
 
 
@@ -24,7 +24,7 @@ pub use wasm::Context; // re-export
 //
 
 // Standard library
-use std::{error::Error, path::{PathBuf, Path}, fmt::{Display, Formatter}};
+use std::{error::Error, path::Path, fmt::{Display, Formatter}};
 
 // Serde library
 use serde;
@@ -61,24 +61,6 @@ impl Display for CreateSessionError {
 	}
 }
 impl Error for CreateSessionError {}
-
-#[derive(Debug)]
-pub enum LoadModuleError {
-	CompilationError(String),
-	InvalidModulePath(PathBuf),
-	DuplicatePath(PathBuf)
-}
-impl Display for LoadModuleError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-		let desc = match self {
-			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
-			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
-			Self::DuplicatePath(path) => &format!("module already present at path: {}", path.display()),
-		};
-		write!(formatter, "LoadModuleError[{desc}]")
-	}
-}
-impl Error for LoadModuleError {}
 
 
 
@@ -173,17 +155,17 @@ impl CompatOptions {
 //
 
 ///
-fn validateModulePath (targetPath: &Path) -> Result<&str, LoadModuleError>
+fn validateModulePath (targetPath: &Path) -> Result<&str, compile::LoadModuleError>
 {
 	targetPath.parent().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	)?;
 	targetPath.file_stem().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	)?;
 
 	Ok(targetPath.as_os_str().to_str().ok_or(
-		LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	)?)
 }
 

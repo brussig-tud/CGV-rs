@@ -12,8 +12,12 @@ use wasm_bindgen::prelude::*;
 
 // Local imports
 use crate::*;
-use crate::{compile::{SetEnvironmentError, AddModuleError}, /*slang::Program, */slang::context::*};
-use crate::compile::LinkError;
+use crate::{
+	compile::{LoadModuleError, LinkError, SetEnvironmentError, AddModuleError}, /*slang::Program, */slang::context::*
+};
+
+
+
 //////
 //
 // Globals
@@ -45,11 +49,11 @@ impl GlobalSession {
 		else { None }
 	}
 
-	pub fn createSession (&self) -> Result<Session<'_>, CreateSessionError>
+	pub fn createSession (&self) -> Result<Session, CreateSessionError>
 	{
 		let handle = slangjs_GlobalSession_createSession(self.0);
 		if handle > 0 {
-			Ok(Session { handle: handle as u64, sessionPhantom: std::marker::PhantomData })
+			Ok(Session { handle: handle as u64 })
 		}
 		else {
 			Err(CreateSessionError::Generic)
@@ -89,11 +93,10 @@ impl Drop for ComponentList {
 }
 
 /// A handle for a JavaScript-side `slang::Session` instance.
-pub struct Session<'sess> {
+pub struct Session {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'sess ()>
 }
-impl<'sess> Session<'sess> {
+impl Session {
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
 		-> Result<JsSlangModule<'_>, LoadModuleError>
 	{
@@ -111,8 +114,8 @@ impl<'sess> Session<'sess> {
 		JsSlangModule::new(moduleHandle as u64, targetPath)
 	}
 
-	pub fn createComposite (&self, components: &[ComponentRef<'sess>])
-		-> Result<SlangComposite<'_>, compile::CreateCompositeError>
+	pub fn createComposite<'this> (&'this self, components: &[ComponentRef<'this>])
+		-> Result<SlangComposite<'this>, compile::CreateCompositeError>
 	{
 		// Build JavaScript-side component list
 		let componentList = ComponentList::new();
@@ -134,7 +137,7 @@ impl<'sess> Session<'sess> {
 		Ok(SlangComposite::new(compositeHandle as u64))
 	}
 }
-impl Drop for Session<'_> {
+impl Drop for Session {
 	fn drop (&mut self) {
 		slangjs_GlobalSession_dropSession(self.handle);
 	}
@@ -145,7 +148,7 @@ pub struct JsSlangModule<'sess> {
 	handle: u64,
 	virtualFilepath: PathBuf,
 	entryPoints: Vec<SlangEntryPoint<'sess>>,
-	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess>>
+	sessionPhantom: std::marker::PhantomData<&'sess Session>
 }
 impl JsSlangModule<'_> {
 	pub(crate) fn new (handle: u64, virtualFilepath: impl AsRef<Path>) -> Result<Self, LoadModuleError>
@@ -220,7 +223,7 @@ impl compile::Component for SlangEntryPoint<'_> {
 /// A handle for a JavaScript-side *Slang* *composite component* instance.
 pub struct SlangComposite<'sess> {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'sess Session<'sess>>
+	sessionPhantom: std::marker::PhantomData<&'sess Session>
 }
 impl SlangComposite<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
@@ -251,7 +254,7 @@ impl compile::Composite for SlangComposite<'_> {}
 /// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
 pub struct SlangLinkedComposite<'sess> {
 	handle: u64,
-	session: &'sess Session<'sess>,
+	session: &'sess Session,
 }
 impl<'sess> SlangLinkedComposite<'sess> {
 	pub(crate) fn new (handle: u64, session: &'sess Session) -> Self { Self {
@@ -281,49 +284,48 @@ impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 pub struct ContextBuilder {
 	targets: util::ds::BTreeUniqueVec<compile::Target>
 }
-impl ContextBuilder {
-	#[inline(always)]
-	pub fn withTarget (target: compile::Target) -> Self {
-		Self::withTargets(&[target])
-	}
-
-	#[inline(always)]
-	pub fn withTargets (targets: impl AsRef<[compile::Target]>) -> Self { Self {
-		targets: targets.as_ref().into(),
-		..Default::default()
-	}}
-
-	#[inline(always)]
-	pub fn addTarget (&mut self, target: compile::Target) -> &mut Self {
-		self.targets.push(target);
-		self
-	}
-
-	#[inline(always)]
-	pub fn addTargets (&mut self, targets: &[compile::Target]) -> &mut Self {
-		self.targets.extend(targets.iter().copied());
-		self
-	}
-
+impl ContextBuilder
+{
 	#[inline(always)]
 	pub fn buildWithGlobalSession<'gs> (self, globalSession: &'gs GlobalSession)
-		-> Result<Context<'gs>, compile::CreateContextError>
+		-> Result<Context, compile::CreateContextError>
 	{
 		let session = globalSession.createSession().map_err(
 			|err| compile::CreateContextError::ImplementationDefined(err.into())
 		)?;
 		Ok(Context { session, compatHash: 123, environment: None })
 	}
-
-	#[inline(always)]
-	pub fn build<'ctx> (self) -> Result<Context<'ctx>, compile::CreateContextError> {
-		self.buildWithGlobalSession(&GLOBAL_SESSION)
-	}
 }
 impl Default for ContextBuilder {
 	fn default () -> Self { Self {
-		targets: vec![compile::Target::WGSL].into()
+		targets: vec![compile::mostSuitableTarget()].into()
 	}}
+}
+impl compile::ContextBuilder for ContextBuilder {
+	type Context = Context;
+
+	#[inline(always)]
+	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self { Self {
+		targets: vec![compile::mostSuitableTargetForPlatform(platform)].into(),
+		..Default::default()
+	}}
+
+	#[inline(always)]
+	fn withTargets (targets: impl AsRef<[compile::Target]>) -> Self { Self {
+		targets: targets.as_ref().into(),
+		..Default::default()
+	}}
+
+	#[inline(always)]
+	fn addTargets (mut self, targets: &[compile::Target]) -> Self {
+		self.targets.extend(targets.iter().copied());
+		self
+	}
+
+	#[inline(always)]
+	fn build<'ctx> (self) -> Result<Context, compile::CreateContextError> {
+		self.buildWithGlobalSession(&GLOBAL_SESSION)
+	}
 }
 
 
@@ -331,46 +333,16 @@ impl Default for ContextBuilder {
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
 /// significantly, but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.
-pub struct Context<'this> {
-	session: Session<'this>,
+pub struct Context {
+	session: Session,
 	compatHash: u64,
 	environment: Option<compile::Environment<EnvModule>>
 }
-impl<'this> Context<'this>
+impl Context
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
+	fn freshSession (globalSession: &GlobalSession) -> Result<Session, CreateSessionError> {
 		globalSession.createSession()
-	}
-
-	/// Create a new *Slang* context for the given compilation target using the given module search path.
-	///
-	/// # Arguments
-	///
-	/// * `target` – The target representation this `Context` will compile/transpile to.
-	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn forTarget (target: compile::Target, _searchPath: &[impl AsRef<Path>])
-		-> Result<Self, compile::CreateContextError>
-	{
-		// Sanity-check the target
-		if !target.isWGSL() {
-			return Err(compile::CreateContextError::UnsupportedTarget(target));
-		}
-
-		// Setup builder for desired Context properties
-		let mut builder = ContextBuilder::withTarget(target);
-
-		// Done!
-		builder.build()
-	}
-
-	/// Create a new *Slang* context for the *WGSL* target with the given module search path.
-	///
-	/// # Arguments
-	///
-	/// * `searchPath` – The module search path for the *Slang* compiler.
-	pub fn new (searchPath: &[impl AsRef<Path>]) -> Result<Self, compile::CreateContextError> {
-		Self::forTarget(compile::Target::WGSL, searchPath)
 	}
 
 	/*/// Build a shader program from the given *Slang* source file.
@@ -381,16 +353,22 @@ impl<'this> Context<'this>
 	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
 		Program::fromSource(self, sourceFile)
 	}*/
+}
+impl compile::Context for Context
+{
+	type ModuleType<'sess> = JsSlangModule<'sess>;
+	type EntryPointType<'module> = SlangEntryPoint<'module>;
+	type CompositeType<'sess> = SlangComposite<'sess>;
+	type LinkedCompositeType<'sess> = SlangLinkedComposite<'sess>;
+	type Builder = ContextBuilder;
 
-	///
 	#[inline]
-	pub fn compileFromSource (&self, sourceCode: &str) -> Result<JsSlangModule<'_>, LoadModuleError> {
+	fn compileFromSource (&self, sourceCode: &str) -> Result<JsSlangModule<'_>, LoadModuleError> {
 		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
-	///
-	pub fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
+	fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
 		-> Result<JsSlangModule<'_>, LoadModuleError>
 	{
 		// Make sure we get a valid target path
@@ -403,18 +381,39 @@ impl<'this> Context<'this>
 		Ok(module)
 	}
 
-	///
-	pub fn loadModule (&mut self, _filename: impl AsRef<Path>) -> Result<(), LoadModuleError> {
+	fn createComposite<'this> (&'this self, components: &[ComponentRef<'this>])
+		-> Result<SlangComposite<'this>, compile::CreateCompositeError>
+	{
+		self.session.createComposite(components)
+	}
+
+	fn linkComposite<'this> (&'this self, composite: &SlangComposite) -> Result<SlangLinkedComposite<'this>, LinkError>
+	{
+		let handle = slangjs_Composite_link(composite.handle);
+		if handle > 0 {
+			Ok(SlangLinkedComposite::new(handle as u64, &self.session))
+		}
+		else {
+			Err(LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")))
+		}
+	}
+}
+impl compile::EnvironmentEnabled for Context
+{
+	type ModuleType = EnvModule;
+	type EnvStorageHint = EnvironmentStorage;
+
+	fn loadModule (&mut self, _filename: impl AsRef<Path>) -> Result<(), LoadModuleError> {
 		// File loading is not currently supported by WASM Slang
 		unimplemented!("Compiling from source files is not currently supported by WASM Slang");
 	}
 
-	///
-	pub fn loadModuleFromSource (
+	fn loadModuleFromSource (
 		&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str
 	) -> Result<(), LoadModuleError>
 	{
 		// Compile the source code inside the Slang session
+		use compile::Context;
 		self.compileFromNamedSource(&targetPath, sourceCode)?;
 		let module = match envStorage {
 			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
@@ -429,8 +428,7 @@ impl<'this> Context<'this>
 		})
 	}
 
-	///
-	pub fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, _bytes: &[u8]) -> Result<(), LoadModuleError>
+	fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, _bytes: &[u8]) -> Result<(), LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let _targetPath_str = validateModulePath(targetPath.as_ref())?;
@@ -438,30 +436,7 @@ impl<'this> Context<'this>
 		// IR bytecode loading is not currently supported by WASM Slang
 		unimplemented!("IR bytecode loading is not currently supported by WASM Slang");
 	}
-}
-impl<'this> compile::Context<
-	'this, JsSlangModule<'this>, SlangEntryPoint<'this>, SlangComposite<'this>, SlangLinkedComposite<'this>
-> for Context<'this>
-{
-	fn createComposite (&'this self, components: &[ComponentRef<'this>])
-	-> Result<SlangComposite<'this>, compile::CreateCompositeError> {
-		self.session.createComposite(components)
-	}
 
-	fn linkComposite (&'this self, composite: &SlangComposite) -> Result<SlangLinkedComposite<'this>, LinkError>
-	{
-		let handle = slangjs_Composite_link(composite.handle);
-		if handle > 0 {
-			Ok(SlangLinkedComposite::new(handle as u64, &self.session))
-		}
-		else {
-			Err(LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")))
-		}
-
-	}
-}
-impl compile::EnvironmentEnabled<EnvModule> for Context<'_>
-{
 	fn replaceEnvironment (&mut self, environment: Option<compile::Environment<EnvModule>>)
 		-> Result<Option<compile::Environment<EnvModule>>, compile::SetEnvironmentError>
 	{

@@ -22,7 +22,9 @@ pub mod env {
 
 /// The module prelude.
 pub mod prelude {
-	pub use super::{Context, EnvironmentEnabled, Module, EntryPoint, Component, Composite};
+	pub use super::{
+		Context, ContextBuilder, WithFilesystemAccess, EnvironmentEnabled, Module, EntryPoint, Component, Composite
+	};
 }
 
 
@@ -33,7 +35,7 @@ pub mod prelude {
 //
 
 // Standard library
-use std::{error::Error, fmt::{Display, Formatter}};
+use std::{error::Error, fmt::{Display, Formatter}, path::{PathBuf, Path}};
 
 // GUID library
 use cgv_util::uuid;
@@ -64,6 +66,24 @@ impl Display for CreateContextError {
 	}
 }
 impl Error for CreateContextError {}
+
+#[derive(Debug)]
+pub enum LoadModuleError {
+	CompilationError(String),
+	InvalidModulePath(PathBuf),
+	DuplicatePath(PathBuf)
+}
+impl Display for LoadModuleError {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
+			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
+			Self::DuplicatePath(path) => &format!("module already present at path: {}", path.display()),
+		};
+		write!(formatter, "LoadModuleError[{desc}]")
+	}
+}
+impl Error for LoadModuleError {}
 
 #[derive(Debug)]
 pub enum CreateCompositeError {
@@ -121,13 +141,13 @@ impl Error for SetEnvironmentError {}
 pub enum Target
 {
 	/// Compile shaders to *SPIR-V*, specifying whether they should be debuggable or not.
-	SPIRV(/* debug: */bool),
+	SPIRV,
 
 	/// Transpile shaders to *WebGPU Shading Language*.
 	WGSL,
 
 	/// Transpile shaders to *DirectX Intermediate Language*.
-	DXIL(/* debug: */bool),
+	DXIL,
 
 	/// Transpile shaders to *GL Shading Language*.
 	GLSL,
@@ -146,19 +166,11 @@ pub enum Target
 }
 impl Target
 {
-	/// Yields a value of [`compile::Target::SPIRV`] with the debug flag set to an unspecified value. Use this if you
-	/// want to indicate *SPIR-V* and don't care about the debug flag, e.g., when choosing the type of target code to
-	/// fetch for a fully built shader from [`compile::LinkedComposite::entryPointCode`].
-	#[inline(always)]
-	pub fn spirv () -> Self {
-		Self::SPIRV(false)
-	}
-
 	///
 	#[inline(always)]
-	pub fn fromWgpuSourceType (wgpuSourceType: WgpuSourceType, debugInfoIfApplicable: bool) -> Self {
+	pub fn fromWgpuSourceType (wgpuSourceType: WgpuSourceType) -> Self {
 		match wgpuSourceType {
-			WgpuSourceType::SPIRV => Self::SPIRV(debugInfoIfApplicable),
+			WgpuSourceType::SPIRV => Self::SPIRV,
 			WgpuSourceType::WGSL => Self::WGSL,
 			WgpuSourceType::GLSL => Self::GLSL
 		}
@@ -166,25 +178,25 @@ impl Target
 
 	#[inline(always)]
 	pub fn isSPIRV (&self) -> bool {
-		std::mem::discriminant(self) == std::mem::discriminant(&Self::spirv())
+		matches!(self, Self::SPIRV)
 	}
 
 	#[inline(always)]
 	pub fn isWGSL (&self) -> bool {
-		std::mem::discriminant(self) == std::mem::discriminant(&Self::WGSL)
+		matches!(self, Self::WGSL)
 	}
 
 	#[inline(always)]
 	pub fn isGLSL (&self) -> bool {
-		std::mem::discriminant(self) == std::mem::discriminant(&Self::GLSL)
+		matches!(self, Self::GLSL)
 	}
 }
 impl Display for Target {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::SPIRV(debug) => write!(f, "SPIR-V(debug={debug}"),
+			Self::SPIRV => write!(f, "SPIR-V"),
 			Self::WGSL => write!(f, "WGSL"),
-			Self::DXIL(debug) => write!(f, "DXIL(debug={debug}"),
+			Self::DXIL => write!(f, "DXIL"),
 			Self::GLSL => write!(f, "GLSL"),
 			Self::HLSL => write!(f, "HLSL"),
 			Self::CudaCpp => write!(f, "Cuda-C++"),
@@ -214,23 +226,133 @@ impl util::ds::UniqueVecElement for Target {
 //
 
 ///
-pub trait Context<'this, ModuleType, EntryPointType, CompositeType, LinkedCompositeType>
-where
-	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite,
-	LinkedCompositeType: LinkedComposite
+pub trait ContextBuilder: Default
 {
-	///
-	fn createComposite (&'this self, components: &[ComponentRef<'this, ModuleType, EntryPointType, CompositeType>])
-		-> Result<CompositeType, CreateCompositeError>;
+	////
+	// Associated types
 
 	///
-	fn linkComposite (&'this self, composite: &CompositeType) -> Result<LinkedCompositeType, LinkError>;
+	type Context: Context;
+
+
+	////
+	// Methods
+
+	///
+	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self;
+
+	///
+	fn withTargets (targets: impl AsRef<[Target]>) -> Self;
+
+	///
+	#[inline(always)]
+	fn withTarget (target: Target) -> Self {
+		Self::withTargets(&[target])
+	}
+
+	///
+	fn addTargets (self, targets: &[compile::Target]) -> Self;
+
+	///
+	#[inline(always)]
+	fn addTarget (self, target: compile::Target) -> Self {
+		self.addTargets(&[target])
+	}
+
+	///
+	fn build (self) -> Result<Self::Context, compile::CreateContextError>;
+}
+
+///
+pub trait WithFilesystemAccess
+{
+	#[inline(always)]
+	fn withSearchPath (path: impl AsRef<Path>) -> Self
+	where Self: ContextBuilder {
+		Self::withSearchPaths(&[path])
+	}
+	fn withSearchPaths (paths: &[impl AsRef<Path>]) -> Self where Self: ContextBuilder;
+
+	#[inline(always)]
+	fn addSearchPath (self, path: impl AsRef<Path>) -> Self
+	where Self: ContextBuilder {
+		self.addSearchPaths(&[path.as_ref()])
+	}
+	fn addSearchPaths (self, paths: &[impl AsRef<Path>]) -> Self where Self: ContextBuilder ;
+}
+
+
+///
+pub trait Context
+{
+	////
+	// Associated types
+
+	///
+	type ModuleType<'sess>: Module<Self::EntryPointType<'sess>> where Self: 'sess;
+
+	///
+	type EntryPointType<'module>: EntryPoint where Self: 'module;
+
+	///
+	type CompositeType<'sess>: Composite;
+
+	///
+	type LinkedCompositeType<'sess>: LinkedComposite where Self: 'sess;
+
+	///
+	type Builder: ContextBuilder<Context = Self>;
+
+
+	////
+	// Methods
+
+	///
+	fn compileFromSource (&self, sourceCode: &str) -> Result<Self::ModuleType<'_>, LoadModuleError>;
+
+	///
+	fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<Self::ModuleType<'_>, LoadModuleError>;
+
+	///
+	fn createComposite<'this> (
+		&'this self, components: &[
+			ComponentRef<'this, Self::ModuleType<'this>, Self::EntryPointType<'this>, Self::CompositeType<'this>>
+		]
+	) -> Result<Self::CompositeType<'this>, CreateCompositeError>;
+
+	///
+	fn linkComposite<'this> (&'this self, composite: &Self::CompositeType<'_>)
+		-> Result<Self::LinkedCompositeType<'this>, LinkError>;
 }
 
 
 /// The trait of a [`compile::Context`] that is capable of working with [`compile::Environment`](Environment)s.
-pub trait EnvironmentEnabled<ModuleType: env::Module>
+pub trait EnvironmentEnabled
 {
+	////
+	// Associated types
+
+	///
+	type ModuleType: env::Module + serde::Serialize+(for<'de> serde::Deserialize<'de>);
+
+	///
+	type EnvStorageHint;
+
+
+	////
+	// Methods
+
+	fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), LoadModuleError>;
+
+	///
+	fn loadModuleFromSource (
+		&mut self, envStorage: Self::EnvStorageHint, virtualFilepath: impl AsRef<Path>, sourceCode: &str
+	) -> Result<(), compile::LoadModuleError>;
+
+	///
+	fn loadModuleFromIR (&mut self, targetPath: impl AsRef<Path>, bytes: &[u8]) -> Result<(), compile::LoadModuleError>;
+
 	/// Replace the currently active [`compile::Environment`](Environment) with the given one (or `None`).
 	///
 	/// Note that the environment is *moved* in. The caller *must* lose ownership of the environment because of the
@@ -259,8 +381,8 @@ pub trait EnvironmentEnabled<ModuleType: env::Module>
 	/// # Returns
 	///
 	/// The previous environment if `Ok`, otherwise a [`SetEnvironmentError`] describing the problem.
-	fn replaceEnvironment (&mut self, environment: Option<Environment<ModuleType>>)
-		-> Result<Option<Environment<ModuleType>>, SetEnvironmentError>;
+	fn replaceEnvironment (&mut self, environment: Option<Environment<Self::ModuleType>>)
+		-> Result<Option<Environment<Self::ModuleType>>, SetEnvironmentError>;
 
 	/// Take the current [`compile::Environment`] out of the context, leaving `None` in its place.
 	///
@@ -274,7 +396,7 @@ pub trait EnvironmentEnabled<ModuleType: env::Module>
 	/// [replacing]() the current environment with `None` (which should be guaranteed to succeed) and cause this method
 	/// to panic.
 	#[inline(always)]
-	fn takeEnvironment (&mut self) -> Option<Environment<ModuleType>> {
+	fn takeEnvironment (&mut self) -> Option<Environment<Self::ModuleType>> {
 		self.replaceEnvironment(None).expect(
 			"Context::takeEnvironment: replacing the current environment with `None` should never fail"
 		)
@@ -282,7 +404,7 @@ pub trait EnvironmentEnabled<ModuleType: env::Module>
 
 	/// Close the context and return its environment if it had one. As the context is consumed by this method,
 	/// implementations can skip any and all reinitialization work that might be required to keep the context usable.
-	fn finishEnvironment (self) -> Option<Environment<ModuleType>>;
+	fn finishEnvironment (self) -> Option<Environment<Self::ModuleType>>;
 
 	///
 	fn environmentCompatHash (&self) -> u64;
@@ -295,6 +417,20 @@ pub trait EnvironmentEnabled<ModuleType: env::Module>
 // Functions
 //
 
+/// Turn a list of [compilation targets](CompilationTarget) into a list of [contexts](Context) that compile to these
+/// targets.
+pub fn createContextsForTargets<'a, ContextType> (targets: &[Target], shaderPath: &[impl AsRef<Path>])
+	-> anyhow::Result<util::ds::RefVec<'a, ContextType>>
+where
+	ContextType: compile::Context, ContextType::Builder: WithFilesystemAccess
+{
+	let mut contexts = Vec::<ContextType>::with_capacity(targets.len());
+	for &target in targets {
+		contexts.push(ContextType::Builder::withTarget(target).addSearchPaths(shaderPath).build()?);
+	}
+	Ok(contexts.into())
+}
+
 /// Determine the most suitable shader compilation target for the platform the module was built for.
 #[inline(always)]
 pub fn mostSuitableTarget() -> compile::Target
@@ -305,12 +441,7 @@ pub fn mostSuitableTarget() -> compile::Target
 	}
 	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
 	#[cfg(not(target_arch="wasm32"))] {
-		#[cfg(debug_assertions)] {
-			compile::Target::SPIRV(true)
-		}
-		#[cfg(not(debug_assertions))] {
-			compile::Target::SPIRV(false)
-		}
+		compile::Target::SPIRV
 	}
 }
 
@@ -324,7 +455,8 @@ pub fn mostSuitableTargetForPlatform(platform: &util::meta::SupportedPlatform) -
 	// All native backends
 	else {
 		// Currently always considers SPIR-V preferable even on non-Vulkan backends
-		compile::Target::SPIRV(platform.isDebug())
+		// TODO: somehow incorporate notion of WGPU backend into this decision
+		compile::Target::SPIRV
 	}
 }
 
@@ -335,13 +467,11 @@ pub fn feasibleTargets() -> &'static [compile::Target]
 {
 	// WebGPU/WASM
 	#[cfg(target_arch="wasm32")]
-	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV(false)];
+	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV];
 
 	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
-	#[cfg(all(not(target_arch="wasm32"),debug_assertions))]
-	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(true), compile::Target::WGSL];
-	#[cfg(all(not(target_arch="wasm32"),not(debug_assertions)))]
-	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(false), compile::Target::WGSL];
+	#[cfg(not(target_arch="wasm32"))]
+	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV, compile::Target::WGSL];
 
 	&COMPILATION_TARGETS
 }
@@ -351,18 +481,18 @@ pub fn feasibleTargetsForPlatform(platform: &util::meta::SupportedPlatform) -> &
 {
 	// WebGPU/WASM
 	if platform.isWasm() {
-		const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV(false)];
+		const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV];
 		&COMPILATION_TARGETS
 	}
 	// All native backends
 	else {
 		// Currently always considers SPIR-V preferable even on non-Vulkan backends
 		if !platform.isDebug() {
-			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(false), compile::Target::WGSL];
+			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV, compile::Target::WGSL];
 			&COMPILATION_TARGETS
 		}
 		else {
-			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV(true), compile::Target::WGSL];
+			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV, compile::Target::WGSL];
 			&COMPILATION_TARGETS
 		}
 	}

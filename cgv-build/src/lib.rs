@@ -25,9 +25,6 @@
 mod setup;
 pub use setup::Setup; // re-export
 
-/// The module implementing the shader packaging facilities.
-pub use cgv_shader as shader;
-
 /// Internal module implementing the high-level shader preparation logic
 mod shaderprep;
 pub use shaderprep::{prepareShaders, generateShaderEnvironment}; // re-export
@@ -62,7 +59,8 @@ pub use anyhow::{Context, Result, anyhow};
 use cargo_metadata::MetadataCommand;
 
 // CGV imports
-pub use cgv_runenv as run; // re-export
+pub use cgv_runenv as run;    // re-export
+pub use cgv_shader as shader; // re-export
 
 
 

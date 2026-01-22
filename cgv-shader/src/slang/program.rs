@@ -11,9 +11,10 @@ use std::path::Path;
 use anyhow::*;
 
 // Slang library
-use shader_slang as slang;
+use shader_slang as slang_native;
 
 // Local imports
+use crate::compile;
 use crate::slang::{Context, EntryPoint};
 
 
@@ -25,15 +26,15 @@ use crate::slang::{Context, EntryPoint};
 
 ///
 pub struct Program {
-	_linkedProg: slang::ComponentType,
-	allEntryPointsProg: slang::Blob,
+	_linkedProg: slang_native::ComponentType,
+	allEntryPointsProg: slang_native::Blob,
 	entryPointProgs: Vec<EntryPoint>
 }
 impl Program
 {
 	#[cfg(not(target_arch="wasm32"))]
 	pub(crate) fn finishCreation (
-		slangContext: &Context, module: &slang::Module, virtualFilename: impl AsRef<Path>
+		slangContext: &Context, module: &slang_native::Module, virtualFilename: impl AsRef<Path>
 	) -> Result<Self>
 	{
 		// Specialize program instances for each entry point
@@ -79,10 +80,11 @@ impl Program
 		-> Result<Self>
 	{
 		// Compile Slang module
+		use compile::Context;
 		let module = slangContext.compileFromNamedSource(&virtualFilename, sourceCode)?;
 
 		// Common initialization code
-		Self::finishCreation(slangContext, &module, virtualFilename)
+		Self::finishCreation(slangContext, &module.0, virtualFilename)
 	}
 
 	#[cfg(not(target_arch="wasm32"))]

@@ -220,7 +220,7 @@ impl<ModuleType> Environment<ModuleType>
 	/// Construct an empty environment identified by the given
 	/// [UUID](https://de.wikipedia.org/wiki/Universally_Unique_Identifier) and setting compatibility with the provided
 	/// [`compile::EnvironmentEnabled`]
-	pub fn forContextWithUuid (context: &impl compile::EnvironmentEnabled<ModuleType>, uuid: Uuid, label: &str)
+	pub fn forContextWithUuid (context: &impl compile::EnvironmentEnabled, uuid: Uuid, label: &str)
 	-> Self { Self {
 		uuid, label: label.to_owned(), compatHash: context.environmentCompatHash(),
 		modules: util::ds::BTreeUniqueVec::new()

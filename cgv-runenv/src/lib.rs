@@ -29,7 +29,7 @@ use serde_yaml_ng;
 //
 
 /// A struct storing runtime environment information (most notably, the shader search path) for a *CGV-rs* application.
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(Default,Debug,serde::Serialize,serde::Deserialize)]
 pub struct Environment {
 	/// Array of directory paths to search for whenever shader files are given by a relative path.
 	pub shaderPath: Vec<PathBuf>
