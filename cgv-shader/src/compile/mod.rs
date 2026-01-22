@@ -289,16 +289,16 @@ pub trait Context
 	// Associated types
 
 	///
-	type ModuleType<'sess>: Module<Self::EntryPointType<'sess>> where Self: 'sess;
+	type ModuleType<'module>: Module<Self::EntryPointType<'module>> where Self: 'module;
 
 	///
-	type EntryPointType<'module>: EntryPoint where Self: 'module;
+	type EntryPointType<'ep>: EntryPoint where Self: 'ep;
 
 	///
-	type CompositeType<'sess>: Composite;
+	type CompositeType<'cp>: Composite;
 
 	///
-	type LinkedCompositeType<'sess>: LinkedComposite where Self: 'sess;
+	type LinkedCompositeType<'lct>: LinkedComposite where Self: 'lct;
 
 	///
 	type Builder: ContextBuilder<Context = Self>;

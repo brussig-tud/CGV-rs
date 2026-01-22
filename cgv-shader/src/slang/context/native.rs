@@ -27,7 +27,7 @@ use compile::{SetEnvironmentError, AddModuleError};
 
 /// The singleton global session instance.
 static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::new(
-	|| NativeGlobalSessionContainer { globalSession: Mutex::new(slang::GlobalSession::new().unwrap()) }
+	|| NativeGlobalSessionContainer(Mutex::new(slang::GlobalSession::new().unwrap()))
 );
 
 
@@ -38,14 +38,12 @@ static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::
 //
 
 ///
-pub struct NativeGlobalSessionContainer {
-	globalSession: Mutex<slang::GlobalSession>
-}
+pub struct NativeGlobalSessionContainer(Mutex<slang::GlobalSession>);
 impl Deref for NativeGlobalSessionContainer {
 	type Target =  Mutex<slang::GlobalSession>;
 
 	fn deref (&self) -> &Self::Target {
-		&self.globalSession
+		&self.0
 	}
 }
 unsafe impl Send for NativeGlobalSessionContainer {
@@ -59,6 +57,24 @@ unsafe impl Sync for NativeGlobalSessionContainer {
 	// session methods are **NOT** re-entrant. However, clients promise they will only ever create instances inside a
 	// `LazyLock`, which enforces mutual exclusion while the initialization methods are run, and our internal mutex
 	// enforces serial access to the global session after initialization.
+}
+
+
+///
+pub(crate) struct Session<'this> {
+	slangSession: slang::Session,
+	_globalSession: &'this NativeGlobalSessionContainer
+}
+impl<'this> Session<'this> {
+	fn new (slangSession: slang::Session, globalSession: &'this NativeGlobalSessionContainer) -> Self { Self {
+		slangSession, _globalSession: globalSession
+	}}
+}
+impl Deref for Session<'_> {
+	type Target = slang::Session;
+	fn deref (&self) -> &Self::Target {
+		&self.slangSession
+	}
 }
 
 
@@ -132,13 +148,13 @@ impl From<&slang::Module> for EnvModule {
 
 /// Helper struct storing session configuration info to facilitate [`compile::Environment`] compatibility checking.
 #[derive(Clone)]
-struct SlangSessionConfig {
+struct SessionConfig {
 	searchPaths: Vec<std::ffi::CString>,
 	targets: util::ds::BTreeUniqueVec<compile::Target>,
 	compilerOptions: slang::CompilerOptions,
 	profile: slang::ProfileID,
 }
-impl SlangSessionConfig {
+impl SessionConfig {
 	pub fn searchPathsAsPointers(&self) -> Vec<*const i8> {
 		self.searchPaths.iter().map(|p| p.as_ptr()).collect::<Vec<*const i8>>()
 	}
@@ -146,16 +162,17 @@ impl SlangSessionConfig {
 
 
 ///
-pub struct ContextBuilder {
+pub struct ContextBuilder<'ctx> {
 	targets: util::ds::BTreeUniqueVec<compile::Target>,
 	debug: bool,
-	searchPath: util::ds::HashUniqueVec<PathBuf>
+	searchPath: util::ds::HashUniqueVec<PathBuf>,
+	lifetimePhantom: std::marker::PhantomData<&'ctx ()>
 }
-impl ContextBuilder
+impl ContextBuilder<'_>
 {
 	#[inline(always)]
-	pub fn buildWithGlobalSession (self, globalSession: &slang::GlobalSession)
-		-> Result<Context, compile::CreateContextError>
+	pub fn buildWithGlobalSession (self, globalSession: &NativeGlobalSessionContainer)
+		-> Result<Context<'_>, compile::CreateContextError>
 	{
 		// Finalize the Slang session configuration
 		// - initialize compat-relevant settings
@@ -177,12 +194,12 @@ impl ContextBuilder
 			);
 
 		// - store
-		let sessionConfig = SlangSessionConfig {
+		let sessionConfig = SessionConfig {
 			targets:self.targets.into(), compilerOptions,
 			searchPaths: self.searchPath.iter().map(|p| unsafe {
 				std::ffi::CString::from_vec_unchecked(p.to_string_lossy().as_bytes().to_vec())
 			}).collect::<Vec<std::ffi::CString>>(),
-			profile:  globalSession.find_profile("glsl_460")
+			profile:  globalSession.lock().unwrap().find_profile("glsl_460")
 		};
 
 		// Create the stateful Slang compiler session
@@ -199,16 +216,17 @@ impl ContextBuilder
 		Ok(Context { sessionConfig, session, compatHash, environment: None })
 	}
 }
-impl Default for ContextBuilder {
+impl Default for ContextBuilder<'_> {
 	fn default () -> Self { Self {
 		targets: vec![compile::mostSuitableTarget()].into(),
 		debug: cfg!(debug_assertions),
 		searchPath: Default::default(),
+		lifetimePhantom: Default::default()
 	}}
 }
-impl compile::ContextBuilder for ContextBuilder
+impl<'ctx> compile::ContextBuilder for ContextBuilder<'ctx>
 {
-	type Context = Context;
+	type Context = Context<'ctx>;
 
 	#[inline(always)]
 	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self { Self {
@@ -231,11 +249,10 @@ impl compile::ContextBuilder for ContextBuilder
 
 	#[inline(always)]
 	fn build (self) -> Result<Self::Context, compile::CreateContextError> {
-		let gs = obtainGlobalSession().lock().unwrap();
-		self.buildWithGlobalSession(&gs)
+		self.buildWithGlobalSession(obtainGlobalSession())
 	}
 }
-impl compile::WithFilesystemAccess for ContextBuilder {
+impl compile::WithFilesystemAccess for ContextBuilder<'_> {
 	#[inline(always)]
 	fn withSearchPaths (paths: &[impl AsRef<Path>]) -> Self { Self {
 		searchPath: paths.iter().map(|p| p.as_ref().to_owned()).collect(),
@@ -251,26 +268,26 @@ impl compile::WithFilesystemAccess for ContextBuilder {
 
 
 /// A *Slang* [compilation context](compile::EnvironmentEnabled).
-pub struct Context {
-	sessionConfig: SlangSessionConfig,
+pub struct Context<'this> {
+	sessionConfig: SessionConfig,
 
-	pub(crate)session: slang::Session,
+	pub(crate) session: Session<'this>,
 
 	compatHash: u64,
 	environment: Option<compile::Environment<EnvModule>>
 }
-impl Context
+impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession (globalSession: &slang::GlobalSession, sessionConfig: &SlangSessionConfig)
-		-> Result<slang::Session, ()>
+	fn freshSession<'gs> (globalSession: &'gs NativeGlobalSessionContainer, sessionConfig: &SessionConfig)
+		-> Result<Session<'gs>, ()>
 	{
 		let targetDesc = constructTargetDescs(&sessionConfig);
-		globalSession.create_session(&slang::SessionDesc::default()
+		Ok(Session::new(globalSession.lock().unwrap().create_session(&slang::SessionDesc::default()
 			.targets(&targetDesc)
 			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
 			.options(&sessionConfig.compilerOptions)
-		).ok_or(())
+		).ok_or(())?, globalSession))
 	}
 
 	///
@@ -305,13 +322,13 @@ impl Context
 		Ok(module)
 	}
 }
-impl compile::Context for Context
+impl<'ctx> compile::Context for Context<'ctx>
 {
-	type ModuleType<'sess> = Module;
-	type EntryPointType<'module> = EntryPoint;
-	type CompositeType<'sess> = Composite;
-	type LinkedCompositeType<'sess> = LinkedComposite;
-	type Builder = ContextBuilder;
+	type ModuleType<'module> = Module where Self: 'module;
+	type EntryPointType<'ep> = EntryPoint where Self: 'ep;
+	type CompositeType<'cp> = Composite;
+	type LinkedCompositeType<'lct> = LinkedComposite where Self: 'lct;
+	type Builder = ContextBuilder<'ctx>;
 
 	#[inline]
 	fn compileFromSource (&self, sourceCode: &str) -> Result<Module, compile::LoadModuleError> {
@@ -343,7 +360,7 @@ impl compile::Context for Context
 		todo!("implement via to-be-completed unified Slang interface")
 	}
 }
-impl compile::EnvironmentEnabled for Context
+impl compile::EnvironmentEnabled for Context<'_>
 {
 	type ModuleType = EnvModule;
 	type EnvStorageHint = EnvironmentStorage;
@@ -406,7 +423,7 @@ impl compile::EnvironmentEnabled for Context
 		}
 
 		// Start from a fresh session
-		let newSession = Self::freshSession(&obtainGlobalSession().lock().unwrap(), &self.sessionConfig).expect(
+		let newSession = Self::freshSession(&obtainGlobalSession(), &self.sessionConfig).expect(
 			"Creating a Slang session identical to an existing one should never fail unless there are \
 			unrecoverable external circumstances (out-of-memory etc.)"
 		);
@@ -479,12 +496,12 @@ fn extractSlangObjectInstancePointer (slangObject: &impl slang::Interface) -> st
 /// Obtain a reference to the singleton [`slang::GlobalSession`](slang::GlobalSession) from which actual, stateful
 /// compiler sessions can be created.
 #[inline(always)]
-pub fn obtainGlobalSession () -> &'static Mutex<slang::GlobalSession> {
+pub fn obtainGlobalSession () -> &'static NativeGlobalSessionContainer {
 	&SLANG_GLOBAL_SESSION
 }
 
 ///
-fn constructTargetDescs<'td> (sessionConfig: &SlangSessionConfig)
+fn constructTargetDescs<'td> (sessionConfig: &SessionConfig)
 	-> Vec<slang::TargetDesc<'td>>
 {
 	sessionConfig.targets.iter().map(|target| {

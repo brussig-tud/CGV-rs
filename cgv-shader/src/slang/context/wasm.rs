@@ -53,7 +53,7 @@ impl GlobalSession {
 	{
 		let handle = slangjs_GlobalSession_createSession(self.0);
 		if handle > 0 {
-			Ok(Session { handle: handle as u64 })
+			Ok(Session { handle: handle as u64, globalSession: self })
 		}
 		else {
 			Err(CreateSessionError::Generic)
@@ -93,10 +93,11 @@ impl Drop for ComponentList {
 }
 
 /// A handle for a JavaScript-side `slang::Session` instance.
-pub struct Session {
+pub struct Session<'this> {
 	handle: u64,
+	globalSession: &'this GlobalSession
 }
-impl Session {
+impl Session<'_> {
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
 		-> Result<JsSlangModule<'_>, LoadModuleError>
 	{
@@ -137,18 +138,18 @@ impl Session {
 		Ok(SlangComposite::new(compositeHandle as u64))
 	}
 }
-impl Drop for Session {
+impl Drop for Session<'_> {
 	fn drop (&mut self) {
 		slangjs_GlobalSession_dropSession(self.handle);
 	}
 }
 
 /// A handle for a JavaScript-side `slang::Module` instance.
-pub struct JsSlangModule<'sess> {
+pub struct JsSlangModule<'this> {
 	handle: u64,
 	virtualFilepath: PathBuf,
-	entryPoints: Vec<SlangEntryPoint<'sess>>,
-	sessionPhantom: std::marker::PhantomData<&'sess Session>
+	entryPoints: Vec<SlangEntryPoint<'this>>,
+	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
 }
 impl JsSlangModule<'_> {
 	pub(crate) fn new (handle: u64, virtualFilepath: impl AsRef<Path>) -> Result<Self, LoadModuleError>
@@ -221,9 +222,9 @@ impl compile::Component for SlangEntryPoint<'_> {
 }
 
 /// A handle for a JavaScript-side *Slang* *composite component* instance.
-pub struct SlangComposite<'sess> {
+pub struct SlangComposite<'this> {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'sess Session>
+	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
 }
 impl SlangComposite<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
@@ -252,9 +253,9 @@ impl compile::Component for SlangComposite<'_> {
 impl compile::Composite for SlangComposite<'_> {}
 
 /// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
-pub struct SlangLinkedComposite<'sess> {
+pub struct SlangLinkedComposite<'this> {
 	handle: u64,
-	session: &'sess Session,
+	session: &'this Session<'this>,
 }
 impl<'sess> SlangLinkedComposite<'sess> {
 	pub(crate) fn new (handle: u64, session: &'sess Session) -> Self { Self {
@@ -281,10 +282,11 @@ impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 
 
 ///
-pub struct ContextBuilder {
-	targets: util::ds::BTreeUniqueVec<compile::Target>
+pub struct ContextBuilder<'ctx> {
+	targets: util::ds::BTreeUniqueVec<compile::Target>,
+	lifetimePhantom: std::marker::PhantomData<&'ctx ()>
 }
-impl ContextBuilder
+impl ContextBuilder<'_>
 {
 	#[inline(always)]
 	pub fn buildWithGlobalSession<'gs> (self, globalSession: &'gs GlobalSession)
@@ -296,13 +298,13 @@ impl ContextBuilder
 		Ok(Context { session, compatHash: 123, environment: None })
 	}
 }
-impl Default for ContextBuilder {
+impl Default for ContextBuilder<'_> {
 	fn default () -> Self { Self {
-		targets: vec![compile::mostSuitableTarget()].into()
+		targets: vec![compile::mostSuitableTarget()].into(), lifetimePhantom: Default::default()
 	}}
 }
-impl compile::ContextBuilder for ContextBuilder {
-	type Context = Context;
+impl<'ctx> compile::ContextBuilder for ContextBuilder<'ctx> {
+	type Context = Context<'ctx>;
 
 	#[inline(always)]
 	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self { Self {
@@ -323,7 +325,7 @@ impl compile::ContextBuilder for ContextBuilder {
 	}
 
 	#[inline(always)]
-	fn build<'ctx> (self) -> Result<Context, compile::CreateContextError> {
+	fn build (self) -> Result<Context<'ctx>, compile::CreateContextError> {
 		self.buildWithGlobalSession(&GLOBAL_SESSION)
 	}
 }
@@ -333,12 +335,12 @@ impl compile::ContextBuilder for ContextBuilder {
 /// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
 /// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
 /// significantly, but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.
-pub struct Context {
-	session: Session,
+pub struct Context<'this> {
+	session: Session<'this>,
 	compatHash: u64,
 	environment: Option<compile::Environment<EnvModule>>
 }
-impl Context
+impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
 	fn freshSession (globalSession: &GlobalSession) -> Result<Session, CreateSessionError> {
@@ -354,13 +356,13 @@ impl Context
 		Program::fromSource(self, sourceFile)
 	}*/
 }
-impl compile::Context for Context
+impl<'ctx> compile::Context for Context<'ctx>
 {
-	type ModuleType<'sess> = JsSlangModule<'sess>;
-	type EntryPointType<'module> = SlangEntryPoint<'module>;
-	type CompositeType<'sess> = SlangComposite<'sess>;
-	type LinkedCompositeType<'sess> = SlangLinkedComposite<'sess>;
-	type Builder = ContextBuilder;
+	type ModuleType<'module> = JsSlangModule<'module> where Self: 'module;
+	type EntryPointType<'ep> = SlangEntryPoint<'ep> where Self: 'ep;
+	type CompositeType<'ct> = SlangComposite<'ct> ;
+	type LinkedCompositeType<'lct> = SlangLinkedComposite<'lct> where Self: 'lct;
+	type Builder = ContextBuilder<'ctx>;
 
 	#[inline]
 	fn compileFromSource (&self, sourceCode: &str) -> Result<JsSlangModule<'_>, LoadModuleError> {
@@ -398,7 +400,7 @@ impl compile::Context for Context
 		}
 	}
 }
-impl compile::EnvironmentEnabled for Context
+impl compile::EnvironmentEnabled for Context<'_>
 {
 	type ModuleType = EnvModule;
 	type EnvStorageHint = EnvironmentStorage;
