@@ -76,6 +76,7 @@ impl Program
 	}
 
 	#[cfg(not(target_arch="wasm32"))]
+	#[expect(dead_code)]
 	pub(crate) fn fromSource (slangContext: &Context, virtualFilename: impl AsRef<Path>, sourceCode: &str)
 		-> Result<Self>
 	{
@@ -84,7 +85,7 @@ impl Program
 		let module = slangContext.compileFromNamedSource(&virtualFilename, sourceCode)?;
 
 		// Common initialization code
-		Self::finishCreation(slangContext, &module.0, virtualFilename)
+		Self::finishCreation(slangContext, &module.component, virtualFilename)
 	}
 
 	#[cfg(not(target_arch="wasm32"))]

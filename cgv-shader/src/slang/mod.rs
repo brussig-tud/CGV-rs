@@ -6,7 +6,7 @@
 
 /// Submodule implementing the Slang runtime context.
 mod context;
-pub use context::{Context, ContextBuilder, EnvModule, EnvironmentStorage}; // re-export
+pub use context::{Context, ContextBuilder, EnvModule, EnvironmentStorage, obtainGlobalSession}; // re-export
 
 /// Submodule implementing the Slang shader program representation.
 #[cfg(not(target_arch="wasm32"))]

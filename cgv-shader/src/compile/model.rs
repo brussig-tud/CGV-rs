@@ -82,10 +82,10 @@ pub trait Composite: Component {}
 /// The trait of a [`Composite`] that has been linked into a functional shader program.
 pub trait LinkedComposite {
 	///
-	fn allEntryPointsCode (target: compile::Target) -> Result<ProgramCode, TranslateError>;
+	fn allEntryPointsCode (&self, target: compile::Target) -> Result<ProgramCode, TranslateError>;
 
 	///
-	fn entryPointCode (target: compile::Target, entryPointIdx: u32) -> Option<Result<ProgramCode, TranslateError>>;
+	fn entryPointCode (&self, target: compile::Target, entryPointIdx: u32) -> Option<Result<ProgramCode, TranslateError>>;
 }
 
 

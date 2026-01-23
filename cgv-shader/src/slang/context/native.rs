@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{path::{PathBuf, Path}, borrow::Cow, ops::Deref, sync::{Mutex, LazyLock}};
+use std::{collections::BTreeMap, path::{PathBuf, Path}, borrow::Cow, ops::Deref, sync::{Mutex, LazyLock}};
 
 // Anyhow library
 use anyhow::anyhow;
@@ -15,8 +15,7 @@ use shader_slang as slang;
 
 // Local imports
 use crate::*;
-use crate::{compile, slang::Program, slang::context::*};
-use compile::{SetEnvironmentError, AddModuleError};
+use crate::{compile::{self, SetEnvironmentError, AddModuleError}, slang::Program, slang::context::*};
 
 
 
@@ -26,9 +25,12 @@ use compile::{SetEnvironmentError, AddModuleError};
 //
 
 /// The singleton global session instance.
-static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::new(
-	|| NativeGlobalSessionContainer(Mutex::new(slang::GlobalSession::new().unwrap()))
+static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(
+	|| GlobalSession(Mutex::new(slang::GlobalSession::new().unwrap()))
 );
+
+/// The common error message for all instances where entry point names are queried from *Slang*.
+static MISSING_ENTRY_POINT_NAME_MSG: &str = "entry points should always have a name";
 
 
 
@@ -38,36 +40,37 @@ static SLANG_GLOBAL_SESSION: LazyLock<NativeGlobalSessionContainer> = LazyLock::
 //
 
 ///
-pub struct NativeGlobalSessionContainer(Mutex<slang::GlobalSession>);
-impl Deref for NativeGlobalSessionContainer {
+pub struct GlobalSession(Mutex<slang::GlobalSession>);
+impl Deref for GlobalSession {
 	type Target =  Mutex<slang::GlobalSession>;
 
 	fn deref (&self) -> &Self::Target {
 		&self.0
 	}
 }
-unsafe impl Send for NativeGlobalSessionContainer {
+unsafe impl Send for GlobalSession {
 	// SAFETY:
 	// According to the [*Slang* docs](https://shader-slang.org/slang/user-guide/compiling.html#multithreading), global
 	// session methods may be called from any thread, as long as they don't do it concurrently.
 }
-unsafe impl Sync for NativeGlobalSessionContainer {
+unsafe impl Sync for GlobalSession {
 	// SAFETY:
 	// According to the [*Slang* docs](https://shader-slang.org/slang/user-guide/compiling.html#multithreading), global
-	// session methods are **NOT** re-entrant. However, clients promise they will only ever create instances inside a
-	// `LazyLock`, which enforces mutual exclusion while the initialization methods are run, and our internal mutex
-	// enforces serial access to the global session after initialization.
+	// session methods are **NOT** re-entrant. However, we guarantee that the only way to access the wrapped *Slang*
+	// global session object is through our mutex.
 }
 
 
 ///
 pub(crate) struct Session<'this> {
 	slangSession: slang::Session,
-	_globalSession: &'this NativeGlobalSessionContainer
+
+	#[expect(dead_code)]
+	globalSession: &'this GlobalSession
 }
 impl<'this> Session<'this> {
-	fn new (slangSession: slang::Session, globalSession: &'this NativeGlobalSessionContainer) -> Self { Self {
-		slangSession, _globalSession: globalSession
+	fn new (slangSession: slang::Session, globalSession: &'this GlobalSession) -> Self { Self {
+		slangSession, globalSession
 	}}
 }
 impl Deref for Session<'_> {
@@ -79,7 +82,7 @@ impl Deref for Session<'_> {
 
 
 ///
-pub struct EntryPoint(pub slang::EntryPoint);
+pub struct EntryPoint(slang::EntryPoint);
 impl compile::Component for EntryPoint {
 	type Id = std::ptr::NonNull<std::ffi::c_void>;
 	fn id (&self) -> Self::Id {
@@ -88,34 +91,40 @@ impl compile::Component for EntryPoint {
 }
 impl compile::EntryPoint for EntryPoint {
 	fn name (&self) -> &str {
-		todo!()
+		self.0.function_reflection().name().expect(MISSING_ENTRY_POINT_NAME_MSG)
 	}
 }
 
 ///
-pub struct Module(pub slang::Module);
+pub struct Module {
+	pub(crate) component: slang::Module,
+	virtualPath: PathBuf,
+	entryPoints: Vec<EntryPoint>
+}
 impl compile::Component for Module {
 	type Id = std::ptr::NonNull<std::ffi::c_void>;
 	fn id (&self) -> Self::Id {
-		extractSlangObjectInstancePointer(&self.0)
+		extractSlangObjectInstancePointer(&self.component)
 	}
 }
-impl compile::Module<EntryPoint> for Module {
+impl compile::Module<EntryPoint> for Module
+{
 	fn virtualFilepath (&self) -> &Path {
-		todo!()
+		&self.virtualPath
 	}
 
-	fn entryPoint (&self, _name: &str) -> Option<&EntryPoint> {
-		todo!()
+	fn entryPoint (&self, name: &str) -> Option<&EntryPoint> {
+		use compile::EntryPoint;
+		self.entryPoints.iter().find(|ep| ep.name() == name)
 	}
 
 	fn entryPoints (&self) -> &[EntryPoint] {
-		todo!()
+		&self.entryPoints
 	}
 }
 
 ///
-pub struct Composite(pub slang::ComponentType);
+pub struct Composite(pub(crate) slang::ComponentType);
 impl compile::Component for Composite {
 	type Id = std::ptr::NonNull<std::ffi::c_void>;
 	fn id (&self) -> Self::Id {
@@ -125,23 +134,59 @@ impl compile::Component for Composite {
 impl compile::Composite for Composite {}
 
 ///
-pub struct LinkedComposite;
+pub struct LinkedComposite {
+	pub(crate) component: slang::ComponentType,
+	entryPointMap: BTreeMap<String, i64>
+}
+impl LinkedComposite {
+	pub fn entryPointMap (&self) -> &BTreeMap<String, i64> {
+		&self.entryPointMap
+	}
+}
 impl compile::LinkedComposite for LinkedComposite {
-	fn allEntryPointsCode (_target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
-		todo!()
+	fn allEntryPointsCode (&self, target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError>
+	{
+		let code = self.component.target_code(0).or_else(|e|
+			Err(compile::TranslateError::ImplementationSpecific(anyhow!("translation to {target} failed: {e}")))
+		)?;
+		Ok(if target.isBinary() {
+			compile::ProgramCode::Binary(code.as_slice().to_owned())
+		} else {
+			compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
+		})
 	}
 
-	fn entryPointCode (_target: compile::Target, _entryPointIdx: u32)
+	fn entryPointCode (&self, target: compile::Target, entryPointIdx: u32)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
-		todo!()
+		if entryPointIdx as usize>= self.entryPointMap.len() {
+			return None;
+		}
+		let translateResult = self.component.entry_point_code(
+			entryPointIdx as i64, 0
+		).map_err(|e| {
+			Err(compile::TranslateError::ImplementationSpecific(anyhow!(
+				"translating entry point {entryPointIdx}[''] to {target} failed: {e}"
+			)))
+		});
+		let code = if translateResult.is_ok() {
+			translateResult.ok().unwrap()
+		}
+		else {
+			return Some(translateResult.err().unwrap());
+		};
+		Some(Ok(if target.isBinary() {
+			compile::ProgramCode::Binary(code.as_slice().to_owned())
+		} else {
+			compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
+		}))
 	}
 }
 
 impl From<&slang::Module> for EnvModule {
 	fn from (value: &shader_slang::Module) -> Self {
 		Self::fromSlangIRBytes(
-			value.serialize().expect("Slang failed to serialize a pre-compiled module").as_slice()
+			value.serialize().expect("Slang modules should always successfully serialize to IR bytes").as_slice()
 		)
 	}
 }
@@ -171,7 +216,7 @@ pub struct ContextBuilder<'ctx> {
 impl ContextBuilder<'_>
 {
 	#[inline(always)]
-	pub fn buildWithGlobalSession (self, globalSession: &NativeGlobalSessionContainer)
+	pub fn buildWithGlobalSession (self, globalSession: &GlobalSession)
 		-> Result<Context<'_>, compile::CreateContextError>
 	{
 		// Finalize the Slang session configuration
@@ -279,7 +324,7 @@ pub struct Context<'this> {
 impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession<'gs> (globalSession: &'gs NativeGlobalSessionContainer, sessionConfig: &SessionConfig)
+	fn freshSession<'gs> (globalSession: &'gs GlobalSession, sessionConfig: &SessionConfig)
 		-> Result<Session<'gs>, ()>
 	{
 		let targetDesc = constructTargetDescs(&sessionConfig);
@@ -346,18 +391,55 @@ impl<'ctx> compile::Context for Context<'ctx>
 		let module =  self.session.load_module_from_source_string(targetPath, targetPath, sourceCode)
 			.or_else(|err| Err(compile::LoadModuleError::CompilationError(format!("{err}"))))?;
 
+		// Enumerate and save entry points
+		let entryPoints = module.entry_points().map(|ep| EntryPoint(ep)).collect();
+
 		// Done!
-		Ok(Module(module))
+		Ok(Module { component: module, virtualPath: virtualFilepath.as_ref().to_owned(), entryPoints })
 	}
 
-	fn createComposite<'this> (
-		&'this self, _components: &[compile::ComponentRef<'this, Module, EntryPoint, Composite>]
-	) -> Result<Composite, compile::CreateCompositeError> {
-		todo!("implement via to-be-completed unified Slang interface")
+	fn createComposite<'this> (&'this self, components: &[compile::ComponentRef<'this, Module, EntryPoint, Composite>])
+		-> Result<Composite, compile::CreateCompositeError>
+	{
+		// Gather component list
+		let components: Vec<_> = components.iter().map(|component| match component {
+			compile::ComponentRef::Module(module) => module.component.clone().into(),
+			compile::ComponentRef::EntryPoint(entryPoint) => entryPoint.0.clone().into(),
+			compile::ComponentRef::Composite(composite) => composite.0.clone().into()
+		}).collect();
+
+		// Composit
+		let componentType = self.session.create_composite_component_type(
+			components.as_slice()
+		).or_else(|err| Err(
+			compile::CreateCompositeError::ImplementationSpecific(anyhow!("layout error: {err}"))
+		))?;
+
+		// Done!
+		Ok(Composite(componentType))
 	}
 
-	fn linkComposite (&self, _composite: &Composite) -> Result<LinkedComposite, compile::LinkError> {
-		todo!("implement via to-be-completed unified Slang interface")
+	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite, compile::LinkError>
+	{
+		// Link
+		let componentType = composite.0.link().or_else(|err| Err(
+			compile::LinkError::ImplementationSpecific(anyhow!("link failure: {err}"))
+		))?;
+
+		// Enumerate all entry points. We blanket-use the very first target, as names and ordering of entry points
+		// should be completely target-independent. We can infer this logical guarantee from the fact that according to
+		// several official Slang examples, you can – and in fact are typically expected to – use the entry point
+		// information obtained prior to linking from untranslated *Slang* modules.
+		let layout = componentType.layout(0).or_else(|err| Err(
+			compile::LinkError::ImplementationSpecific(anyhow!("layout error: {err}"))
+		))?;
+		let mut entryPointMap = BTreeMap::default();
+		for (idx, ep) in layout.entry_points().enumerate() {
+			entryPointMap.insert(ep.name().expect(MISSING_ENTRY_POINT_NAME_MSG).to_owned(), idx as i64);
+		}
+
+		// Done!
+		Ok(LinkedComposite { component: componentType, entryPointMap } )
 	}
 }
 impl compile::EnvironmentEnabled for Context<'_>
@@ -384,7 +466,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 		let slangModule = self.compileFromNamedSource(&virtualFilepath, sourceCode)?;
 		let module = match envStorage {
 			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
-			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule.0).map_err(
+			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule.component).map_err(
 				|err| compile::LoadModuleError::CompilationError(format!("{err}"))
 			)?
 		};
@@ -493,11 +575,11 @@ fn extractSlangObjectInstancePointer (slangObject: &impl slang::Interface) -> st
 	}
 }
 
-/// Obtain a reference to the singleton [`slang::GlobalSession`](slang::GlobalSession) from which actual, stateful
-/// compiler sessions can be created.
+/// Obtain a reference to a `'static` [`slang::GlobalSession`](GlobalSession) from which actual, stateful compiler
+/// sessions can be created. *CGV-rs* uses this global session for all its internal shader compilation tasks.
 #[inline(always)]
-pub fn obtainGlobalSession () -> &'static NativeGlobalSessionContainer {
-	&SLANG_GLOBAL_SESSION
+pub fn obtainGlobalSession () -> &'static GlobalSession {
+	&GLOBAL_SESSION
 }
 
 ///

@@ -4,7 +4,7 @@
 // Module definitions
 //
 
-// Submodule defining the compilation model.
+// Submodule defining the traits, structs and errors of the *CGV-rs* shader compilation model.
 mod model;
 pub use model::{
 	Module, EntryPoint, Component, Composite, LinkedComposite, ProgramCode, ComponentRef, TranslateError
@@ -136,7 +136,27 @@ impl Error for SetEnvironmentError {}
 // Enums
 //
 
-/// Enum describing possible shader compilation targets known to *CGV-rs*
+/// Enum describing possible formats of a [`compile::Target`].
+#[derive(Debug,Clone,Copy)]
+pub enum TargetFormat {
+	/// A sequence of arbitrary bytes.
+	Binary,
+
+	/// UTF-8 encoded text.
+	Text
+}
+impl Display for TargetFormat {
+	fn fmt (&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Binary => write!(f, "binary"),
+			Self::Text => write!(f, "text")
+		}
+	}
+}
+
+
+/// Enum describing possible known shader compilation targets as well as a [`Custom`](Target::Custom) target for
+/// supporting targets not currently known to *CGV-rs*.
 #[derive(Debug,Clone,Copy)]
 pub enum Target
 {
@@ -161,8 +181,14 @@ pub enum Target
 	/// Transpile shaders to the *Metal* shading language.
 	Metal,
 
-	/// Compile to another target that the [`compile::Context`] supports.
-	Custom(uuid::Uuid)
+	/// Compile to a custom target that the [`compile::Context`] supports. Implementations should make a best effort to
+	/// select a globally unique [UUID](uuid) (first value) to identify their custom target. The second value indicates
+	/// the format of the target. If implementations cannot guarantee [text targets](TargetFormat::Text) are UTF-8, they
+	/// might want to choose marking it as a [binary format](TargetFormat::Text) instead.
+	///
+	/// If a target comprises several formats (e.g. one text and one binary variant), implementations should introduce
+	/// distinct `Custom` targets for them.
+	Custom(uuid::Uuid, TargetFormat)
 }
 impl Target
 {
@@ -176,19 +202,42 @@ impl Target
 		}
 	}
 
+	///
 	#[inline(always)]
 	pub fn isSPIRV (&self) -> bool {
 		matches!(self, Self::SPIRV)
 	}
 
+	///
 	#[inline(always)]
 	pub fn isWGSL (&self) -> bool {
 		matches!(self, Self::WGSL)
 	}
 
+	///
 	#[inline(always)]
 	pub fn isGLSL (&self) -> bool {
 		matches!(self, Self::GLSL)
+	}
+
+	///
+	#[inline]
+	pub fn isText (&self) -> bool {
+		match self {
+			Self::WGSL | Self::GLSL | Self::HLSL | Self::CudaCpp | Self::Metal => true,
+			Self::SPIRV | Self::DXIL => false,
+			Self::Custom(_, format) => matches!(format, TargetFormat::Text)
+		}
+	}
+
+	///
+	#[inline]
+	pub fn isBinary (&self) -> bool {
+		match self {
+			Self::WGSL | Self::GLSL | Self::HLSL | Self::CudaCpp | Self::Metal => false,
+			Self::SPIRV | Self::DXIL => true,
+			Self::Custom(_, format) => matches!(format, TargetFormat::Binary)
+		}
 	}
 }
 impl Display for Target {
@@ -201,7 +250,7 @@ impl Display for Target {
 			Self::HLSL => write!(f, "HLSL"),
 			Self::CudaCpp => write!(f, "Cuda-C++"),
 			Self::Metal => write!(f, "Metal"),
-			Self::Custom(uuid) => write!(f, "Custom(uuid={uuid})")
+			Self::Custom(uuid, fmt) => write!(f, "Custom[uuid={uuid},{fmt}]")
 		}
 	}
 }
@@ -262,6 +311,7 @@ pub trait ContextBuilder: Default
 	///
 	fn build (self) -> Result<Self::Context, compile::CreateContextError>;
 }
+
 
 ///
 pub trait WithFilesystemAccess

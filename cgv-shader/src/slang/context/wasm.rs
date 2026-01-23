@@ -49,7 +49,7 @@ impl GlobalSession {
 		else { None }
 	}
 
-	pub fn createSession (&self) -> Result<Session, CreateSessionError>
+	pub fn createSession (&self) -> Result<Session<'_>, CreateSessionError>
 	{
 		let handle = slangjs_GlobalSession_createSession(self.0);
 		if handle > 0 {
@@ -95,6 +95,8 @@ impl Drop for ComponentList {
 /// A handle for a JavaScript-side `slang::Session` instance.
 pub struct Session<'this> {
 	handle: u64,
+
+	#[expect(dead_code)]
 	globalSession: &'this GlobalSession
 }
 impl Session<'_> {
@@ -255,6 +257,8 @@ impl compile::Composite for SlangComposite<'_> {}
 /// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
 pub struct SlangLinkedComposite<'this> {
 	handle: u64,
+
+	#[expect(dead_code)]
 	session: &'this Session<'this>,
 }
 impl<'sess> SlangLinkedComposite<'sess> {
@@ -269,11 +273,11 @@ impl Drop for SlangLinkedComposite<'_> {
 	}
 }
 impl compile::LinkedComposite for SlangLinkedComposite<'_> {
-	fn allEntryPointsCode (target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
+	fn allEntryPointsCode (&self, _target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
 		Err(compile::TranslateError::ImplementationSpecific(anyhow::anyhow!("Not yet implemented")))
 	}
 
-	fn entryPointCode (target: compile::Target, entryPointIdx: u32)
+	fn entryPointCode (&self, _target: compile::Target, _entryPointIdx: u32)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
 		None
@@ -289,8 +293,8 @@ pub struct ContextBuilder<'ctx> {
 impl ContextBuilder<'_>
 {
 	#[inline(always)]
-	pub fn buildWithGlobalSession<'gs> (self, globalSession: &'gs GlobalSession)
-		-> Result<Context, compile::CreateContextError>
+	pub fn buildWithGlobalSession (self, globalSession: &GlobalSession)
+		-> Result<Context<'_>, compile::CreateContextError>
 	{
 		let session = globalSession.createSession().map_err(
 			|err| compile::CreateContextError::ImplementationDefined(err.into())
@@ -343,7 +347,7 @@ pub struct Context<'this> {
 impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
-	fn freshSession (globalSession: &GlobalSession) -> Result<Session, CreateSessionError> {
+	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
 		globalSession.createSession()
 	}
 
@@ -496,6 +500,14 @@ impl compile::EnvironmentEnabled for Context<'_>
 // Functions
 //
 
+/// Obtain a reference to a `'static` [`slang::GlobalSession`](GlobalSession) from which actual, stateful compiler
+/// sessions can be created. *CGV-rs* uses this global session for all its internal shader compilation tasks.
+#[inline(always)]
+pub fn obtainGlobalSession () -> &'static GlobalSession {
+	&GLOBAL_SESSION
+}
+
+/// API prototypes of the JavaScript bridge.
 #[wasm_bindgen]
 extern "C" {
 	fn slangjs_createGlobalSession () -> i64;
