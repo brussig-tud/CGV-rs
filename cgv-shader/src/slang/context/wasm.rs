@@ -274,7 +274,7 @@ impl Drop for SlangLinkedComposite<'_> {
 }
 impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 	fn allEntryPointsCode (&self, _target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
-		Err(compile::TranslateError::ImplementationSpecific(anyhow::anyhow!("Not yet implemented")))
+		Err(compile::TranslateError::Backend(anyhow::anyhow!("Not yet implemented")))
 	}
 
 	fn entryPointCode (&self, _target: compile::Target, _entryPointIdx: u32)
@@ -336,9 +336,10 @@ impl<'ctx> compile::ContextBuilder for ContextBuilder<'ctx> {
 
 
 /// A *Slang* [compilation context](compile::Context) for `wasm32-unknown-unknown` targets that makes use of a *light*
-/// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs that the
-/// `Context` implements, rather than translating the full JavaScript *Slang* API. This reduces function call overhead
-/// significantly, but also limits clients to the small and abstracted subset of functionality exposed by the `Context`.
+/// JavaScript bridge. It is considered "light" because it only forwards the small number of high-level APIs defined by
+/// the [*CGV-rs* shader compilation model](crate::compile), rather than translating the full *Slang* API. This reduces
+/// function call overhead significantly, but also limits clients to the small and abstracted subset of functionality
+/// exposed by the `Context`.
 pub struct Context<'this> {
 	session: Session<'this>,
 	compatHash: u64,

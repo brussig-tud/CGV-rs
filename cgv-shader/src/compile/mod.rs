@@ -157,6 +157,7 @@ impl Display for TargetFormat {
 
 /// Enum describing possible known shader compilation targets as well as a [`Custom`](Target::Custom) target for
 /// supporting targets not currently known to *CGV-rs*.
+#[repr(u8)]
 #[derive(Debug,Clone,Copy)]
 pub enum Target
 {
@@ -184,7 +185,7 @@ pub enum Target
 	/// Compile to a custom target that the [`compile::Context`] supports. Implementations should make a best effort to
 	/// select a globally unique [UUID](uuid) (first value) to identify their custom target. The second value indicates
 	/// the format of the target. If implementations cannot guarantee [text targets](TargetFormat::Text) are UTF-8, they
-	/// might want to choose marking it as a [binary format](TargetFormat::Text) instead.
+	/// might want to choose marking it as a [binary format](TargetFormat::Binary) instead.
 	///
 	/// If a target comprises several formats (e.g. one text and one binary variant), implementations should introduce
 	/// distinct `Custom` targets for them.
@@ -192,6 +193,46 @@ pub enum Target
 }
 impl Target
 {
+	/// The highest slot any `compile::Target` corresponds to. *CGV-rs* shall adopt the convention that this will always
+	/// be equal to the [discriminant](std::mem::Discriminant) of the [`Custom`](compile::Target::Custom) variant.
+	///
+	/// The type is intentionally kept as `u8` (thus requiring an explicit cast to `usize` for most practical purposes)
+	/// to emphasize that this number will always be quite small. Its value will always be one less than
+	/// [`compile::Target::NUM_SLOTS`].
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// assert_eq!(compile::Target.slot(), compile::Target::MAX_SLOT);
+	/// ```
+	pub const MAX_SLOT: u8 = {
+		// Ensure we stay informed about the primitive representation used for `compile::Target` in case it ever gets
+		// changed
+		util::assert_eq_size!(std::mem::Discriminant<Target>, u8);
+
+		const DUMMY_CUSTOM: Target = Target::Custom(uuid::Uuid::from_u128(u128::MAX), TargetFormat::Text);
+		const MAX: u8 = DUMMY_CUSTOM.slot() as u8;
+
+		// Ensure we stay informed about the highest discriminant value whenever we change `compile::Target`
+		util::const_assert_eq!(MAX, 7);
+		MAX
+	};
+
+	/// The number of slots that an array storing one value per variant of the `compile::Target` enum would have. Will
+	/// always be one more than the related [`compile::Target::MAX_SLOT`] constant.
+	///
+	/// The type is intentionally kept as `u8` (thus requiring an explicit cast to `usize` for most practical purposes)
+	/// to emphasize that this number will always be quite small.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// // A map enabling lightning-fast $O(1)$ checks if a compilation target is active, and if yes, which index
+	/// // it corresponds to.
+	/// type ActiveTargetsMap = [Option<u32>; compile::Target::NUM_SLOTS as usize];
+	/// ```
+	pub const NUM_SLOTS: u8 = Target::MAX_SLOT + 1;
+
 	///
 	#[inline(always)]
 	pub fn fromWgpuSourceType (wgpuSourceType: WgpuSourceType) -> Self {
@@ -199,6 +240,19 @@ impl Target
 			WgpuSourceType::SPIRV => Self::SPIRV,
 			WgpuSourceType::WGSL => Self::WGSL,
 			WgpuSourceType::GLSL => Self::GLSL
+		}
+	}
+
+	/// The corresponding *slot* of a certain target. This will always be one less than [`compile::Target::NUM_SLOTS`]
+	/// less-than-or-equal to [`compile::Target::MAX_SLOT`].
+	#[inline(always)]
+	pub const fn slot (&self) -> usize {
+		unsafe {
+			// SAFETY:
+			// `compile::Target` is a `repr(u8)`, and the Rust specification states that the discriminants of enums with
+			// primitive representation may be obtained via pointer casting even if the enum is complex:
+			// https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
+			*(self as *const Target as *const u8) as usize
 		}
 	}
 
@@ -255,12 +309,12 @@ impl Display for Target {
 	}
 }
 impl util::ds::UniqueVecElement for Target {
-	type Key<'k> = usize;
+	type Key<'k> = u8;
 
 	fn key (&self) -> Self::Key<'_> {
-		util::assert_eq_size!(std::mem::Discriminant<Target>, usize);
+		util::assert_eq_size!(std::mem::Discriminant<Target>, u8);
 		unsafe {
-			// SAFETY: `Discriminant<Target>` has the same size as `usize` (statically asserted above), and all possible
+			// SAFETY: `Discriminant<Target>` has the same size as `u8` (statically asserted above), and all possible
 			//          bit patterns form a valid `usize` value.
 			std::mem::transmute(std::mem::discriminant(self))
 		}

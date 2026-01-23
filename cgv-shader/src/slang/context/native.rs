@@ -14,7 +14,7 @@ use anyhow::anyhow;
 use shader_slang as slang;
 
 // Local imports
-use crate::*;
+use crate::slang::*;
 use crate::{compile::{self, SetEnvironmentError, AddModuleError}, slang::Program, slang::context::*};
 
 
@@ -64,13 +64,16 @@ unsafe impl Sync for GlobalSession {
 ///
 pub(crate) struct Session<'this> {
 	slangSession: slang::Session,
+	targets: ActiveTargetsMap,
 
 	#[expect(dead_code)]
 	globalSession: &'this GlobalSession
 }
 impl<'this> Session<'this> {
-	fn new (slangSession: slang::Session, globalSession: &'this GlobalSession) -> Self { Self {
-		slangSession, globalSession
+	fn new (
+		slangSession: slang::Session, globalSession: &'this GlobalSession, targets: &ActiveTargetsMap
+	) -> Self { Self {
+		slangSession, globalSession, targets: *targets
 	}}
 }
 impl Deref for Session<'_> {
@@ -134,26 +137,37 @@ impl compile::Component for Composite {
 impl compile::Composite for Composite {}
 
 ///
-pub struct LinkedComposite {
+pub struct LinkedComposite<'this> {
 	pub(crate) component: slang::ComponentType,
-	entryPointMap: BTreeMap<String, i64>
+	entryPointMap: BTreeMap<String, i64>,
+	activeTargetsMap: &'this ActiveTargetsMap
 }
-impl LinkedComposite {
+impl LinkedComposite<'_> {
 	pub fn entryPointMap (&self) -> &BTreeMap<String, i64> {
 		&self.entryPointMap
 	}
 }
-impl compile::LinkedComposite for LinkedComposite {
+impl compile::LinkedComposite for LinkedComposite<'_>
+{
 	fn allEntryPointsCode (&self, target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError>
 	{
-		let code = self.component.target_code(0).or_else(|e|
-			Err(compile::TranslateError::ImplementationSpecific(anyhow!("translation to {target} failed: {e}")))
-		)?;
-		Ok(if target.isBinary() {
-			compile::ProgramCode::Binary(code.as_slice().to_owned())
-		} else {
-			compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
-		})
+		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
+		{
+			// Translate to target
+			let code = self.component.target_code(targetIdx).or_else(|e|
+				Err(compile::TranslateError::Backend(anyhow!("translation to {target} failed: {e}")))
+			)?;
+
+			// Done!
+			Ok(if target.isBinary() {
+				compile::ProgramCode::Binary(code.as_slice().to_owned())
+			} else {
+				compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
+			})
+		}
+		else {
+			Err(compile::TranslateError::InvalidTarget(target))
+		}
 	}
 
 	fn entryPointCode (&self, target: compile::Target, entryPointIdx: u32)
@@ -162,24 +176,33 @@ impl compile::LinkedComposite for LinkedComposite {
 		if entryPointIdx as usize>= self.entryPointMap.len() {
 			return None;
 		}
-		let translateResult = self.component.entry_point_code(
-			entryPointIdx as i64, 0
-		).map_err(|e| {
-			Err(compile::TranslateError::ImplementationSpecific(anyhow!(
+		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
+		{
+			// Translate to target
+			let translateResult = self.component.entry_point_code(
+				entryPointIdx as i64, targetIdx
+			).map_err(|e| Err(compile::TranslateError::Backend(anyhow!(
 				"translating entry point {entryPointIdx}[''] to {target} failed: {e}"
-			)))
-		});
-		let code = if translateResult.is_ok() {
-			translateResult.ok().unwrap()
+			))));
+
+			// Make sense of the translation result
+			let code = if translateResult.is_ok() {
+				translateResult.ok().unwrap()
+			}
+			else {
+				return Some(translateResult.err().unwrap());
+			};
+
+			// Done!
+			Some(Ok(if target.isBinary() {
+				compile::ProgramCode::Binary(code.as_slice().to_owned())
+			} else {
+				compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
+			}))
 		}
 		else {
-			return Some(translateResult.err().unwrap());
-		};
-		Some(Ok(if target.isBinary() {
-			compile::ProgramCode::Binary(code.as_slice().to_owned())
-		} else {
-			compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
-		}))
+			Some(Err(compile::TranslateError::InvalidTarget(target)))
+		}
 	}
 }
 
@@ -240,11 +263,11 @@ impl ContextBuilder<'_>
 
 		// - store
 		let sessionConfig = SessionConfig {
-			targets:self.targets.into(), compilerOptions,
+			targets: self.targets.into(), compilerOptions,
 			searchPaths: self.searchPath.iter().map(|p| unsafe {
 				std::ffi::CString::from_vec_unchecked(p.to_string_lossy().as_bytes().to_vec())
 			}).collect::<Vec<std::ffi::CString>>(),
-			profile:  globalSession.lock().unwrap().find_profile("glsl_460")
+			profile: globalSession.lock().unwrap().find_profile("glsl_460")
 		};
 
 		// Create the stateful Slang compiler session
@@ -327,12 +350,13 @@ impl Context<'_>
 	fn freshSession<'gs> (globalSession: &'gs GlobalSession, sessionConfig: &SessionConfig)
 		-> Result<Session<'gs>, ()>
 	{
-		let targetDesc = constructTargetDescs(&sessionConfig);
+		let mut activeTargetsMap = ActiveTargetsMap::default();
+		let targetDesc = constructTargetDescs(&sessionConfig, &mut activeTargetsMap);
 		Ok(Session::new(globalSession.lock().unwrap().create_session(&slang::SessionDesc::default()
 			.targets(&targetDesc)
 			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
 			.options(&sessionConfig.compilerOptions)
-		).ok_or(())?, globalSession))
+		).ok_or(())?, globalSession, &activeTargetsMap))
 	}
 
 	///
@@ -372,7 +396,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 	type ModuleType<'module> = Module where Self: 'module;
 	type EntryPointType<'ep> = EntryPoint where Self: 'ep;
 	type CompositeType<'cp> = Composite;
-	type LinkedCompositeType<'lct> = LinkedComposite where Self: 'lct;
+	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
 	type Builder = ContextBuilder<'ctx>;
 
 	#[inline]
@@ -419,7 +443,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 		Ok(Composite(componentType))
 	}
 
-	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite, compile::LinkError>
+	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'_>, compile::LinkError>
 	{
 		// Link
 		let componentType = composite.0.link().or_else(|err| Err(
@@ -439,7 +463,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 		}
 
 		// Done!
-		Ok(LinkedComposite { component: componentType, entryPointMap } )
+		Ok(LinkedComposite { component: componentType, entryPointMap, activeTargetsMap: &self.session.targets } )
 	}
 }
 impl compile::EnvironmentEnabled for Context<'_>
@@ -583,11 +607,13 @@ pub fn obtainGlobalSession () -> &'static GlobalSession {
 }
 
 ///
-fn constructTargetDescs<'td> (sessionConfig: &SessionConfig)
+fn constructTargetDescs<'td> (sessionConfig: &SessionConfig, activeTargetsMap: &mut ActiveTargetsMap)
 	-> Vec<slang::TargetDesc<'td>>
 {
-	sessionConfig.targets.iter().map(|target| {
+	sessionConfig.targets.iter().enumerate().map(|(idx, target)|
+	{
 		let targetDesc = slang::TargetDesc::default().profile(sessionConfig.profile);
+		activeTargetsMap[target.slot()] = Some(idx as i64);
 		match target {
 			compile::Target::SPIRV => targetDesc.format(slang::CompileTarget::Spirv),
 			compile::Target::WGSL => targetDesc.format(slang::CompileTarget::Wgsl),

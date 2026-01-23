@@ -30,6 +30,7 @@ use shader_slang as slang_native;
 
 // Local imports
 use cgv_util as util;
+use crate::compile;
 
 
 
@@ -37,6 +38,11 @@ use cgv_util as util;
 //
 // Structs
 //
+
+/// Used by the *CGV-rs* adapters to the *Slang* compiler for lightning-fast $O(1)$ checks if a compilation target is
+/// active, and if yes, which [target index](slang_native::ComponentType::target_code) it corresponds to.
+type ActiveTargetsMap = [Option<i64>; compile::Target::NUM_SLOTS as usize];
+
 
 ///
 #[cfg(not(target_arch="wasm32"))]

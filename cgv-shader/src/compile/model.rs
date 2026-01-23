@@ -19,8 +19,8 @@ use super::compile;
 
 ///
 pub enum TranslateError {
-	UnsupportedTarget,
-	ImplementationSpecific(anyhow::Error)
+	InvalidTarget(compile::Target),
+	Backend(anyhow::Error)
 }
 
 
