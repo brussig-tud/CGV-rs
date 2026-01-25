@@ -7,8 +7,8 @@
 /// Submodule implementing the Slang runtime context.
 mod context;
 pub use context::{
-	Context, ContextBuilder, Module, EntryPoint, Composite, LinkedComposite, EnvModule, EnvironmentStorage,
-	obtainGlobalSession
+	Context, ContextBuilder, Module, EntryPoint, Composite, LinkedComposite, ComponentRef, EnvModule,
+	EnvironmentStorage, obtainGlobalSession
 }; // re-export
 
 

@@ -39,6 +39,9 @@ static MISSING_ENTRY_POINT_NAME_MSG: &str = "entry points should always have a n
 // Structs
 //
 
+/// Convenience alias for our `compile::ComponentRef`.
+pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
+
 ///
 pub struct GlobalSession(Mutex<slang::GlobalSession>);
 impl Deref for GlobalSession {
@@ -63,12 +66,12 @@ unsafe impl Sync for GlobalSession {
 ///
 pub(crate) struct Session<'this> {
 	slangSession: slang::Session,
-	targets: ActiveTargetsMap,
+	activeTargetsMap: ActiveTargetsMap,
 	gsPhantom: std::marker::PhantomData<&'this GlobalSession>
 }
 impl<'this> Session<'this> {
-	fn new (slangSession: slang::Session, targets: &ActiveTargetsMap) -> Self { Self {
-		slangSession, targets: *targets, gsPhantom: Default::default()
+	fn new (slangSession: slang::Session, activeTargetsMap: ActiveTargetsMap) -> Self { Self {
+		slangSession, activeTargetsMap, gsPhantom: Default::default()
 	}}
 }
 impl Deref for Session<'_> {
@@ -216,7 +219,8 @@ impl From<&slang::Module> for EnvModule {
 	}
 }
 
-/// Helper struct storing session configuration info to facilitate [`compile::Environment`] compatibility checking.
+/// Helper struct storing session configuration info to facilitate both [quick rebuilds](Context::freshSession) as well
+/// as [`compile::Environment`] compatibility checking.
 #[derive(Clone)]
 struct SessionConfig {
 	searchPaths: Vec<std::ffi::CString>,
@@ -263,9 +267,9 @@ impl ContextBuilder<'_>
 				if self.debug { slang::DebugInfoLevel::Maximal } else { slang::DebugInfoLevel::None }
 			);
 
-		// - store
+		// Store in reusable session config
 		let sessionConfig = SessionConfig {
-			targets: self.targets.into(), compilerOptions,
+			targets: self.targets, compilerOptions,
 			searchPaths: self.searchPath.iter().map(|p| unsafe {
 				std::ffi::CString::from_vec_unchecked(p.to_string_lossy().as_bytes().to_vec())
 			}).collect::<Vec<std::ffi::CString>>(),
@@ -299,9 +303,9 @@ impl<'ctx> compile::ContextBuilder for ContextBuilder<'ctx>
 	type Context = Context<'ctx>;
 
 	#[inline(always)]
-	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self { Self {
+	fn withPlatformDefaults (platform: &util::meta::SupportedPlatform) -> Self { Self {
 		targets: vec![compile::mostSuitableTargetForPlatform(platform)].into(),
-		debug: platform.isDebug(),
+		debug: !platform.isWasm() && platform.isDebug(),
 		..Default::default()
 	}}
 
@@ -340,9 +344,7 @@ impl compile::BuildsContextWithFilesystemAccess for ContextBuilder<'_> {
 /// A *Slang* [compilation context](compile::EnvironmentEnabled).
 pub struct Context<'this> {
 	sessionConfig: SessionConfig,
-
-	pub(crate) session: Session<'this>,
-
+	session: Session<'this>,
 	compatHash: u64,
 	environment: Option<compile::Environment<EnvModule>>
 }
@@ -350,7 +352,7 @@ impl Context<'_>
 {
 	/// Helper for obtaining a fresh *Slang* session.
 	fn freshSession<'gs> (globalSession: &'gs GlobalSession, sessionConfig: &SessionConfig)
-		-> Result<Session<'gs>, ()>
+		-> Result<Session<'gs>, CreateSessionError>
 	{
 		let mut activeTargetsMap = ActiveTargetsMap::default();
 		let targetDesc = constructTargetDescs(&sessionConfig, &mut activeTargetsMap);
@@ -358,7 +360,7 @@ impl Context<'_>
 			.targets(&targetDesc)
 			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
 			.options(&sessionConfig.compilerOptions)
-		).ok_or(())?, &activeTargetsMap))
+		).ok_or(CreateSessionError::Generic)?, activeTargetsMap))
 	}
 }
 impl<'ctx> compile::Context for Context<'ctx>
@@ -370,7 +372,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 	type Builder = ContextBuilder<'ctx>;
 
 	fn supportsTarget (&self, target: compile::Target) -> bool {
-		self.session.targets[target.slot()].is_some()
+		self.session.activeTargetsMap[target.slot()].is_some()
 	}
 
 	#[inline]
@@ -402,14 +404,14 @@ impl<'ctx> compile::Context for Context<'ctx>
 	}
 
 	fn createComposite<'this, 'inner> (
-		&'this self, components: &'inner [compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>]
+		&'this self, components: &'inner [ComponentRef<'this>]
 	) -> Result<Composite<'this>, compile::CreateCompositeError>
 	{
 		// Gather component list
 		let components: Vec<_> = components.iter().map(|component| match component {
-			compile::ComponentRef::Module(module) => module.component.clone().into(),
-			compile::ComponentRef::EntryPoint(entryPoint) => entryPoint.component.clone().into(),
-			compile::ComponentRef::Composite(composite) => composite.component.clone().into()
+			ComponentRef::Module(module) => module.component.clone().into(),
+			ComponentRef::EntryPoint(entryPoint) => entryPoint.component.clone().into(),
+			ComponentRef::Composite(composite) => composite.component.clone().into()
 		}).collect();
 
 		// Composit
@@ -444,7 +446,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 
 		// Done!
 		Ok(LinkedComposite {
-			component: componentType, entryPointMap, activeTargetsMap: &self.session.targets,
+			component: componentType, entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
 			sessionPhantom: Default::default()
 		})
 	}

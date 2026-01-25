@@ -216,7 +216,6 @@ impl Package
 
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
-	#[cfg(not(target_arch="wasm32"))]
 	pub fn fromSourceFileMultipleTypes<CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &CompileContext, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> anyhow::Result<Self>

@@ -112,9 +112,10 @@ pub fn prepareShaders (
 	let sourceTypes = sourceTypes.unwrap_or_else(
 		|| feasibleSourceTypesForPlatform(cargoBuildTargetPlatform())
 	);
-	let slangContext = shader::compile::createContextForSourceTypes::<slang::Context>(
-		sourceTypes, buildSetup.shaderPath()
-	)?;
+	let slangContext = slang::ContextBuilder::withPlatformDefaults(cargoBuildTargetPlatform())
+		.addTargets(&shader::compile::Target::vecFromWgpuSourceTypes(sourceTypes))
+		.addSearchPaths(buildSetup.shaderPath())
+		.build()?;
 
 	// Recurse through provided shader directory and package each .slang shader encountered that is not in a skipped
 	// subdirectory

@@ -244,6 +244,11 @@ impl Target
 		}
 	}
 
+	///
+	pub fn vecFromWgpuSourceTypes (wgpuSourceTypes: &[WgpuSourceType]) -> Vec<Self> {
+		wgpuSourceTypes.iter().map(|&srcType| Self::fromWgpuSourceType(srcType)).collect()
+	}
+
 	/// The corresponding *slot* of a certain target. This will always be one less than [`compile::Target::NUM_SLOTS`]
 	/// less-than-or-equal to [`compile::Target::MAX_SLOT`].
 	#[inline(always)]
@@ -343,7 +348,7 @@ pub trait ContextBuilder: Default
 	// Methods
 
 	///
-	fn defaultForPlatform (platform: &util::meta::SupportedPlatform) -> Self;
+	fn withPlatformDefaults (platform: &util::meta::SupportedPlatform) -> Self;
 
 	///
 	fn withTargets (targets: impl AsRef<[Target]>) -> Self;
@@ -537,22 +542,6 @@ pub trait EnvironmentEnabled
 //
 // Functions
 //
-
-/// Create a [`compile::Context`] that supports [compilation targets](compile::Target) corresponding to the given
-/// *WGPU* [source types](crate::WgpuSourceType).
-pub fn createContextForSourceTypes<'a, ContextType> (sourceTypes: &[WgpuSourceType], shaderPath: &[impl AsRef<Path>])
-	-> Result<ContextType, compile::CreateContextError>
-where
-	ContextType: compile::HasFileSystemAccess
-{
-	let targets: Vec<compile::Target> = sourceTypes.iter().map(
-		|&srcType| compile::Target::fromWgpuSourceType(srcType)
-	).collect();
-	let context = ContextType::Builder::withTargets(targets)
-		.addSearchPaths(shaderPath)
-		.build()?;
-	Ok(context)
-}
 
 /// Determine the most suitable shader compilation target for the platform the module was built for.
 #[inline(always)]
