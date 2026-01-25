@@ -74,7 +74,7 @@ impl WgpuSourceType
 	{
 		// WebGPU/WASM
 		#[cfg(target_arch="wasm32")] {
-			WgpuSourceType::SPIRV
+			WgpuSourceType::WGSL
 		}
 		// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
 		#[cfg(not(target_arch="wasm32"))] {
