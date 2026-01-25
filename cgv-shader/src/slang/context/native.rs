@@ -434,7 +434,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 
 		// Enumerate all entry points. We blanket-use the very first target, as names and ordering of entry points
 		// should be completely target-independent. We can infer this logical guarantee from the fact that according to
-		// several official Slang examples, you can – and in fact are typically expected to – use the entry point
+		// several official *Slang* examples, you can – and in fact are typically expected to – use the entry point
 		// information obtained prior to linking from untranslated *Slang* modules.
 		let layout = componentType.layout(0).or_else(|err| Err(
 			compile::LinkError::ImplementationSpecific(anyhow!("layout error: {err}"))

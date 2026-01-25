@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{path::{PathBuf, Path}, sync::LazyLock};
+use std::{collections::BTreeMap, path::{PathBuf, Path}, sync::LazyLock, marker::PhantomData};
 
 // Wasm-bindgen library
 use wasm_bindgen::prelude::*;
@@ -98,7 +98,7 @@ impl Drop for ComponentList {
 pub struct Session<'this> {
 	handle: u64,
 	activeTargetsMap: ActiveTargetsMap,
-	gsPhantom: std::marker::PhantomData<&'this GlobalSession>
+	gsPhantom: PhantomData<&'this GlobalSession>
 }
 impl Session<'_> {
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
@@ -152,7 +152,7 @@ pub struct Module<'this> {
 	handle: u64,
 	virtualFilepath: PathBuf,
 	entryPoints: Vec<EntryPoint<'this>>,
-	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
+	sessionPhantom: PhantomData<&'this Session<'this>>
 }
 impl Module<'_> {
 	pub(crate) fn new (handle: u64, virtualFilepath: impl AsRef<Path>) -> Result<Self, compile::LoadModuleError>
@@ -162,7 +162,7 @@ impl Module<'_> {
 		).collect();
 		Ok(Self {
 			handle, virtualFilepath: virtualFilepath.as_ref().to_owned(),
-			entryPoints, sessionPhantom: std::marker::PhantomData
+			entryPoints, sessionPhantom: PhantomData
 		})
 	}
 
@@ -198,11 +198,11 @@ impl compile::Component for Module<'_> {
 pub struct EntryPoint<'this> {
 	handle: u64,
 	name: String,
-	modulePhantom: std::marker::PhantomData<&'this Module<'this>>
+	modulePhantom: PhantomData<&'this Module<'this>>
 }
 impl EntryPoint<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
-		handle, name: slangjs_EntryPoint_name(handle), modulePhantom: std::marker::PhantomData
+		handle, name: slangjs_EntryPoint_name(handle), modulePhantom: PhantomData::default()
 	}}
 
 	#[inline(always)]
@@ -227,11 +227,11 @@ impl compile::Component for EntryPoint<'_> {
 /// A handle for a JavaScript-side *Slang* *composite component* instance.
 pub struct Composite<'this> {
 	handle: u64,
-	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
+	sessionPhantom: PhantomData<&'this Session<'this>>
 }
 impl Composite<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
-		handle, sessionPhantom: std::marker::PhantomData
+		handle, sessionPhantom: PhantomData
 	}}
 
 	#[inline(always)]
@@ -258,14 +258,9 @@ impl compile::Composite for Composite<'_> {}
 /// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
 pub struct LinkedComposite<'this> {
 	handle: u64,
-
-	#[expect(dead_code)]
-	session: &'this Session<'this>,
-}
-impl<'this> LinkedComposite<'this> {
-	fn new (handle: u64, session: &'this Session) -> Self { Self {
-		handle, session
-	}}
+	entryPointMap: BTreeMap<String, i64>,
+	activeTargetsMap: &'this ActiveTargetsMap,
+	sessionPhantom: PhantomData<&'this Session<'this>>
 }
 impl Drop for LinkedComposite<'_> {
 	fn drop (&mut self) {
@@ -297,7 +292,7 @@ struct SessionConfig {
 ///
 pub struct ContextBuilder<'ctx> {
 	targets: util::ds::BTreeUniqueVec<compile::Target>,
-	lifetimePhantom: std::marker::PhantomData<&'ctx ()>
+	lifetimePhantom: PhantomData<&'ctx ()>
 }
 impl ContextBuilder<'_>
 {
@@ -405,13 +400,28 @@ impl<'ctx> compile::Context for Context<'ctx>
 
 	fn linkComposite<'this> (&'this self, composite: &Composite) -> Result<LinkedComposite<'this>, compile::LinkError>
 	{
+		// Link
 		let handle = slangjs_Composite_link(composite.handle);
-		if handle > 0 {
-			Ok(LinkedComposite::new(handle as u64, &self.session))
+		if handle < 0 {
+			return Err(compile::LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")));
 		}
-		else {
-			Err(compile::LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")))
-		}
+
+		/*// Enumerate all entry points. We blanket-use the very first target, as names and ordering of entry points
+		// should be completely target-independent. We can infer this logical guarantee from the fact that according to
+		// several official *Slang* examples, you can – and in fact are typically expected to – use the entry point
+		// information obtained prior to linking from untranslated *Slang* modules.
+		let layout = componentType.layout(0).or_else(|err| Err(
+			compile::LinkError::ImplementationSpecific(anyhow!("layout error: {err}"))
+		))?;
+		let mut entryPointMap = BTreeMap::default();
+		for (idx, ep) in layout.entry_points().enumerate() {
+			entryPointMap.insert(ep.name().expect(crate::slang::context::native::MISSING_ENTRY_POINT_NAME_MSG).to_owned(), idx as i64);
+		}*/
+
+		Ok(LinkedComposite {
+			handle: handle as u64, entryPointMap: BTreeMap::new(), activeTargetsMap: &self.session.activeTargetsMap,
+			sessionPhantom: Default::default()
+		})
 	}
 }
 impl compile::EnvironmentEnabled for Context<'_>
