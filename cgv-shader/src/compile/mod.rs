@@ -281,6 +281,12 @@ impl Target
 	}
 
 	///
+	#[inline(always)]
+	pub fn isCustom (&self) -> bool {
+		matches!(self, Self::Custom(_, _))
+	}
+
+	///
 	#[inline]
 	pub fn isText (&self) -> bool {
 		match self {

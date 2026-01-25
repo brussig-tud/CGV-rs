@@ -244,10 +244,18 @@ pub struct ContextBuilder<'ctx> {
 }
 impl ContextBuilder<'_>
 {
+	///
 	#[inline(always)]
 	pub fn buildWithGlobalSession (self, globalSession: &GlobalSession)
 		-> Result<Context<'_>, compile::CreateContextError>
 	{
+		// Reject any unknown targets
+		for target in self.targets.iter() {
+			if target.isCustom() {
+				return Err(compile::CreateContextError::UnsupportedTarget(*target));
+			}
+		}
+
 		// Finalize the Slang session configuration
 		// - initialize compat-relevant settings
 		let mut compatOptions = CompatOptions::default();

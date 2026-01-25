@@ -296,13 +296,23 @@ pub struct ContextBuilder<'ctx> {
 }
 impl ContextBuilder<'_>
 {
+	///
 	#[inline(always)]
 	pub fn buildWithGlobalSession (self, globalSession: &GlobalSession)
 		-> Result<Context<'_>, compile::CreateContextError>
 	{
+		// Until we can do further testing, we will only support the WGSL target
+		for target in self.targets.iter() {
+			if !target.isWGSL() {
+				return Err(compile::CreateContextError::UnsupportedTarget(*target));
+			}
+		}
+
 		// Populate reusable session config
 		let sessionConfig = SessionConfig { targets: self.targets };
-		let session = globalSession.createSession(&sessionConfig).map_err(
+
+		// Create the stateful Slang compiler session
+		let session = Context::freshSession(&globalSession, &sessionConfig).map_err(
 			|err| compile::CreateContextError::ImplementationDefined(err.into())
 		)?;
 		Ok(Context { session, sessionConfig, compatHash: 0, environment: None })
