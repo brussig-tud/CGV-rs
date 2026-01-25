@@ -132,7 +132,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
 		-> cgv::Result<Box<dyn cgv::Application>>
 	{
-		tracing::info!("Creating Example application\n{:?}", environment);
+		// Tracing
+		tracing::info!("Creating Example application");
+		tracing::info!("{:?}", environment);
 
 
 		////
@@ -304,6 +306,7 @@ impl SampleApplication
 		&self, context: &cgv::Context, renderState: &cgv::RenderState, renderSetup: &cgv::RenderSetup
 	) -> wgpu::RenderPipeline
 	{
+		// Tracing
 		tracing::info!("Creating pipelines");
 
 		let pipelineLayout =
@@ -369,8 +372,10 @@ impl cgv::Application for SampleApplication
 
 	fn postInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()>
 	{
+		// Tracing
+		tracing::info!("Positioning initial camera");
+
 		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
-		tracing::info!("PostInit: positioning intial camera");
 		let cam = player.activeCamera_mut().parameters_mut();
 		cam.intrinsics.f = 2.;
 		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
