@@ -23,7 +23,8 @@ pub mod env {
 /// The module prelude.
 pub mod prelude {
 	pub use super::{
-		Context, ContextBuilder, WithFilesystemAccess, EnvironmentEnabled, Module, EntryPoint, Component, Composite
+		Context, ContextBuilder, BuildsContextWithFilesystemAccess, EnvironmentEnabled, Module, EntryPoint, Component,
+		Composite, LinkedComposite
 	};
 }
 
@@ -35,13 +36,13 @@ pub mod prelude {
 //
 
 // Standard library
-use std::{error::Error, fmt::{Display, Formatter}, path::{PathBuf, Path}};
+use std::{error::Error, fmt::{Display, Formatter}, path::{PathBuf, Path}, sync::LazyLock};
 
 // GUID library
 use cgv_util::uuid;
 
 // Local imports
-use crate::{compile, WgpuSourceType};
+use crate::{compile, feasibleSourceTypesForPlatform, WgpuSourceType};
 use cgv_util as util;
 
 
@@ -368,7 +369,7 @@ pub trait ContextBuilder: Default
 
 
 ///
-pub trait WithFilesystemAccess
+pub trait BuildsContextWithFilesystemAccess: ContextBuilder
 {
 	#[inline(always)]
 	fn withSearchPath (path: impl AsRef<Path>) -> Self
@@ -412,6 +413,15 @@ pub trait Context
 	// Methods
 
 	///
+	fn supportsTarget (&self, target: Target) -> bool;
+
+	///
+	#[inline(always)]
+	fn supportsWgpuSourceType (&self, sourceType: WgpuSourceType) -> bool {
+		self.supportsTarget(Target::fromWgpuSourceType(sourceType))
+	}
+
+	///
 	fn compileFromSource (&self, sourceCode: &str) -> Result<Self::ModuleType<'_>, LoadModuleError>;
 
 	///
@@ -419,8 +429,8 @@ pub trait Context
 		-> Result<Self::ModuleType<'_>, LoadModuleError>;
 
 	///
-	fn createComposite<'this> (
-		&'this self, components: &[
+	fn createComposite<'this, 'inner> (
+		&'this self, components: &'inner [
 			ComponentRef<'this, Self::ModuleType<'this>, Self::EntryPointType<'this>, Self::CompositeType<'this>>
 		]
 	) -> Result<Self::CompositeType<'this>, CreateCompositeError>;
@@ -428,6 +438,13 @@ pub trait Context
 	///
 	fn linkComposite<'this> (&'this self, composite: &Self::CompositeType<'_>)
 		-> Result<Self::LinkedCompositeType<'this>, LinkError>;
+}
+
+
+/// The trait of a [`compile::Context`] that can access a filesystem for loading source files
+pub trait HasFileSystemAccess: Context<Builder: BuildsContextWithFilesystemAccess> {
+	///
+	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Self::ModuleType<'_>, LoadModuleError>;
 }
 
 
@@ -447,7 +464,7 @@ pub trait EnvironmentEnabled
 	////
 	// Methods
 
-	fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), LoadModuleError>;
+	fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), LoadModuleError> where Self: HasFileSystemAccess;
 
 	///
 	fn loadModuleFromSource (
@@ -521,47 +538,32 @@ pub trait EnvironmentEnabled
 // Functions
 //
 
-/// Turn a list of [compilation targets](CompilationTarget) into a list of [contexts](Context) that compile to these
-/// targets.
-pub fn createContextsForTargets<'a, ContextType> (targets: &[Target], shaderPath: &[impl AsRef<Path>])
-	-> anyhow::Result<util::ds::RefVec<'a, ContextType>>
+/// Create a [`compile::Context`] that supports [compilation targets](compile::Target) corresponding to the given
+/// *WGPU* [source types](crate::WgpuSourceType).
+pub fn createContextForSourceTypes<'a, ContextType> (sourceTypes: &[WgpuSourceType], shaderPath: &[impl AsRef<Path>])
+	-> Result<ContextType, compile::CreateContextError>
 where
-	ContextType: compile::Context, ContextType::Builder: WithFilesystemAccess
+	ContextType: compile::HasFileSystemAccess
 {
-	let mut contexts = Vec::<ContextType>::with_capacity(targets.len());
-	for &target in targets {
-		contexts.push(ContextType::Builder::withTarget(target).addSearchPaths(shaderPath).build()?);
-	}
-	Ok(contexts.into())
+	let targets: Vec<compile::Target> = sourceTypes.iter().map(
+		|&srcType| compile::Target::fromWgpuSourceType(srcType)
+	).collect();
+	let context = ContextType::Builder::withTargets(targets)
+		.addSearchPaths(shaderPath)
+		.build()?;
+	Ok(context)
 }
 
 /// Determine the most suitable shader compilation target for the platform the module was built for.
 #[inline(always)]
-pub fn mostSuitableTarget() -> compile::Target
-{
-	// WebGPU/WASM
-	#[cfg(target_arch="wasm32")] {
-		compile::Target::WGSL
-	}
-	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
-	#[cfg(not(target_arch="wasm32"))] {
-		compile::Target::SPIRV
-	}
+pub fn mostSuitableTarget() -> compile::Target {
+	compile::Target::fromWgpuSourceType(WgpuSourceType::mostSuitable())
 }
 
 /// Determine the most suitable shader compilation target for the given platform.
-pub fn mostSuitableTargetForPlatform(platform: &util::meta::SupportedPlatform) -> compile::Target
-{
-	// WebGPU/WASM
-	if platform.isWasm() {
-		compile::Target::WGSL
-	}
-	// All native backends
-	else {
-		// Currently always considers SPIR-V preferable even on non-Vulkan backends
-		// TODO: somehow incorporate notion of WGPU backend into this decision
-		compile::Target::SPIRV
-	}
+#[inline(always)]
+pub fn mostSuitableTargetForPlatform(platform: &util::meta::SupportedPlatform) -> compile::Target {
+	compile::Target::fromWgpuSourceType(WgpuSourceType::mostSuitableForPlatform(platform))
 }
 
 /// Return a list of feasible shader compilation target for the platform the module was built for, from most to least
@@ -579,25 +581,31 @@ pub fn feasibleTargets() -> &'static [compile::Target]
 
 	&COMPILATION_TARGETS
 }
-
 /// Return a list of feasible shader compilation target for the given platform, from most to least suitable.
-pub fn feasibleTargetsForPlatform(platform: &util::meta::SupportedPlatform) -> &'static [compile::Target]
+pub fn feasibleTargetsForPlatform (platform: &util::meta::SupportedPlatform) -> &'static [compile::Target]
 {
+	// Common conversion logic from `WgpuSourceType` to `Target`
+	fn wgpuSrcTypeToTarget (targetTripleString: &str) -> Vec<compile::Target> {
+		use std::str::FromStr;
+		let platform = util::meta::SupportedPlatform::from_str(targetTripleString).unwrap();
+		feasibleSourceTypesForPlatform(&platform).into_iter().map(
+			|&srcType| compile::Target::fromWgpuSourceType(srcType)
+		).collect()
+	}
+
 	// WebGPU/WASM
 	if platform.isWasm() {
-		const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV];
+		static COMPILATION_TARGETS: LazyLock<Vec<compile::Target>> = LazyLock::new(
+			|| wgpuSrcTypeToTarget("wasm32-unknown-unknown")
+		);
 		&COMPILATION_TARGETS
 	}
-	// All native backends
+	// All others
 	else {
-		// Currently always considers SPIR-V preferable even on non-Vulkan backends
-		if !platform.isDebug() {
-			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV, compile::Target::WGSL];
-			&COMPILATION_TARGETS
-		}
-		else {
-			const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV, compile::Target::WGSL];
-			&COMPILATION_TARGETS
-		}
+		// Currently always considers SPIR-V preferable even on non-Vulkan platforms
+		static COMPILATION_TARGETS: LazyLock<Vec<compile::Target>> = LazyLock::new(
+			|| wgpuSrcTypeToTarget("x86_64-unknown-linux-gnuu")
+		);
+		&COMPILATION_TARGETS
 	}
 }

@@ -185,8 +185,9 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			).build()?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
-			cgv::shader::Package::fromSlangSourceFile(
-				&slangCtx, util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
+			cgv::shader::Package::fromSourceFile(
+				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx,
+				util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
 			)?
 		};
 

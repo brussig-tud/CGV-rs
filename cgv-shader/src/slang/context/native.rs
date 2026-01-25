@@ -15,7 +15,7 @@ use shader_slang as slang;
 
 // Local imports
 use crate::slang::*;
-use crate::{compile::{self, SetEnvironmentError, AddModuleError}, slang::Program, slang::context::*};
+use crate::{compile, slang::context::*};
 
 
 
@@ -43,7 +43,6 @@ static MISSING_ENTRY_POINT_NAME_MSG: &str = "entry points should always have a n
 pub struct GlobalSession(Mutex<slang::GlobalSession>);
 impl Deref for GlobalSession {
 	type Target =  Mutex<slang::GlobalSession>;
-
 	fn deref (&self) -> &Self::Target {
 		&self.0
 	}
@@ -65,15 +64,11 @@ unsafe impl Sync for GlobalSession {
 pub(crate) struct Session<'this> {
 	slangSession: slang::Session,
 	targets: ActiveTargetsMap,
-
-	#[expect(dead_code)]
-	globalSession: &'this GlobalSession
+	gsPhantom: std::marker::PhantomData<&'this GlobalSession>
 }
 impl<'this> Session<'this> {
-	fn new (
-		slangSession: slang::Session, globalSession: &'this GlobalSession, targets: &ActiveTargetsMap
-	) -> Self { Self {
-		slangSession, globalSession, targets: *targets
+	fn new (slangSession: slang::Session, targets: &ActiveTargetsMap) -> Self { Self {
+		slangSession, targets: *targets, gsPhantom: Default::default()
 	}}
 }
 impl Deref for Session<'_> {
@@ -85,62 +80,69 @@ impl Deref for Session<'_> {
 
 
 ///
-pub struct EntryPoint(slang::EntryPoint);
-impl compile::Component for EntryPoint {
-	type Id = std::ptr::NonNull<std::ffi::c_void>;
-	fn id (&self) -> Self::Id {
-		extractSlangObjectInstancePointer(&self.0)
-	}
+pub struct EntryPoint<'this> {
+	component: slang::EntryPoint,
+	modulePhantom: std::marker::PhantomData<&'this Module<'this>>
 }
-impl compile::EntryPoint for EntryPoint {
-	fn name (&self) -> &str {
-		self.0.function_reflection().name().expect(MISSING_ENTRY_POINT_NAME_MSG)
-	}
-}
-
-///
-pub struct Module {
-	pub(crate) component: slang::Module,
-	virtualPath: PathBuf,
-	entryPoints: Vec<EntryPoint>
-}
-impl compile::Component for Module {
+impl compile::Component for EntryPoint<'_> {
 	type Id = std::ptr::NonNull<std::ffi::c_void>;
 	fn id (&self) -> Self::Id {
 		extractSlangObjectInstancePointer(&self.component)
 	}
 }
-impl compile::Module<EntryPoint> for Module
+impl compile::EntryPoint for EntryPoint<'_> {
+	fn name (&self) -> &str {
+		self.component.function_reflection().name().expect(MISSING_ENTRY_POINT_NAME_MSG)
+	}
+}
+
+///
+pub struct Module<'this> {
+	pub(crate) component: slang::Module,
+	virtualPath: PathBuf,
+	entryPoints: Vec<EntryPoint<'this>>
+}
+impl compile::Component for Module<'_> {
+	type Id = std::ptr::NonNull<std::ffi::c_void>;
+	fn id (&self) -> Self::Id {
+		extractSlangObjectInstancePointer(&self.component)
+	}
+}
+impl<'this> compile::Module<EntryPoint<'this>> for Module<'this>
 {
 	fn virtualFilepath (&self) -> &Path {
 		&self.virtualPath
 	}
 
-	fn entryPoint (&self, name: &str) -> Option<&EntryPoint> {
+	fn entryPoint (&self, name: &str) -> Option<&EntryPoint<'this>> {
 		use compile::EntryPoint;
 		self.entryPoints.iter().find(|ep| ep.name() == name)
 	}
 
-	fn entryPoints (&self) -> &[EntryPoint] {
+	fn entryPoints (&self) -> &[EntryPoint<'this>] {
 		&self.entryPoints
 	}
 }
 
 ///
-pub struct Composite(pub(crate) slang::ComponentType);
-impl compile::Component for Composite {
+pub struct Composite<'this> {
+	pub(crate) component: slang::ComponentType,
+	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
+}
+impl compile::Component for Composite<'_> {
 	type Id = std::ptr::NonNull<std::ffi::c_void>;
 	fn id (&self) -> Self::Id {
-		extractSlangObjectInstancePointer(&self.0)
+		extractSlangObjectInstancePointer(&self.component)
 	}
 }
-impl compile::Composite for Composite {}
+impl compile::Composite for Composite<'_> {}
 
 ///
 pub struct LinkedComposite<'this> {
 	pub(crate) component: slang::ComponentType,
 	entryPointMap: BTreeMap<String, i64>,
-	activeTargetsMap: &'this ActiveTargetsMap
+	activeTargetsMap: &'this ActiveTargetsMap,
+	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
 }
 impl LinkedComposite<'_> {
 	pub fn entryPointMap (&self) -> &BTreeMap<String, i64> {
@@ -170,7 +172,7 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 		}
 	}
 
-	fn entryPointCode (&self, target: compile::Target, entryPointIdx: u32)
+	fn entryPointCode (&self, target: compile::Target, entryPointIdx: usize)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
 		if entryPointIdx as usize>= self.entryPointMap.len() {
@@ -320,7 +322,7 @@ impl<'ctx> compile::ContextBuilder for ContextBuilder<'ctx>
 		self.buildWithGlobalSession(obtainGlobalSession())
 	}
 }
-impl compile::WithFilesystemAccess for ContextBuilder<'_> {
+impl compile::BuildsContextWithFilesystemAccess for ContextBuilder<'_> {
 	#[inline(always)]
 	fn withSearchPaths (paths: &[impl AsRef<Path>]) -> Self { Self {
 		searchPath: paths.iter().map(|p| p.as_ref().to_owned()).collect(),
@@ -356,97 +358,75 @@ impl Context<'_>
 			.targets(&targetDesc)
 			.search_paths(sessionConfig.searchPathsAsPointers().as_slice())
 			.options(&sessionConfig.compilerOptions)
-		).ok_or(())?, globalSession, &activeTargetsMap))
-	}
-
-	///
-	pub fn targetType (&self) -> Option<WgpuSourceType> {
-		match self.sessionConfig.targets.first()? {
-			compile::Target::SPIRV => Some(WgpuSourceType::SPIRV),
-			compile::Target::WGSL => Some(WgpuSourceType::WGSL),
-			_ => None
-		}
-	}
-
-	/// Build a shader program from the given *Slang* source file.
-	///
-	/// # Arguments
-	///
-	/// * `sourceFile` – The `.slang` file containing the shader source code.
-	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
-		Program::fromSourceFile(self, sourceFile)
-	}
-
-	///
-	pub fn compile (&self, sourcefile: impl AsRef<Path>) -> Result<slang::Module, compile::LoadModuleError>
-	{
-		// Let slang load and compile the module
-		let module =  self.session.load_module(
-			sourcefile.as_ref().to_string_lossy().as_ref()
-		).or_else(|err|
-			Err(compile::LoadModuleError::CompilationError(format!("File {} – {err}", sourcefile.as_ref().display())))
-		)?;
-
-		// Done!
-		Ok(module)
+		).ok_or(())?, &activeTargetsMap))
 	}
 }
 impl<'ctx> compile::Context for Context<'ctx>
 {
-	type ModuleType<'module> = Module where Self: 'module;
-	type EntryPointType<'ep> = EntryPoint where Self: 'ep;
-	type CompositeType<'cp> = Composite;
+	type ModuleType<'module> = Module<'module> where Self: 'module;
+	type EntryPointType<'ep> = EntryPoint<'ep> where Self: 'ep;
+	type CompositeType<'cp> = Composite<'cp>;
 	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
 	type Builder = ContextBuilder<'ctx>;
 
+	fn supportsTarget (&self, target: compile::Target) -> bool {
+		self.session.targets[target.slot()].is_some()
+	}
+
 	#[inline]
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Module, compile::LoadModuleError> {
+	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
 		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
 	fn compileFromNamedSource (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module, compile::LoadModuleError>
+		-> Result<Module<'_>, compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
 
 		// Let slang compile the module
-		let module =  self.session.load_module_from_source_string(targetPath, targetPath, sourceCode)
-			.or_else(|err| Err(compile::LoadModuleError::CompilationError(format!("{err}"))))?;
+		let module =  self.session.load_module_from_source_string(
+			targetPath, targetPath, sourceCode
+		).or_else(
+			|err| Err(compile::LoadModuleError::CompilationError(format!("{err}")))
+		)?;
 
 		// Enumerate and save entry points
-		let entryPoints = module.entry_points().map(|ep| EntryPoint(ep)).collect();
+		let entryPoints = module.entry_points().map(
+			|ep| EntryPoint { component: ep, modulePhantom: Default::default() }
+		).collect();
 
 		// Done!
 		Ok(Module { component: module, virtualPath: virtualFilepath.as_ref().to_owned(), entryPoints })
 	}
 
-	fn createComposite<'this> (&'this self, components: &[compile::ComponentRef<'this, Module, EntryPoint, Composite>])
-		-> Result<Composite, compile::CreateCompositeError>
+	fn createComposite<'this, 'inner> (
+		&'this self, components: &'inner [compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>]
+	) -> Result<Composite<'this>, compile::CreateCompositeError>
 	{
 		// Gather component list
 		let components: Vec<_> = components.iter().map(|component| match component {
 			compile::ComponentRef::Module(module) => module.component.clone().into(),
-			compile::ComponentRef::EntryPoint(entryPoint) => entryPoint.0.clone().into(),
-			compile::ComponentRef::Composite(composite) => composite.0.clone().into()
+			compile::ComponentRef::EntryPoint(entryPoint) => entryPoint.component.clone().into(),
+			compile::ComponentRef::Composite(composite) => composite.component.clone().into()
 		}).collect();
 
 		// Composit
-		let componentType = self.session.create_composite_component_type(
+		let composite = self.session.create_composite_component_type(
 			components.as_slice()
 		).or_else(|err| Err(
 			compile::CreateCompositeError::ImplementationSpecific(anyhow!("layout error: {err}"))
 		))?;
 
 		// Done!
-		Ok(Composite(componentType))
+		Ok(Composite { component: composite, sessionPhantom: Default::default() })
 	}
 
 	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'_>, compile::LinkError>
 	{
 		// Link
-		let componentType = composite.0.link().or_else(|err| Err(
+		let componentType = composite.component.link().or_else(|err| Err(
 			compile::LinkError::ImplementationSpecific(anyhow!("link failure: {err}"))
 		))?;
 
@@ -463,7 +443,30 @@ impl<'ctx> compile::Context for Context<'ctx>
 		}
 
 		// Done!
-		Ok(LinkedComposite { component: componentType, entryPointMap, activeTargetsMap: &self.session.targets } )
+		Ok(LinkedComposite {
+			component: componentType, entryPointMap, activeTargetsMap: &self.session.targets,
+			sessionPhantom: Default::default()
+		})
+	}
+}
+impl compile::HasFileSystemAccess for Context<'_>
+{
+	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Module<'_>, compile::LoadModuleError>
+	{
+		// Let slang load and compile the module
+		let module =  self.session.load_module(
+			sourceFile.as_ref().to_string_lossy().as_ref()
+		).or_else(
+			|err| Err(compile::LoadModuleError::CompilationError(format!("{err}")))
+		)?;
+
+		// Enumerate and save entry points
+		let entryPoints = module.entry_points().map(
+			|ep| EntryPoint { component: ep, modulePhantom: Default::default() }
+		).collect();
+
+		// Done!
+		Ok(Module { component: module, virtualPath: sourceFile.as_ref().to_owned(), entryPoints })
 	}
 }
 impl compile::EnvironmentEnabled for Context<'_>
@@ -473,7 +476,8 @@ impl compile::EnvironmentEnabled for Context<'_>
 
 	fn loadModule (&mut self, filename: impl AsRef<Path>) -> Result<(), compile::LoadModuleError>
 	{
-		let module = EnvModule::fromSlangModule(self.compile(&filename)?).map_err(
+		use compile::HasFileSystemAccess;
+		let module = EnvModule::fromSlangModule(self.compile(&filename)?.component).map_err(
 			|err| compile::LoadModuleError::CompilationError(format!("{err}"))
 		)?;
 		storeInEnvironment(self.environment.as_mut(), filename, module).map_err(|err| match err {
@@ -544,7 +548,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 				{
 					EnvModule::SourceCode(sourceCode) =>
 						newSession.load_module_from_source_string(&path, "", sourceCode).or_else(|err|Err(
-							SetEnvironmentError::ImplementationSpecific(
+							compile::SetEnvironmentError::ImplementationSpecific(
 								compile::LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?,
@@ -552,7 +556,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 					EnvModule::IR(bytes) => {
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 						newSession.load_module_from_ir_blob(&path, "", &irBlob).or_else(|err|Err(
-							SetEnvironmentError::ImplementationSpecific(
+							compile::SetEnvironmentError::ImplementationSpecific(
 								compile::LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?
@@ -622,7 +626,7 @@ fn constructTargetDescs<'td> (sessionConfig: &SessionConfig, activeTargetsMap: &
 			compile::Target::HLSL => targetDesc.format(slang::CompileTarget::Hlsl),
 			compile::Target::CudaCpp => targetDesc.format(slang::CompileTarget::CudaSource),
 			compile::Target::Metal => targetDesc.format(slang::CompileTarget::Metal),
-			_ => unimplemented!("unsupported target type")
+			_ => unreachable!("unsupported target types should have been rejected by earlier logic")
 		}
 	}).collect()
 }

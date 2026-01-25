@@ -12,9 +12,7 @@ use wasm_bindgen::prelude::*;
 
 // Local imports
 use crate::*;
-use crate::{
-	compile::{LoadModuleError, LinkError, SetEnvironmentError, AddModuleError}, /*slang::Program, */slang::context::*
-};
+use crate::{compile, slang::{Program, context::*}};
 
 
 
@@ -277,7 +275,7 @@ impl compile::LinkedComposite for SlangLinkedComposite<'_> {
 		Err(compile::TranslateError::Backend(anyhow::anyhow!("Not yet implemented")))
 	}
 
-	fn entryPointCode (&self, _target: compile::Target, _entryPointIdx: u32)
+	fn entryPointCode (&self, _target: compile::Target, _entryPointIdx: usize)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
 		None
@@ -351,15 +349,6 @@ impl Context<'_>
 	fn freshSession (globalSession: &GlobalSession) -> Result<Session<'_>, CreateSessionError> {
 		globalSession.createSession()
 	}
-
-	/*/// Build a shader program from the given *Slang* source file.
-	///
-	/// # Arguments
-	///
-	/// * `sourceFile` – The `.slang` file containing the shader source code.
-	pub fn buildProgram (&self, sourceFile: impl AsRef<Path>) -> anyhow::Result<Program> {
-		Program::fromSource(self, sourceFile)
-	}*/
 }
 impl<'ctx> compile::Context for Context<'ctx>
 {

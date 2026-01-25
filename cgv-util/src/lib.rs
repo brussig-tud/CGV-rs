@@ -17,6 +17,8 @@
 // Experimental language features
 #![feature(generic_const_exprs)] // required for notsafe::Phony
 #![feature(str_from_raw_parts)]  // required for notsafe::offsetStr
+#![feature(const_option_ops)]    // required for meta::*
+#![feature(const_trait_impl)]    // required for meta::*
 
 
 

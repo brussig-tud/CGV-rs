@@ -116,8 +116,8 @@ pub enum PlatformArchitecture
 impl PlatformArchitecture {
 	/// `true` if the architecture is from the WebAssembly family, `false` otherwise.
 	#[inline(always)]
-	pub fn isWasm (self) -> bool {
-		self == Self::Wasm32 || self == Self::Wasm64
+	pub const fn isWasm (self) -> bool {
+		matches!(self, PlatformArchitecture::Wasm32 | PlatformArchitecture::Wasm64)
 	}
 }
 
@@ -453,13 +453,13 @@ impl SupportedPlatform
 
 	/// This is merely a convenience shorthand for [`Self::arch::isWasm`](PlatformArchitecture::isWasm).
 	#[inline(always)]
-	pub fn isWasm (&self) -> bool {
+	pub const fn isWasm (&self) -> bool {
 		self.arch.isWasm()
 	}
 
 	/// Evaluates to `true` if and only if [`Self::debug`] is `Some(true)`. Evaluates to `false` in all other cases.
 	#[inline(always)]
-	pub fn isDebug (&self) -> bool {
+	pub const fn isDebug (&self) -> bool {
 		self.debug.unwrap_or(false)
 	}
 }

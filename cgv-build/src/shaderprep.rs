@@ -17,6 +17,7 @@ pub use anyhow::{Result, anyhow};
 
 // CGV-rs
 use cgv_shader as shader;
+use cgv_shader::{feasibleSourceTypesForPlatform, slang};
 use cgv_util as util;
 use shader::compile::prelude::*;
 
@@ -75,7 +76,7 @@ where
 
 /// Prepare the shaders in the given directory, skipping indicated directory sub-trees.
 pub fn prepareShaders (
-	buildSetup: &Setup, moduleSourceTargets: Option<&[shader::compile::Target]>,
+	buildSetup: &Setup, sourceTypes: Option<&[shader::WgpuSourceType]>,
 	shaderDirectory: impl AsRef<Path>, skipSubDirs: Option<&[impl AsRef<Path>]>
 ) -> Result<()>
 {
@@ -104,15 +105,15 @@ pub fn prepareShaders (
 		))
 	}
 
-	// Determine target root directory for packaged shaders
+	// Determine the target root directory for packaged shaders
 	let targetDir = std::path::absolute(getCargoOutDir().join(shaderDirectory))?;
 
 	// Determine module source types if none were specified
-	let slangContexts = shader::compile::createContextsForTargets(
-		moduleSourceTargets.unwrap_or(&[shader::compile::mostSuitableTargetForPlatform(
-			cargoBuildTargetPlatform()
-		)]),
-		buildSetup.shaderPath()
+	let sourceTypes = sourceTypes.unwrap_or_else(
+		|| feasibleSourceTypesForPlatform(cargoBuildTargetPlatform())
+	);
+	let slangContext = shader::compile::createContextForSourceTypes::<slang::Context>(
+		sourceTypes, buildSetup.shaderPath()
 	)?;
 
 	// Recurse through provided shader directory and package each .slang shader encountered that is not in a skipped
@@ -133,7 +134,7 @@ pub fn prepareShaders (
 			}
 			dependOnFile(srcPath);
 			fs::create_dir_all(tgtParent)?;
-			let package = shader::Package::fromSlangSourceFileMultiple(&slangContexts, srcPath, None)?;
+			let package = shader::Package::fromSourceFileMultipleTypes(sourceTypes, &slangContext, srcPath, None)?;
 			package.writeToFile(&tgtPath)?;
 			dependOnGeneratedFile(tgtPath)?;
 			Ok(())

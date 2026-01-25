@@ -8,13 +8,17 @@
 #[cfg(not(target_arch="wasm32"))]
 mod native;
 #[cfg(not(target_arch="wasm32"))]
-pub use native::{Context, ContextBuilder, obtainGlobalSession}; // re-export
+pub use native::{
+	Context, ContextBuilder, Module, EntryPoint, Composite, LinkedComposite, obtainGlobalSession
+}; // re-export
 
 /// Submodule implementing the WASM version of the *Slang* compilation context.
 #[cfg(target_arch="wasm32")]
 mod wasm;
 #[cfg(target_arch="wasm32")]
-pub use wasm::{Context, ContextBuilder, obtainGlobalSession}; // re-export
+pub use wasm::{
+	Context, ContextBuilder, Module, EntryPoint, Composite, LinkedComposite, obtainGlobalSession
+}; // re-export
 
 
 
