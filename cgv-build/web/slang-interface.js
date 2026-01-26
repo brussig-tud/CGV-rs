@@ -61,7 +61,7 @@ export class SlangComposite
 			console.debug(code);
 			return code;
 		}
-		this.entryPointCode = (targetIdx, entryPointIdx) => {
+		this.entryPointCode = (entryPointIdx, targetIdx) => {
 			const code = this.object.getEntryPointCodeBlob(entryPointIdx, targetIdx);
 			if (!code)
 				return slangContext.handleCodeTranslationError();
@@ -512,7 +512,7 @@ export default async function slang_setupAndAddInterface (targetObj)
 	targetObj.slangjs_Composite_targetCode = function (handle, targetIdx) {
 		return targetObj.slangCtx.getComposite(handle).targetCode(targetIdx);
 	};
-	targetObj.slangjs_Composite_entryPointCode = function (handle, targetIdx, entryPointIdx) {
-		return targetObj.slangCtx.getComposite(handle).entryPointCode(targetIdx, entryPointIdx);
+	targetObj.slangjs_Composite_entryPointCode = function (handle, entryPointIdx, targetIdx) {
+		return targetObj.slangCtx.getComposite(handle).entryPointCode(entryPointIdx, targetIdx);
 	};
 }

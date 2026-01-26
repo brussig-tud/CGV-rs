@@ -37,9 +37,11 @@ type ActiveTargetsMap = GenericActiveTargetsMap<u32>;
 /// Convenience alias for our `compile::ComponentRef`.
 pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
 
+
 /// A handle for a JavaScript-side `slang::GlobalSession` instance.
 pub struct GlobalSession(u64);
-impl GlobalSession {
+impl GlobalSession
+{
 	pub fn new () -> Option<Self> {
 		let handle = slangjs_createGlobalSession();
 		if handle > 0 {
@@ -313,18 +315,24 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 	fn entryPointCode (&self, target: compile::Target, entryPointIdx: usize)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
+		// Check for entry points index out-of-bounds
 		if entryPointIdx >= self.entryPointsMap.len() {
 			return None;
 		}
+
+		// Only proceed if target is active
 		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
 		{
 			// Translate to target
 			let code = slangjs_Composite_entryPointCode(
 				self.handle, entryPointIdx as u32, targetIdx
 			);
-			Self::checkTranslationResult(&code, &target).err().map(
-				|err| Some(Result::<compile::ProgramCode, compile::TranslateError>::Err(err))
-			)?;
+
+			// Make sense of the translation result
+			let translationResult = Self::checkTranslationResult(&code, &target);
+			if translationResult.is_err() {
+				return Some(Err(translationResult.err().unwrap()));
+			};
 
 			// Done!
 			if target.isText() {

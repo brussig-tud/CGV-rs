@@ -167,25 +167,12 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 			let mut slangCtx = cgv::shader::slang::ContextBuilder::default().build()?;
 			let env = cgv::obtainShaderCompileEnvironment();
 			slangCtx.replaceEnvironment(Some(env))?;
-			let module = slangCtx.compileFromNamedSource("example.slang", util::sourceFile!("/shader/example.slang"))?;
-			let ep0 = &module.entryPoints()[0];
-			let ep1 = &module.entryPoints()[1];
-			let composite = slangCtx.createComposite(
-				&[module.enter(), ep0.enter()]
-			)?;
-			let program = slangCtx.createComposite(
-				&[composite.enter(), ep1.enter()]
-			)?;
-			let linkedComposite = slangCtx.linkComposite(&program)?;
-			let code = linkedComposite.allEntryPointsCode(cgv::shader::compile::Target::WGSL)?;
-			tracing::warn!("Transpiled Slang->WGSL code:\n{:?}", code);
-			cgv::shader::Package::deserialize(
-				util::sourceGeneratedBytes!("/shader/example.spk")
-			)?
-			/*cgv::shader::Package::fromSourceCode(
+			cgv::shader::Package::/*fromSourceCode(
 				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "example.slang",
 				util::sourceFile!("/shader/example.slang"), None/* all entry points */
-			)?*/
+			)*/deserialize(
+				util::sourceGeneratedBytes!("/shader/example.spk")
+			)?
 		};
 		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
 			let mut slangCtx = cgv::shader::slang::ContextBuilder::withSearchPaths(

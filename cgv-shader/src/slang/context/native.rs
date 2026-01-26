@@ -45,6 +45,7 @@ type ActiveTargetsMap = GenericActiveTargetsMap<i64>;
 /// Convenience alias for our `compile::ComponentRef`.
 pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
 
+
 ///
 pub struct GlobalSession(Mutex<slang::GlobalSession>);
 impl Deref for GlobalSession {
@@ -182,9 +183,12 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 	fn entryPointCode (&self, target: compile::Target, entryPointIdx: usize)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
-		if entryPointIdx as usize>= self.entryPointsMap.len() {
+		// Check for entry points index out-of-bounds
+		if entryPointIdx >= self.entryPointsMap.len() {
 			return None;
 		}
+
+		// Only proceed if target is active
 		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
 		{
 			// Translate to target
