@@ -77,6 +77,16 @@ impl ProgramCode
 		self.clone().into()
 	}
 }
+impl From<String> for ProgramCode {
+	fn from (text: String) -> Self {
+		Self::Text(text)
+	}
+}
+impl From<Vec<u8>> for ProgramCode {
+	fn from (bin: Vec<u8>) -> Self {
+		Self::Binary(bin)
+	}
+}
 impl AsRef<[u8]> for ProgramCode {
 	#[inline]
 	fn as_ref(&self) -> &[u8] {

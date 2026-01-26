@@ -177,9 +177,15 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 				&[composite.enter(), ep1.enter()]
 			)?;
 			let linkedComposite = slangCtx.linkComposite(&program)?;
+			let code = linkedComposite.allEntryPointsCode(cgv::shader::compile::Target::WGSL)?;
+			tracing::warn!("Transpiled Slang->WGSL code:\n{:?}", code);
 			cgv::shader::Package::deserialize(
 				util::sourceGeneratedBytes!("/shader/example.spk")
 			)?
+			/*cgv::shader::Package::fromSourceCode(
+				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "example.slang",
+				util::sourceFile!("/shader/example.slang"), None/* all entry points */
+			)?*/
 		};
 		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
 			let mut slangCtx = cgv::shader::slang::ContextBuilder::withSearchPaths(

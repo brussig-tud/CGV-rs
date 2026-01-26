@@ -5,8 +5,26 @@ export class SlangComposite
 {
 	constructor(slangContext, session, compositeHandle, compositeObject)
 	{
+		// Common init
 		this.object = compositeObject;
 		this.session = session;
+
+		// Setup reflection
+		const layout = this.object.getLayout(0);
+		if (layout)
+		{
+			// We have a linked component
+			this.layout = layout;
+			const layoutJson = layout.toJsonObject();
+			var entryPoints = [];
+			for (const epEntry in layoutJson.entryPoints)
+				if (Object.prototype.hasOwnProperty.call(layoutJson.entryPoints, epEntry)) {
+					const epInfo = layoutJson.entryPoints[epEntry];
+					const ep = layout.findEntryPointByName(epInfo.name)
+					entryPoints.push([ep, epInfo]);
+				}
+			this.entryPoints = entryPoints;
+		}
 
 		// Internal API
 		this.cleanup = () => {
@@ -14,6 +32,13 @@ export class SlangComposite
 		}
 
 		// API methods
+		this.orderedEntryPointNames = () => {
+			let names_wire = [];
+			this.entryPoints.forEach(
+				([_, epInfo]) => names_wire.push(epInfo.name)
+			);
+			return names_wire;
+		}
 		this.link = () => {
 			const linkedProg = this.object.link();
 			if (!linkedProg)
@@ -21,11 +46,29 @@ export class SlangComposite
 			const handle = SlangContext.getUniqueNumber();
 			slangContext.composites.set(handle, new SlangComposite(slangContext, this.session, handle, linkedProg));
 			this.session.composites.add(handle);
-			console.debug("Session #"+this.session+": linked to new composite #."+handle+":");
+			console.debug("Session #"+this.session.handle+": linked to new composite #."+handle+":");
 			console.debug(linkedProg);
-			console.debug("Session #"+this.session+" composites now:");
+			console.debug("Session #"+this.session.handle+" composites now:");
 			console.debug(this.session.composites);
 			return BigInt(handle);
+		}
+		this.targetCode = (targetIdx) => {
+			const code = this.object.getTargetCodeBlob(targetIdx);
+			if (!code)
+				return slangContext.handleCodeTranslationError();
+			console.debug("Session #"+this.session.handle+", composite #."+compositeHandle+":");
+			console.debug("Translated to target ("+targetIdx+"):\n");
+			console.debug(code);
+			return code;
+		}
+		this.entryPointCode = (targetIdx, entryPointIdx) => {
+			const code = this.object.getEntryPointCodeBlob(entryPointIdx, targetIdx);
+			if (!code)
+				return slangContext.handleCodeTranslationError();
+			console.debug("Session #"+this.session.handle+", composite #."+compositeHandle+":");
+			console.debug("Translated to target ("+targetIdx+"):\n");
+			console.debug(code);
+			return code;
 		}
 	}
 }
@@ -176,7 +219,7 @@ export class SlangGlobalSession
 			const compilationTarget = "WGSL";
 			const target = slangContext.availableTargets[compilationTarget];
 			console.debug(
-				  "Global session #"+this.handle+": New session requested for target: "
+				"Global session #"+this.handle+": New session requested for target: "
 				+ compilationTarget+"("+target+")");
 			const newSession = this.object.createSession(target);
 			if (!newSession)
@@ -247,6 +290,11 @@ export class SlangContext
 			const error = slangModule.getLastError();
 			console.error(error.type + " error: " + error.message);
 			return BigInt(-1);
+		}
+		this.handleCodeTranslationError = () => {
+			const error = slangModule.getLastError();
+			console.error(error.type + " error: " + error.message);
+			return Uint8Array.fromHex("ff");
 		}
 		this.getGlobalSession = (handle) => {
 			const handle_bg = Number(handle);
@@ -455,7 +503,16 @@ export default async function slang_setupAndAddInterface (targetObj)
 		let entryPoint = targetObj.slangCtx.getEntryPoint(entryPointHandle);
 		return entryPoint.name();
 	};
+	targetObj.slangjs_Composite_orderedEntryPointNames = function (handle) {
+		return targetObj.slangCtx.getComposite(handle).orderedEntryPointNames();
+	};
 	targetObj.slangjs_Composite_link = function (handle) {
 		return targetObj.slangCtx.getComposite(handle).link();
+	};
+	targetObj.slangjs_Composite_targetCode = function (handle, targetIdx) {
+		return targetObj.slangCtx.getComposite(handle).targetCode(targetIdx);
+	};
+	targetObj.slangjs_Composite_entryPointCode = function (handle, targetIdx, entryPointIdx) {
+		return targetObj.slangCtx.getComposite(handle).entryPointCode(targetIdx, entryPointIdx);
 	};
 }

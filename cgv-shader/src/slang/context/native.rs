@@ -39,6 +39,9 @@ static MISSING_ENTRY_POINT_NAME_MSG: &str = "entry points should always have a n
 // Structs
 //
 
+/// Our `ActiveTargetsMap` specialization using`i64` as that is what native *Slang* uses to index compilation targets.
+type ActiveTargetsMap = GenericActiveTargetsMap<i64>;
+
 /// Convenience alias for our `compile::ComponentRef`.
 pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
 
@@ -143,13 +146,14 @@ impl compile::Composite for Composite<'_> {}
 ///
 pub struct LinkedComposite<'this> {
 	pub(crate) component: slang::ComponentType,
-	entryPointMap: BTreeMap<String, i64>,
+	entryPointsMap: BTreeMap<String, i64>,
 	activeTargetsMap: &'this ActiveTargetsMap,
 	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
 }
 impl LinkedComposite<'_> {
-	pub fn entryPointMap (&self) -> &BTreeMap<String, i64> {
-		&self.entryPointMap
+	#[inline(always)]
+	pub fn entryPointsMap (&self) -> &BTreeMap<String, i64> {
+		&self.entryPointsMap
 	}
 }
 impl compile::LinkedComposite for LinkedComposite<'_>
@@ -178,7 +182,7 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 	fn entryPointCode (&self, target: compile::Target, entryPointIdx: usize)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
-		if entryPointIdx as usize>= self.entryPointMap.len() {
+		if entryPointIdx as usize>= self.entryPointsMap.len() {
 			return None;
 		}
 		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
@@ -454,7 +458,8 @@ impl<'ctx> compile::Context for Context<'ctx>
 
 		// Done!
 		Ok(LinkedComposite {
-			component: componentType, entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
+			component: componentType,
+			entryPointsMap: entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
 			sessionPhantom: Default::default()
 		})
 	}
@@ -495,13 +500,12 @@ impl compile::EnvironmentEnabled for Context<'_>
 		})
 	}
 
-	fn loadModuleFromSource (
-		&mut self, envStorage: EnvironmentStorage, virtualFilepath: impl AsRef<Path>, sourceCode: &str
-	) -> Result<(), compile::LoadModuleError>
+	fn loadModuleFromSource (&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<(), compile::LoadModuleError>
 	{
 		// Compile the source code inside the Slang session
 		use compile::Context;
-		let slangModule = self.compileFromNamedSource(&virtualFilepath, sourceCode)?;
+		let slangModule = self.compileFromNamedSource(&targetPath, sourceCode)?;
 		let module = match envStorage {
 			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
 			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule.component).map_err(
@@ -510,7 +514,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 		};
 
 		// Store the module in the environment
-		storeInEnvironment(self.environment.as_mut(), virtualFilepath, module).map_err(|err| match err {
+		storeInEnvironment(self.environment.as_mut(), targetPath, module).map_err(|err| match err {
 			AddModuleError::DuplicateModulePaths(path) => compile::LoadModuleError::DuplicatePath(path)
 		})
 	}

@@ -34,7 +34,7 @@ use crate::compile;
 
 /// Used by the *CGV-rs* adapters to the *Slang* compiler for lightning-fast $O(1)$ checks if a compilation target is
 /// active, and if yes, which [target index](slang_native::ComponentType::target_code) it corresponds to.
-type ActiveTargetsMap = [Option<i64>; compile::Target::NUM_SLOTS as usize];
+type GenericActiveTargetsMap<IndexType> = [Option<IndexType>; compile::Target::NUM_SLOTS as usize];
 
 
 

@@ -31,10 +31,11 @@ pub static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(|| GlobalSess
 // Structs
 //
 
+/// Our `ActiveTargetsMap` specialization using`u32` as that is what out JavaScript bridge uses.
+type ActiveTargetsMap = GenericActiveTargetsMap<u32>;
+
 /// Convenience alias for our `compile::ComponentRef`.
-pub type ComponentRef<'this> = compile::ComponentRef<
-	'this, Module<'this>, EntryPoint<'this>, Composite<'this>
->;
+pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
 
 /// A handle for a JavaScript-side `slang::GlobalSession` instance.
 pub struct GlobalSession(u64);
@@ -53,7 +54,7 @@ impl GlobalSession {
 		if handle > 0 {
 			let mut activeTargetsMap = ActiveTargetsMap::default();
 			sessionConfig.targets.iter().enumerate().for_each(
-				|(idx, target)| activeTargetsMap[target.slot()] = Some(idx as i64)
+				|(idx, target)| activeTargetsMap[target.slot()] = Some(idx as u32)
 			);
 			Ok(Session { handle: handle as u64, activeTargetsMap, gsPhantom: Default::default() })
 		}
@@ -258,9 +259,26 @@ impl compile::Composite for Composite<'_> {}
 /// A handle for a **linked** JavaScript-side *Slang* *composite component* instance.
 pub struct LinkedComposite<'this> {
 	handle: u64,
-	entryPointMap: BTreeMap<String, i64>,
+	entryPointsMap: BTreeMap<String, u32>,
 	activeTargetsMap: &'this ActiveTargetsMap,
 	sessionPhantom: PhantomData<&'this Session<'this>>
+}
+impl LinkedComposite<'_> {
+	#[inline]
+	fn checkTranslationResult (code: &[u8], target: &compile::Target) -> Result<(), compile::TranslateError>
+	{
+		if code.len()>1 || (code.len()==1 && code[0]!=0xff) {
+			Ok(())
+		}
+		else {
+			Err(compile::TranslateError::Backend(anyhow::anyhow!("translation to {target} failed")))
+		}
+	}
+
+	#[inline(always)]
+	pub fn entryPointsMap (&self) -> &BTreeMap<String, u32> {
+		&self.entryPointsMap
+	}
 }
 impl Drop for LinkedComposite<'_> {
 	fn drop (&mut self) {
@@ -268,15 +286,60 @@ impl Drop for LinkedComposite<'_> {
 		slangjs_Session_dropComposite(self.handle);
 	}
 }
-impl compile::LinkedComposite for LinkedComposite<'_> {
-	fn allEntryPointsCode (&self, _target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError> {
-		Err(compile::TranslateError::Backend(anyhow::anyhow!("Not yet implemented")))
+impl compile::LinkedComposite for LinkedComposite<'_>
+{
+	fn allEntryPointsCode (&self, target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError>
+	{
+		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
+		{
+			// Translate via JavaScript bridge
+			let code = slangjs_Composite_targetCode(self.handle, targetIdx);
+			Self::checkTranslationResult(&code, &target)?;
+
+			// Done!
+			Ok(if target.isText() {
+				compile::ProgramCode::Text(
+					String::from_utf8(code).map_err(|e| compile::TranslateError::Backend(e.into()))?
+				)
+			} else {
+				compile::ProgramCode::Binary(code)
+			})
+		}
+		else {
+			Err(compile::TranslateError::InvalidTarget(target))
+		}
 	}
 
-	fn entryPointCode (&self, _target: compile::Target, _entryPointIdx: usize)
+	fn entryPointCode (&self, target: compile::Target, entryPointIdx: usize)
 		-> Option<Result<compile::ProgramCode, compile::TranslateError>>
 	{
-		None
+		if entryPointIdx >= self.entryPointsMap.len() {
+			return None;
+		}
+		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
+		{
+			// Translate to target
+			let code = slangjs_Composite_entryPointCode(
+				self.handle, entryPointIdx as u32, targetIdx
+			);
+			Self::checkTranslationResult(&code, &target).err().map(
+				|err| Some(Result::<compile::ProgramCode, compile::TranslateError>::Err(err))
+			)?;
+
+			// Done!
+			if target.isText() {
+				let textCode = unsafe {
+					// SAFETY: We strongly believe in Slang's commitment to always returning valid UTF-8
+					String::from_utf8_unchecked(code)
+				};
+				Some(Ok(compile::ProgramCode::Text(textCode)))
+			} else {
+				Some(Ok(compile::ProgramCode::Binary(code)))
+			}
+		}
+		else {
+			Some(Err(compile::TranslateError::InvalidTarget(target)))
+		}
 	}
 }
 
@@ -416,20 +479,16 @@ impl<'ctx> compile::Context for Context<'ctx>
 			return Err(compile::LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")));
 		}
 
-		/*// Enumerate all entry points. We blanket-use the very first target, as names and ordering of entry points
-		// should be completely target-independent. We can infer this logical guarantee from the fact that according to
-		// several official *Slang* examples, you can – and in fact are typically expected to – use the entry point
-		// information obtained prior to linking from untranslated *Slang* modules.
-		let layout = componentType.layout(0).or_else(|err| Err(
-			compile::LinkError::ImplementationSpecific(anyhow!("layout error: {err}"))
-		))?;
+		// Build entry point name->index map
+		let epNames = slangjs_Composite_orderedEntryPointNames(handle as u64);
 		let mut entryPointMap = BTreeMap::default();
-		for (idx, ep) in layout.entry_points().enumerate() {
-			entryPointMap.insert(ep.name().expect(crate::slang::context::native::MISSING_ENTRY_POINT_NAME_MSG).to_owned(), idx as i64);
-		}*/
+		for (idx, epName) in epNames.into_iter().enumerate() {
+			entryPointMap.insert(epName, idx as u32);
+		}
 
 		Ok(LinkedComposite {
-			handle: handle as u64, entryPointMap: BTreeMap::new(), activeTargetsMap: &self.session.activeTargetsMap,
+			handle: handle as u64,
+			entryPointsMap: entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
 			sessionPhantom: Default::default()
 		})
 	}
@@ -450,9 +509,8 @@ impl compile::EnvironmentEnabled for Context<'_>
 		}
 	}
 
-	fn loadModuleFromSource (
-		&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str
-	) -> Result<(), compile::LoadModuleError>
+	fn loadModuleFromSource (&mut self, envStorage: EnvironmentStorage, targetPath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<(), compile::LoadModuleError>
 	{
 		// Compile the source code inside the Slang session
 		use compile::Context;
@@ -569,5 +627,8 @@ extern "C" {
 
 	fn slangjs_EntryPoint_name (entryPointHandle: u64) -> String;
 
+	fn slangjs_Composite_orderedEntryPointNames (handle: u64) -> Vec<String>;
 	fn slangjs_Composite_link (handle: u64) -> i64;
+	fn slangjs_Composite_targetCode (handle: u64, targetIdx: u32) -> Vec<u8>;
+	fn slangjs_Composite_entryPointCode (handle: u64, targetIdx: u32, entryPointIdx: u32) -> Vec<u8>;
 }
