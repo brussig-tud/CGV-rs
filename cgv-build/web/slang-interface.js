@@ -28,6 +28,7 @@ export class SlangComposite
 
 		// Internal API
 		this.cleanup = () => {
+			this.object.delete();
 			this.object = null;
 		}
 
@@ -82,6 +83,7 @@ export class SlangEntryPoint
 
 		// Internal API
 		this.cleanup = () => {
+			this.object.delete();
 			this.object = null;
 		}
 
@@ -116,6 +118,7 @@ export class SlangModule
 				slangContext.entryPoints.delete(handle);
 			});
 			this.entryPoints = null;
+			this.object.delete();
 			this.object = null;
 		}
 
@@ -157,6 +160,7 @@ export class SlangSession
 			const ownedCompositeHandles = structuredClone(this.composites);
 			ownedCompositeHandles.forEach((handle) => slangContext.dropComposite(handle));
 			this.composites = null;
+			this.object.delete();
 			this.object = null;
 			this.globalSession = null;
 		}
@@ -211,6 +215,7 @@ export class SlangGlobalSession
 			ownedSessionHandles.forEach((handle) => slangContext.dropSession(handle));
 			this.sessions = null;
 			this.object = null;
+			this.object.delete();
 			this.handle = null;
 		}
 
