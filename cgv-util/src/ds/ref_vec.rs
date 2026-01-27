@@ -14,11 +14,14 @@ use std::ops::Deref;
 // Structs
 //
 
-/// A zero-cost* convenience wrapper around [`Vec`] that [derefs](Deref) to a slice of references to the stored
+/// A zero runtime cost* convenience wrapper around [`Vec`] that [derefs](Deref) to a slice of references to the stored
 /// elements. Very useful in places where you need to call a function that needs such a slice of references (as is often
 /// the case when interacting with C libraries). If you borrow this slice more than once, it naturally saves conversion
-/// costs without additional effort on your part as the slice of references is created only once
+/// costs without additional effort on your part as the underlying vector of references is created only once
 /// [during construction](RefVec::new).
+///
+/// **NOTE**: `RefVec`s cannot be manipulated after creation. Since the internal vector of references persists for the
+/// entire lifetime of the `RefVec`, manipulation would violate Rust's aliasing rules.
 ///
 /// # Example
 ///
@@ -46,8 +49,8 @@ use std::ops::Deref;
 ///
 /// ##### Footnotes
 ///
-/// \*It is zero-cost only if you actually use the slice of references it derefs to, otherwise the construction overhead
-/// is not amortized.
+/// \*The runtime cost is zero only if you actually use the slice of references it derefs to, otherwise the construction
+/// overhead will not be amortized.
 pub struct RefVec<'this, T: 'this> {
 	vec: Vec<T>,
 	refs: Vec<&'this T>,
@@ -63,6 +66,15 @@ impl<'this, T: 'this> RefVec<'this, T>
 	/// # Returns
 	///
 	/// The `RefVec` wrapping `vec`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// # use cgv_util::ds::RefVec;
+	/// let vec = vec![1, 2, 3];
+	/// let refVec = RefVec::new(vec);
+	/// assert_eq!(refVec.len(), 3);
+	/// ```
 	#[inline(always)]
 	pub fn new (vec: Vec<T>) -> Self {
 		let slice = unsafe {
@@ -77,12 +89,36 @@ impl<'this, T: 'this> RefVec<'this, T>
 	}
 
 	/// Borrow a slice over the Vector of **owned** elements.
+	///
+	/// # Returns
+	///
+	/// A slice over all stored elements.
+	///
+	/// # Example
+	///
+	/// ```
+	/// # use cgv_util::ds::RefVec;
+	/// let ref_vec = RefVec::new(vec![1, 2, 3]);
+	/// assert_eq!(ref_vec.elements(), &[1, 2, 3]);
+	/// ```
 	#[inline(always)]
 	pub fn elements (&self) -> &[T] {
 		self.vec.as_slice()
 	}
 
 	/// Borrow a slice over the Vector of **references** to the elements.
+	///
+	/// # Returns
+	///
+	/// A slice over references to all stored elements.
+	///
+	/// # Example
+	///
+	/// ```
+	/// # use cgv_util::ds::RefVec;
+	/// let ref_vec = RefVec::new(vec![1, 2, 3]);
+	/// assert_eq!(ref_vec.references(), &[&1, &2, &3]);
+	/// ```
 	#[inline(always)]
 	pub fn references (&self) -> &[&'this T] {
 		self.refs.as_slice()
