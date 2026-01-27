@@ -162,14 +162,14 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		////
 		// Load resources
 
-		// The example shader, from source code via *Slang* online compilation
+		// The example shader, built from source code via *Slang* online compilation
 		// - step 1: a Slang compilation context
 		#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
 			// On native, it's a good idea to always consider the shader path we get from the runtime environment
 			cgv::shader::slang::ContextBuilder::withSearchPaths(&environment.shaderPath).build()?
 		};
 		#[cfg(target_arch="wasm32")] let mut slangCtx = {
-			// On WASM, we can't (yet) use a shader path to find modules
+			// On WASM, we can't (yet) use a shader path to find modules residing on a filesystem
 			cgv::shader::slang::ContextBuilder::default().build()?
 		};
 		// - step 2: load the *CGV-rs* core shader library into the context
