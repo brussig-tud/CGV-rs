@@ -103,9 +103,9 @@ pub struct Session<'this> {
 	activeTargetsMap: ActiveTargetsMap,
 	gsPhantom: PhantomData<&'this GlobalSession>
 }
-impl Session<'_> {
+impl<'this> Session<'this> {
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module<'_>, compile::LoadModuleError>
+		-> Result<Module<'this>, compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
@@ -121,7 +121,7 @@ impl Session<'_> {
 		Module::new(moduleHandle as u64, targetPath)
 	}
 
-	pub fn createComposite<'this> (&'this self, components: &[ComponentRef<'this>])
+	pub fn createComposite<'outer> (&self, components: &'outer [ComponentRef<'outer>])
 		-> Result<Composite<'this>, compile::CreateCompositeError>
 	{
 		// Build JavaScript-side component list
@@ -174,8 +174,10 @@ impl Module<'_> {
 		ComponentRef::Module(self)
 	}
 }
-impl<'this> compile::Module<EntryPoint<'this>> for Module<'this>
+impl<'this> compile::Module for Module<'this>
 {
+	type EntryPointType = EntryPoint<'this>;
+
 	fn virtualFilepath (&self) -> &Path {
 		&self.virtualFilepath
 	}
@@ -262,7 +264,7 @@ impl compile::Composite for Composite<'_> {}
 pub struct LinkedComposite<'this> {
 	handle: u64,
 	entryPointsMap: BTreeMap<String, u32>,
-	activeTargetsMap: &'this ActiveTargetsMap,
+	activeTargetsMap: ActiveTargetsMap,
 	sessionPhantom: PhantomData<&'this Session<'this>>
 }
 impl LinkedComposite<'_> {
@@ -442,26 +444,26 @@ impl Context<'_>
 		globalSession.createSession(sessionConfig)
 	}
 }
-impl<'ctx> compile::Context for Context<'ctx>
+impl<'this> compile::Context for Context<'this>
 {
-	type ModuleType<'module> = Module<'module> where Self: 'module;
-	type EntryPointType<'ep> = EntryPoint<'ep> where Self: 'ep;
-	type CompositeType<'ct> = Composite<'ct> ;
-	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
-	type Builder = ContextBuilder<'ctx>;
+	type ModuleType = Module<'this>;
+	type EntryPointType = EntryPoint<'this>;
+	type CompositeType = Composite<'this>;
+	type LinkedCompositeType = LinkedComposite<'this>;
+	type Builder = ContextBuilder<'this>;
 
 	fn supportsTarget (&self, target: compile::Target) -> bool {
 		self.session.activeTargetsMap[target.slot()].is_some()
 	}
 
 	#[inline]
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
+	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'this>, compile::LoadModuleError> {
 		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
 	fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module<'_>, compile::LoadModuleError>
+		-> Result<Module<'this>, compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(targetPath.as_ref())?;
@@ -473,13 +475,13 @@ impl<'ctx> compile::Context for Context<'ctx>
 		Ok(module)
 	}
 
-	fn createComposite<'this> (&'this self, components: &[ComponentRef<'this>])
+	fn createComposite<'outer> (&self, components: &'outer [ComponentRef<'outer>])
 		-> Result<Composite<'this>, compile::CreateCompositeError>
 	{
 		self.session.createComposite(components)
 	}
 
-	fn linkComposite<'this> (&'this self, composite: &Composite) -> Result<LinkedComposite<'this>, compile::LinkError>
+	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'this>, compile::LinkError>
 	{
 		// Link
 		let handle = slangjs_Composite_link(composite.handle);
@@ -496,7 +498,7 @@ impl<'ctx> compile::Context for Context<'ctx>
 
 		Ok(LinkedComposite {
 			handle: handle as u64,
-			entryPointsMap: entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
+			entryPointsMap: entryPointMap, activeTargetsMap: self.session.activeTargetsMap,
 			sessionPhantom: Default::default()
 		})
 	}

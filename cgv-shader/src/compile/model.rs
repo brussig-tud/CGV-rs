@@ -130,16 +130,26 @@ pub trait EntryPoint: Component {
 
 
 /// The trait of modules that contain shader program code managed by a [`compile::Context`].
-pub trait Module<EntryPointType: EntryPoint>: Component
+pub trait Module: Component
 {
+	////
+	// Associated types
+
+	///
+	type EntryPointType: EntryPoint;
+
+
+	////
+	// Methods
+
 	///
 	fn virtualFilepath (&self) -> &Path;
 
 	///
-	fn entryPoint (&self, name: &str) -> Option<&EntryPointType>;
+	fn entryPoint (&self, name: &str) -> Option<&Self::EntryPointType>;
 
 	///
-	fn entryPoints (&self) -> &[EntryPointType];
+	fn entryPoints (&self) -> &[Self::EntryPointType];
 }
 
 
@@ -168,7 +178,7 @@ pub trait LinkedComposite {
 #[derive(Clone,Copy)]
 pub enum ComponentRef<'c, ModuleType, EntryPointType, CompositeType>
 where
-	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite
+	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType=EntryPointType>, CompositeType: Composite
 {
 	Module(&'c ModuleType),
 	EntryPoint(&'c EntryPointType),

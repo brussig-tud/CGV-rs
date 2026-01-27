@@ -115,8 +115,10 @@ impl compile::Component for Module<'_> {
 		extractSlangObjectInstancePointer(&self.component)
 	}
 }
-impl<'this> compile::Module<EntryPoint<'this>> for Module<'this>
+impl<'this> compile::Module for Module<'this>
 {
+	type EntryPointType = EntryPoint<'this>;
+
 	fn virtualFilepath (&self) -> &Path {
 		&self.virtualPath
 	}
@@ -148,10 +150,10 @@ impl compile::Composite for Composite<'_> {}
 pub struct LinkedComposite<'this> {
 	pub(crate) component: slang::ComponentType,
 	entryPointsMap: BTreeMap<String, i64>,
-	activeTargetsMap: &'this ActiveTargetsMap,
+	activeTargetsMap: ActiveTargetsMap,
 	sessionPhantom: std::marker::PhantomData<&'this Session<'this>>
 }
-impl LinkedComposite<'_> {
+impl<'this> LinkedComposite<'this> {
 	#[inline(always)]
 	pub fn entryPointsMap (&self) -> &BTreeMap<String, i64> {
 		&self.entryPointsMap
@@ -377,26 +379,26 @@ impl Context<'_>
 		).ok_or(CreateSessionError::Generic)?, activeTargetsMap))
 	}
 }
-impl<'ctx> compile::Context for Context<'ctx>
+impl<'this> compile::Context for Context<'this>
 {
-	type ModuleType<'module> = Module<'module> where Self: 'module;
-	type EntryPointType<'ep> = EntryPoint<'ep> where Self: 'ep;
-	type CompositeType<'cp> = Composite<'cp>;
-	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
-	type Builder = ContextBuilder<'ctx>;
+	type ModuleType = Module<'this>;
+	type EntryPointType = EntryPoint<'this>;
+	type CompositeType = Composite<'this>;
+	type LinkedCompositeType = LinkedComposite<'this>;
+	type Builder = ContextBuilder<'this>;
 
 	fn supportsTarget (&self, target: compile::Target) -> bool {
 		self.session.activeTargetsMap[target.slot()].is_some()
 	}
 
 	#[inline]
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
+	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'this>, compile::LoadModuleError> {
 		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
 	fn compileFromNamedSource (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module<'_>, compile::LoadModuleError>
+		-> Result<Module<'this>, compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
@@ -417,9 +419,8 @@ impl<'ctx> compile::Context for Context<'ctx>
 		Ok(Module { component: module, virtualPath: virtualFilepath.as_ref().to_owned(), entryPoints })
 	}
 
-	fn createComposite<'this, 'inner> (
-		&'this self, components: &'inner [ComponentRef<'this>]
-	) -> Result<Composite<'this>, compile::CreateCompositeError>
+	fn createComposite<'outer> (&self, components: &'outer [ComponentRef<'outer>])
+		-> Result<Composite<'this>, compile::CreateCompositeError>
 	{
 		// Gather component list
 		let components: Vec<_> = components.iter().map(|component| match component {
@@ -439,7 +440,8 @@ impl<'ctx> compile::Context for Context<'ctx>
 		Ok(Composite { component: composite, sessionPhantom: Default::default() })
 	}
 
-	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'_>, compile::LinkError>
+	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'this>, compile::LinkError>
+		where Self: 'this
 	{
 		// Link
 		let componentType = composite.component.link().or_else(|err| Err(
@@ -461,14 +463,14 @@ impl<'ctx> compile::Context for Context<'ctx>
 		// Done!
 		Ok(LinkedComposite {
 			component: componentType,
-			entryPointsMap: entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
+			entryPointsMap: entryPointMap, activeTargetsMap: self.session.activeTargetsMap,
 			sessionPhantom: Default::default()
 		})
 	}
 }
-impl compile::HasFileSystemAccess for Context<'_>
+impl<'this> compile::HasFileSystemAccess for Context<'this>
 {
-	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Module<'_>, compile::LoadModuleError>
+	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Module<'this>, compile::LoadModuleError>
 	{
 		// Let slang load and compile the module
 		let module =  self.session.load_module(

@@ -405,16 +405,16 @@ pub trait Context
 	// Associated types
 
 	///
-	type ModuleType<'module>: Module<Self::EntryPointType<'module>> where Self: 'module;
+	type ModuleType: Module<EntryPointType = Self::EntryPointType>;
 
 	///
-	type EntryPointType<'ep>: EntryPoint where Self: 'ep;
+	type EntryPointType: EntryPoint;
 
 	///
-	type CompositeType<'cp>: Composite;
+	type CompositeType: Composite;
 
 	///
-	type LinkedCompositeType<'lct>: LinkedComposite where Self: 'lct;
+	type LinkedCompositeType: LinkedComposite;
 
 	///
 	type Builder: ContextBuilder<Context = Self>;
@@ -433,29 +433,27 @@ pub trait Context
 	}
 
 	///
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Self::ModuleType<'_>, LoadModuleError>;
+	fn compileFromSource (&self, sourceCode: &str) -> Result<Self::ModuleType, LoadModuleError>;
 
 	///
 	fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Self::ModuleType<'_>, LoadModuleError>;
+		-> Result<Self::ModuleType, LoadModuleError>;
 
 	///
-	fn createComposite<'this, 'inner> (
-		&'this self, components: &'inner [
-			ComponentRef<'this, Self::ModuleType<'this>, Self::EntryPointType<'this>, Self::CompositeType<'this>>
-		]
-	) -> Result<Self::CompositeType<'this>, CreateCompositeError>;
+	fn createComposite<'outer> (
+		&self, components: &'outer [ComponentRef<'outer, Self::ModuleType, Self::EntryPointType, Self::CompositeType>]
+	) -> Result<Self::CompositeType, CreateCompositeError>;
 
 	///
-	fn linkComposite<'this> (&'this self, composite: &Self::CompositeType<'_>)
-		-> Result<Self::LinkedCompositeType<'this>, LinkError>;
+	fn linkComposite (&self, composite: &Self::CompositeType)
+		-> Result<Self::LinkedCompositeType, LinkError>;
 }
 
 
 /// The trait of a [`compile::Context`] that can access a filesystem for loading source files
 pub trait HasFileSystemAccess: Context<Builder: BuildsContextWithFilesystemAccess> {
 	///
-	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Self::ModuleType<'_>, LoadModuleError>;
+	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Self::ModuleType, LoadModuleError>;
 }
 
 
