@@ -34,9 +34,17 @@ impl Program<'_>
 	{
 		// XXX: This is ugly. We need to rephrase the way we communicate lifetimes in the `compile::model` to dodge this
 		// issue. Could potentially be solved by having the context own every component and hand out references only.
-		let module = unsafe { &*(module as *const Context::ModuleType<'_>) };
+		let module = unsafe {
+			// SAFETY:
+			// We don't keep this reference beyond the body of this function, and we also don't hand it out to anything
+			// else, directly or indirectly, that outlives this function body. Thus, it is safe to cast away the
+			// lifetime information. In fact, the only reason we even have to do this is because we haven't figured out
+			// how to properly communicate the actual lifetime relationships to the compiler. Right now, it thinks we're
+			// leaking this reference left and right even though we really don't.
+			&*(module as *const Context::ModuleType<'_>)
+		};
 
-		// Gather components to specialize program for each entry point
+		// Gather components to specialize the program for each entry point
 		use compile::ComponentRef;
 		let mut components = vec![ComponentRef::Module(module)];
 		for ep in module.entryPoints() {
