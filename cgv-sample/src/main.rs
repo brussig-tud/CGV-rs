@@ -162,35 +162,40 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		////
 		// Load resources
 
-		// Test Slang runtime compilation
-		#[cfg(target_arch="wasm32")] let shaderPackage = {
-			let mut slangCtx = cgv::shader::slang::ContextBuilder::default().build()?;
-			let env = cgv::obtainShaderCompileEnvironment();
-			slangCtx.replaceEnvironment(Some(env))?;
-			cgv::shader::Package::/*fromSourceCode(
-				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "example.slang",
-				util::sourceFile!("/shader/example.slang"), None/* all entry points */
-			)*/deserialize(
-				util::sourceGeneratedBytes!("/shader/example.spk")
-			)?
+		// The example shader, from source code via *Slang* online compilation
+		// - step 1: a Slang compilation context
+		#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
+			// On native, it's a good idea to always consider the shader path we get from the runtime environment
+			cgv::shader::slang::ContextBuilder::withSearchPaths(&environment.shaderPath).build()?
 		};
+		#[cfg(target_arch="wasm32")] let mut slangCtx = {
+			// On WASM, we can't (yet) use a shader path to find modules
+			cgv::shader::slang::ContextBuilder::default().build()?
+		};
+		// - step 2: load the *CGV-rs* core shader library into the context
+		let env = cgv::obtainShaderCompileEnvironment();
+		slangCtx.replaceEnvironment(Some(env))?;
+		// - step 3: build shader package we can use to create *WGPU* shader modules that can be plugged into a
+		//           pipeline. In cases where offline compilation is ok, ready-made shader packages can contain several
+		//           variants (e.g. SPIR-V for desktop, WGSL for WASM) and be deserialized from a file or memory blob
 		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
-			let mut slangCtx = cgv::shader::slang::ContextBuilder::withSearchPaths(
-				&environment.shaderPath
-			).build()?;
-			let env = cgv::obtainShaderCompileEnvironment();
-			slangCtx.replaceEnvironment(Some(env))?;
+			// On native, we can load the shader source from the filesystem
 			cgv::shader::Package::fromSourceFile(
 				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx,
 				util::pathInsideCrate!("/shader/example.slang"), None/* all entry points */
 			)?
 		};
-
-		// The example shader
-		let shader = /*cgv::shader::Package::deserialize(
-			util::sourceGeneratedBytes!("/shader/example.spk")
-		)?*/
-		shaderPackage.createShaderModuleFromBestInstance(context.device(), None, Some("Example__ShaderModule")).ok_or(
+		#[cfg(target_arch="wasm32")] let shaderPackage = {
+			// On WASM, we currently have to resort to baking the source file into the crate
+			cgv::shader::Package::fromSourceCode(
+				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "example.slang",
+				util::sourceFile!("/shader/example.slang"), None/* all entry points */
+			)?
+		};
+		// - final: obtain the *WGPU* shader module
+		let shader = shaderPackage.createShaderModuleFromBestInstance(
+			context.device(), None, Some("Example__ShaderModule")
+		).ok_or(
 			cgv::anyhow!("Could not create example shader module")
 		)?;
 
