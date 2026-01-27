@@ -86,6 +86,7 @@ pub enum EnvironmentStorage {
 	IR
 }
 
+
 ///
 #[derive(Debug,Clone,serde::Serialize,serde::Deserialize)]
 pub enum EnvModule {
@@ -126,24 +127,39 @@ impl compile::env::Module for EnvModule {}
 //
 
 /// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
-#[derive(Default)]
 #[cfg(not(target_arch="wasm32"))]
 struct CompatOptions {
-	matrixLayoutColumn: bool,
-	matrixLayoutRow: bool
+	matrixLayoutColumn: bool
+}
+#[cfg(not(target_arch="wasm32"))]
+impl Default for CompatOptions {
+	fn default() -> Self { Self { matrixLayoutColumn: false } }
 }
 #[cfg(not(target_arch="wasm32"))]
 impl CompatOptions {
-	pub fn matrixLayoutColumn(&mut self, enable: bool) -> bool {
-		self.matrixLayoutColumn = enable;
-		enable
+	///
+	#[allow(dead_code)]
+	#[inline(always)]
+	pub fn matrixLayoutColumn (&mut self) {
+		self.matrixLayoutColumn = true;
 	}
 
-	pub fn matrixLayoutRow(&mut self, enable: bool) -> bool {
-		self.matrixLayoutRow = enable;
-		enable
+	///
+	#[allow(dead_code)]
+	#[inline(always)]
+	pub fn matrixLayoutRow (&mut self) {
+		self.matrixLayoutColumn = false;
 	}
 
+	///
+	pub fn toCompilerOptions (&self) -> slang::CompilerOptions {
+		let options = slang::CompilerOptions::default();
+		if self.matrixLayoutColumn {
+			options.matrix_layout_row(false).matrix_layout_column(true)
+		} else { options }
+	}
+
+	///
 	pub fn digest (self) -> u64 {
 		let mut digest = crc64::Digest::new();
 		digest.write(util::slicify(&self));

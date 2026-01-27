@@ -266,11 +266,9 @@ impl ContextBuilder<'_>
 
 		// Finalize the Slang session configuration
 		// - initialize compat-relevant settings
-		let mut compatOptions = CompatOptions::default();
+		let compatOptions = CompatOptions::default();
 		// - compile flags
-		let compilerOptions = slang::CompilerOptions::default()
-			.matrix_layout_column(compatOptions.matrixLayoutColumn(true))
-			.matrix_layout_row(compatOptions.matrixLayoutRow(false));
+		let compilerOptions = compatOptions.toCompilerOptions();
 		let compilerOptions = if self.targets.contains(&compile::Target::SPIRV) {
 			compilerOptions.emit_spirv_directly(true)
 		}
