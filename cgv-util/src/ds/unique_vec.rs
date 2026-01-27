@@ -17,7 +17,8 @@
 //! # Examples
 //!
 //! ```
-//! let mut v = cgv_util::ds::BTreeUniqueVec::new();
+//! # use cgv_util::ds::BTreeUniqueVec;
+//! let mut v = BTreeUniqueVec::new();
 //! assert!(v.push(1));
 //! assert!(v.push(2));
 //! assert!(!v.push(1)); // 1 is already in the collection
@@ -43,7 +44,10 @@
 use std::{
 	collections::{BTreeSet, HashSet}, hash::{Hash, Hasher}, ops::{Index, Deref}, slice::SliceIndex
 };
+
+// ordered_float library
 use ordered_float::OrderedFloat;
+
 // Serde library
 #[cfg(feature="serde")]
 use serde;
@@ -66,7 +70,7 @@ use serde;
 /// Basic implementation for a custom struct:
 ///
 /// ```
-/// use cgv_util::ds::UniqueVecElement;
+/// # use cgv_util::ds::UniqueVecElement;
 ///
 /// struct User {
 ///     id: u64,
@@ -391,7 +395,7 @@ pub struct UniqueVec<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>>
 	storage: Vec<T>,
 
 	// Keys of the elements in `storage`.
-	// SAFETY: We store keys with a 'static lifetime. This is safe as long as:
+	// SAFETY: The keys are stored with a 'static lifetime. This is safe as long as:
 	// 1. The key refers to data owned by the element on the heap (stable address).
 	// 2. The key is removed from this set before the element is removed from `storage`.
 	keys: S,
@@ -403,8 +407,9 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let v: BTreeUniqueVec<i32> = BTreeUniqueVec::new();
+	/// assert_eq!(v.len(), 0);
 	/// ```
 	#[inline(always)]
 	pub fn new () -> Self { Self {
@@ -421,7 +426,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::*;
+	/// # use cgv_util::ds::*;
 	/// let v: BTreeUniqueVec<u32> = UniqueVec::withCapacity(10);
 	/// assert!(v.capacity() >= 10);
 	/// ```
@@ -444,7 +449,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let v = unsafe { BTreeUniqueVec::fromVec_unchecked(vec![1, 2, 3]) };
 	/// assert_eq!(v.len(), 3);
 	/// ```
@@ -472,7 +477,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let mut v = BTreeUniqueVec::new();
 	/// assert!(v.push(1));
 	/// assert!(!v.push(1));
@@ -498,7 +503,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let mut v = BTreeUniqueVec::new();
 	/// v.push(1);
 	/// assert_eq!(v.pop(), Some(1));
@@ -530,7 +535,8 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// let mut v = cgv_util::ds::BTreeUniqueVec::new();
+	/// # use cgv_util::ds::BTreeUniqueVec;
+	/// let mut v = BTreeUniqueVec::new();
 	/// v.push(1);
 	/// v.push(2);
 	/// assert_eq!(v.remove(0), 1);
@@ -557,7 +563,8 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// let mut v = cgv_util::ds::BTreeUniqueVec::new();
+	/// # use cgv_util::ds::BTreeUniqueVec;
+	/// let mut v = BTreeUniqueVec::new();
 	/// v.push(1);
 	/// assert_eq!(v.get(0), Some(&1));
 	/// assert_eq!(v.get(1), None);
@@ -576,7 +583,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let mut v = BTreeUniqueVec::new();
 	/// v.push(1);
 	/// v.push(2);
@@ -596,7 +603,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let mut v = BTreeUniqueVec::new();
 	/// v.push(1);
 	/// v.push(2);
@@ -620,9 +627,8 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
-	/// let mut v = BTreeUniqueVec::new();
-	/// v.push(1);
+	/// # use cgv_util::ds::BTreeUniqueVec;
+	/// let v = BTreeUniqueVec::from(vec![0, 1, 3]);
 	/// assert!(v.contains(&1));
 	/// assert!(!v.contains(&2));
 	/// ```
@@ -821,7 +827,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```compile_fail
-	/// use cgv_util::ds::*;
+	/// # use cgv_util::ds::*;
 	/// let v1 = BTreeUniqueVec::from(vec![1, 2]);
 	/// let v2 = BTreeUniqueVec::from(vec![2, 3]);
 	///
@@ -848,7 +854,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let v = BTreeUniqueVec::from(vec![1, 2, 3]);
 	/// assert!(v.checkLenConsistency());
 	/// ```
@@ -870,12 +876,13 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// # Examples
 	///
 	/// ```
-	/// use cgv_util::ds::BTreeUniqueVec;
+	/// # use cgv_util::ds::BTreeUniqueVec;
 	/// let v = BTreeUniqueVec::from(vec![1, 2, 3]);
 	/// assert!(v.checkConsistency());
 	/// ```
 	#[inline]
-	pub fn checkConsistency (&self) -> bool {
+	pub fn checkConsistency (&self) -> bool
+	{
 		// 1: Check if every element has its corresponding key stored
 		for element in &self.storage {
 			if !self.keys.contains(&KeyWrapper::new(element.key())) {
@@ -891,8 +898,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> From<Vec<T>> for UniqueVe
 {
 	/// Creates a `UniqueVec` from a [`Vec`].
 	///
-	/// Duplicate elements in the vector will be ignored. Only the first occurrence
-	/// of each key will be kept.
+	/// Duplicate elements in the vector will be ignored. Only the first occurrence of each key will be kept.
 	fn from (vec: Vec<T>) -> Self {
 		let mut result = Self::new();
 		result.extend(vec);
@@ -903,8 +909,7 @@ impl<T: UniqueVecElement+Copy, S: UniqueSet<KeyWrapper<T>>> From<&[T]> for Uniqu
 {
 	/// Creates a `UniqueVec` from a slice of `T`.
 	///
-	/// Duplicate elements in the slice will be ignored. Only the first occurrence
-	/// of each key will be kept.
+	/// Duplicate elements in the slice will be ignored. Only the first occurrence of each key will be kept.
 	fn from (slice: &[T]) -> Self {
 		let mut result = Self::new();
 		result.extend(slice.iter().copied());
@@ -915,8 +920,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> FromIterator<T> for Uniqu
 {
 	/// Creates a `UniqueVec` from the given iterable.
 	///
-	/// Duplicate elements in the vector will be ignored. Only the first occurrence
-	/// of each key will be kept.
+	/// Duplicate elements in the vector will be ignored. Only the first occurrence of each key will be kept.
 	fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self {
 		let mut result = Self::new();
 		result.extend(iter);
