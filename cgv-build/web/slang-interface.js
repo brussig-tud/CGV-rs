@@ -1,5 +1,6 @@
 import Module from "./slang-wasm.js";
 
+
 // A container storing a `Slang` *composite component* made from several modules and/or entry points.
 export class SlangComposite
 {
@@ -74,7 +75,8 @@ export class SlangComposite
 	}
 }
 
-// A container storing a `Slang` component that represents an entry point of a Slang module.
+
+// A container storing a `Slang` *entry point* component that represents a possible entry to program execution.
 export class SlangEntryPoint
 {
 	constructor(slangContext, epHandle, entryPointObject)
@@ -92,7 +94,8 @@ export class SlangEntryPoint
 	}
 }
 
-// The module container storing the assigned module handle and its owned module components (the entry points)
+
+// A container storing a `Slang` *module* and references to its *entry point* components.
 export class SlangModule
 {
 	constructor(slangContext, moduleHandle, moduleObject)
@@ -132,6 +135,7 @@ export class SlangModule
 		};
 	}
 }
+
 
 // The session container storing the assigned session handle and its owned modules
 export class SlangSession
@@ -195,6 +199,7 @@ export class SlangSession
 	}
 }
 
+
 // The global session container storing the assigned global session handle and its owned sessions
 export class SlangGlobalSession
 {
@@ -242,6 +247,7 @@ export class SlangGlobalSession
 		}
 	}
 }
+
 
 // The Slang runtime context used by the JavaScript bridge to serve Slang shader-related requests.
 export class SlangContext
@@ -437,6 +443,7 @@ export class SlangContext
 		}
 	}
 }
+
 
 // Initialize Slang WASM module and add the JavaScript bridge functions to the provided Object.
 export default async function slang_setupAndAddInterface (targetObj)
