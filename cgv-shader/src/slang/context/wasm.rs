@@ -11,9 +11,7 @@ use std::{collections::BTreeMap, path::{PathBuf, Path}, sync::LazyLock, marker::
 use wasm_bindgen::prelude::*;
 
 // Local imports
-use crate::slang::*;
-use crate::{compile, slang::context::*};
-
+use crate::{compile::{self, ComponentRef}, slang::{*, context::*}};
 
 
 //////
@@ -33,9 +31,6 @@ pub static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(|| GlobalSess
 
 /// Our `ActiveTargetsMap` specialization using`u32` as that is what out JavaScript bridge uses.
 type ActiveTargetsMap = GenericActiveTargetsMap<u32>;
-
-/// Convenience alias for our `compile::ComponentRef`.
-pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
 
 
 /// A handle for a JavaScript-side `slang::GlobalSession` instance.
@@ -121,19 +116,8 @@ impl Session<'_> {
 		Module::new(moduleHandle as u64, targetPath)
 	}
 
-	pub fn createComposite<'this> (&'this self, components: &[ComponentRef<'this>])
-		-> Result<Composite<'this>, compile::CreateCompositeError>
+	fn createComposite (&self, componentList: &ComponentList) -> Result<Composite<'_>, compile::CreateCompositeError>
 	{
-		// Build JavaScript-side component list
-		let componentList = ComponentList::new();
-		for component in components {
-			match component {
-				ComponentRef::Module(module) => componentList.addModule(module),
-				ComponentRef::EntryPoint(entryPoint) => componentList.addEntryPoint(entryPoint),
-				ComponentRef::Composite(composite) => componentList.addComposite(composite)
-			}
-		}
-
 		// Composit via JavaScript bridge
 		let compositeHandle = slangjs_Session_createComposite(self.handle, componentList.0);
 		if compositeHandle < 0 {
@@ -167,11 +151,6 @@ impl Module<'_> {
 			handle, virtualFilepath: virtualFilepath.as_ref().to_owned(),
 			entryPoints, sessionPhantom: PhantomData
 		})
-	}
-
-	#[inline(always)]
-	pub fn enter (&self) -> ComponentRef<'_> {
-		ComponentRef::Module(self)
 	}
 }
 impl<'this> compile::Module<EntryPoint<'this>> for Module<'this>
@@ -207,11 +186,6 @@ impl EntryPoint<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
 		handle, name: slangjs_EntryPoint_name(handle), modulePhantom: PhantomData::default()
 	}}
-
-	#[inline(always)]
-	pub fn enter (&self) -> ComponentRef<'_> {
-		ComponentRef::EntryPoint(self)
-	}
 }
 impl compile::EntryPoint for EntryPoint<'_> {
 	fn name (&self) -> &str {
@@ -236,11 +210,6 @@ impl Composite<'_> {
 	pub(crate) fn new (handle: u64) -> Self { Self {
 		handle, sessionPhantom: PhantomData
 	}}
-
-	#[inline(always)]
-	pub	fn enter (&self) -> ComponentRef<'_> {
-		ComponentRef::Composite(self)
-	}
 }
 impl Drop for Composite<'_> {
 	fn drop (&mut self) {
@@ -442,13 +411,13 @@ impl Context<'_>
 		globalSession.createSession(sessionConfig)
 	}
 }
-impl<'ctx> compile::Context for Context<'ctx>
+impl<'this> compile::Context for Context<'this>
 {
 	type ModuleType<'module> = Module<'module> where Self: 'module;
 	type EntryPointType<'ep> = EntryPoint<'ep> where Self: 'ep;
-	type CompositeType<'ct> = Composite<'ct> ;
+	type CompositeType<'ct> = Composite<'ct> where Self: 'ct;
 	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
-	type Builder = ContextBuilder<'ctx>;
+	type Builder = ContextBuilder<'this>;
 
 	fn supportsTarget (&self, target: compile::Target) -> bool {
 		self.session.activeTargetsMap[target.slot()].is_some()
@@ -473,13 +442,24 @@ impl<'ctx> compile::Context for Context<'ctx>
 		Ok(module)
 	}
 
-	fn createComposite<'this> (&'this self, components: &[ComponentRef<'this>])
-		-> Result<Composite<'this>, compile::CreateCompositeError>
+	fn createComposite<'outer, 'ctx> (&'ctx self, components: &'outer [ComponentRef<'outer, 'ctx, Self>])
+		-> Result<Self::CompositeType<'ctx>, compile::CreateCompositeError>
 	{
-		self.session.createComposite(components)
+		// Build JavaScript-side component list
+		let componentList = ComponentList::new();
+		for component in components {
+			match component {
+				ComponentRef::Module(module) => componentList.addModule(module),
+				ComponentRef::EntryPoint(entryPoint) => componentList.addEntryPoint(entryPoint),
+				ComponentRef::Composite(composite) => componentList.addComposite(composite)
+			}
+		}
+
+		// Create the composite
+		self.session.createComposite(&componentList)
 	}
 
-	fn linkComposite<'this> (&'this self, composite: &Composite) -> Result<LinkedComposite<'this>, compile::LinkError>
+	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'_>, compile::LinkError>
 	{
 		// Link
 		let handle = slangjs_Composite_link(composite.handle);

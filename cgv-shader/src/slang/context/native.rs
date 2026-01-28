@@ -14,8 +14,7 @@ use anyhow::anyhow;
 use shader_slang as slang;
 
 // Local imports
-use crate::slang::*;
-use crate::{compile, slang::context::*};
+use crate::{compile::{self, ComponentRef}, slang::{*, context::*}};
 
 
 
@@ -41,9 +40,6 @@ static MISSING_ENTRY_POINT_NAME_MSG: &str = "entry points should always have a n
 
 /// Our `ActiveTargetsMap` specialization using`i64` as that is what native *Slang* uses to index compilation targets.
 type ActiveTargetsMap = GenericActiveTargetsMap<i64>;
-
-/// Convenience alias for our `compile::ComponentRef`.
-pub type ComponentRef<'this> = compile::ComponentRef<'this, Module<'this>, EntryPoint<'this>, Composite<'this>>;
 
 
 ///
@@ -377,13 +373,13 @@ impl Context<'_>
 		).ok_or(CreateSessionError::Generic)?, activeTargetsMap))
 	}
 }
-impl<'ctx> compile::Context for Context<'ctx>
+impl<'this> compile::Context for Context<'this>
 {
 	type ModuleType<'module> = Module<'module> where Self: 'module;
 	type EntryPointType<'ep> = EntryPoint<'ep> where Self: 'ep;
-	type CompositeType<'cp> = Composite<'cp>;
+	type CompositeType<'cp> = Composite<'cp> where Self: 'cp;
 	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
-	type Builder = ContextBuilder<'ctx>;
+	type Builder = ContextBuilder<'this>;
 
 	fn supportsTarget (&self, target: compile::Target) -> bool {
 		self.session.activeTargetsMap[target.slot()].is_some()
@@ -417,9 +413,8 @@ impl<'ctx> compile::Context for Context<'ctx>
 		Ok(Module { component: module, virtualPath: virtualFilepath.as_ref().to_owned(), entryPoints })
 	}
 
-	fn createComposite<'this, 'inner> (
-		&'this self, components: &'inner [ComponentRef<'this>]
-	) -> Result<Composite<'this>, compile::CreateCompositeError>
+	fn createComposite<'outer, 'ctx> (&'ctx self, components: &'outer [ComponentRef<'outer, 'ctx, Self>])
+		-> Result<Self::CompositeType<'ctx>, compile::CreateCompositeError>
 	{
 		// Gather component list
 		let components: Vec<_> = components.iter().map(|component| match component {
@@ -657,6 +652,5 @@ fn encodeValidModulePath (targetPath: &Path) -> Cow<'_, str>
 	targetPath.file_stem().ok_or(
 		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
 	).unwrap();
-
 	targetPath.as_os_str().to_string_lossy()
 }

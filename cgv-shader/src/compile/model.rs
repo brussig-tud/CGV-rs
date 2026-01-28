@@ -166,11 +166,11 @@ pub trait LinkedComposite {
 
 ///
 #[derive(Clone,Copy)]
-pub enum ComponentRef<'c, ModuleType, EntryPointType, CompositeType>
+pub enum ComponentRef<'this, 'ctx, ContextType>
 where
-	EntryPointType: EntryPoint, ModuleType: Module<EntryPointType>, CompositeType: Composite
+	ContextType: compile::Context + ?Sized + 'ctx
 {
-	Module(&'c ModuleType),
-	EntryPoint(&'c EntryPointType),
-	Composite(&'c CompositeType)
+	Module(&'this ContextType::ModuleType<'ctx>),
+	EntryPoint(&'this ContextType::EntryPointType<'ctx>),
+	Composite(&'this ContextType::CompositeType<'ctx>)
 }

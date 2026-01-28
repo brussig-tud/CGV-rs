@@ -411,7 +411,7 @@ pub trait Context
 	type EntryPointType<'ep>: EntryPoint where Self: 'ep;
 
 	///
-	type CompositeType<'cp>: Composite;
+	type CompositeType<'cp>: Composite where Self: 'cp;
 
 	///
 	type LinkedCompositeType<'lct>: LinkedComposite where Self: 'lct;
@@ -440,15 +440,13 @@ pub trait Context
 		-> Result<Self::ModuleType<'_>, LoadModuleError>;
 
 	///
-	fn createComposite<'this, 'inner> (
-		&'this self, components: &'inner [
-			ComponentRef<'this, Self::ModuleType<'this>, Self::EntryPointType<'this>, Self::CompositeType<'this>>
-		]
-	) -> Result<Self::CompositeType<'this>, CreateCompositeError>;
+	fn createComposite<'outer, 'ctx> (
+		&'ctx self, components: &'outer [ComponentRef<'outer, 'ctx, Self>]
+	) -> Result<Self::CompositeType<'ctx>, CreateCompositeError>;
 
 	///
-	fn linkComposite<'this> (&'this self, composite: &Self::CompositeType<'_>)
-		-> Result<Self::LinkedCompositeType<'this>, LinkError>;
+	fn linkComposite<'outer, 'ctx> (&'ctx self, composite: &'outer Self::CompositeType<'ctx>)
+		-> Result<Self::LinkedCompositeType<'ctx>, LinkError>;
 }
 
 
