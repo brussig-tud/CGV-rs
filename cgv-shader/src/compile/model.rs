@@ -149,7 +149,23 @@ pub trait Composite: Component {}
 
 
 /// The trait of a [`Composite`] that has been linked into a functional shader program.
-pub trait LinkedComposite {
+pub trait LinkedComposite
+{
+	///
+	fn numEntryPoints (&self) -> usize;
+
+	///
+	#[inline(always)]
+	fn entryPointsIndices (&self) -> std::ops::Range<usize> {
+		0..self.numEntryPoints()
+	}
+
+	///
+	fn entryPointIdx (&self, name: &str) -> usize;
+
+	///
+	fn entryPointName (&self, entryPointIdx: usize) -> &str;
+
 	///
 	fn allEntryPointsCode (&self, target: compile::Target) -> Result<ProgramCode, TranslateError>;
 

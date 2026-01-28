@@ -231,6 +231,7 @@ impl compile::Composite for Composite<'_> {}
 pub struct LinkedComposite<'this> {
 	handle: u64,
 	entryPointsMap: BTreeMap<String, u32>,
+	entryPointNames: Vec<&'this str>,
 	activeTargetsMap: &'this ActiveTargetsMap,
 	sessionPhantom: PhantomData<&'this Session<'this>>
 }
@@ -245,11 +246,6 @@ impl LinkedComposite<'_> {
 			Err(compile::TranslateError::Backend(anyhow::anyhow!("translation to {target} failed")))
 		}
 	}
-
-	#[inline(always)]
-	pub fn entryPointsMap (&self) -> &BTreeMap<String, u32> {
-		&self.entryPointsMap
-	}
 }
 impl Drop for LinkedComposite<'_> {
 	fn drop (&mut self) {
@@ -259,6 +255,20 @@ impl Drop for LinkedComposite<'_> {
 }
 impl compile::LinkedComposite for LinkedComposite<'_>
 {
+	#[inline(always)]
+	fn numEntryPoints (&self) -> usize {
+		self.entryPointsMap.len()
+	}
+
+	#[inline]
+	fn entryPointIdx (&self, name: &str) -> usize {
+		*self.entryPointsMap.get(name).expect(&format!("entry point '{name}' not found")) as usize
+	}
+
+	fn entryPointName (&self, entryPointIdx: usize) -> &str {
+		self.entryPointNames[entryPointIdx]
+	}
+
 	fn allEntryPointsCode (&self, target: compile::Target) -> Result<compile::ProgramCode, compile::TranslateError>
 	{
 		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
@@ -468,15 +478,25 @@ impl<'this> compile::Context for Context<'this>
 		}
 
 		// Build entry point name->index map
-		let epNames = slangjs_Composite_orderedEntryPointNames(handle as u64);
-		let mut entryPointMap = BTreeMap::default();
-		for (idx, epName) in epNames.into_iter().enumerate() {
-			entryPointMap.insert(epName, idx as u32);
+		let epNames_owned = slangjs_Composite_orderedEntryPointNames(handle as u64);
+		let mut entryPointsMap = BTreeMap::default();
+		let mut entryPointNames = Vec::with_capacity(epNames_owned.len());
+		for (idx, epName) in epNames_owned.into_iter().enumerate() {
+			entryPointNames.push(unsafe {
+				// SAFETY:
+				// Strings always live on the heap in Rust, so the address of their contents will be stable even when
+				// moved. The lifetime of the reference we create to the string slice is the same as `name` as per our
+				// struct definition, so we will not cause dangling references. Finally, `LinkedComposite`s are
+				// immutable once created, so no aliasing rule will ever be violated by disconnecting the reference from
+				// the owning `name` string object.
+				&*(epName.as_str() as *const str)
+			});
+			entryPointsMap.insert(epName, idx as u32);
 		}
 
 		Ok(LinkedComposite {
 			handle: handle as u64,
-			entryPointsMap: entryPointMap, activeTargetsMap: &self.session.activeTargetsMap,
+			entryPointsMap, entryPointNames, activeTargetsMap: &self.session.activeTargetsMap,
 			sessionPhantom: Default::default()
 		})
 	}

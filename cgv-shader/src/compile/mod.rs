@@ -101,6 +101,22 @@ impl Display for CreateCompositeError {
 impl Error for CreateCompositeError {}
 
 #[derive(Debug)]
+pub enum BuildError<'this> {
+	InvalidEntryPoint(&'this str),
+	Nested(anyhow::Error)
+}
+impl Display for BuildError<'_> {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+		let desc = match self {
+			Self::InvalidEntryPoint(ep) => &format!("invalid entry point: '{ep}'"),
+			Self::Nested(err) => &format!("build failed: {err}"),
+		};
+		write!(formatter, "LinkError[{desc}]")
+	}
+}
+impl Error for BuildError<'_> {}
+
+#[derive(Debug)]
 pub enum LinkError {
 	ImplementationSpecific(anyhow::Error)
 }
@@ -574,6 +590,7 @@ pub fn feasibleTargets() -> &'static [compile::Target]
 
 	&COMPILATION_TARGETS
 }
+
 /// Return a list of feasible shader compilation target for the given platform, from most to least suitable.
 pub fn feasibleTargetsForPlatform (platform: &util::meta::SupportedPlatform) -> &'static [compile::Target]
 {
@@ -601,4 +618,35 @@ pub fn feasibleTargetsForPlatform (platform: &util::meta::SupportedPlatform) -> 
 		);
 		&COMPILATION_TARGETS
 	}
+}
+
+/// Convenience function to turn a single successfully loaded [`compile::Module`] into a fully [`LinkedComposite`] ready
+/// to request translated shader code from.
+///
+/// # Arguments
+///
+/// * `context` – The context under which `module` was loaded.
+/// * `module` – The `compile::Module` to build.`
+///
+/// # Returns
+///
+/// The [`LinkedComposite`] if successful, otherwise a [`BuildError`] detailing what went wrong.
+pub fn buildModule<'outer, Context: compile::Context> (context: &'outer Context, module: &Context::ModuleType<'outer>)
+	-> Result<Context::LinkedCompositeType<'outer>, BuildError<'outer>>
+{
+	// Gather components to specialize the program for each entry point
+	let mut components = vec![ComponentRef::Module(module)];
+	for ep in module.entryPoints() {
+		components.push(ComponentRef::EntryPoint(ep));
+	}
+
+	// Combine
+	let composite = context.createComposite(&components).map_err(
+		|err| BuildError::Nested(err.into())
+	)?;
+
+	// Link
+	context.linkComposite(&composite).map_err(
+		|err| BuildError::Nested(err.into())
+	)
 }

@@ -187,7 +187,7 @@ impl cgv::ApplicationFactory for SampleApplicationFactory
 		};
 		#[cfg(target_arch="wasm32")] let shaderPackage = {
 			// On WASM, we currently have to resort to baking the source file into the crate
-			cgv::shader::Package::fromSourceCode(
+			cgv::shader::Package::fromSource(
 				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "example.slang",
 				util::sourceFile!("/shader/example.slang"), None/* all entry points */
 			)?
