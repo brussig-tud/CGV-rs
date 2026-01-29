@@ -15,9 +15,11 @@ use postcard;
 use util::uuid as uuid;
 use uuid::Uuid;
 
+// CGV-rs core libraries
+use cgv_util::{self as util, ds::UniqueVecElement};
+
 // Local imports
 use crate::compile;
-use crate::util::{self, ds::UniqueVecElement};
 
 
 
@@ -428,6 +430,5 @@ impl<ModuleType> Environment<ModuleType>
 		Ok(())
 	}
 }
-
 unsafe impl<ModuleType: Module+Send> Send for Environment<ModuleType> {}
 unsafe impl<ModuleType: Module+Sync> Sync for Environment<ModuleType> {}

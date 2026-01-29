@@ -15,11 +15,9 @@ use std::{fs, path::{Path}};
 // Anyhow library
 pub use anyhow::{Result, anyhow};
 
-// CGV-rs
-use cgv_shader as shader;
-use cgv_shader::{feasibleSourceTypesForPlatform, slang};
+// CGV-rs core libraries
+use cgv_shader::{self as shader, feasibleSourceTypesForPlatform, compile::prelude::*};
 use cgv_util as util;
-use shader::compile::prelude::*;
 
 // Local imports
 use crate::*;
@@ -112,7 +110,7 @@ pub fn prepareShaders (
 	let sourceTypes = sourceTypes.unwrap_or_else(
 		|| feasibleSourceTypesForPlatform(cargoBuildTargetPlatform())
 	);
-	let slangContext = slang::ContextBuilder::withPlatformDefaults(cargoBuildTargetPlatform())
+	let slangContext = shader::slang::ContextBuilder::withPlatformDefaults(cargoBuildTargetPlatform())
 		.addTargets(&shader::compile::Target::vecFromWgpuSourceTypes(sourceTypes))
 		.addSearchPaths(buildSetup.shaderPath())
 		.build()?;

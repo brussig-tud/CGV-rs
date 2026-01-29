@@ -1,12 +1,23 @@
 
 //////
 //
+// Module definitions
+//
+
+/// The module prelude.
+pub mod prelude {
+	pub use super::Realm;
+}
+
+
+
+//////
+//
 // Imports
 //
 
 // Standard library
-use std::sync::LazyLock;
-use std::sync::atomic::{AtomicU32, AtomicU64};
+use std::{sync::LazyLock, sync::atomic::{AtomicU32, AtomicU64}};
 
 // Local imports
 use crate::*;

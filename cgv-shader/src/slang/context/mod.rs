@@ -42,8 +42,7 @@ use shader_slang as slang;
 use crc64fast_nvme as crc64;
 
 // Local imports
-use crate::*;
-use crate::compile::AddModuleError;
+use crate::{*, compile::AddModuleError};
 
 
 

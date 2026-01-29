@@ -43,7 +43,7 @@ pub mod slang;
 // Bitcode library
 use bitcode;
 
-// Local imports
+// CGV-rs core libraries
 use cgv_util as util;
 
 

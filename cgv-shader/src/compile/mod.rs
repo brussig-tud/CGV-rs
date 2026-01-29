@@ -41,7 +41,7 @@ use std::{error::Error, fmt::{Display, Formatter}, path::{PathBuf, Path}, sync::
 // GUID library
 use cgv_util::uuid;
 
-// CGV-rs components
+// CGV-rs core libraries
 use cgv_util as util;
 
 // Local imports

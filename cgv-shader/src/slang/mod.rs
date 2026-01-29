@@ -21,8 +21,10 @@ pub use context::{
 // Standard library
 /* nothing here yet */
 
-// Local imports
+// CGV-rs core libraries
 use cgv_util as util;
+
+// Local imports
 use crate::compile;
 
 
