@@ -28,7 +28,7 @@ pub use wasm::{
 //
 
 // Standard library
-use std::{error::Error, path::Path, fmt::{Display, Formatter}};
+use std::{error::Error, path::{Path, PathBuf}, fmt::{Display, Formatter}};
 
 // Serde library
 use serde;
@@ -203,4 +203,11 @@ fn storeInEnvironment (
 		// No environment, nothing to do
 		Ok(())
 	}
+}
+
+///
+pub fn uniqueAnonymousSlangFilename () -> PathBuf {
+	let mut baseName = uniqueAnonymousPath();
+	baseName.set_extension("slang");
+	baseName
 }

@@ -22,16 +22,15 @@ use crate::compile::{self, prelude::*};
 
 ///
 pub struct Program<'this> {
+	target: compile::Target,
 	allEntryPointsProg: compile::ProgramCode,
 	entryPointProgs: Vec<(&'this str, compile::ProgramCode)>,
 	entryPointsMap: BTreeMap<String, usize>,
 }
 impl Program<'_>
 {
-	////
-	// Internal helpers
-
-	fn finishCreation<'outer, Context: compile::Context> (
+	///
+	pub fn fromSingleModule<'outer, Context: compile::Context> (
 		context: &'outer Context, module: &Context::ModuleType<'outer>, target: compile::Target
 	) -> anyhow::Result<Self>
 	{
@@ -45,10 +44,6 @@ impl Program<'_>
 			|err| anyhow!("error building '{}':\n{err}", module.virtualFilepath().display())
 		)
 	}
-
-
-	////
-	// Public API
 
 	///
 	pub fn fromLinkedComposite<Context: compile::Context> (
@@ -91,7 +86,7 @@ impl Program<'_>
 		}
 
 		// Done!
-		Ok(Self { allEntryPointsProg, entryPointProgs, entryPointsMap })
+		Ok(Self { target, allEntryPointsProg, entryPointProgs, entryPointsMap })
 	}
 
 	///
@@ -103,7 +98,7 @@ impl Program<'_>
 		let module = context.compileFromNamedSource(&virtualFilename, sourceCode)?;
 
 		// Common initialization code
-		Self::finishCreation(context, &module, target)
+		Self::fromSingleModule(context, &module, target)
 	}
 
 	///
@@ -115,7 +110,13 @@ impl Program<'_>
 		let module = context.compile(filename.as_ref())?;
 
 		// Common initialization code
-		Self::finishCreation(context, &module, target)
+		Self::fromSingleModule(context, &module, target)
+	}
+
+	///
+	#[inline(always)]
+	pub fn target (&self) -> compile::Target {
+		self.target
 	}
 
 	///

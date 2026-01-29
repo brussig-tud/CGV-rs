@@ -45,7 +45,8 @@ pub enum CreateShaderModuleError
 	InvalidSourceType(WgpuSourceType)
 }
 #[cfg(feature="wgpu_runtime")]
-impl Display for CreateShaderModuleError {
+impl Display for CreateShaderModuleError
+{
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::InvalidEntryPoint(ep) => format!("invalid entry point: `{ep}`"),
@@ -60,38 +61,66 @@ impl std::error::Error for CreateShaderModuleError {}
 
 /// Error conditions when building [shader program instances](ProgramInstance).
 #[derive(Debug)]
-pub enum ProgramInstanceBuildError
+pub enum ProgramInstanceCreationError
 {
-	/// A [`compile::Context`] that was supposed to compile a program instance for the given [`WgpuSourceType`] but did
-	/// not support the corresponding [compilation target](compile::Target).
+	/// A [`compile::Context`] was supposed to compile a program instance for the given [`WgpuSourceType`] but did not
+	/// support the corresponding [compilation target](compile::Target).
 	IncompatibleContext(WgpuSourceType),
 
 	#[doc=include_str!("_doc/_InvalidEntryPoint_withString.md")]
 	InvalidEntryPoint(String),
 
-	/// Some other (nested) error caused by external code.
-	External(anyhow::Error)
+	/// A nested error that occurred during some part of the build process.
+	Nested(anyhow::Error)
 }
-impl Display for ProgramInstanceBuildError {
+impl Display for ProgramInstanceCreationError
+{
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
 	{
 		match self {
 			Self::IncompatibleContext(srcType) => write!(formatter,
-				"ProgramInstanceBuildError[context cannot compile to {srcType}]"
+				"ProgramInstanceCreationError[context cannot compile to {srcType}]"
 			),
 
 			Self::InvalidEntryPoint(ep) => write!(
-				formatter, "ProgramInstanceBuildError[invalid entry point: `{ep}`]"
+				formatter, "ProgramInstanceCreationError[invalid entry point: `{ep}`]"
 			),
 
-			Self::External(e) => {
-				writeln!(formatter, "ProgramInstanceBuildError[<Nested>]:")?;
+			Self::Nested(e) => {
+				writeln!(formatter, "ProgramInstanceCreationError[<Nested>]:")?;
 				write!(formatter, "-> {e}")
 			}
 		}
 	}
 }
-impl std::error::Error for ProgramInstanceBuildError {}
+impl std::error::Error for ProgramInstanceCreationError {}
+
+
+///
+#[derive(Debug)]
+pub enum PackageFromProgramError {
+	/// The program was built for a compilation target does not match any [`WgpuSourceType`].
+	IncompatibleProgram(compile::Target),
+
+	/// Some problem instantiating the shader program for a source type occurred.
+	InstanceCreation(ProgramInstanceCreationError)
+}
+impl Display for PackageFromProgramError
+{
+	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+	{
+		match self {
+			Self::IncompatibleProgram(target) => write!(
+				formatter, "PackageFromProgramError[program uses incompatible code type {target}]"
+			),
+
+			Self::InstanceCreation(err) => write!(
+				formatter, "PackageFromProgramError[`{err}`]"
+			)
+		}
+	}
+}
+impl std::error::Error for PackageFromProgramError {}
 
 
 
@@ -114,8 +143,7 @@ impl ProgramInstance
 		Self { entryPoints: BTreeMap::from([(name, code)])}
 	}
 
-	/// Shorthand for
-	/// `InternalProgramRepresentation::`[`fromSingleEntryPoint(None, code)`](Self::fromSingleEntryPoint)`.
+	/// Shorthand for `ProgramInstance::`[`fromSingleEntryPoint(None, code)`](Self::fromSingleEntryPoint)`.
 	#[inline(always)]
 	pub fn generic (code: Vec<u8>) -> Self {
 		Self::fromSingleEntryPoint(None, code)
@@ -144,6 +172,44 @@ pub struct Package {
 }
 impl Package
 {
+	////
+	// Internal helpers
+
+	fn programIntoInstance (prog: Program, entryPoints: Option<&BTreeSet<Option<&str>>>)
+		-> Result<ProgramInstance, ProgramInstanceCreationError>
+	{
+		// Create the program instance with specialized code for the indicated entry points if any, or just the generic
+		// code if no entry points were specified.
+		if let Some(entryPoints) = entryPoints
+		{
+			let mut progInstance = ProgramInstance { entryPoints: BTreeMap::new() };
+			for &entryPoint in entryPoints
+			{
+				if let Some(entryPointName) = entryPoint
+				{
+					if let Some(code) = prog.entryPointProg(entryPointName) {
+						progInstance.addEntryPoint(Some(entryPointName), code.toVec());
+					}
+					else {
+						return Err(ProgramInstanceCreationError::InvalidEntryPoint(entryPointName.to_owned()))
+					}
+				}
+				else {
+					progInstance.addEntryPoint(None, prog.allEntryPointsProg().toVec());
+				}
+			}
+			Ok(progInstance)
+		}
+		else {
+			// Only include the generic program that includes all code paths from all entry points
+			Ok(ProgramInstance::generic(prog.allEntryPointsProg().toVec()))
+		}
+	}
+
+
+	////
+	// Public API
+
 	/// Deserialize from the given bytes.
 	pub fn deserialize (bytes: &[u8]) -> anyhow::Result<Self> {
 		Ok(bitcode::decode(bytes)?)
@@ -154,186 +220,128 @@ impl Package
 		Ok(bitcode::decode(std::fs::read(filename)?.as_slice())?)
 	}
 
-	/// Internal helper function to create a single program instance from a *Slang* shader source file.
-	///
-	/// # Arguments
-	///
-	/// * `slangContext` – The [`SlangContext`] to use for building the sole instance in the package.
-	/// * `filepath` – The path to the file containing the *Slang* source code.
-	/// * `entryPoints` – Optionally a set of entry points to include in the sole instance in the package. This set can
-	///                   contain [`None`] to indicate that the non-specialized program with all entry points should be
-	///                   included in the instance.
-	///
-	/// # Returns
-	///
-	/// The built [program instance](ProgramInstance) if the process went `Ok`, or a
-	/// [`ProgramInstanceBuildError`] otherwise.
-	fn buildSingleInstanceFromSourceFile<Context> (
-		sourceType: WgpuSourceType, context: &Context, filepath: impl AsRef<Path>,
-		entryPoints: Option<&BTreeSet<Option<&str>>>
-	) -> Result<ProgramInstance, ProgramInstanceBuildError>
-	where
-		Context: compile::HasFileSystemAccess
-	{
-		// Check compilation target
-		let target = compile::Target::fromWgpuSourceType(sourceType);
-		if !context.supportsTarget(target) {
-			return Err(ProgramInstanceBuildError::IncompatibleContext(sourceType));
-		}
-
-		// Build shader program
-		let prog = Program::fromSourceFile(context, target, filepath).map_err(
-			|err| ProgramInstanceBuildError::External(err)
-		)?;
-
-		// Create the program instance for the compilation target indicated by the Slang context, with code for the
-		// indicated entry points if any, or the generic code if no entry points were specified.
-		if let Some(entryPoints) = entryPoints
-		{
-			let mut progInstance = ProgramInstance { entryPoints: BTreeMap::new() };
-			for &entryPoint in entryPoints
-			{
-				if let Some(entryPointName) = entryPoint
-				{
-					if let Some(code) = prog.entryPointProg(entryPointName) {
-						progInstance.addEntryPoint(Some(entryPointName), code.toVec());
-					}
-					else {
-						return Err(ProgramInstanceBuildError::InvalidEntryPoint(entryPointName.to_owned()))
-					}
-				}
-				else {
-					progInstance.addEntryPoint(None, prog.allEntryPointsProg().toVec());
-				}
-			}
-			Ok(progInstance)
-		}
-		else {
-			// Only include the generic program that includes code paths from all entry points
-			Ok(ProgramInstance::generic(prog.allEntryPointsProg().toVec()))
+	/// Construct with the given [`ProgramInstance`] as the sole instance of type `sourceType` in the package.
+	pub fn fromSingleInstance (sourceType: WgpuSourceType, instance: ProgramInstance, name: Option<String>) -> Self {
+		Self {
+			name: name.unwrap_or_else(|| uniqueAnonymousName()), instances: BTreeMap::from([(sourceType, instance)])
 		}
 	}
 
-	/// Internal helper function to create a single program instance from a *Slang* shader source file.
 	///
-	/// # Arguments
-	///
-	/// * `slangContext` – The [`SlangContext`] to use for building the sole instance in the package.
-	/// * `sourceCode` – A string containing the shader source code.
-	/// * `entryPoints` – Optionally a set of entry points to include in the sole instance in the package. This set can
-	///                   contain [`None`] to indicate that the non-specialized program with all entry points should be
-	///                   included in the instance.
-	///
-	/// # Returns
-	///
-	/// The built [program instance](ProgramInstance) if the process went `Ok`, or a
-	/// [`ProgramInstanceBuildError`] otherwise.
-	fn buildSingleInstanceFromSourceCode<Context> (
-		sourceType: WgpuSourceType, context: &Context, moduleName: &str, sourceCode: impl AsRef<str>,
-		entryPoints: Option<&BTreeSet<Option<&str>>>
-	) -> Result<ProgramInstance, ProgramInstanceBuildError>
+	pub fn fromModuleMultipleTypes<'outer, Context> (
+		sourceTypes: &[WgpuSourceType], context: &'outer Context, module: &Context::ModuleType<'outer>,
+		entryPoints: Option<BTreeSet<Option<&str>>>
+	) -> Result<Self, ProgramInstanceCreationError>
 	where
 		Context: compile::Context
 	{
-		// Check compilation target
-		let target = compile::Target::fromWgpuSourceType(sourceType);
-		if !context.supportsTarget(target) {
-			return Err(ProgramInstanceBuildError::IncompatibleContext(sourceType));
-		}
-
-		// Build shader program
-		let prog = Program::fromSource(context, target, moduleName, sourceCode.as_ref()).map_err(
-			|err| ProgramInstanceBuildError::External(err)
+		// Build module
+		use compile::Module;
+		let linkedProg = compile::buildModule(context, module).map_err(
+			|err| ProgramInstanceCreationError::Nested(err.into())
 		)?;
 
-		// Create the program instance for the compilation target indicated by the Slang context, with code for the
-		// indicated entry points if any, or the generic code if no entry points were specified.
-		if let Some(entryPoints) = entryPoints
+		// Instantiate for every source type
+		let mut instances = BTreeMap::new();
+		for &sourceType in sourceTypes
 		{
-			let mut progInstance = ProgramInstance { entryPoints: BTreeMap::new() };
-			for &entryPoint in entryPoints
-			{
-				if let Some(entryPointName) = entryPoint
-				{
-					if let Some(code) = prog.entryPointProg(entryPointName) {
-						progInstance.addEntryPoint(Some(entryPointName), code.toVec());
-					}
-					else {
-						return Err(ProgramInstanceBuildError::InvalidEntryPoint(entryPointName.to_owned()))
-					}
-				}
-				else {
-					progInstance.addEntryPoint(None, prog.allEntryPointsProg().toVec());
-				}
+			// Check compilation target
+			let target = sourceType.into();
+			if !context.supportsTarget(target) {
+				return Err(ProgramInstanceCreationError::IncompatibleContext(sourceType));
 			}
-			Ok(progInstance)
+
+			// Translate code
+			let program = Program::fromLinkedComposite(context, target, &linkedProg).map_err(
+				|err| ProgramInstanceCreationError::Nested(err)
+			)?;
+
+			// Instantiate program instance
+			instances.insert(sourceType, Self::programIntoInstance(program, entryPoints.as_ref())?);
 		}
-		else {
-			// Only include the generic program that includes code paths from all entry points
-			Ok(ProgramInstance::generic(prog.allEntryPointsProg().toVec()))
-		}
+
+		Ok(Self {
+			name: unsafe {
+				// SAFETY:
+				// If we're here, then the module could be built from the filename (or was assigned a virtual one), so
+				// we know the path definitely contains a filename component. Calling `file_name().unwrap_unchecked()`
+				// can thus never produce `None`.
+				module.virtualFilepath().file_name().unwrap_unchecked().to_string_lossy().into()
+			},
+			instances
+		})
 	}
 
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
 	pub fn fromSourceFileMultipleTypes<CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &CompileContext, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
-	) -> anyhow::Result<Self>
+	) -> Result<Self, ProgramInstanceCreationError>
 	where
 		CompileContext: compile::HasFileSystemAccess
 	{
-		// Strip path from name for privacy
-		let name = filename.as_ref().file_name().unwrap().display().to_string();
+		// Compile from source file
+		let module = context.compile(&filename).map_err(
+			|err| ProgramInstanceCreationError::Nested(err.into())
+		)?;
 
 		// Package an instance for every source type
-		let mut package = Self { name, instances: BTreeMap::new() };
-		for &sourceType in sourceTypes {
-			let instance = Self::buildSingleInstanceFromSourceFile(
-				sourceType, context, filename.as_ref(), entryPoints.as_ref()
-			)?;
-			package.setInstance(sourceType, instance);
-		}
-		Ok(package)
+		Self::fromModuleMultipleTypes(sourceTypes, context, &module, entryPoints)
 	}
 
 	/// Create the package from the given *Slang* shader source code, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
-	pub fn fromSourceCodeMultipleTypes<CompileContext> (
-		sourceTypes: &[WgpuSourceType], context: &CompileContext, programName: impl AsRef<str>,
+	pub fn fromSourceMultipleTypes<CompileContext> (
+		sourceTypes: &[WgpuSourceType], context: &CompileContext, programName: impl AsRef<Path>,
 		sourceCode: impl AsRef<str>, entryPoints: Option<BTreeSet<Option<&str>>>
-	) -> anyhow::Result<Self>
+	) -> Result<Self, ProgramInstanceCreationError>
 	where
 		CompileContext: compile::Context
 	{
+		// Compile from source code string
+		let module = context.compileFromNamedSource(
+			programName, sourceCode.as_ref()
+		).map_err(
+			|err| ProgramInstanceCreationError::Nested(err.into())
+		)?;
+
 		// Package an instance for every source type
-		let mut package = Self { name: programName.as_ref().to_owned(), instances: BTreeMap::new() };
-		for &sourceType in sourceTypes {
-			let instance = Self::buildSingleInstanceFromSourceCode(
-				sourceType, context, programName.as_ref(), &sourceCode, entryPoints.as_ref()
-			)?;
-			package.setInstance(sourceType, instance);
-		}
-		Ok(package)
+		Self::fromModuleMultipleTypes(sourceTypes, context, &module, entryPoints)
 	}
 
-	/// Create the package from the given *Slang* shader source file.
+	/// Create the package with the given [`Program`] as the sole instance.
+	pub fn fromProgram (program: Program, name: Option<String>, entryPoints: Option<BTreeSet<Option<&str>>>)
+		-> Result<Self, PackageFromProgramError>
+	{
+		let srcType = program.target().intoWgpuSourceType().ok_or_else(
+			|| PackageFromProgramError::IncompatibleProgram(program.target())
+		)?;
+		let instance = Self::programIntoInstance(program, entryPoints.as_ref()).map_err(
+			|err| PackageFromProgramError::InstanceCreation(err)
+		)?;
+		Ok(Self::fromSingleInstance(srcType, instance, name))
+	}
+
+	/// Create the package from the given shader source file.
 	#[inline(always)]
 	pub fn fromSourceFile<CompileContext> (
 		sourceType: WgpuSourceType, context: &CompileContext, filename: impl AsRef<Path>,
 		entryPoints: Option<BTreeSet<Option<&str>>>
-	) -> anyhow::Result<Self>
-	where CompileContext: compile::HasFileSystemAccess {
+	) -> Result<Self, ProgramInstanceCreationError>
+	where
+		CompileContext: compile::HasFileSystemAccess
+	{
 		Self::fromSourceFileMultipleTypes(&[sourceType], context, filename, entryPoints)
 	}
 
 	/// Create the package from the given *Slang* shader source code string.
 	#[inline(always)]
-	pub fn fromSourceCode<CompileContext> (
-		sourceType: WgpuSourceType, context: &CompileContext, programName: impl AsRef<str>,
+	pub fn fromSource<CompileContext> (
+		sourceType: WgpuSourceType, context: &CompileContext, programName: impl AsRef<Path>,
 		sourceCode: impl AsRef<str>, entryPoints: Option<BTreeSet<Option<&str>>>
-	) -> anyhow::Result<Self>
+	) -> Result<Self, ProgramInstanceCreationError>
 	where CompileContext: compile::Context {
-		Self::fromSourceCodeMultipleTypes(&[sourceType], context, programName, sourceCode, entryPoints)
+		Self::fromSourceMultipleTypes(&[sourceType], context, programName, sourceCode, entryPoints)
 	}
 
 	/// Set the instance of the program for the given source type to the package. If there is already an instance for

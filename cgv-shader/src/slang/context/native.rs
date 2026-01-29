@@ -169,8 +169,8 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 		if let Some(targetIdx) = self.activeTargetsMap[target.slot()]
 		{
 			// Translate to target
-			let code = self.component.target_code(targetIdx).or_else(|e|
-				Err(compile::TranslateError::Backend(anyhow!("translation to {target} failed: {e}")))
+			let code = self.component.target_code(targetIdx).or_else(|err|
+				Err(compile::TranslateError::Backend(anyhow!("translation to {target} failed: {err}")))
 			)?;
 
 			// Done!
@@ -199,9 +199,12 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 			// Translate to target
 			let translateResult = self.component.entry_point_code(
 				entryPointIdx as i64, targetIdx
-			).map_err(|e| Err(compile::TranslateError::Backend(anyhow!(
-				"translating entry point {entryPointIdx}[''] to {target} failed: {e}"
-			))));
+			).map_err(|err| Err(compile::TranslateError::Backend(
+				anyhow!(
+					"translating entry point {entryPointIdx}['{}'] to {target} failed: {err}",
+					self.entryPointNames[entryPointIdx]
+				)
+			)));
 
 			// Make sense of the translation result
 			let code = if translateResult.is_ok() {
@@ -214,8 +217,11 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 			// Done!
 			Some(Ok(if target.isBinary() {
 				compile::ProgramCode::Binary(code.as_slice().to_owned())
-			} else {
-				compile::ProgramCode::Text(code.as_str().expect("{target} targets should be UTF-8-encoded").to_owned())
+			}
+			else {
+				compile::ProgramCode::Text(code.as_str().expect(
+					&format!("{target} targets should be UTF-8-encoded")
+				).to_owned())
 			}))
 		}
 		else {
@@ -396,7 +402,7 @@ impl<'this> compile::Context for Context<'this>
 
 	#[inline]
 	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
-		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
+		let targetPath = uniqueAnonymousSlangFilename();
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 

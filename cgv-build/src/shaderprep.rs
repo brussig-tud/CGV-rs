@@ -135,7 +135,9 @@ pub fn prepareShaders (
 			}
 			dependOnFile(srcPath);
 			fs::create_dir_all(tgtParent)?;
-			let package = shader::Package::fromSourceFileMultipleTypes(sourceTypes, &slangContext, srcPath, None)?;
+			let package = shader::Package::fromSourceFileMultipleTypes(
+				sourceTypes, &slangContext, srcPath, None
+			)?;
 			package.writeToFile(&tgtPath)?;
 			dependOnGeneratedFile(tgtPath)?;
 			Ok(())

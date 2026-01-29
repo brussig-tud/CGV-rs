@@ -280,7 +280,7 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 			// Done!
 			Ok(if target.isText() {
 				compile::ProgramCode::Text(
-					String::from_utf8(code).map_err(|e| compile::TranslateError::Backend(e.into()))?
+					String::from_utf8(code).expect(&format!("{target} targets should be UTF-8-encoded"))
 				)
 			} else {
 				compile::ProgramCode::Binary(code)
@@ -435,7 +435,7 @@ impl<'this> compile::Context for Context<'this>
 
 	#[inline]
 	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
-		let targetPath = PathBuf::from(format!("_unnamed__{}.slang", util::unique::uint32()));
+		let targetPath = uniqueAnonymousSlangFilename();
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 

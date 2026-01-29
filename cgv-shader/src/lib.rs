@@ -68,7 +68,7 @@ pub enum WgpuSourceType {
 }
 impl WgpuSourceType
 {
-	/// Instantiate with the most suitable *WGPU* source type for the platform the caller is running on.
+	/// Get the most suitable *WGPU* source type for the platform the caller is running on.
 	#[inline(always)]
 	pub const fn mostSuitable() -> WgpuSourceType
 	{
@@ -82,7 +82,7 @@ impl WgpuSourceType
 		}
 	}
 
-	/// Instantiate with the most suitable *WGPU* source type for the given platform.
+	/// Get the most suitable *WGPU* source type for the given platform.
 	pub const fn mostSuitableForPlatform (platform: &util::meta::SupportedPlatform) ->WgpuSourceType
 	{
 		// WebGPU/WASM
@@ -145,4 +145,46 @@ pub const fn feasibleSourceTypesForPlatform(platform: &util::meta::SupportedPlat
 			&SOURCE_TYPES
 		}
 	}
+}
+
+/// Generate a shader program/module name that is unique over the calling process' lifetime. Usefull whenever pieces of
+/// code (e.g. modules) or whole programs which need a name for identification are created from in-memory source
+/// strings, but the client does not want to provide a specific one.
+///
+/// # Returns
+///
+/// A unique name.
+///
+/// # Examples
+///
+/// ```
+/// # use cgv_shader::*;
+/// let name1 = uniqueAnonymousName();
+/// let name2 = uniqueAnonymousName();
+/// assert_ne!(name1, name2);
+/// ```
+#[inline]
+pub fn uniqueAnonymousName () -> String {
+	format!("_unnamed__{}", util::unique::uint32())
+}
+
+/// Generate a shader program/module (virtual) *filename* that is unique over the duration of the calling process'
+/// runtime. Useful whenever pieces of code (e.g. modules) or whole programs are created from in-memory source strings
+/// but need a virtual file path for identification, and the client does not want to provide a specific one.
+///
+/// This is equivalent to calling `std::path::PathBuf::from(`[`uniqueAnonymousName()`]`)`:
+///
+/// ```
+/// # use cgv_shader::*;
+/// let name = uniqueAnonymousName();
+/// let filename = uniqueAnonymousPath();
+/// assert_ne!(name, filename.to_str().unwrap());
+/// ```
+///
+/// # Returns
+///
+/// A path with a unique filename.
+#[inline(always)]
+pub fn uniqueAnonymousPath () -> std::path::PathBuf {
+	uniqueAnonymousName().into()
 }

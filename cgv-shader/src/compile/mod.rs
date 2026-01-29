@@ -41,9 +41,11 @@ use std::{error::Error, fmt::{Display, Formatter}, path::{PathBuf, Path}, sync::
 // GUID library
 use cgv_util::uuid;
 
-// Local imports
-use crate::{compile, feasibleSourceTypesForPlatform, WgpuSourceType};
+// CGV-rs components
 use cgv_util as util;
+
+// Local imports
+use crate::*;
 
 
 
@@ -211,7 +213,7 @@ pub enum Target
 impl Target
 {
 	/// The highest slot any `compile::Target` corresponds to. *CGV-rs* shall adopt the convention that this will always
-	/// be equal to the [discriminant](std::mem::Discriminant) of the [`Custom`](compile::Target::Custom) variant.
+	/// be equal to the [discriminant](std::mem::discriminant) of the [`Custom`](compile::Target::Custom) variant.
 	///
 	/// The type is intentionally kept as `u8` (thus requiring an explicit cast to `usize` for most practical purposes)
 	/// to emphasize that this number will always be quite small. Its value will always be one less than
@@ -219,8 +221,13 @@ impl Target
 	///
 	/// # Examples
 	///
-	/// ```rust
-	/// assert_eq!(compile::Target.slot(), compile::Target::MAX_SLOT);
+	/// ```
+	/// # use cgv_util::uuid::Uuid;
+	/// # use cgv_shader::compile::{self, TargetFormat};
+	/// let someCustomTarget = compile::Target::Custom(
+	/// 	Uuid::from_u64_pair(42, 0xBADF00D), TargetFormat::Binary
+	/// );
+	/// assert_eq!(someCustomTarget.slot(), compile::Target::MAX_SLOT as usize);
 	/// ```
 	pub const MAX_SLOT: u8 = {
 		// Ensure we stay informed about the primitive representation used for `compile::Target` in case it ever gets
@@ -243,26 +250,17 @@ impl Target
 	///
 	/// # Examples
 	///
-	/// ```rust
-	/// // A map enabling lightning-fast $O(1)$ checks if a compilation target is active, and if yes, which index
-	/// // it corresponds to.
+	/// ```
+	/// // A map enabling lightning-fast O(1) checks if a compilation target is active, and if yes, which index it
+	/// // corresponds to.
+	/// # use cgv_shader::compile;
 	/// type ActiveTargetsMap = [Option<u32>; compile::Target::NUM_SLOTS as usize];
 	/// ```
 	pub const NUM_SLOTS: u8 = Target::MAX_SLOT + 1;
 
 	///
-	#[inline(always)]
-	pub fn fromWgpuSourceType (wgpuSourceType: WgpuSourceType) -> Self {
-		match wgpuSourceType {
-			WgpuSourceType::SPIRV => Self::SPIRV,
-			WgpuSourceType::WGSL => Self::WGSL,
-			WgpuSourceType::GLSL => Self::GLSL
-		}
-	}
-
-	///
 	pub fn vecFromWgpuSourceTypes (wgpuSourceTypes: &[WgpuSourceType]) -> Vec<Self> {
-		wgpuSourceTypes.iter().map(|&srcType| Self::fromWgpuSourceType(srcType)).collect()
+		wgpuSourceTypes.iter().map(|&srcType| srcType.into()).collect()
 	}
 
 	/// The corresponding *slot* of a certain target. This will always be one less than [`compile::Target::NUM_SLOTS`]
@@ -319,6 +317,32 @@ impl Target
 			Self::WGSL | Self::GLSL | Self::HLSL | Self::CudaCpp | Self::Metal => false,
 			Self::SPIRV | Self::DXIL => true,
 			Self::Custom(_, format) => matches!(format, TargetFormat::Binary)
+		}
+	}
+
+	/// Returns the corresponding [`WgpuSourceType`] if it exists.
+	#[inline]
+	pub fn asWgpuSourceType (&self) -> Option<WgpuSourceType> {
+		match self {
+			Self::WGSL => Some(WgpuSourceType::WGSL),
+			Self::GLSL => Some(WgpuSourceType::GLSL),
+			Self::SPIRV => Some(WgpuSourceType::SPIRV),
+			_ => None
+		}
+	}
+
+	/// Consumes `self` and produces the corresponding [`WgpuSourceType`] if it exists.
+	#[inline(always)]
+	pub fn intoWgpuSourceType (self) -> Option<WgpuSourceType> {
+		self.asWgpuSourceType()
+	}
+}
+impl From<WgpuSourceType> for Target {
+	fn from (value: WgpuSourceType) -> Self {
+		match value {
+			WgpuSourceType::SPIRV => Self::SPIRV,
+			WgpuSourceType::WGSL => Self::WGSL,
+			WgpuSourceType::GLSL => Self::GLSL
 		}
 	}
 }
@@ -445,7 +469,7 @@ pub trait Context
 	///
 	#[inline(always)]
 	fn supportsWgpuSourceType (&self, sourceType: WgpuSourceType) -> bool {
-		self.supportsTarget(Target::fromWgpuSourceType(sourceType))
+		self.supportsTarget(sourceType.into())
 	}
 
 	///
@@ -566,13 +590,13 @@ pub trait EnvironmentEnabled
 /// Determine the most suitable shader compilation target for the platform the module was built for.
 #[inline(always)]
 pub fn mostSuitableTarget() -> compile::Target {
-	compile::Target::fromWgpuSourceType(WgpuSourceType::mostSuitable())
+	WgpuSourceType::mostSuitable().into()
 }
 
 /// Determine the most suitable shader compilation target for the given platform.
 #[inline(always)]
 pub fn mostSuitableTargetForPlatform(platform: &util::meta::SupportedPlatform) -> compile::Target {
-	compile::Target::fromWgpuSourceType(WgpuSourceType::mostSuitableForPlatform(platform))
+	WgpuSourceType::mostSuitableForPlatform(platform).into()
 }
 
 /// Return a list of feasible shader compilation target for the platform the module was built for, from most to least
@@ -595,18 +619,16 @@ pub fn feasibleTargets() -> &'static [compile::Target]
 pub fn feasibleTargetsForPlatform (platform: &util::meta::SupportedPlatform) -> &'static [compile::Target]
 {
 	// Common conversion logic from `WgpuSourceType` to `Target`
-	fn wgpuSrcTypeToTarget (targetTripleString: &str) -> Vec<compile::Target> {
+	fn feasibleTargetsForPlatform (targetTripleString: &str) -> Vec<compile::Target> {
 		use std::str::FromStr;
 		let platform = util::meta::SupportedPlatform::from_str(targetTripleString).unwrap();
-		feasibleSourceTypesForPlatform(&platform).into_iter().map(
-			|&srcType| compile::Target::fromWgpuSourceType(srcType)
-		).collect()
+		feasibleSourceTypesForPlatform(&platform).into_iter().map(|&srcType| srcType.into()).collect()
 	}
 
 	// WebGPU/WASM
 	if platform.isWasm() {
 		static COMPILATION_TARGETS: LazyLock<Vec<compile::Target>> = LazyLock::new(
-			|| wgpuSrcTypeToTarget("wasm32-unknown-unknown")
+			|| feasibleTargetsForPlatform("wasm32-unknown-unknown")
 		);
 		&COMPILATION_TARGETS
 	}
@@ -614,7 +636,7 @@ pub fn feasibleTargetsForPlatform (platform: &util::meta::SupportedPlatform) -> 
 	else {
 		// Currently always considers SPIR-V preferable even on non-Vulkan platforms
 		static COMPILATION_TARGETS: LazyLock<Vec<compile::Target>> = LazyLock::new(
-			|| wgpuSrcTypeToTarget("x86_64-unknown-linux-gnuu")
+			|| feasibleTargetsForPlatform("x86_64-unknown-linux-gnuu")
 		);
 		&COMPILATION_TARGETS
 	}
@@ -631,8 +653,8 @@ pub fn feasibleTargetsForPlatform (platform: &util::meta::SupportedPlatform) -> 
 /// # Returns
 ///
 /// The [`LinkedComposite`] if successful, otherwise a [`BuildError`] detailing what went wrong.
-pub fn buildModule<'outer, Context: compile::Context> (context: &'outer Context, module: &Context::ModuleType<'outer>)
-	-> Result<Context::LinkedCompositeType<'outer>, BuildError<'outer>>
+pub fn buildModule<'ctx, 'outer, Context: compile::Context> (context: &'ctx Context, module: &Context::ModuleType<'ctx>)
+	-> Result<Context::LinkedCompositeType<'ctx>, BuildError<'outer>>
 {
 	// Gather components to specialize the program for each entry point
 	let mut components = vec![ComponentRef::Module(module)];
