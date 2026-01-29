@@ -10,6 +10,9 @@ use std::{collections::BTreeMap, path::{PathBuf, Path}, sync::LazyLock, marker::
 // Wasm-bindgen library
 use wasm_bindgen::prelude::*;
 
+// Anyhow library
+use anyhow::anyhow;
+
 // Local imports
 use crate::{compile::{self, ComponentRef}, slang::{*, context::*}};
 
@@ -98,7 +101,8 @@ pub struct Session<'this> {
 	activeTargetsMap: ActiveTargetsMap,
 	gsPhantom: PhantomData<&'this GlobalSession>
 }
-impl Session<'_> {
+impl Session<'_>
+{
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
 		-> Result<Module<'_>, compile::LoadModuleError>
 	{
@@ -121,7 +125,7 @@ impl Session<'_> {
 		// Composit via JavaScript bridge
 		let compositeHandle = slangjs_Session_createComposite(self.handle, componentList.0);
 		if compositeHandle < 0 {
-			return Err(compile::CreateCompositeError::ImplementationSpecific(anyhow::anyhow!("Slang error")))
+			return Err(compile::CreateCompositeError::Backend(anyhow!("Slang error")))
 		}
 
 		// Return resulting module
@@ -243,7 +247,7 @@ impl LinkedComposite<'_> {
 			Ok(())
 		}
 		else {
-			Err(compile::TranslateError::Backend(anyhow::anyhow!("translation to {target} failed")))
+			Err(compile::TranslateError::Backend(anyhow!("translation to {target} failed")))
 		}
 	}
 }
@@ -363,7 +367,7 @@ impl ContextBuilder<'_>
 
 		// Create the stateful Slang compiler session
 		let session = Context::freshSession(&globalSession, &sessionConfig).map_err(
-			|err| compile::CreateContextError::ImplementationDefined(err.into())
+			|err| compile::CreateContextError::Backend(err.into())
 		)?;
 		Ok(Context { session, sessionConfig, compatHash: 0, environment: None })
 	}
@@ -474,7 +478,7 @@ impl<'this> compile::Context for Context<'this>
 		// Link
 		let handle = slangjs_Composite_link(composite.handle);
 		if handle < 0 {
-			return Err(compile::LinkError::ImplementationSpecific(anyhow::anyhow!("Slang link error")));
+			return Err(compile::LinkError::Backend(anyhow!("Slang link error")));
 		}
 
 		// Build entry point name->index map
@@ -568,7 +572,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 				{
 					EnvModule::SourceCode(sourceCode) =>
 						newSession.loadModuleFromSourceString(&module.path, sourceCode).or_else(|err| Err(
-							compile::SetEnvironmentError::ImplementationSpecific(err.into())
+							compile::SetEnvironmentError::Backend(err.into())
 						))?,
 
 					EnvModule::IR(_) =>

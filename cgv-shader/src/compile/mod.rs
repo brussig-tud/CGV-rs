@@ -57,13 +57,13 @@ use crate::*;
 #[derive(Debug)]
 pub enum CreateContextError {
 	UnsupportedTarget(compile::Target),
-	ImplementationDefined(anyhow::Error),
+	Backend(anyhow::Error),
 }
 impl Display for CreateContextError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::UnsupportedTarget(target) => format!("unsupported target: {target}"),
-			Self::ImplementationDefined(err) => format!("implementation-specific: {err}")
+			Self::Backend(err) => format!("backend error: {err}")
 		};
 		write!(formatter, "CreateContextError[{desc}]")
 	}
@@ -77,7 +77,7 @@ pub enum LoadModuleError {
 	DuplicatePath(PathBuf)
 }
 impl Display for LoadModuleError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
 			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
@@ -90,12 +90,12 @@ impl Error for LoadModuleError {}
 
 #[derive(Debug)]
 pub enum CreateCompositeError {
-	ImplementationSpecific(anyhow::Error)
+	Backend(anyhow::Error)
 }
 impl Display for CreateCompositeError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
-			Self::ImplementationSpecific(st) => &format!("nested implementation error: {st}"),
+			Self::Backend(st) => &format!("backend error: {st}"),
 		};
 		write!(formatter, "CreateCompositeError[{desc}]")
 	}
@@ -105,27 +105,27 @@ impl Error for CreateCompositeError {}
 #[derive(Debug)]
 pub enum BuildError<'this> {
 	InvalidEntryPoint(&'this str),
-	Nested(anyhow::Error)
+	Backend(anyhow::Error)
 }
 impl Display for BuildError<'_> {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::InvalidEntryPoint(ep) => &format!("invalid entry point: '{ep}'"),
-			Self::Nested(err) => &format!("build failed: {err}"),
+			Self::Backend(err) => &format!("backend error: {err}"),
 		};
-		write!(formatter, "LinkError[{desc}]")
+		write!(formatter, "BuildError[{desc}]")
 	}
 }
 impl Error for BuildError<'_> {}
 
 #[derive(Debug)]
 pub enum LinkError {
-	ImplementationSpecific(anyhow::Error)
+	Backend(anyhow::Error)
 }
 impl Display for LinkError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
-			Self::ImplementationSpecific(st) => &format!("nested implementation error: {st}"),
+			Self::Backend(st) => &format!("backend error: {st}"),
 		};
 		write!(formatter, "LinkError[{desc}]")
 	}
@@ -135,13 +135,13 @@ impl Error for LinkError {}
 #[derive(Debug)]
 pub enum SetEnvironmentError {
 	IncompatibleEnvironment,
-	ImplementationSpecific(anyhow::Error)
+	Backend(anyhow::Error)
 }
 impl Display for SetEnvironmentError {
-	fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::IncompatibleEnvironment => "incompatible environment",
-			Self::ImplementationSpecific(st) => &format!("nested implementation error: {st}"),
+			Self::Backend(st) => &format!("backend error: {st}"),
 		};
 		write!(formatter, "SetEnvironmentError[{desc}]")
 	}
@@ -346,8 +346,10 @@ impl From<WgpuSourceType> for Target {
 		}
 	}
 }
-impl Display for Target {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Target
+{
+	fn fmt (&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+	{
 		match self {
 			Self::SPIRV => write!(f, "SPIR-V"),
 			Self::WGSL => write!(f, "WGSL"),
@@ -664,11 +666,11 @@ pub fn buildModule<'ctx, 'outer, Context: compile::Context> (context: &'ctx Cont
 
 	// Combine
 	let composite = context.createComposite(&components).map_err(
-		|err| BuildError::Nested(err.into())
+		|err| BuildError::Backend(err.into())
 	)?;
 
 	// Link
 	context.linkComposite(&composite).map_err(
-		|err| BuildError::Nested(err.into())
+		|err| BuildError::Backend(err.into())
 	)
 }

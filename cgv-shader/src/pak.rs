@@ -41,7 +41,7 @@ pub enum CreateShaderModuleError
 	InvalidEntryPoint(String),
 
 	/// The package from which a module was requested does not contain an instance in the requested source type. Holds
-	/// the `SourceType` that was not available.
+	/// the requested `SourceType` that was unavailable.
 	InvalidSourceType(WgpuSourceType)
 }
 #[cfg(feature="wgpu_runtime")]
@@ -52,7 +52,7 @@ impl Display for CreateShaderModuleError
 			Self::InvalidEntryPoint(ep) => format!("invalid entry point: `{ep}`"),
 			Self::InvalidSourceType(st) => format!("invalid source type: `{st}`")
 		};
-		write!(formatter, "InvalidEntryPointError[{desc}]")
+		write!(formatter, "CreateShaderModuleError[{desc}]")
 	}
 }
 #[cfg(feature="wgpu_runtime")]
@@ -70,27 +70,19 @@ pub enum ProgramInstanceCreationError
 	#[doc=include_str!("_doc/_InvalidEntryPoint_withString.md")]
 	InvalidEntryPoint(String),
 
-	/// A nested error that occurred during some part of the build process.
-	Nested(anyhow::Error)
+	/// A backend error that occurred during some part of the build process.
+	Backend(anyhow::Error)
 }
 impl Display for ProgramInstanceCreationError
 {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
 	{
-		match self {
-			Self::IncompatibleContext(srcType) => write!(formatter,
-				"ProgramInstanceCreationError[context cannot compile to {srcType}]"
-			),
-
-			Self::InvalidEntryPoint(ep) => write!(
-				formatter, "ProgramInstanceCreationError[invalid entry point: `{ep}`]"
-			),
-
-			Self::Nested(e) => {
-				writeln!(formatter, "ProgramInstanceCreationError[<Nested>]:")?;
-				write!(formatter, "-> {e}")
-			}
-		}
+		let desc = match self {
+			Self::IncompatibleContext(srcType) => format!("context cannot compile to {srcType}"),
+			Self::InvalidEntryPoint(ep) => format!("invalid entry point: `{ep}`"),
+			Self::Backend(err) => format!("backend error: {err}")
+		};
+		write!(formatter, "ProgramInstanceCreationError[{desc}]")
 	}
 }
 impl std::error::Error for ProgramInstanceCreationError {}
@@ -238,7 +230,7 @@ impl Package
 		// Build module
 		use compile::Module;
 		let linkedProg = compile::buildModule(context, module).map_err(
-			|err| ProgramInstanceCreationError::Nested(err.into())
+			|err| ProgramInstanceCreationError::Backend(err.into())
 		)?;
 
 		// Instantiate for every source type
@@ -253,7 +245,7 @@ impl Package
 
 			// Translate code
 			let program = Program::fromLinkedComposite(context, target, &linkedProg).map_err(
-				|err| ProgramInstanceCreationError::Nested(err)
+				|err| ProgramInstanceCreationError::Backend(err)
 			)?;
 
 			// Instantiate program instance
@@ -282,7 +274,7 @@ impl Package
 	{
 		// Compile from source file
 		let module = context.compile(&filename).map_err(
-			|err| ProgramInstanceCreationError::Nested(err.into())
+			|err| ProgramInstanceCreationError::Backend(err.into())
 		)?;
 
 		// Package an instance for every source type
@@ -302,7 +294,7 @@ impl Package
 		let module = context.compileFromNamedSource(
 			programName, sourceCode.as_ref()
 		).map_err(
-			|err| ProgramInstanceCreationError::Nested(err.into())
+			|err| ProgramInstanceCreationError::Backend(err.into())
 		)?;
 
 		// Package an instance for every source type
@@ -496,7 +488,7 @@ impl Package
 	}
 
 	/// Save the package to a file.
-	pub fn writeToFile(&self, filename: impl AsRef<Path>) -> anyhow::Result<()> {
+	pub fn writeToFile(&self, filename: impl AsRef<Path>) ->std::io::Result<()> {
 		Ok(std::fs::write(filename, self.serialize())?)
 	}
 }

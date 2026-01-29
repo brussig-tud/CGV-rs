@@ -305,7 +305,7 @@ impl ContextBuilder<'_>
 		let session = Context::freshSession(&globalSession, &sessionConfig).map_err(|_|
 			anyhow!("Failed to create Slang context")
 		).map_err(
-			|_| compile::CreateContextError::ImplementationDefined(CreateSessionError::Generic.into())
+			|_| compile::CreateContextError::Backend(CreateSessionError::Generic.into())
 		)?;
 
 		// Create the compatibility hash for our configuration
@@ -441,9 +441,7 @@ impl<'this> compile::Context for Context<'this>
 		// Composit
 		let composite = self.session.create_composite_component_type(
 			components.as_slice()
-		).or_else(|err| Err(
-			compile::CreateCompositeError::ImplementationSpecific(anyhow!("layout error: {err}"))
-		))?;
+		).or_else(|err| Err(compile::CreateCompositeError::Backend(err.into())))?;
 
 		// Done!
 		Ok(Composite { component: composite, sessionPhantom: Default::default() })
@@ -453,7 +451,7 @@ impl<'this> compile::Context for Context<'this>
 	{
 		// Link
 		let componentType = composite.component.link().or_else(|err| Err(
-			compile::LinkError::ImplementationSpecific(anyhow!("link failure: {err}"))
+			compile::LinkError::Backend(anyhow!("link failure: {err}"))
 		))?;
 
 		// Enumerate all entry points. We blanket-use the very first target, as names and ordering of entry points
@@ -461,7 +459,7 @@ impl<'this> compile::Context for Context<'this>
 		// several official *Slang* examples, you can – and in fact are typically expected to – use the entry point
 		// information obtained prior to linking from untranslated *Slang* modules.
 		let layout = componentType.layout(0).or_else(|err| Err(
-			compile::LinkError::ImplementationSpecific(anyhow!("layout error: {err}"))
+			compile::LinkError::Backend(anyhow!("layout error: {err}"))
 		))?;
 		let mut entryPointsMap = BTreeMap::default();
 		let mut entryPointNames = Vec::with_capacity(layout.entry_point_count() as usize);
@@ -585,7 +583,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 				{
 					EnvModule::SourceCode(sourceCode) =>
 						newSession.load_module_from_source_string(&path, "", sourceCode).or_else(|err|Err(
-							compile::SetEnvironmentError::ImplementationSpecific(
+							compile::SetEnvironmentError::Backend(
 								compile::LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?,
@@ -593,7 +591,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 					EnvModule::IR(bytes) => {
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 						newSession.load_module_from_ir_blob(&path, "", &irBlob).or_else(|err|Err(
-							compile::SetEnvironmentError::ImplementationSpecific(
+							compile::SetEnvironmentError::Backend(
 								compile::LoadModuleError::CompilationError(format!("{err}")).into()
 							)
 						))?
