@@ -1,0 +1,4 @@
+[submodule "vendor/egui_code_editor"]
+	path = vendor/egui_code_editor
+	url = https://github.com/brussig-tud/egui_code_editor.git
+	branch = contrib_egui_update
