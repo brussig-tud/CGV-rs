@@ -347,6 +347,16 @@ pub trait ApplicationFactory
 		&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment
 	) -> Result<Box<dyn Application>>;
 }
+impl<F> ApplicationFactory for F
+where
+	F: for<'a, 'b> Fn(&'a Context, &'b RenderSetup, run::Environment)->Result<Box<dyn Application>>
+{
+	fn create (&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment)
+		-> Result<Box<dyn Application>>
+	{
+		self(context, renderSetup, environment)
+	}
+}
 
 
 
