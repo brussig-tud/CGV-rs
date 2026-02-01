@@ -41,7 +41,7 @@ pub fn normalize<PathRef: AsRef<Path>> (path: PathRef) -> PathBuf {
 /// # Returns
 ///
 /// The absolute path resulting from normalizing *path*.
-pub fn normalizeToAnchor<PathRef: AsRef<Path>> (anchor: PathRef, path: PathRef) -> PathBuf
+pub fn normalizeToAnchor<PathRef1: AsRef<Path>, PathRef2: AsRef<Path>> (anchor: PathRef1, path: PathRef2) -> PathBuf
 {
 	if path.as_ref().is_relative() {
 		anchor.as_ref().join(path).normalize()
