@@ -14,7 +14,7 @@ use crate::wgpu;
 use image::GenericImageView;
 
 // Local imports
-use crate::*;
+use crate::{*, hal::texture};
 use util::math::alignToFactor;
 
 
@@ -143,8 +143,9 @@ impl Texture
 	/// * `context` – The *CGV-rs* context under which to create the texture.
 	/// * `dims` – The desired dimensions in terms of width, height and depth (or layers).
 	/// * `format` – The desired format of the texture.
-	/// * `numMipLevels` – How many mipmap levels to create for the texture. Setting this to zero or a value greater
-	///    than the number calculated by [`numMipLevels`] for the given `dims` will result in undefined behavior.
+	/// * `numMipLevels` – How many mipmap levels to create for the texture. Setting this to zero will determine the
+	///    number of mipmap levels automatically as calculated by [`numMipLevels`] for the given `dims`, while setting a
+	///    value greater than what [`numMipLevels`] would compute will result in undefined behavior.
 	///    **TODO: take explicit chain of miplevel descriptors instead**
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `usageFlags` – The set of [texture usages](wgpu::TextureUsages) the texture is intended for.
@@ -161,6 +162,11 @@ impl Texture
 		} else {
 			None
 		};
+
+		// Determine number of mipmap levels automatically if necessary
+		let numMipLevels = if numMipLevels < 1 {
+			texture::numMipLevels(&dims)
+		} else { numMipLevels };
 
 		// Create texture object
 		let descriptor = wgpu::TextureDescriptor {
