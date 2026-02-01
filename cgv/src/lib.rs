@@ -79,7 +79,7 @@ pub use eframe::egui as egui;
 //
 
 // Standart library
-use std::{any::Any, sync::LazyLock};
+use std::any::Any;
 
 // Ctor library
 #[cfg(not(target_arch="wasm32"))]
@@ -87,9 +87,6 @@ use ctor;
 
 // Tracing library
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-// Uuid library
-use uuid;
 
 // CGV imports
 pub use cgv_util as util; // re-export
@@ -362,6 +359,11 @@ pub trait ApplicationFactory
 #[cfg(feature="slang_runtime")]
 pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader::slang::EnvModule>
 {
+	// Imports we only need here, when the feature `slang_runtime` is enabled
+	use std::sync::LazyLock;
+	use uuid::Uuid;
+
+	// Statically keep the environment in memopry
 	static SHADER_LIB_ENVIRONMENT: LazyLock<shader::compile::Environment<shader::slang::EnvModule>> = LazyLock::new(||
 		shader::compile::Environment::deserialize(util::sourceGeneratedBytes!("/coreshaderlib.env")).expect(
 			"core shader library environment could not be deserialized"
@@ -369,7 +371,7 @@ pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader:
 	);
 	static SHADER_LIB_COUNTER: util::unique::RealmU32 = util::unique::RealmU32::one();
 	let newCount = SHADER_LIB_COUNTER.newEntity();
-	let newUuid = uuid::Uuid::from_u128(SHADER_LIB_ENVIRONMENT.uuid().as_u128() + newCount as u128);
+	let newUuid = Uuid::from_u128(SHADER_LIB_ENVIRONMENT.uuid().as_u128() + newCount as u128);
 	SHADER_LIB_ENVIRONMENT.cloneWithNewUuid(
 		newUuid, &format!("{}_instance{newCount}", SHADER_LIB_ENVIRONMENT.label())
 	)

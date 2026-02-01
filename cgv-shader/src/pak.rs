@@ -60,6 +60,7 @@ impl std::error::Error for CreateShaderModuleError {}
 
 
 /// Error conditions when building [shader program instances](ProgramInstance).
+#[cfg(feature="compilation")]
 #[derive(Debug)]
 pub enum ProgramInstanceCreationError
 {
@@ -73,6 +74,7 @@ pub enum ProgramInstanceCreationError
 	/// A backend error that occurred during some part of the build process.
 	Backend(anyhow::Error)
 }
+#[cfg(feature="compilation")]
 impl Display for ProgramInstanceCreationError
 {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
@@ -85,10 +87,12 @@ impl Display for ProgramInstanceCreationError
 		write!(formatter, "ProgramInstanceCreationError[{desc}]")
 	}
 }
+#[cfg(feature="compilation")]
 impl std::error::Error for ProgramInstanceCreationError {}
 
 
 ///
+#[cfg(feature="compilation")]
 #[derive(Debug)]
 pub enum PackageFromProgramError {
 	/// The program was built for a compilation target does not match any [`WgpuSourceType`].
@@ -97,6 +101,7 @@ pub enum PackageFromProgramError {
 	/// Some problem instantiating the shader program for a source type occurred.
 	InstanceCreation(ProgramInstanceCreationError)
 }
+#[cfg(feature="compilation")]
 impl Display for PackageFromProgramError
 {
 	fn fmt (&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
@@ -112,6 +117,7 @@ impl Display for PackageFromProgramError
 		}
 	}
 }
+#[cfg(feature="compilation")]
 impl std::error::Error for PackageFromProgramError {}
 
 
@@ -167,6 +173,7 @@ impl Package
 	////
 	// Internal helpers
 
+	#[cfg(feature="compilation")]
 	fn programIntoInstance (prog: Program, entryPoints: Option<&BTreeSet<Option<&str>>>)
 		-> Result<ProgramInstance, ProgramInstanceCreationError>
 	{
@@ -220,6 +227,7 @@ impl Package
 	}
 
 	///
+	#[cfg(feature="compilation")]
 	pub fn fromModuleMultipleTypes<'outer, Context> (
 		sourceTypes: &[WgpuSourceType], context: &'outer Context, module: &Context::ModuleType<'outer>,
 		entryPoints: Option<BTreeSet<Option<&str>>>
@@ -266,6 +274,7 @@ impl Package
 
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
+	#[cfg(feature="compilation")]
 	pub fn fromSourceFileMultipleTypes<CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &CompileContext, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> Result<Self, ProgramInstanceCreationError>
@@ -283,6 +292,7 @@ impl Package
 
 	/// Create the package from the given *Slang* shader source code, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
+	#[cfg(feature="compilation")]
 	pub fn fromSourceMultipleTypes<CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &CompileContext, programName: impl AsRef<Path>,
 		sourceCode: impl AsRef<str>, entryPoints: Option<BTreeSet<Option<&str>>>
@@ -302,6 +312,7 @@ impl Package
 	}
 
 	/// Create the package with the given [`Program`] as the sole instance.
+	#[cfg(feature="compilation")]
 	pub fn fromProgram (program: Program, name: Option<String>, entryPoints: Option<BTreeSet<Option<&str>>>)
 		-> Result<Self, PackageFromProgramError>
 	{
@@ -315,6 +326,7 @@ impl Package
 	}
 
 	/// Create the package from the given shader source file.
+	#[cfg(feature="compilation")]
 	#[inline(always)]
 	pub fn fromSourceFile<CompileContext> (
 		sourceType: WgpuSourceType, context: &CompileContext, filename: impl AsRef<Path>,
@@ -327,6 +339,7 @@ impl Package
 	}
 
 	/// Create the package from the given *Slang* shader source code string.
+	#[cfg(feature="compilation")]
 	#[inline(always)]
 	pub fn fromSource<CompileContext> (
 		sourceType: WgpuSourceType, context: &CompileContext, programName: impl AsRef<Path>,

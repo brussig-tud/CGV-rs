@@ -19,7 +19,9 @@
 pub mod compile;
 
 /// Submodule implementing the shader program abstraction
+#[cfg(feature="compilation")]
 mod program;
+#[cfg(feature="compilation")]
 pub use program::Program; // re-export
 
 /// Submodule implementing the shader package facilities

@@ -30,7 +30,6 @@ shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true
 
 [features]
 default = []
-#tracing_output = ["dep:tracing"]
 wgpu_runtime = ["dep:wgpu", "dep:tracing"]
 compilation = ["dep:serde", "dep:postcard", "cgv-util/serde"]
 slang_runtime = [
