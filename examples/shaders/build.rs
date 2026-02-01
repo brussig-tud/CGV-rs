@@ -17,13 +17,9 @@ fn main() -> cgv_build::Result<()>
 		cgv_build::generateRuntimeEnvironmentFile(&buildSetup)?;
 	}
 
-	// Compile and pre-package all our shaders.
-	// TODO: work around internal compiler error when passing `None` subdirs to skip
-	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["derp"]))?;
-
 	// Deploy a web application if the target architecture is WASM
 	cgv_build::webDeployIfWasm(
-		cgv_build::getCargoWorkspaceRootDir().join("./pkg/ex-basic"), &buildSetup,
+		cgv_build::getCargoWorkspaceRootDir().join("./pkg/ex-shaders"), &buildSetup,
 		&["Cargo.toml"]
 	)?;
 
