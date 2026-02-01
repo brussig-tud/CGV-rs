@@ -262,6 +262,38 @@ pub fn generateRuntimeEnvironmentFile (buildSetup: &Setup) -> Result<()> {
 	dependOnGeneratedFile(filepath)
 }
 
+/// Report the root path of the workspace (if there is one) containing the crate that is currently building. If the
+/// crate is not part of a workspace, it will just report the root path of the crate itself.
+///
+/// # Panics
+///
+/// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
+/// information.
+pub fn getCargoWorkspaceRootDir () -> &'static Path
+{
+	static ROOT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+		// Call cargo
+		let output = std::process::Command::new(env!("CARGO"))
+			.arg("locate-project")
+			.arg("--workspace")
+			.arg("--message-format=plain")
+			.output()
+			.expect("`cargo locate-project` should be available inside a Cargo build process")
+			.stdout;
+
+		// Parse output
+		let workspaceManifestPath = Path::new(std::str::from_utf8(&output).expect(
+			"`cargo locate-project` should return a UTF-8 encoded path"
+		).trim());
+
+		// Remove the manifest filename from the path
+		workspaceManifestPath.parent().expect(
+			"`cargo locate-project` should return a path to the manifest file"
+		).to_owned()
+	});
+	&ROOT_DIR
+}
+
 /// Report the package name of the crate currently being built by *Cargo*.
 ///
 /// # Panics
