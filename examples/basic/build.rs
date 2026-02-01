@@ -21,7 +21,10 @@ fn main() -> cgv_build::Result<()>
 	cgv_build::prepareShaders(&buildSetup, None, "shader", Some(&["derp"]))?;
 
 	// Deploy a web application if the target architecture is WASM
-	cgv_build::webDeployIfWasm("../pkg", &buildSetup, &["Cargo.toml"])?;
+	cgv_build::webDeployIfWasm(
+		cgv_build::getCargoWorkspaceRootDir().join("./pkg/ex-basic"), &buildSetup,
+		&["Cargo.toml"]
+	)?;
 
 	// Done!
 	Ok(())
