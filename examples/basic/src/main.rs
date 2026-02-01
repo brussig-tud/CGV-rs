@@ -83,7 +83,7 @@ const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5
 
 //////
 //
-// Data structures
+// Structs
 //
 
 ////
@@ -99,7 +99,6 @@ struct HermiteNode
 	//radius: glm::Vec2,
 	texcoord: glm::Vec2
 }
-
 impl HermiteNode
 {
 	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
@@ -115,145 +114,125 @@ impl HermiteNode
 }
 
 
-
-//////
-//
-// Classes
-//
-
 ////
-// SampleApplicationFactory
+// ExampleApplication
 
-struct SampleApplicationFactory {}
-
-impl cgv::ApplicationFactory for SampleApplicationFactory
+/// Factory function for our `ExampleApplication` defined right after. Regular functions with this signature implement
+/// the [`cgv::ApplicationFactory`] trait. If more flexibility is required to control how exactly your app is created,
+/// you can also write a factory class, i.e. a custom struct that implements `cgv::ApplicationFactory`.
+fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
+	-> cgv::Result<Box<dyn cgv::Application>>
 {
-	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
-		-> cgv::Result<Box<dyn cgv::Application>>
-	{
-		// Tracing
-		tracing::info!("Creating \"Basic\" example application");
-		tracing::info!("{:?}", environment);
+	// Tracing
+	tracing::info!("Creating \"Basic\" example application");
+	tracing::info!("{:?}", environment);
 
 
-		////
-		// Prepare buffers
+	////
+	// Prepare buffers
 
-		// Vertex buffer
-		let vertexBuffer = context.device().create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("ExBasic__HermiteNodes"),
-				contents: util::slicify(NODES),
-				usage: wgpu::BufferUsages::VERTEX,
-			}
-		);
+	// Vertex buffer
+	let vertexBuffer = context.device().create_buffer_init(
+		&wgpu::util::BufferInitDescriptor {
+			label: Some("ExBasic__HermiteNodes"),
+			contents: util::slicify(NODES),
+			usage: wgpu::BufferUsages::VERTEX
+		}
+	);
 
-		// Index buffer
-		let indexBuffer = context.device().create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("ExBasic__HermiteIndices"),
-				contents: util::slicify(INDICES),
-				usage: wgpu::BufferUsages::INDEX,
-			}
-		);
+	// Index buffer
+	let indexBuffer = context.device().create_buffer_init(
+		&wgpu::util::BufferInitDescriptor {
+			label: Some("ExBasic__HermiteIndices"),
+			contents: util::slicify(INDICES),
+			usage: wgpu::BufferUsages::INDEX
+		}
+	);
 
 
-		////
-		// Load resources
+	////
+	// Load resources
 
-		// The example shader
-		// - load the shader package we pre-built while the crate was compiled. We could load it from the filesystem
-		//   during runtime using `Package::fromFile`, but for easy portability of the executable we bake it into the
-		//   binary image and deserialize it from memory.
-		let shaderPackage = cgv::shader::Package::deserialize(
-			// Bake – when using `sourceGeneratedBytes`, the path is rooted at our crate's *Cargo* build script output
-			// directory. `cgv_build::prepareShaders` in our build script will have mirrored our source folder structure.
-			util::sourceGeneratedBytes!("/shader/example.spk")
-		)?;
-		// - obtain the *WGPU* shader module
-		let shader = shaderPackage.createShaderModuleFromBestInstance(
-			context.device(), None, Some("ExBasic__ShaderModule")
-		).ok_or(
-			cgv::anyhow!("Could not create example shader module")
-		)?;
+	// The example shader
+	// - load the shader package we pre-built while the crate was compiled. We could load it from the filesystem
+	//   during runtime using `Package::fromFile`, but for easy portability of the executable we bake it into the
+	//   binary image and deserialize it from memory.
+	let shaderPackage = cgv::shader::Package::deserialize(
+		// Bake – when using `sourceGeneratedBytes`, the path is rooted at our crate's *Cargo* build script output
+		// directory. `cgv_build::prepareShaders` in our build script will have mirrored our source folder structure.
+		util::sourceGeneratedBytes!("/shader/example.spk")
+	)?;
+	// - obtain the *WGPU* shader module
+	let shader = shaderPackage.createShaderModuleFromBestInstance(
+		context.device(), None, Some("ExBasic__ShaderModule")
+	).ok_or(
+		cgv::anyhow!("Could not create example shader module")
+	)?;
 
-		// The example texture
-		let tex = cgv::hal::Texture::fromBlob(
-			context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
-			cgv::hal::defaultMipmapping(), Some("ExBasic__TestTexture")
-		)?;
-		static TEX_BINDGROUP_LAYOUT_ENTRIES: [wgpu::BindGroupLayoutEntry; 2] = [
-			wgpu::BindGroupLayoutEntry {
-				binding: 0,
-				visibility: wgpu::ShaderStages::FRAGMENT,
-				ty: wgpu::BindingType::Texture {
-					multisampled: false,
-					view_dimension: wgpu::TextureViewDimension::D2,
-					sample_type: wgpu::TextureSampleType::Float { filterable: true },
+	// The example texture
+	let tex = cgv::hal::Texture::fromBlob(
+		context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
+		cgv::hal::defaultMipmapping(), Some("ExBasic__TestTexture")
+	)?;
+	static TEX_BINDGROUP_LAYOUT_ENTRIES: [wgpu::BindGroupLayoutEntry; 2] = [
+		wgpu::BindGroupLayoutEntry {
+			binding: 0,
+			visibility: wgpu::ShaderStages::FRAGMENT,
+			ty: wgpu::BindingType::Texture {
+				multisampled: false,
+				view_dimension: wgpu::TextureViewDimension::D2,
+				sample_type: wgpu::TextureSampleType::Float { filterable: true },
+			},
+			count: None,
+		},
+		wgpu::BindGroupLayoutEntry {
+			binding: 1,
+			visibility: wgpu::ShaderStages::FRAGMENT,
+			ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+			count: None,
+		},
+	];
+	let texBindGroupLayout = context.device().create_bind_group_layout(
+		&wgpu::BindGroupLayoutDescriptor {
+			entries: TEX_BINDGROUP_LAYOUT_ENTRIES.as_slice(),
+			label: Some("ExBasic__TexBindGroupLayout"),
+		}
+	);
+	let texBindGroup = context.device().create_bind_group(
+		&wgpu::BindGroupDescriptor {
+			layout: &texBindGroupLayout,
+			entries: &[
+				wgpu::BindGroupEntry {
+					binding: 0,
+					resource: wgpu::BindingResource::TextureView(&tex.view()),
 				},
-				count: None,
-			},
-			wgpu::BindGroupLayoutEntry {
-				binding: 1,
-				visibility: wgpu::ShaderStages::FRAGMENT,
-				ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-				count: None,
-			},
-		];
-		let texBindGroupLayout = context.device().create_bind_group_layout(
-			&wgpu::BindGroupLayoutDescriptor {
-				entries: TEX_BINDGROUP_LAYOUT_ENTRIES.as_slice(),
-				label: Some("ExBasic__TestBindGroupLayout"),
-			}
-		);
-		let texBindGroup = context.device().create_bind_group(
-			&wgpu::BindGroupDescriptor {
-				layout: &texBindGroupLayout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: wgpu::BindingResource::TextureView(&tex.view()),
-					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::Sampler(context.refSampler(
-							&wgpu::SamplerDescriptor {
-								address_mode_u: wgpu::AddressMode::Repeat,
-								address_mode_v: wgpu::AddressMode::Repeat,
-								address_mode_w: wgpu::AddressMode::Repeat,
-								mag_filter: wgpu::FilterMode::Linear,
-								min_filter: wgpu::FilterMode::Linear,
-								mipmap_filter: wgpu::FilterMode::Linear,
-								anisotropy_clamp: 16,
-								..Default::default()
-							}
-						)),
-					}
-				],
-				label: Some("ExBasic__TestBindGroup"),
-			}
-		);
+				wgpu::BindGroupEntry {
+					binding: 1,
+					resource: wgpu::BindingResource::Sampler(context.refSampler(
+						&wgpu::SamplerDescriptor {
+							mag_filter: wgpu::FilterMode::Linear,
+							min_filter: wgpu::FilterMode::Linear,
+							mipmap_filter: wgpu::FilterMode::Linear,
+							anisotropy_clamp: 16,
+							..Default::default()
+						}
+					)),
+				}
+			],
+			label: Some("ExBasic__TexBindGroup"),
+		}
+	);
 
 
-		////
-		// Done!
+	////
+	// Done!
 
-		// Construct the instance and put it in a box
-		Ok(Box::new(SampleApplication {
-			shader,
-			texBindGroupLayout,
-			texBindGroup,
-			pipelines: Vec::new(),
-			vertexBuffer,
-			indexBuffer,
-			guiState: Default::default()
-		}))
-	}
+	// Construct the instance and put it in a box
+	Ok(Box::new(ExampleApplication {
+		shader, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState: Default::default(),
+		pipelines: Vec::new(), // <- delayed, *CGV-rs* has a dedicated cycle for this as typically we don't have all
+	}))                        //    required information at this point, like viewport dimensions
 }
-
-
-////
-// SampleApplicaton
 
 #[derive(Default,Debug)]
 struct GuiState {
@@ -262,7 +241,7 @@ struct GuiState {
 }
 
 #[derive(Debug)]
-struct SampleApplication
+struct ExampleApplication
 {
 	// Rendering related
 	shader: wgpu::ShaderModule,
@@ -275,7 +254,7 @@ struct SampleApplication
 	// GUI-controllable state
 	guiState: GuiState
 }
-impl SampleApplication
+impl ExampleApplication
 {
 	/// Helper function: create the interfacing pipeline for the given render state.
 	fn createPipeline (
@@ -320,8 +299,7 @@ impl SampleApplication
 		})
 	}
 }
-
-impl cgv::Application for SampleApplication
+impl cgv::Application for ExampleApplication
 {
 	fn title (&self) -> &str {
 		"Basic Example App"
@@ -421,6 +399,6 @@ impl cgv::Application for SampleApplication
 
 /// The application entry point.
 pub fn main() -> cgv::Result<()> {
-	// Immediately hand off control flow, passing in a factory for our SampleApplication
-	cgv::Player::run(SampleApplicationFactory{})
+	// Immediately hand off control flow, passing in a factory for our ExampleApplication
+	cgv::Player::run(createBasicExampleApp)
 }

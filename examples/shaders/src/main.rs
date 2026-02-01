@@ -24,8 +24,7 @@ use cgv::{wgpu, glm, egui, tracing};
 use wgpu::util::DeviceExt;
 
 // CGV Framework
-use cgv;
-use cgv::{util, shader::compile::prelude::*};
+use cgv::{self, util, shader::compile::prelude::*};
 
 
 
@@ -34,46 +33,38 @@ use cgv::{util, shader::compile::prelude::*};
 // Statics
 //
 
-const NODES: &[HermiteNode; 8] = &[
-	HermiteNode {
+const QUAD_VERTS: &[QuadVertex; 8] = &[
+	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 0.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 0.)
 	},
 
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 0.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 0.)
 	}
 ];
@@ -84,27 +75,22 @@ const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5
 
 //////
 //
-// Data structures
+// Structs
 //
 
 ////
-// HermiteNode
+// QuadVertex
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-struct HermiteNode
-{
+struct QuadVertex {
 	pos: glm::Vec4,
-	//tan: glm::Vec4,
-	color: glm::Vec4,
-	//radius: glm::Vec2,
 	texcoord: glm::Vec2
 }
-
-impl HermiteNode
+impl QuadVertex
 {
-	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
-		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
+	const GPU_ATTRIBS: [wgpu::VertexAttribute; 2] =
+		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x2];
 
 	fn layoutDesc () -> wgpu::VertexBufferLayout<'static> {
 		wgpu::VertexBufferLayout {
@@ -116,107 +102,86 @@ impl HermiteNode
 }
 
 
-
-//////
-//
-// Classes
-//
-
 ////
-// SampleApplicationFactory
+// OnlineShadersDemo
 
-struct OnlineShadersDemoFactory {}
-
-impl cgv::ApplicationFactory for OnlineShadersDemoFactory
+/// Factory function.
+fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
+	-> cgv::Result<Box<dyn cgv::Application>>
 {
-	fn create (&self, context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
-		-> cgv::Result<Box<dyn cgv::Application>>
-	{
-		// Tracing
-		tracing::info!("Creating \"Shaders\" example application");
-		tracing::info!("{:?}", environment);
+	// Tracing
+	tracing::info!("Creating \"Shaders\" example application");
+	tracing::info!("{:?}", environment);
 
 
-		////
-		// Prepare buffers
+	////
+	// Prepare buffers
 
-		// Vertex buffer
-		let vertexBuffer = context.device().create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("ExShaders__HermiteNodes"),
-				contents: util::slicify(NODES),
-				usage: wgpu::BufferUsages::VERTEX,
-			}
-		);
+	// Vertex buffer
+	let vertexBuffer = context.device().create_buffer_init(
+		&wgpu::util::BufferInitDescriptor {
+			label: Some("ExShaders__HermiteNodes"), contents: util::slicify(QUAD_VERTS),
+			usage: wgpu::BufferUsages::VERTEX
+		}
+	);
 
-		// Index buffer
-		let indexBuffer = context.device().create_buffer_init(
-			&wgpu::util::BufferInitDescriptor {
-				label: Some("ExShaders__HermiteIndices"),
-				contents: util::slicify(INDICES),
-				usage: wgpu::BufferUsages::INDEX,
-			}
-		);
+	// Index buffer
+	let indexBuffer = context.device().create_buffer_init(
+		&wgpu::util::BufferInitDescriptor {
+			label: Some("ExShaders__HermiteIndices"), contents: util::slicify(INDICES), usage: wgpu::BufferUsages::INDEX
+		}
+	);
 
 
-		////
-		// Load resources
+	////
+	// Load resources
 
-		// The example shader, built from source code via *Slang* online compilation
-		// - step 1: a Slang compilation context
-		#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
-			// On native, it's a good idea to always consider the shader path we get from the runtime environment
-			cgv::shader::slang::ContextBuilder::withSearchPaths(&environment.shaderPath).build()?
-		};
-		#[cfg(target_arch="wasm32")] let mut slangCtx = {
-			// On WASM, we can't (yet) use a shader path to find modules residing on a filesystem
-			cgv::shader::slang::ContextBuilder::default().build()?
-		};
-		// - step 2: load the *CGV-rs* core shader library into the context
-		let env = cgv::obtainShaderCompileEnvironment();
-		slangCtx.replaceEnvironment(Some(env))?;
-		// - step 3: build shader package we can use to create *WGPU* shader modules that can be plugged into a
-		//           pipeline. In cases where offline compilation is ok, ready-made shader packages can contain several
-		//           variants (e.g. SPIR-V for desktop, WGSL for WASM) and be deserialized from a file or memory blob
-		#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
-			// On native, we can load the shader source from the filesystem
-			cgv::shader::Package::fromSourceFile(
-				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx,
-				util::pathInsideCrate!("/shader/sdfquad.slang"), None/* all entry points */
-			)?
-		};
-		#[cfg(target_arch="wasm32")] let shaderPackage = {
-			// On WASM, we currently have to resort to baking the source file into the crate
-			cgv::shader::Package::fromSource(
-				cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "sdfquad.slang",
-				util::sourceFile!("/shader/sdfquad.slang"), None/* all entry points */
-			)?
-		};
-		// - final: obtain the *WGPU* shader module
-		let shader = shaderPackage.createShaderModuleFromBestInstance(
-			context.device(), None, Some("ExShaders__ShaderModule")
-		).ok_or(
-			cgv::anyhow!("Could not create example shader module")
-		)?;
+	// The example shader, built from source code via *Slang* online compilation
+	// - step 1: a Slang compilation context
+	#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
+		// On native, it's a good idea to always consider the shader path we get from the runtime environment
+		cgv::shader::slang::ContextBuilder::withSearchPaths(&environment.shaderPath).build()?
+	};
+	#[cfg(target_arch="wasm32")] let mut slangCtx = {
+		// On WASM, we can't (yet) use a shader path to find modules residing on a filesystem
+		cgv::shader::slang::ContextBuilder::default().build()?
+	};
+	// - step 2: load the *CGV-rs* core shader library into the context
+	let env = cgv::obtainShaderCompileEnvironment();
+	slangCtx.replaceEnvironment(Some(env))?;
+	// - step 3: build shader package we can use to create *WGPU* shader modules that can be plugged into a
+	//           pipeline. In cases where offline compilation is ok, ready-made shader packages can contain several
+	//           variants (e.g. SPIR-V for desktop, WGSL for WASM) and be deserialized from a file or memory blob
+	#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
+		// On native, we can load the shader source from the filesystem
+		cgv::shader::Package::fromSourceFile(
+			cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx,
+			util::pathInsideCrate!("/shader/sdfquad.slang"), None/* all entry points */
+		)?
+	};
+	#[cfg(target_arch="wasm32")] let shaderPackage = {
+		// On WASM, we currently have to resort to baking the source file into the crate
+		cgv::shader::Package::fromSource(
+			cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "sdfquad.slang",
+			util::sourceFile!("/shader/sdfquad.slang"), None/* all entry points */
+		)?
+	};
+	// - final: obtain the *WGPU* shader module
+	let shader = shaderPackage.createShaderModuleFromBestInstance(
+		context.device(), None, Some("ExShaders__ShaderModule")
+	).ok_or(
+		cgv::anyhow!("Could not create example shader module")
+	)?;
 
 
-		////
-		// Done!
+	////
+	// Done!
 
-		// Construct the instance and put it in a box
-		Ok(Box::new(OnlineShadersDemo {
-			shader,
-			pipelines: Vec::new(),
-			vertexBuffer,
-			indexBuffer,
-			guiState: Default::default()
-		}))
-	}
+	// Construct the instance and put it in a box
+	Ok(Box::new(OnlineShadersDemo {
+		shader, pipelines: Vec::new(), vertexBuffer, indexBuffer, guiState: Default::default()
+	}))
 }
-
-
-////
-// SampleApplicaton
 
 #[derive(Default,Debug)]
 struct GuiState {
@@ -258,7 +223,7 @@ impl OnlineShadersDemo
 			vertex: wgpu::VertexState {
 				module: &self.shader,
 				entry_point: Some("vertexMain"), // Slang (for now) requires explicitly stating entry points
-				buffers: &[HermiteNode::layoutDesc()],
+				buffers: &[QuadVertex::layoutDesc()],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState {
@@ -281,7 +246,6 @@ impl OnlineShadersDemo
 		})
 	}
 }
-
 impl cgv::Application for OnlineShadersDemo
 {
 	fn title (&self) -> &str {
@@ -382,5 +346,5 @@ impl cgv::Application for OnlineShadersDemo
 /// The application entry point.
 pub fn main() -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our online shader compilation demo app
-	cgv::Player::run(OnlineShadersDemoFactory{})
+	cgv::Player::run(createOnlineShadersDemo)
 }
