@@ -252,8 +252,6 @@ pub fn applyBuildSetup () -> Result<Setup>
 	}
 }
 
-
-
 /// Emit the [`ENVIRONMENT.yaml`](run::Environment) file resulting from the given [build setup](Setup) next to the
 /// target executable.
 pub fn generateRuntimeEnvironmentFile (buildSetup: &Setup) -> Result<()> {
@@ -301,7 +299,7 @@ pub fn getCargoWorkspaceRootDir () -> &'static Path
 /// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
 /// information.
 pub fn getCargoCrateName () -> &'static str {
-	static NAME: std::sync::LazyLock<String> = std::sync::LazyLock::new(||
+	static NAME: LazyLock<String> = LazyLock::new(||
 		env::var("CARGO_PKG_NAME").expect("`CARGO_PKG_NAME` should be defined by Cargo")
 	);
 	NAME.as_str()
@@ -314,8 +312,8 @@ pub fn getCargoCrateName () -> &'static str {
 /// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
 /// information.
 pub fn getCargoSourceDir () -> &'static Path {
-	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(||
-		env::var("CARGO_MANIFEST_DIR").map(std::path::PathBuf::from)
+	static PATH: LazyLock<PathBuf> = LazyLock::new(||
+		env::var("CARGO_MANIFEST_DIR").map(PathBuf::from)
 			.expect("`CARGO_MANIFEST_DIR` should point to a valid path")
 	);
 	PATH.as_path()
@@ -328,8 +326,8 @@ pub fn getCargoSourceDir () -> &'static Path {
 /// This function cannot fail if *Cargo* works nominally, so it will panic if there are any problems extracting this
 /// information.
 pub fn getCargoOutDir () -> &'static Path {
-	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(||
-		env::var("OUT_DIR").map(std::path::PathBuf::from)
+	static PATH: LazyLock<PathBuf> = LazyLock::new(||
+		env::var("OUT_DIR").map(PathBuf::from)
 			.expect("`OUT_DIR` should point to a valid path")
 	);
 	PATH.as_path()
@@ -367,7 +365,7 @@ pub fn getCargoTargetDir () -> Result<PathBuf> {
 
 /// Retrieve the base path of the `cgv-build` crate.
 pub fn cgvBuildCrateDirectory () -> &'static Path {
-	static BUILD_CRATE_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static BUILD_CRATE_DIR: LazyLock<PathBuf> = LazyLock::new(
 		|| env!("CARGO_MANIFEST_DIR").parse::<PathBuf>().unwrap()
 	);
 	BUILD_CRATE_DIR.as_path()
@@ -375,7 +373,7 @@ pub fn cgvBuildCrateDirectory () -> &'static Path {
 
 /// Retrieve the base path of the `cgv` crate.
 pub fn cgvCrateDirectory () -> &'static Path {
-	static CGV_CRATE_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static CGV_CRATE_DIR: LazyLock<PathBuf> = LazyLock::new(
 		|| fs::canonicalize(cgvBuildCrateDirectory().join("../cgv")).expect(
 			"`cgv` crate source path unavailable"
 		)
@@ -385,7 +383,7 @@ pub fn cgvCrateDirectory () -> &'static Path {
 
 /// Retrieve the (absolute) web resources path of the `cgv-build` crate.
 pub fn cgvBuildCrateWebResourcesDirectory () -> &'static Path {
-	static BUILD_CRATE_WEB_RES_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static BUILD_CRATE_WEB_RES_DIR: LazyLock<PathBuf> = LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web")
 	);
 	BUILD_CRATE_WEB_RES_DIR.as_path()
@@ -436,7 +434,7 @@ pub fn getCargoDebugAndOptLevel () -> Result<(bool, u32)> {
 
 /// Retrieve the path to the favicon resources
 pub fn webResourcesDirFavicon () -> &'static Path {
-	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static PATH: LazyLock<PathBuf> = LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web/favicon")
 	);
 	PATH.as_path()
@@ -444,7 +442,7 @@ pub fn webResourcesDirFavicon () -> &'static Path {
 
 /// Retrieve the path to the `index.html` template for web deployments.
 pub fn templateFileIndexHtml () -> &'static Path {
-	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static PATH: LazyLock<PathBuf> = LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web/index.html")
 	);
 	PATH.as_path()
@@ -452,7 +450,7 @@ pub fn templateFileIndexHtml () -> &'static Path {
 
 /// Retrieve the path to the `site.webmanifest` template for web deployments.
 pub fn templateFileSiteWebmanifest () -> &'static Path {
-	static PATH: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(
+	static PATH: LazyLock<PathBuf> = LazyLock::new(
 		|| cgvBuildCrateDirectory().join("web/site.webmanifest")
 	);
 	PATH.as_path()
@@ -517,7 +515,8 @@ pub fn performCgvWebDeployment (deployPath: &Path, webDeployment: WebDeployment)
 ///                                 monitoring rules, the calling build script must make explicit any locations it would
 ///                                 normally depend on being monitored automatically by *Cargo*. It can do so here if it
 ///                                 doesn't already do it elsewhere (passing in an empty slice is perfectly OK).
-pub fn webDeployIfWasm (deployPath: &str, buildSetup: &Setup, changeCheckedFilesOrDirs: &[&str]) -> Result<()>
+pub fn webDeployIfWasm (deployPath: impl AsRef<Path>, buildSetup: &Setup, changeCheckedFilesOrDirs: &[&str])
+	-> Result<()>
 {
 	////
 	// Preamble
@@ -535,9 +534,6 @@ pub fn webDeployIfWasm (deployPath: &str, buildSetup: &Setup, changeCheckedFiles
 	////
 	// Gather metadata
 
-	// First, parse output path
-	let outputPath = deployPath.parse::<PathBuf>()?;
-
 	// Inject re-run decision dependencies
 	for dep in changeCheckedFilesOrDirs {
 		let dep_absPath = util::path::normalizeToAnchor(
@@ -546,7 +542,7 @@ pub fn webDeployIfWasm (deployPath: &str, buildSetup: &Setup, changeCheckedFiles
 		util::setTimestampToBeforeBuildScriptTime(&dep_absPath);
 		println!("cargo::rerun-if-changed={}", dep_absPath.as_os_str().to_str().unwrap());
 	}
-	let outputPath = util::path::normalizeToAnchor(&manifestPath, &outputPath);
+	let outputPath = util::path::normalizeToAnchor(&manifestPath, deployPath);
 	println!(
 		"cargo::rerun-if-changed={}",
 		outputPath.as_os_str().to_str().context("`outputPath` contains non-UTF-8 characters")?
