@@ -85,6 +85,7 @@ static SCRIPT_START_TIME: std::time::SystemTime = {
 // WebDeployment
 
 pub struct WebDeployment<'bs> {
+	#[expect(dead_code)]
 	buildSetup: &'bs Setup,
 	packageName: String,
 	niceName: String,
@@ -491,7 +492,8 @@ pub fn performCgvWebDeployment (deployPath: &Path, webDeployment: WebDeployment)
 	fs::write(deployPath.join("site.webmanifest"), siteWebmanifest)?;
 
 	// In case `slang_runtime` is enabled, deploy the Slang WASM build artifacts also
-	if webDeployment.buildSetup.cgvFeatures.slang_runtime {
+	// TODO: we have to deploy the Slang component anyway until index.html gets updated to support this being optional
+	/*if webDeployment.buildSetup.cgvFeatures.slang_runtime*/ {
 		let cargoTargetDir = getCargoTargetDir()?;
 		util::installFile(cargoTargetDir.join("slang-wasm.wasm"), deployPath)?;
 		util::installFile(cargoTargetDir.join("slang-wasm.js"), deployPath)?;
