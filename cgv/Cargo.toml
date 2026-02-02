@@ -47,7 +47,7 @@ ansi_term = "*"
 console_error_panic_hook = "*"
 tracing-wasm = "*"
 wasm-bindgen-futures = "*"
-getrandom = {version="*", default-features=true, features=["wasm_js"]}
+getrandom = {version="0.3", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
 wgpu = {version="27", default-features=false, features=["webgpu", "spirv"]}
 egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
