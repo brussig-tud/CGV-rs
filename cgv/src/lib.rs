@@ -91,7 +91,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 // CGV imports
 pub use cgv_util as util; // re-export
 pub use cgv_runenv as run; // re-export
-pub use util::unique::Realm;
 
 
 
@@ -371,7 +370,8 @@ pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader:
 {
 	// Imports we only need here, when the feature `slang_runtime` is enabled
 	use std::sync::LazyLock;
-	use uuid::Uuid;
+	use util::uuid::Uuid;
+	use util::unique::Realm;
 
 	// Statically keep the environment in memopry
 	static SHADER_LIB_ENVIRONMENT: LazyLock<shader::compile::Environment<shader::slang::EnvModule>> = LazyLock::new(||

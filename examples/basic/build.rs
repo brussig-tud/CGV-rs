@@ -23,8 +23,7 @@ fn main() -> cgv_build::Result<()>
 
 	// Deploy a web application if the target architecture is WASM
 	cgv_build::webDeployIfWasm(
-		cgv_build::getCargoWorkspaceRootDir().join("./pkg/ex-basic"), &buildSetup,
-		&["Cargo.toml"]
+		cgv_build::getCargoWorkspaceRootDir().join("./pkg/ex-basic"), &buildSetup, &[]
 	)?;
 
 	// Done!

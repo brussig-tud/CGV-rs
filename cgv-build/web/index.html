@@ -90,39 +90,10 @@
 		}
 	</style>
 	<script type="module">
-		// Import modules
-		// - Slang JavaScript bridge
-		import slang_setupAndAddInterface from "./slang-interface.js";
-		// - CGV-rs WASM application
+		// Import app module
 		import init from "./@PACKAGE_NAME@.js";
 
-		// Make JavaScript bridge accessible to CGV-rs WASM module
-		console.info("Loading and linking Slang WASM module...");
-		const startTime = performance.now();
-		slang_setupAndAddInterface(window).then(
-		() => {
-			/* Log Slang JavaScript bridge initializaion result */ {
-				const duration = performance.now()-startTime;
-				const initMsg = "...took "+duration+"ms. Slang-WASM JavaScript bridge";
-				if (window.hasOwnProperty('slangCtx') && window.slangCtx) {
-					console.info(initMsg+" ready.");
-				}
-				else {
-					console.error(initMsg+" failed to initialize!");
-				}
-			}
-
-			// Hand over control to CGV-rs WASM module
-			console.info("Delegating control to CGV-rs application '@PACKAGE_NAME@'");
-			init().catch((error) => {
-				// Prevent the necessary control flow exception from showing up in the console
-				if (!error.message.startsWith(
-						"Using exceptions for control flow, don't mind me. This isn't actually an error!"
-				)) {
-					throw error; // Legit error, rethrow
-				}
-			});
-		});
+		@APP_INIT_CODE@
 	</script>
 </head>
 <body>

@@ -38,7 +38,6 @@ alum = "*"
 cgv-util = {path="../cgv-util"}
 cgv-runenv = {path="../cgv-runenv"}
 cgv-shader = {path="../cgv-shader", features=["wgpu_runtime"]}
-uuid = { version = "1.18.1", features = ["v4"] } # , "tracing_output"
 
 [target.'cfg(target_os="windows")'.dependencies]
 ansi_term = "*"

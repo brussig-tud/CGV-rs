@@ -78,14 +78,13 @@ static SCRIPT_START_TIME: std::time::SystemTime = {
 
 //////
 //
-// Classes
+// Structs
 //
 
 ////
 // WebDeployment
 
 pub struct WebDeployment<'bs> {
-	#[expect(dead_code)]
 	buildSetup: &'bs Setup,
 	packageName: String,
 	niceName: String,
@@ -104,7 +103,6 @@ pub struct WebDeploymentBuilder {
 	shortNiceName: Option<String>,
 	faviconSourceDir: Option<PathBuf>
 }
-
 impl WebDeploymentBuilder
 {
 	pub fn niceName (&mut self, niceName: String) -> &mut Self {
@@ -458,8 +456,33 @@ pub fn templateFileSiteWebmanifest () -> &'static Path {
 }
 
 /// Process the given template file for the provided [`WebDeployment`].
+///
+/// **TODO: logic and patterns are completely hardcoded for our `index.html` and associated JavaScript modules.**
 pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> Result<String>
 {
+	const WEB_DEPLOY_PRECONDITION_MSG: &str =
+		"`filepath` must point to an HTML file which has the CGV-rs JavaScript glue modules next to it";
+
+	let filepathDir = filepath.parent().expect(
+		"`filepath` must either be an absolute path or a relative path with at least one parent component"
+	);
+	let runAppWasmModuleCode = {
+		let template = fs::read_to_string(filepathDir.join("wasm-setup.js")).expect(
+			WEB_DEPLOY_PRECONDITION_MSG
+		);
+		template.replace("@PACKAGE_NAME@", webDeployment.packageName.as_str())
+		        .replace("@NICE_NAME@", webDeployment.niceName.as_str())
+		        .replace("@SHORT_NICE_NAME@", webDeployment.shortNiceName.as_str())
+	};
+
+	let appInitCode = if webDeployment.buildSetup.cgvFeatures.slang_runtime {
+		let template = fs::read_to_string(filepathDir.join("wasm-setup_slang.js")).expect(
+			WEB_DEPLOY_PRECONDITION_MSG
+		);
+		template.replace("@CODE__WASM_SETUP@", &runAppWasmModuleCode)
+	}
+	else { runAppWasmModuleCode };
+
 	let template = fs::read_to_string(filepath)?;
 	let instantiated =
 		template.replace("@PACKAGE_NAME@", webDeployment.packageName.as_str())
@@ -467,7 +490,8 @@ pub fn instantiateTemplate (filepath: &Path, webDeployment: &WebDeployment) -> R
 		        .replace("@SHORT_NICE_NAME@", webDeployment.shortNiceName.as_str())
 		        .replace("@FAVICON_SOURCE_DIR@", webDeployment.faviconSourceDir.to_str()
 		         	.context("property 'faviconSourceDir' is not UTF-8")?
-		         );
+		         )
+		        .replace("@APP_INIT_CODE@", &appInitCode);
 	Ok(instantiated)
 }
 
@@ -492,8 +516,7 @@ pub fn performCgvWebDeployment (deployPath: &Path, webDeployment: WebDeployment)
 	fs::write(deployPath.join("site.webmanifest"), siteWebmanifest)?;
 
 	// In case `slang_runtime` is enabled, deploy the Slang WASM build artifacts also
-	// TODO: we have to deploy the Slang component anyway until index.html gets updated to support this being optional
-	/*if webDeployment.buildSetup.cgvFeatures.slang_runtime*/ {
+	if webDeployment.buildSetup.cgvFeatures.slang_runtime {
 		let cargoTargetDir = getCargoTargetDir()?;
 		util::installFile(cargoTargetDir.join("slang-wasm.wasm"), deployPath)?;
 		util::installFile(cargoTargetDir.join("slang-wasm.js"), deployPath)?;
@@ -512,6 +535,7 @@ pub fn performCgvWebDeployment (deployPath: &Path, webDeployment: WebDeployment)
 /// # Arguments
 ///
 /// * `outputPath` – The path to deploy to.
+/// * `buildSetup` – Your *CGV-rs* [build setup](applyBuildSetup).
 /// * `changeCheckedFilesOrPaths` – This function is injecting a new file system location that will be monitored for
 ///                                 changes into the *Cargo* `build.rs` re-run decision logic. Therefore, as per *Cargo*
 ///                                 monitoring rules, the calling build script must make explicit any locations it would
@@ -538,9 +562,7 @@ pub fn webDeployIfWasm (deployPath: impl AsRef<Path>, buildSetup: &Setup, change
 
 	// Inject re-run decision dependencies
 	for dep in changeCheckedFilesOrDirs {
-		let dep_absPath = util::path::normalizeToAnchor(
-			&manifestPath, &dep.parse::<PathBuf>()?
-		);
+		let dep_absPath = util::path::normalizeToAnchor(&manifestPath, &dep.parse::<PathBuf>()?);
 		util::setTimestampToBeforeBuildScriptTime(&dep_absPath);
 		println!("cargo::rerun-if-changed={}", dep_absPath.as_os_str().to_str().unwrap());
 	}

@@ -68,8 +68,12 @@ impl RealmU32 {
 		RealmU32 { counter: AtomicU32::new(1) }
 	}
 }
-unsafe impl Send for RealmU32 {}
-unsafe impl Sync for RealmU32 {}
+unsafe impl Send for RealmU32 {
+	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Send.
+}
+unsafe impl Sync for RealmU32 {
+	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Sync.
+}
 impl Realm<u32> for RealmU32 {
 	/// Create and return a new 32-bit integer that is unique to this realm.
 	fn newEntity (&self) -> u32 {
@@ -91,8 +95,12 @@ impl RealmU64 {
 		RealmU64 { counter: AtomicU64::new(1) }
 	}
 }
-unsafe impl Send for RealmU64 {}
-unsafe impl Sync for RealmU64 {}
+unsafe impl Send for RealmU64 {
+	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Send.
+}
+unsafe impl Sync for RealmU64 {
+	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Sync.
+}
 impl Realm<u64> for RealmU64 {
 	/// Create and return a new 64-bit integer that is unique to this realm.
 	fn newEntity (&self) -> u64 {
