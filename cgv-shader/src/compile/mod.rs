@@ -23,8 +23,8 @@ pub mod env {
 /// The module prelude.
 pub mod prelude {
 	pub use super::{
-		Context, ContextBuilder, BuildsContextWithFilesystemAccess, EnvironmentEnabled, Module, EntryPoint, Component,
-		Composite, LinkedComposite
+		Context, ContextBuilder, HasFileSystemAccess, BuildsContextWithFilesystemAccess, EnvironmentEnabled, Module,
+		EntryPoint, Component, Composite, LinkedComposite
 	};
 }
 
