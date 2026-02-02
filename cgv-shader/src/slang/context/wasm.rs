@@ -113,7 +113,7 @@ impl Session<'_>
 		tracing::warn!("Session #{}: Compiling module `{targetPath}` via JavaScript bridge", self.handle);
 		let moduleHandle = slangjs_Session_loadModuleFromSource(self.handle, targetPath, targetPath, sourceCode);
 		if moduleHandle < 0 {
-			return Err(compile::LoadModuleError::CompilationError("Failed to compile module `{targetPath}`".into()))
+			return Err(compile::LoadModuleError::CompilationError(anyhow!("Failed to compile module `{targetPath}`")))
 		}
 
 		// Return resulting module
