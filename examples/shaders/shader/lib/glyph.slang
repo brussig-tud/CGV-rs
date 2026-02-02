@@ -12,8 +12,8 @@ module glyph;
 // Imports
 
 // Local imports
-import common;
-import sdf;
+import "lib/common.slang";
+import "lib/sdf.slang";
 
 
 /////

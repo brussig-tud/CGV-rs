@@ -25,7 +25,9 @@ use wgpu::util::DeviceExt;
 
 // CGV Framework
 use cgv::{self, util, shader::compile::prelude::*};
-use cgv::shader::compile::HasFileSystemAccess;
+
+
+
 //////
 //
 // Statics
@@ -136,6 +138,7 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 
 	// Our SDF glyph shader
 	// - step 1: a Slang compilation context
+	tracing::info!("Preparing shader: context creation");
 	#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
 		// On native, it's a good idea to always consider the shader path we get from the runtime environment
 		cgv::shader::slang::ContextBuilder::withSearchPaths(&environment.shaderPath).build()?
@@ -145,26 +148,47 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 		cgv::shader::slang::ContextBuilder::default().build()?
 	};
 	// - step 2: load the *CGV-rs* core shader library into the context
+	tracing::info!("Preparing shader: loading compilation environment");
 	let env = cgv::obtainShaderCompileEnvironment();
 	slangCtx.replaceEnvironment(Some(env))?;
 	// - step 3: build shader package we can use to create *WGPU* shader modules that can be plugged into a
 	//           pipeline. In cases where offline compilation is ok, ready-made shader packages can contain several
 	//           variants (e.g. SPIR-V for desktop, WGSL for WASM) and be deserialized from a file or memory blob
+	tracing::info!("Preparing shader: compiling main module '/shader/sdf_demo.slang'");
 	#[cfg(not(target_arch="wasm32"))] let mainModule = {
 		// On native, we can load the shader source from the filesystem
-		slangCtx.compile(util::pathInsideCrate!("/shader/sdfquad.slang"))?
+		slangCtx.compile(util::pathInsideCrate!("/shader/sdf_demo.slang"))?
 	};
 	#[cfg(target_arch="wasm32")] let mainModule = {
-		// On WASM, we currently have to resort to baking the source file into the crate
-		slangCtx.compileFromNamedSource("sdfquad.slang", util::sourceFile!("/shader/sdfquad.slang"))?
+		// On WASM, we currently have to resort to baking shader source files into the crate. For the same reason (the
+		// context does not have runtime filesystem access), we also need to load our local shader "library" into the
+		// context manually. This could be largely automated by creating a local *compile environment* and merging it
+		// with the one we get from *CGV-rs*, but for our 3 source files we can just do it here.
+		use cgv::shader::slang::EnvironmentStorage;
+		slangCtx.loadModuleFromSource(
+			EnvironmentStorage::SourceCode, "lib/common.slang",
+			util::sourceFile!("/shader/lib/common.slang")
+		)?;
+		slangCtx.loadModuleFromSource(
+			EnvironmentStorage::SourceCode, "lib/sdf.slang",
+			util::sourceFile!("/shader/lib/sdf.slang")
+		)?;
+		slangCtx.loadModuleFromSource(
+			EnvironmentStorage::SourceCode, "lib/glyph.slang",
+			util::sourceFile!("/shader/lib/glyph.slang")
+		)?;
+		slangCtx.compileFromNamedSource(
+			"sdf_demo.slang", util::sourceFile!("/shader/sdf_demo.slang")
+		)?
 	};
-	// - step 4: load a module that provides the `instantiateGlyph` function that our "sdfquad.slang" module expects
+	// - step 4: load a module that provides the `instantiateGlyph` function that our "sdf_demo.slang" module expects
+	tracing::info!("Preparing shader: generating specialization module 'glyphProvider'");
 	let instantiateCircleModule = slangCtx.compileFromNamedSource(
-		"instantiateCircleModule",
-		"import \"lib/glyph.slang\"; \
-		export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
+		"glyph_provider",
+		"import \"lib/glyph.slang\"; export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
 	)?;
 	// - step 5: link into usable program
+	tracing::info!("Preparing shader: linking final program");
 	let linked = slangCtx.linkComposite(&slangCtx.createComposite(&[
 		cgv::shader::compile::ComponentRef::Module(&mainModule),
 		cgv::shader::compile::ComponentRef::Module(&instantiateCircleModule),
@@ -175,12 +199,13 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 		)?, Some("sdfquad".into()), /* all entry points */None
 	)?;
 	// - final: obtain the *WGPU* shader module
+	tracing::info!("Preparing shader: converting to WGPU shader");
 	let shader = shaderPackage.createShaderModuleFromBestInstance(
 		context.device(), None, Some("ExShaders__ShaderModule")
 	).ok_or(
 		cgv::anyhow!("Could not create example shader module")
 	)?;
-	drop(linked); // currently needed because of slang-rs issue #26: https://github.com/FloatyMonkey/slang-rs/issues/26
+	drop(linked); // currently needed because of Slang-rs issue #26: https://github.com/FloatyMonkey/slang-rs/issues/26
 
 
 	////

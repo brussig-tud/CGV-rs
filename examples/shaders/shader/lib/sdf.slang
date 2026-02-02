@@ -12,7 +12,7 @@ module sdf;
 // Imports
 
 // Local imports
-import common;
+import "lib/common.slang";
 
 
 /////
