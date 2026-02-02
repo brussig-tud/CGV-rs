@@ -416,7 +416,7 @@ impl<'this> compile::Context for Context<'this>
 		let module =  self.session.load_module_from_source_string(
 			targetPath, targetPath, sourceCode
 		).or_else(
-			|err| Err(compile::LoadModuleError::CompilationError(format!("{err}")))
+			|err| Err(compile::LoadModuleError::CompilationError(err.into()))
 		)?;
 
 		// Enumerate and save entry points
@@ -493,7 +493,7 @@ impl compile::HasFileSystemAccess for Context<'_>
 		let module =  self.session.load_module(
 			sourceFile.as_ref().to_string_lossy().as_ref()
 		).or_else(
-			|err| Err(compile::LoadModuleError::CompilationError(format!("{err}")))
+			|err| Err(compile::LoadModuleError::CompilationError(err.into()))
 		)?;
 
 		// Enumerate and save entry points
@@ -514,7 +514,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 	{
 		use compile::HasFileSystemAccess;
 		let module = EnvModule::fromSlangModule(self.compile(&filename)?.component).map_err(
-			|err| compile::LoadModuleError::CompilationError(format!("{err}"))
+			|err| compile::LoadModuleError::CompilationError(err.into())
 		)?;
 		storeInEnvironment(self.environment.as_mut(), filename, module).map_err(|err| match err {
 			AddModuleError::DuplicateModulePaths(path) => compile::LoadModuleError::DuplicatePath(path)
@@ -530,7 +530,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 		let module = match envStorage {
 			EnvironmentStorage::SourceCode => EnvModule::fromSlangSourceCode(sourceCode),
 			EnvironmentStorage::IR => EnvModule::fromSlangModule(slangModule.component).map_err(
-				|err| compile::LoadModuleError::CompilationError(format!("{err}"))
+				|err| compile::LoadModuleError::CompilationError(err.into())
 			)?
 		};
 
@@ -548,7 +548,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 		// Load the IR bytecode blob into the Slang session
 		let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 		self.session.load_module_from_ir_blob(targetPath_str, targetPath_str, &irBlob).or_else(
-			|err| Err(compile::LoadModuleError::CompilationError(format!("{err}")))
+			|err| Err(compile::LoadModuleError::CompilationError(err.into()))
 		)?;
 
 		// Store the IR module in the environment
@@ -584,7 +584,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 					EnvModule::SourceCode(sourceCode) =>
 						newSession.load_module_from_source_string(&path, "", sourceCode).or_else(|err|Err(
 							compile::SetEnvironmentError::Backend(
-								compile::LoadModuleError::CompilationError(format!("{err}")).into()
+								compile::LoadModuleError::CompilationError(err.into()).into()
 							)
 						))?,
 
@@ -592,7 +592,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 						let irBlob = slang::ComPtr::new(slang::VecBlob::from_slice(bytes));
 						newSession.load_module_from_ir_blob(&path, "", &irBlob).or_else(|err|Err(
 							compile::SetEnvironmentError::Backend(
-								compile::LoadModuleError::CompilationError(format!("{err}")).into()
+								compile::LoadModuleError::CompilationError(err.into()).into()
 							)
 						))?
 					}

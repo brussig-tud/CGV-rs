@@ -72,7 +72,7 @@ impl Error for CreateContextError {}
 
 #[derive(Debug)]
 pub enum LoadModuleError {
-	CompilationError(String),
+	CompilationError(anyhow::Error),
 	InvalidModulePath(PathBuf),
 	DuplicatePath(PathBuf)
 }
