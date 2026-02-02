@@ -13,7 +13,7 @@ fn main() -> cgv_build::Result<()>
 	// Apply CGV-rs build setup
 	let buildSetup = cgv_build::applyBuildSetup()?;
 	if !cgv_build::isWasm()? {
-		// also get an "ENVIRONMENT.yaml" file for non-WASM builds
+		// Also get an "ENVIRONMENT.yaml" file for non-WASM builds
 		cgv_build::generateRuntimeEnvironmentFile(&buildSetup)?;
 	}
 

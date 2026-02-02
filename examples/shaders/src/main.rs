@@ -25,9 +25,7 @@ use wgpu::util::DeviceExt;
 
 // CGV Framework
 use cgv::{self, util, shader::compile::prelude::*};
-
-
-
+use cgv::shader::compile::HasFileSystemAccess;
 //////
 //
 // Statics
@@ -36,7 +34,7 @@ use cgv::{self, util, shader::compile::prelude::*};
 const QUAD_VERTS: &[QuadVertex; 8] = &[
 	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		texcoord: glm::Vec2::new(0., 1.)
+		texcoord: glm::Vec2::new(-1., 1.)
 	},
 	QuadVertex {
 		pos: glm::Vec4::new(1., -1., 0., 1.),
@@ -44,11 +42,11 @@ const QUAD_VERTS: &[QuadVertex; 8] = &[
 	},
 	QuadVertex {
 		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(0., 0.)
+		texcoord: glm::Vec2::new(-1., -1.)
 	},
 	QuadVertex {
 		pos: glm::Vec4::new(1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(1., 0.)
+		texcoord: glm::Vec2::new(1., -1.)
 	},
 
 	QuadVertex {
@@ -57,15 +55,15 @@ const QUAD_VERTS: &[QuadVertex; 8] = &[
 	},
 	QuadVertex {
 		pos: glm::Vec4::new(1., -1., 0., 1.),
-		texcoord: glm::Vec2::new(0., 1.)
+		texcoord: glm::Vec2::new(-1., 1.)
 	},
 	QuadVertex {
 		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(1., 0.)
+		texcoord: glm::Vec2::new(1., -1.)
 	},
 	QuadVertex {
 		pos: glm::Vec4::new(1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(0., 0.)
+		texcoord: glm::Vec2::new(-1., -1.)
 	}
 ];
 
@@ -136,7 +134,7 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	////
 	// Load resources
 
-	// The example shader, built from source code via *Slang* online compilation
+	// Our SDF glyph shader
 	// - step 1: a Slang compilation context
 	#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
 		// On native, it's a good idea to always consider the shader path we get from the runtime environment
@@ -152,26 +150,37 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	// - step 3: build shader package we can use to create *WGPU* shader modules that can be plugged into a
 	//           pipeline. In cases where offline compilation is ok, ready-made shader packages can contain several
 	//           variants (e.g. SPIR-V for desktop, WGSL for WASM) and be deserialized from a file or memory blob
-	#[cfg(not(target_arch="wasm32"))] let shaderPackage = {
+	#[cfg(not(target_arch="wasm32"))] let mainModule = {
 		// On native, we can load the shader source from the filesystem
-		cgv::shader::Package::fromSourceFile(
-			cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx,
-			util::pathInsideCrate!("/shader/sdfquad.slang"), None/* all entry points */
-		)?
+		slangCtx.compile(util::pathInsideCrate!("/shader/sdfquad.slang"))?
 	};
-	#[cfg(target_arch="wasm32")] let shaderPackage = {
+	#[cfg(target_arch="wasm32")] let mainModule = {
 		// On WASM, we currently have to resort to baking the source file into the crate
-		cgv::shader::Package::fromSource(
-			cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, "sdfquad.slang",
-			util::sourceFile!("/shader/sdfquad.slang"), None/* all entry points */
-		)?
+		slangCtx.compileFromNamedSource("sdfquad.slang", util::sourceFile!("/shader/sdfquad.slang"))?
 	};
+	// - step 4: load a module that provides the `instantiateGlyph` function that our "sdfquad.slang" module expects
+	let instantiateCircleModule = slangCtx.compileFromNamedSource(
+		"instantiateCircleModule",
+		"import \"lib/glyph.slang\"; \
+		export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
+	)?;
+	// - step 5: link into usable program
+	let linked = slangCtx.linkComposite(&slangCtx.createComposite(&[
+		cgv::shader::compile::ComponentRef::Module(&mainModule),
+		cgv::shader::compile::ComponentRef::Module(&instantiateCircleModule),
+	])?)?;
+	let shaderPackage = cgv::shader::Package::fromProgram(
+		cgv::shader::Program::fromLinkedComposite(
+			&slangCtx, cgv::shader::compile::mostSuitableTarget(), &linked
+		)?, Some("sdfquad".into()), /* all entry points */None
+	)?;
 	// - final: obtain the *WGPU* shader module
 	let shader = shaderPackage.createShaderModuleFromBestInstance(
 		context.device(), None, Some("ExShaders__ShaderModule")
 	).ok_or(
 		cgv::anyhow!("Could not create example shader module")
 	)?;
+	drop(linked); // currently needed because of slang-rs issue #26: https://github.com/FloatyMonkey/slang-rs/issues/26
 
 
 	////

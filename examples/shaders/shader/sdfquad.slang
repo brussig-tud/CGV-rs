@@ -4,11 +4,14 @@
 // Imports
 //
 
-// Interface with managed uniforms handled by CGV-rs.
+// CGV-rs core shader library
 import "cgv/api/uniforms.slang";
-
-// Enable linear algebra mathematical operators (allows using `*` for matrix multiplication like in GLSL)
 import "cgv/lin/operators.slang";
+
+// Local imports
+import "lib/common.slang";
+import "lib/sdf.slang";
+import "lib/glyph.slang";
 
 
 
@@ -66,9 +69,16 @@ func vertexMain (vert: VSInput) -> VSOutput {
 // Fragment shader
 //
 
+////
+// Specialization points
+
+// The Glyph to draw
+extern struct Glyph: ex::IGlyph;
+
 // Fragment shader entry point
 [shader("fragment")]
-func fragmentMain (vsOut: VSOutput) -> float4 {
-	var shadedColor = float4(1, 1, 0, 1);
+func fragmentMain (fsIn: VSOutput) -> float4 {
+	let glyph = Glyph::default();
+	let shadedColor = glyph.colorAt(fsIn.texcoord);
 	return shadedColor;
 }
