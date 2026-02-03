@@ -228,19 +228,14 @@ impl Package
 
 	///
 	#[cfg(feature="compilation")]
-	pub fn fromModuleMultipleTypes<'outer, Context> (
-		sourceTypes: &[WgpuSourceType], context: &'outer Context, module: &Context::ModuleType<'outer>,
+	pub fn fromLinkedCompositeMultipleTypes<'outer, CompileContext> (
+		sourceTypes: &[WgpuSourceType], context: &'outer CompileContext,
+		linkedComposite: &CompileContext::LinkedCompositeType<'outer>, name: Option<String>,
 		entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> Result<Self, ProgramInstanceCreationError>
 	where
-		Context: compile::Context
+		CompileContext: compile::Context
 	{
-		// Build module
-		use compile::Module;
-		let linkedProg = compile::buildModule(context, module).map_err(
-			|err| ProgramInstanceCreationError::Backend(err.into())
-		)?;
-
 		// Instantiate for every source type
 		let mut instances = BTreeMap::new();
 		for &sourceType in sourceTypes
@@ -252,7 +247,7 @@ impl Package
 			}
 
 			// Translate code
-			let program = Program::fromLinkedComposite(context, target, &linkedProg).map_err(
+			let program = Program::fromLinkedComposite(context, target, &linkedComposite).map_err(
 				|err| ProgramInstanceCreationError::Backend(err)
 			)?;
 
@@ -261,22 +256,46 @@ impl Package
 		}
 
 		Ok(Self {
-			name: unsafe {
+			name: name.unwrap_or_else(|| uniqueAnonymousName()),
+			instances
+		})
+	}
+
+	///
+	#[cfg(feature="compilation")]
+	pub fn fromModuleMultipleTypes<'outer, CompileContext> (
+		sourceTypes: &[WgpuSourceType], context: &'outer CompileContext, module: &CompileContext::ModuleType<'outer>,
+		entryPoints: Option<BTreeSet<Option<&str>>>
+	) -> Result<Self, ProgramInstanceCreationError>
+	where
+		CompileContext: compile::Context
+	{
+		// Build module
+		use compile::Module;
+		let linkedProg = compile::buildModule(context, module).map_err(
+			|err| ProgramInstanceCreationError::Backend(err.into())
+		)?;
+
+		// Delegate
+		Self::fromLinkedCompositeMultipleTypes(
+			sourceTypes, context, &linkedProg,
+			/* name: */Some(unsafe {
 				// SAFETY:
 				// If we're here, then the module could be built from the filename (or was assigned a virtual one), so
 				// we know the path definitely contains a filename component. Calling `file_name().unwrap_unchecked()`
 				// can thus never produce `None`.
 				module.virtualFilepath().file_name().unwrap_unchecked().to_string_lossy().into()
-			},
-			instances
-		})
+			}),
+			entryPoints
+		)
 	}
 
 	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
 	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
 	#[cfg(feature="compilation")]
 	pub fn fromSourceFileMultipleTypes<CompileContext> (
-		sourceTypes: &[WgpuSourceType], context: &CompileContext, filename: impl AsRef<Path>, entryPoints: Option<BTreeSet<Option<&str>>>
+		sourceTypes: &[WgpuSourceType], context: &CompileContext, filename: impl AsRef<Path>,
+		entryPoints: Option<BTreeSet<Option<&str>>>
 	) -> Result<Self, ProgramInstanceCreationError>
 	where
 		CompileContext: compile::HasFileSystemAccess
@@ -323,6 +342,34 @@ impl Package
 			|err| PackageFromProgramError::InstanceCreation(err)
 		)?;
 		Ok(Self::fromSingleInstance(srcType, instance, name))
+	}
+
+	/// Create the package from the given [`compile::LinkedComposite`].
+	#[cfg(feature="compilation")]
+	#[inline(always)]
+	pub fn fromLinkedComposite<'outer, CompileContext> (
+		sourceType: WgpuSourceType, context: &'outer CompileContext,
+		linkedComposite: &CompileContext::LinkedCompositeType<'outer>, name: Option<String>,
+		entryPoints: Option<BTreeSet<Option<&str>>>
+	) -> Result<Self, ProgramInstanceCreationError>
+	where
+		CompileContext: compile::Context
+	{
+		Self::fromLinkedCompositeMultipleTypes(&[sourceType], context, linkedComposite, name, entryPoints)
+	}
+
+
+	/// Create the package from the given [`compile::Module`].
+	#[cfg(feature="compilation")]
+	#[inline(always)]
+	pub fn fromModule<'outer, CompileContext> (
+		sourceType: WgpuSourceType, context: &'outer CompileContext, module: &CompileContext::ModuleType<'outer>,
+		entryPoints: Option<BTreeSet<Option<&str>>>
+	) -> Result<Self, ProgramInstanceCreationError>
+	where
+		CompileContext: compile::Context
+	{
+		Self::fromModuleMultipleTypes(&[sourceType], context, module, entryPoints)
 	}
 
 	/// Create the package from the given shader source file.

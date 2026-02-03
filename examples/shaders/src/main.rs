@@ -193,10 +193,10 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 		cgv::shader::compile::ComponentRef::Module(&mainModule),
 		cgv::shader::compile::ComponentRef::Module(&instantiateCircleModule),
 	])?)?;
-	let shaderPackage = cgv::shader::Package::fromProgram(
-		cgv::shader::Program::fromLinkedComposite(
-			&slangCtx, cgv::shader::compile::mostSuitableTarget(), &linked
-		)?, Some("sdfquad".into()), /* all entry points */None
+	let shaderPackage = cgv::shader::Package::fromLinkedComposite(
+		cgv::shader::WgpuSourceType::mostSuitable(), &slangCtx, &linked,
+		None, // <- we don't require our purely on-line package to have any particular name
+		None  // <- no cherry-picked entry point specializations, just include all possible variants
 	)?;
 	// - final: obtain the *WGPU* shader module
 	tracing::info!("Preparing shader: converting to WGPU shader");
@@ -205,7 +205,6 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	).ok_or(
 		cgv::anyhow!("Could not create example shader module")
 	)?;
-	drop(linked); // currently needed because of Slang-rs issue #26: https://github.com/FloatyMonkey/slang-rs/issues/26
 
 
 	////
