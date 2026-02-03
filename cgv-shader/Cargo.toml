@@ -25,7 +25,7 @@ shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true
 [target.'cfg(target_arch="wasm32")'.dependencies]
 wasm-bindgen = {version="*", optional=true}
 shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
-	"build_slang_from_source"
+	"download_slang_binaries", "build_slang_from_source"
 ]}
 
 [features]
