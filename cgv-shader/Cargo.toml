@@ -13,20 +13,12 @@ serde = {version="*", optional=true}
 postcard = {version="*", optional=true, features=["alloc"]}
 crc64fast-nvme = "*"
 cgv-util = {path="../cgv-util"}
-
-[target.'cfg(all(not(target_arch="wasm32"),not(target_os="windows")))'.dependencies]
 shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
 	"download_slang_binaries", "build_slang_from_source"
 ]}
-
-[target.'cfg(all(not(target_arch="wasm32"),target_os="windows"))'.dependencies]
-shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true}
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
 wasm-bindgen = {version="*", optional=true}
-shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
-	"download_slang_binaries", "build_slang_from_source"
-]}
 
 [features]
 default = []
