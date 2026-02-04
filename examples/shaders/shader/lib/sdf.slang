@@ -80,16 +80,19 @@ public struct Circle<Real: __BuiltinFloatingPointType>: ISdf<Real>
 	}
 
 	/// Initializer
+	[ForceInline]
 	public __init (Real radius) {
 		this.radius = radius;
 	}
 
 	/// Construct the unit circle
+	[ForceInline]
 	public static func unit () -> Circle<Real> {
 		return Circle<Real>(1);
 	}
 
 	/// Construct the unit diameter circle (i.e. a radius of .5).
+	[ForceInline]
 	public static func halfUnit () -> Circle<Real> {
 		return Circle<Real>(.5);
 	}

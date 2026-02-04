@@ -34,9 +34,6 @@ public typealias Vec2<Number: IArithmetic> = vector<Number, 2>;
 /// A struct representing a 2-dimensional axis-aligned bounding box around a central point `(0,0)` as two distinct extents, one each along the *x*- and *y*-axes.
 public struct Extents<Number: IArithmetic>
 {
-	/*/// For efficiency, we use built-in vector types to represent negative and positive extents of a direction.
-	typealias Vec2 = Vec2<Number>;*/
-
 	/// The extents along the *x*-axis.
 	public Vec2<Number> x;
 
@@ -44,6 +41,7 @@ public struct Extents<Number: IArithmetic>
 	public Vec2<Number> y;
 
 	/// Initializer
+	[ForceInline]
 	public __init (Vec2<Number> xExt, Vec2<Number> yExt) {
 		x = xExt; y = yExt;
 	}
@@ -54,6 +52,7 @@ public struct Extents<Number: IArithmetic>
 	/// * `yRadius` – The radius along the *y*-axis.
 	/// # Returns
 	/// Symmetric `Extents` with the given radii.
+	[ForceInline]
 	public static func symmetric (xAxis: Number, yAxis: Number) -> Extents<Number> {
 		return Extents<Number>(Vec2<Number>(-xAxis, xAxis), Vec2<Number>(-yAxis, yAxis));
 	}
@@ -63,6 +62,7 @@ public struct Extents<Number: IArithmetic>
 	/// * `radius` – The symmetric radius to use.
 	/// # Returns
 	/// Bi-symmetric `Extents` with the given radius.
+	[ForceInline]
 	public static func biSymmetric (radius: Number) -> Extents<Number> {
 		return Extents<Number>(Vec2<Number>(-radius, radius), Vec2<Number>(-radius, radius));
 	}

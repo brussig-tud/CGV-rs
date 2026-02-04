@@ -102,11 +102,13 @@ public struct Circle: IGlyph
 	/// Create a default instance of the glyph.
 	/// # Returns
 	/// A valid glyph instance, its exact properties depend on the implementation.
+	[ForceInline]
 	public static Self default () {
 		return Circle(.5, .125);
 	}
 
 	/// Initializer
+	[ForceInline]
 	public __init (float radius, float smear) {
 		this.circle = ex::sdf::Circle<float>(radius);
 		this.smear = smear;
