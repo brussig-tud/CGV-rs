@@ -72,10 +72,12 @@ impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 		)
 	}
 
+	#[inline(always)]
 	pub fn borrowData (&self) -> &UniformsStruct {
 		&self.data
 	}
 
+	#[inline(always)]
 	pub fn borrowData_mut (&self) -> &mut UniformsStruct {
 		util::mutify(&self.data) // zero-abstraction interior mutability
 	}
