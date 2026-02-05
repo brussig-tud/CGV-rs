@@ -163,12 +163,8 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 		// On WASM, we currently have to resort to baking shader source files into the crate. For the same reason (the
 		// context does not have runtime filesystem access), we also need to load our local shader "library" into the
 		// context manually. This could be largely automated by creating a local *compile environment* and merging it
-		// with the one we get from *CGV-rs*, but for our 3 source files we can just do it here.
+		// with the one we get from *CGV-rs*, but for our two files we can just do it here.
 		use cgv::shader::slang::EnvironmentStorage;
-		slangCtx.loadModuleFromSource(
-			EnvironmentStorage::SourceCode, "lib/common.slang",
-			util::sourceFile!("/shader/lib/common.slang")
-		)?;
 		slangCtx.loadModuleFromSource(
 			EnvironmentStorage::SourceCode, "lib/sdf.slang",
 			util::sourceFile!("/shader/lib/sdf.slang")

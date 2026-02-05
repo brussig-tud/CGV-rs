@@ -11,8 +11,9 @@ module sdf;
 //////
 // Imports
 
-// Local imports
-import "lib/common.slang";
+// CGV-rs core shader library
+import "cgv/common.slang";
+import "cgv/geom/common.slang";
 
 
 /////
@@ -34,7 +35,7 @@ public interface ISdf<Real: __BuiltinFloatingPointType>
 	/// Provide (and potentially on-the-fly compute) the tight-fitting axis-aligned bounding box around the SDF's 0-contour.
 	/// # Returns
 	/// The directional extents.
-	func extents () -> ex::Extents<Real>;
+	func extents () -> cgv::geom::Extents<Real>;
 
 	/// Evaluate the SDF at the given query point `q`.
 	/// # Parameters
@@ -66,8 +67,8 @@ public struct Circle<Real: __BuiltinFloatingPointType>: ISdf<Real>
 	/// Provide (and potentially on-the-fly compute) the tight-fitting axis-aligned bounding box around the SDF's 0-contour.
 	/// # Returns
 	/// The directional extents.
-	public func extents () -> ex::Extents<Real> {
-		return ex::Extents<Real>::biSymmetric(radius);
+	public func extents () -> cgv::geom::Extents<Real> {
+		return cgv::geom::Extents<Real>::biSymmetric(radius);
 	}
 
 	/// Evaluate the SDF at the given query point `q`.
@@ -75,7 +76,7 @@ public struct Circle<Real: __BuiltinFloatingPointType>: ISdf<Real>
 	/// * `q` – The query point.
 	/// # Returns
 	/// The value of the distance field at the provided query point.
-	public func eval (q: ex::Vec2<Real>) -> Real {
+	public func eval (q: cgv::Vec2<Real>) -> Real {
 		return length(q) - radius;
 	}
 

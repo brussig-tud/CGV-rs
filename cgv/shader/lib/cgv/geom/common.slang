@@ -4,25 +4,25 @@
 // Module setup
 //
 
-/// A module for common functionality most other modules depend on.
+/// Commonly used assorted functionality for handling geometry.
 module common;
+
+
+//////
+// Imports
+
+// Local imports
+import "cgv/common.slang";
 
 
 /////
 // Module namespace
 
-// The common example namespace.
-public namespace ex {
+// Insert into cgv::geom namespace
+public namespace cgv::geom {
 
-
-
-//////
-//
-// Type aliases and enums
-//
-
-/// A convenience type alias for generic 2-dimensional vectors.
-public typealias Vec2<Number: IArithmetic> = vector<Number, 2>;
+// Import parent namespace
+using cgv;
 
 
 
@@ -40,7 +40,7 @@ public struct Extents<Number: IArithmetic>
 	/// The extents along the *y*-axis.
 	public Vec2<Number> y;
 
-	/// Initializer
+	/// Initializer.
 	[ForceInline]
 	public __init (Vec2<Number> xExt, Vec2<Number> yExt) {
 		x = xExt; y = yExt;

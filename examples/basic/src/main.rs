@@ -155,7 +155,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 
 	// The example shader
 	// - load the shader package we pre-built while the crate was compiled. We could load it from the filesystem
-	//   during runtime using `Package::fromFile`, but for easy portability of the executable we bake it into the
+	//   during runtime using `Package::fromFile`, but for easy portability of the executable, we bake it into the
 	//   binary image and deserialize it from memory.
 	let shaderPackage = cgv::shader::Package::deserialize(
 		// Bake – when using `sourceGeneratedBytes`, the path is rooted at our crate's *Cargo* build script output

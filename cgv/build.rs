@@ -64,6 +64,9 @@ fn main() -> cgv_build::Result<()>
 			.addSearchPaths(buildSetup.shaderPath()),
 		"coreshaderlib.env", "shader/lib",
 		"CgvCoreShaderLib", |mut env, recommendedStorage| {
+			env.addModule(recommendedStorage, "cgv/common.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/misc.slang")?;
+			env.addModule(recommendedStorage, "cgv/geom/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/operators.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/transform.slang")?;

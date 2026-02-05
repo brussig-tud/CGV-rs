@@ -9,7 +9,6 @@ import "cgv/api/uniforms.slang";
 import "cgv/lin/operators.slang";
 
 // Local imports
-import "lib/common.slang";
 import "lib/sdf.slang";
 import "lib/glyph.slang";
 

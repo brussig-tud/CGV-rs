@@ -11,8 +11,11 @@ module glyph;
 //////
 // Imports
 
+// CGV-rs core shader library
+import "cgv/common.slang";
+import "cgv/geom/common.slang";
+
 // Local imports
-import "lib/common.slang";
 import "lib/sdf.slang";
 
 
@@ -38,7 +41,7 @@ public interface IGlyph
 	/// Provide (and potentially on-the-fly compute) the tight-fitting axis-aligned bounding box around the glyph.
 	/// # Returns
 	/// The directional extents.
-	func extents () -> ex::Extents<float>;
+	func extents () -> cgv::geom::Extents<float>;
 
 	/// Query the glyph color at the given query point `q`.
 	/// # Arguments
@@ -81,10 +84,10 @@ public struct Circle: IGlyph
 	/// Provide (and potentially on-the-fly compute) the tight-fitting axis-aligned bounding box around the glyph.
 	/// # Returns
 	/// The directional extents.
-	public func extents () -> ex::Extents<float> {
+	public func extents () -> cgv::geom::Extents<float> {
 		let smearOffset = float2(-smear, smear);
 		let circleExtents = circle.extents();
-		return ex::Extents<float>(circleExtents.x+smearOffset, circleExtents.y+smearOffset);
+		return cgv::geom::Extents<float>(circleExtents.x+smearOffset, circleExtents.y+smearOffset);
 	}
 
 	/// Query the glyph color at the given query point `q`.

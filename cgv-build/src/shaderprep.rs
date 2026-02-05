@@ -51,7 +51,9 @@ where
 		&mut self, envStorage: CompileContext::EnvStorageHint,
 		sourceFilePath: impl AsRef<Path>
 	) -> Result<()> {
-		let contents = std::fs::read_to_string(self.addModulesRoot.join(sourceFilePath.as_ref()))?;
+		let fullSrcPath = self.addModulesRoot.join(sourceFilePath.as_ref());
+		dependOnFile(&fullSrcPath);
+		let contents = std::fs::read_to_string(fullSrcPath)?;
 		Ok(self.context.loadModuleFromSource(envStorage, sourceFilePath.as_ref(), &contents)?)
 	}
 
