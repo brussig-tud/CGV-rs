@@ -808,8 +808,16 @@ impl Player
 		}
 	}
 
-	pub fn postRedraw (&self) {
-		if self.continousRedrawRequests < 1 {
+	pub fn postRedraw (&self)
+	{
+		if self.continousRedrawRequests < 1
+		{
+			// Cause cameras to be redrawn instead of just the GUI
+			unsafe { #[allow(invalid_reference_casting)] std::ptr::write_volatile(
+				&self.pendingRedraw as *const bool as *mut bool, true
+			)}
+
+			// Tell Egui to start drawing immediately
 			self.egui.request_repaint();
 		}
 	}
