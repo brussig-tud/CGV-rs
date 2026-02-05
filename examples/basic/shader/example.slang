@@ -96,12 +96,13 @@ func fragmentMain (vsOut: VSOutput) -> float4
 	// Checkerboard background
 	let checkers = cgv::math::field::Checkers<float, 2>::withInversePeriod(float2(16));
 	let bgColor = lerp(
-		colors.checkerColor_dark*vsOut.color,  colors.checkerColor_light*vsOut.color,
-		/* checkers mask: */checkers.queryPreFiltered(vsOut.texcoord, (float mask) => fwidth(mask))
+		/* dark: */colors.checkerColor_dark*vsOut.color, /* light: */colors.checkerColor_light*vsOut.color,
+		/* selector: */checkers.queryPreFiltered(vsOut.texcoord, (float mask) => fwidth(mask))
 	);
 
 	// Fetch and color texture samples
-	let texColor = colors.logoColor * texture.color.Sample(texture.sampler, vsOut.texcoord);
+	let texSample = texture.color.Sample(texture.sampler, vsOut.texcoord);
+	let texColor = lerp(colors.bgColor, colors.logoColor*texSample, texSample.a);
 
 	// Mix solid part of color according to texture alpha
 	return float4(lerp(bgColor.rgb, texColor.rgb, texColor.a), bgColor.a);

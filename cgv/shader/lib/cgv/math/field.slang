@@ -4,7 +4,7 @@
 // Module definition
 //
 
-// A module providing coordinate system transformation utilities.
+// A module providing utilities for representing an manipulating (scalar-)fields
 module field;
 
 

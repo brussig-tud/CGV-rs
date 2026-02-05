@@ -122,16 +122,16 @@ impl HermiteNode
 pub struct UserColors
 {
 	/// The color of the CGV logo.
-	pub logoColor: glm::Vec4,
+	pub logoColor: egui::Rgba,
 
 	/// The color of the CGV logo.
-	pub backgroundColor: glm::Vec4,
+	pub backgroundColor: egui::Rgba,
 
 	/// The color of light checkers (visible where the CGV logo texture is not fully opaque).
-	pub checkerColor_light: glm::Vec4,
+	pub checkerColor_light: egui::Rgba,
 
 	/// The color of dark checkers (visible where the CGV logo texture is not fully opaque).
-	pub checkerColor_dark: glm::Vec4
+	pub checkerColor_dark: egui::Rgba
 }
 pub type UserColorsUniformGroup = cgv::hal::UniformGroup<UserColors>;
 
@@ -261,8 +261,12 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	// Initialize GUI state
 
 	let guiState = GuiState {
-		//logoColor: egui::ecolor::Color32::from()
-		..Default::default()
+		logoColor: egui::Color32::from_rgba_premultiplied(
+			0, 120, 163, 255   // <- CGV blue in sRGB (linear  would be [0, 48, 94]
+		),
+		backgroundColor: egui::Color32::from_rgba_unmultiplied(255, 255, 255, 224),
+		checkerColor_dark: egui::Color32::from_rgba_premultiplied(213, 213, 213, 255),
+		checkerColor_light: egui::Color32::from_rgba_premultiplied(255, 255, 255, 255)
 	};
 
 
@@ -361,13 +365,12 @@ impl cgv::Application for ExampleApplication
 
 	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()>
 	{
-		/* Chose initial values for our GUI-settable colors */ {
-			let colors = self.userColors.borrowData_mut();
-			colors.logoColor =          glm::vec4(  0.,  0.188, 0.365, 1.); // <- CGV blue
-			colors.backgroundColor =    glm::vec4(  1.,    1.,   1.,   0.);
-			colors.checkerColor_dark =  glm::vec4(5./6., 5./6., 5./6., 1.);
-			colors.checkerColor_light = glm::vec4(  1.,    1.,   1.,   1.);
-		}
+		// Upload initial uniform values
+		let colors = self.userColors.borrowData_mut();
+		colors.logoColor = self.guiState.logoColor.into();
+		colors.backgroundColor = self.guiState.backgroundColor.into();
+		colors.checkerColor_dark = self.guiState.checkerColor_dark.into();
+		colors.checkerColor_light = self.guiState.checkerColor_light.into();
 		self.userColors.upload(context);
 
 		// Done!
@@ -439,28 +442,38 @@ impl cgv::Application for ExampleApplication
 	{
 		// Add the standard 2-column layout control grid
 		cgv::gui::layout::ControlTableLayouter::new(ui).layout(
-			ui, "Cgv.Ex.Basic",
-			|controlTable|
+			ui, "Cgv.Ex.Basic", |controlTable|
 			{
 				let mut uploadFlag = false;
-				if controlTable.add("Logo color", |ui, _|
-					ui.color_edit_button_srgba(&mut self.guiState.logoColor)
-				).changed() {
-					self.userColors.borrowData_mut().logoColor = glm::vec4(
-						self.guiState.logoColor.r() as f32/255., self.guiState.logoColor.g() as f32/255.,
-						self.guiState.logoColor.b() as f32/255., self.guiState.logoColor.a() as f32/255.
-					);
-					uploadFlag = true;
-				};
-				if controlTable.add("Background color", |ui, _|
-					ui.color_edit_button_srgba(&mut self.guiState.backgroundColor)
-				).changed() {
-					self.userColors.borrowData_mut().backgroundColor = glm::vec4(
-						self.guiState.backgroundColor.r() as f32/255., self.guiState.backgroundColor.g() as f32/255.,
-						self.guiState.backgroundColor.b() as f32/255., self.guiState.backgroundColor.a() as f32/255.
-					);
-					uploadFlag = true;
-				};
+				controlTable.add("Logo colors", |ui, _| {
+					if ui.color_edit_button_srgba(&mut self.guiState.logoColor).changed() {
+						self.userColors.borrowData_mut().logoColor = self.guiState.logoColor.into();
+						uploadFlag = true;
+					}
+					ui.label("logo (foreground)");
+				});
+				controlTable.add("", |ui, _| {
+					if ui.color_edit_button_srgba(&mut self.guiState.backgroundColor).changed() {
+						self.userColors.borrowData_mut().backgroundColor = self.guiState.backgroundColor.into();
+						uploadFlag = true;
+					};
+					ui.label("background");
+				});
+				controlTable.add("Canvas colors", |ui, _| {
+					if ui.color_edit_button_srgba(&mut self.guiState.checkerColor_dark).changed() {
+						self.userColors.borrowData_mut().checkerColor_dark = self.guiState.checkerColor_dark.into();
+						uploadFlag = true;
+					}
+					ui.label("odd checkers");
+				});
+				controlTable.add("", |ui, _| {
+					if ui.color_edit_button_srgba(&mut self.guiState.checkerColor_light).changed() {
+						self.userColors.borrowData_mut().checkerColor_light = self.guiState.checkerColor_light.into();
+						uploadFlag = true;
+					};
+					ui.label("even checkers");
+				});
+
 				if uploadFlag {
 					self.userColors.upload(player.context());
 					player.postRedraw();
