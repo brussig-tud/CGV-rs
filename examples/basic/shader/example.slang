@@ -21,10 +21,19 @@ import "cgv/math/field.slang";
 // Uniforms
 //
 
-// group(0): Viewing parameters.
+// group(0): Viewing parameters. Change often and are thus group(0).
 ParameterBlock<cgv::api::Viewing> viewing;
 
-// group(1): Material parameters (just a texture and its sampler in this simple example).
+// group(1): Visualization parameters. Are adjustable from the GUI and thus change from time to time, hence group(1).
+struct Colors {
+	float4 logoColor;
+	float4 bgColor;
+	float4 checkerColor_dark;
+	float4 checkerColor_light;
+};
+ParameterBlock<Colors> colors;
+
+// group(2): Material parameters (just a texture and its sampler in this simple example). Won't change, thus group(2).
 struct Texture {
 	Texture2D color;
 	SamplerState sampler;
@@ -87,12 +96,12 @@ func fragmentMain (vsOut: VSOutput) -> float4
 	// Checkerboard background
 	let checkers = cgv::math::field::Checkers<float, 2>::withInversePeriod(float2(16));
 	let bgColor = lerp(
-		/* dark checker: */float4(float3(5/6.), 1.)*vsOut.color,  /* white checker: */float4(1),
+		colors.checkerColor_dark*vsOut.color,  colors.checkerColor_light*vsOut.color,
 		/* checkers mask: */checkers.queryPreFiltered(vsOut.texcoord, (float mask) => fwidth(mask))
-    );
+	);
 
 	// Fetch and color texture samples
-	let texColor = float4(.0, .188, .365, 1.) * texture.color.Sample(texture.sampler, vsOut.texcoord);
+	let texColor = colors.logoColor * texture.color.Sample(texture.sampler, vsOut.texcoord);
 
 	// Mix solid part of color according to texture alpha
 	return float4(lerp(bgColor.rgb, texColor.rgb, texColor.a), bgColor.a);

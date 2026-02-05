@@ -20,6 +20,7 @@ use crate::*;
 // Classes
 //
 
+#[derive(Debug)]
 pub struct UniformGroup<UniformsStruct: Sized+Default> {
 	data: UniformsStruct,
 	buffer: wgpu::Buffer,

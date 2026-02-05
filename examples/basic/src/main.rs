@@ -115,6 +115,28 @@ impl HermiteNode
 
 
 ////
+// Our color data we'll send to the shader as a uniform block
+
+#[repr(C)]
+#[derive(Default, Debug, Copy, Clone)]
+pub struct UserColors
+{
+	/// The color of the CGV logo.
+	pub logoColor: glm::Vec4,
+
+	/// The color of the CGV logo.
+	pub backgroundColor: glm::Vec4,
+
+	/// The color of light checkers (visible where the CGV logo texture is not fully opaque).
+	pub checkerColor_light: glm::Vec4,
+
+	/// The color of dark checkers (visible where the CGV logo texture is not fully opaque).
+	pub checkerColor_dark: glm::Vec4
+}
+pub type UserColorsUniformGroup = cgv::hal::UniformGroup<UserColors>;
+
+
+////
 // ExampleApplication
 
 /// Factory function for our `ExampleApplication` defined right after. Regular functions with this signature implement
@@ -174,6 +196,17 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 		context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
 		cgv::hal::defaultMipmapping(), Some("ExBasic__TestTexture")
 	)?;
+
+
+	////
+	// Bind groups
+
+	// Colors uniform
+	let userColors = cgv::hal::UniformGroup::create(
+		context, wgpu::ShaderStages::FRAGMENT, Some("ExBasic__colorUniforms").as_deref()
+	);
+
+	// Texture uniform
 	static TEX_BINDGROUP_LAYOUT_ENTRIES: [wgpu::BindGroupLayoutEntry; 2] = [
 		wgpu::BindGroupLayoutEntry {
 			binding: 0,
@@ -225,19 +258,37 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 
 
 	////
+	// Initialize GUI state
+
+	let guiState = GuiState {
+		//logoColor: egui::ecolor::Color32::from()
+		..Default::default()
+	};
+
+
+	////
 	// Done!
 
 	// Construct the instance and put it in a box
 	Ok(Box::new(ExampleApplication {
-		shader, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState: Default::default(),
+		shader, userColors, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState,
 		pipelines: Vec::new(), // <- delayed, *CGV-rs* has a dedicated cycle for this as typically we don't have all
 	}))                        //    required information at this point, like viewport dimensions
 }
 
 #[derive(Default,Debug)]
 struct GuiState {
-	pub dummy_bool: bool,
-	pub dummy_float: f32
+	/// Proxy for [`UserColors::logoColor`].
+	pub logoColor: egui::ecolor::Color32,
+
+	/// Proxy for [`UserColors::backgroundColor`].
+	pub backgroundColor: egui::ecolor::Color32,
+
+	/// Proxy for [`UserColors::checkerColor_light`].
+	pub checkerColor_light: egui::ecolor::Color32,
+
+	/// Proxy for [`UserColors::checkerColor_dark`].
+	pub checkerColor_dark: egui::ecolor::Color32
 }
 
 #[derive(Debug)]
@@ -245,6 +296,7 @@ struct ExampleApplication
 {
 	// Rendering related
 	shader: wgpu::ShaderModule,
+	userColors: UserColorsUniformGroup,
 	texBindGroupLayout: wgpu::BindGroupLayout,
 	texBindGroup: wgpu::BindGroup,
 	pipelines: Vec<wgpu::RenderPipeline>,
@@ -267,7 +319,9 @@ impl ExampleApplication
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExBasic__RenderPipelineLayout"),
-				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing, &self.texBindGroupLayout],
+				bind_group_layouts: &[
+					&renderSetup.bindGroupLayouts().viewing, &self.userColors.bindGroupLayout, &self.texBindGroupLayout
+				],
 				push_constant_ranges: &[],
 			});
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -305,8 +359,18 @@ impl cgv::Application for ExampleApplication
 		"Basic Example App"
 	}
 
-	fn preInit (&mut self, _: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
-		// We don't have any pre-initialization to do
+	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()>
+	{
+		/* Chose initial values for our GUI-settable colors */ {
+			let colors = self.userColors.borrowData_mut();
+			colors.logoColor =          glm::vec4(  0.,  0.188, 0.365, 1.); // <- CGV blue
+			colors.backgroundColor =    glm::vec4(  1.,    1.,   1.,   0.);
+			colors.checkerColor_dark =  glm::vec4(5./6., 5./6., 5./6., 1.);
+			colors.checkerColor_light = glm::vec4(  1.,    1.,   1.,   1.);
+		}
+		self.userColors.upload(context);
+
+		// Done!
 		Ok(())
 	}
 
@@ -363,28 +427,44 @@ impl cgv::Application for ExampleApplication
 	{
 		renderPass.set_pipeline(&self.pipelines[0]);
 		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-		renderPass.set_bind_group(1, &self.texBindGroup, &[]);
+		renderPass.set_bind_group(1, &self.userColors.bindGroup, &[]);
+		renderPass.set_bind_group(2, &self.texBindGroup, &[]);
 		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
 		renderPass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
+	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
 	{
 		// Add the standard 2-column layout control grid
 		cgv::gui::layout::ControlTableLayouter::new(ui).layout(
 			ui, "Cgv.Ex.Basic",
 			|controlTable|
 			{
-				controlTable.add("check", |ui, _| ui.add(
-					egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool")
-				));
-				controlTable.add("dummy f32", |ui, _| ui.add(
-					egui::Slider::new(&mut self.guiState.dummy_float, 0.1..=100.)
-						.logarithmic(true)
-						.clamping(egui::SliderClamping::Always)
-				));
+				let mut uploadFlag = false;
+				if controlTable.add("Logo color", |ui, _|
+					ui.color_edit_button_srgba(&mut self.guiState.logoColor)
+				).changed() {
+					self.userColors.borrowData_mut().logoColor = glm::vec4(
+						self.guiState.logoColor.r() as f32/255., self.guiState.logoColor.g() as f32/255.,
+						self.guiState.logoColor.b() as f32/255., self.guiState.logoColor.a() as f32/255.
+					);
+					uploadFlag = true;
+				};
+				if controlTable.add("Background color", |ui, _|
+					ui.color_edit_button_srgba(&mut self.guiState.backgroundColor)
+				).changed() {
+					self.userColors.borrowData_mut().backgroundColor = glm::vec4(
+						self.guiState.backgroundColor.r() as f32/255., self.guiState.backgroundColor.g() as f32/255.,
+						self.guiState.backgroundColor.b() as f32/255., self.guiState.backgroundColor.a() as f32/255.
+					);
+					uploadFlag = true;
+				};
+				if uploadFlag {
+					self.userColors.upload(player.context());
+					player.postRedraw();
+				}
 			}
 		);
 	}
