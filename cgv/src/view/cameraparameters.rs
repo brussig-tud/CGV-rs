@@ -10,10 +10,11 @@
 // Egui library
 use egui;
 
+// CGV-rs components
+use cgv_util::math;
+
 // Local imports
-use crate::*;
-use crate::util::math;
-use crate::view::*;
+use crate::{*, view::*};
 
 
 
@@ -306,8 +307,7 @@ impl CameraParameters
 		let mut changed = false;
 
 		// UI for compound settings
-		let controlTable =
-		ui.vertical(|ui|
+		let controlTable = ui.vertical(|ui|
 		{
 			// Header
 			ui.label(egui::RichText::new("Compounds").underline());
