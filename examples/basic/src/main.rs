@@ -87,7 +87,7 @@ const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5
 //
 
 ////
-// HermiteNode
+// QuadVertex
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -119,16 +119,16 @@ impl QuadVertex
 pub struct UserColors
 {
 	/// The color of the CGV logo.
-	pub logoColor: egui::Rgba,
+	pub logo: egui::Rgba,
 
 	/// The color of the CGV logo.
-	pub backgroundColor: egui::Rgba,
+	pub background: egui::Rgba,
 
 	/// The color of light checkers (visible where the CGV logo texture is not fully opaque).
-	pub checkerColor_light: egui::Rgba,
+	pub oddCheckers: egui::Rgba,
 
 	/// The color of dark checkers (visible where the CGV logo texture is not fully opaque).
-	pub checkerColor_dark: egui::Rgba
+	pub evenCheckers: egui::Rgba
 }
 pub type UserColorsUniformGroup = cgv::hal::UniformGroup<UserColors>;
 
@@ -153,7 +153,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	// Vertex buffer
 	let vertexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
-			label: Some("ExBasic__HermiteNodes"),
+			label: Some("ExBasic__QuadVertices"),
 			contents: util::slicify(QUAD_VERTS),
 			usage: wgpu::BufferUsages::VERTEX
 		}
@@ -162,7 +162,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	// Index buffer
 	let indexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
-			label: Some("ExBasic__HermiteIndices"),
+			label: Some("ExBasic__QuadIndices"),
 			contents: util::slicify(INDICES),
 			usage: wgpu::BufferUsages::INDEX
 		}
@@ -199,7 +199,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	// Bind groups
 
 	// Colors uniform
-	let userColors = cgv::hal::UniformGroup::create(
+	let colorUniforms = cgv::hal::UniformGroup::create(
 		context, wgpu::ShaderStages::FRAGMENT, Some("ExBasic__colorUniforms").as_deref()
 	);
 
@@ -262,8 +262,8 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 			0, 120, 163, 255   // <- CGV blue in sRGB (linear  would be [0, 48, 94]
 		),
 		backgroundColor: egui::Color32::from_rgba_unmultiplied(255, 255, 255, 224),
-		checkerColor_dark: egui::Color32::from_rgba_premultiplied(213, 213, 213, 255),
-		checkerColor_light: egui::Color32::from_rgba_premultiplied(255, 255, 255, 255),
+		oddCheckersColor: egui::Color32::from_rgba_premultiplied(232, 232, 232, 255),
+		evenCheckersColor: egui::Color32::from_rgba_premultiplied(255, 255, 255, 255),
 		drawBackside: true
 	};
 
@@ -273,24 +273,24 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 
 	// Construct the instance and put it in a box
 	Ok(Box::new(ExampleApplication {
-		shader, userColors, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState,
+		shader, colorUniforms, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState,
 		pipelines: Vec::new(), // <- delayed, *CGV-rs* has a dedicated cycle for this as typically we don't have all
 	}))                        //    required information at this point, like viewport dimensions
 }
 
 #[derive(Default,Debug)]
 struct GuiState {
-	/// Proxy for [`UserColors::logoColor`].
+	/// Proxy for [`UserColors::logo`].
 	pub logoColor: egui::ecolor::Color32,
 
-	/// Proxy for [`UserColors::backgroundColor`].
+	/// Proxy for [`UserColors::background`].
 	pub backgroundColor: egui::ecolor::Color32,
 
-	/// Proxy for [`UserColors::checkerColor_light`].
-	pub checkerColor_light: egui::ecolor::Color32,
+	/// Proxy for [`UserColors::oddCheckers`].
+	pub oddCheckersColor: egui::ecolor::Color32,
 
-	/// Proxy for [`UserColors::checkerColor_dark`].
-	pub checkerColor_dark: egui::ecolor::Color32,
+	/// Proxy for [`UserColors::evenCheckers`].
+	pub evenCheckersColor: egui::ecolor::Color32,
 
 	/// Whether to draw the quad's backside (relative to the initial viewing direction)
 	pub drawBackside: bool
@@ -301,7 +301,7 @@ struct ExampleApplication
 {
 	// Rendering related
 	shader: wgpu::ShaderModule,
-	userColors: UserColorsUniformGroup,
+	colorUniforms: UserColorsUniformGroup,
 	texBindGroupLayout: wgpu::BindGroupLayout,
 	texBindGroup: wgpu::BindGroup,
 	pipelines: Vec<wgpu::RenderPipeline>,
@@ -325,7 +325,8 @@ impl ExampleApplication
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExBasic__RenderPipelineLayout"),
 				bind_group_layouts: &[
-					&renderSetup.bindGroupLayouts().viewing, &self.userColors.bindGroupLayout, &self.texBindGroupLayout
+					&renderSetup.bindGroupLayouts().viewing, &self.colorUniforms.bindGroupLayout,
+					&self.texBindGroupLayout
 				],
 				push_constant_ranges: &[],
 			});
@@ -367,12 +368,12 @@ impl cgv::Application for ExampleApplication
 	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()>
 	{
 		// Upload initial uniform values
-		let colors = self.userColors.borrowData_mut();
-		colors.logoColor = self.guiState.logoColor.into();
-		colors.backgroundColor = self.guiState.backgroundColor.into();
-		colors.checkerColor_dark = self.guiState.checkerColor_dark.into();
-		colors.checkerColor_light = self.guiState.checkerColor_light.into();
-		self.userColors.upload(context);
+		let colors = self.colorUniforms.borrowData_mut();
+		colors.logo = self.guiState.logoColor.into();
+		colors.background = self.guiState.backgroundColor.into();
+		colors.evenCheckers = self.guiState.oddCheckersColor.into();
+		colors.oddCheckers = self.guiState.evenCheckersColor.into();
+		self.colorUniforms.upload(context);
 
 		// Done!
 		Ok(())
@@ -431,7 +432,7 @@ impl cgv::Application for ExampleApplication
 	{
 		renderPass.set_pipeline(&self.pipelines[0]);
 		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-		renderPass.set_bind_group(1, &self.userColors.bindGroup, &[]);
+		renderPass.set_bind_group(1, &self.colorUniforms.bindGroup, &[]);
 		renderPass.set_bind_group(2, &self.texBindGroup, &[]);
 		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -444,42 +445,46 @@ impl cgv::Application for ExampleApplication
 		// Appearance section
 		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
 		{
+			// Mutable access to our color uniforms in case something changes
+			let colorUniforms = self.colorUniforms.borrowData_mut();
+
 			// Add the standard 2-column layout control grid
 			cgv::gui::layout::ControlTableLayouter::new(ui)
-			.layout(ui, "Cgv.Ex.Basic", |controlTable|
+			.layout(ui, "Cgv.Ex.Basic-color", |controlTable|
 			{
 				let mut uploadFlag = false;
 				controlTable.add("Logo colors", |ui, _| {
 					if ui.color_edit_button_srgba(&mut self.guiState.logoColor).changed() {
-						self.userColors.borrowData_mut().logoColor = self.guiState.logoColor.into();
+						colorUniforms.logo = self.guiState.logoColor.into();
 						uploadFlag = true;
 					}
 					ui.label("logo (foreground)");
 				});
 				controlTable.add("", |ui, _| {
 					if ui.color_edit_button_srgba(&mut self.guiState.backgroundColor).changed() {
-						self.userColors.borrowData_mut().backgroundColor = self.guiState.backgroundColor.into();
+						colorUniforms.background = self.guiState.backgroundColor.into();
 						uploadFlag = true;
 					};
 					ui.label("background");
 				});
 				controlTable.add("Canvas colors", |ui, _| {
-					if ui.color_edit_button_srgba(&mut self.guiState.checkerColor_dark).changed() {
-						self.userColors.borrowData_mut().checkerColor_dark = self.guiState.checkerColor_dark.into();
+					if ui.color_edit_button_srgba(&mut self.guiState.oddCheckersColor).changed() {
+						colorUniforms.evenCheckers = self.guiState.oddCheckersColor.into();
 						uploadFlag = true;
 					}
 					ui.label("odd checkers");
 				});
 				controlTable.add("", |ui, _| {
-					if ui.color_edit_button_srgba(&mut self.guiState.checkerColor_light).changed() {
-						self.userColors.borrowData_mut().checkerColor_light = self.guiState.checkerColor_light.into();
+					if ui.color_edit_button_srgba(&mut self.guiState.evenCheckersColor).changed() {
+						colorUniforms.oddCheckers = self.guiState.evenCheckersColor.into();
 						uploadFlag = true;
 					};
 					ui.label("even checkers");
 				});
 
+				// Upload new color values if something changed
 				if uploadFlag {
-					self.userColors.upload(player.context());
+					self.colorUniforms.upload(player.context());
 					player.postRedraw();
 				}
 			});
@@ -490,7 +495,7 @@ impl cgv::Application for ExampleApplication
 		{
 			// Add the standard 2-column layout control grid
 			cgv::gui::layout::ControlTableLayouter::new(ui)
-			.layout(ui, "Cgv.Ex.Basic", |controlTable| {
+			.layout(ui, "Cgv.Ex.Basic-render", |controlTable| {
 				controlTable.add("geometry", |ui, _| ui.add(
 					egui::Checkbox::new(&mut self.guiState.drawBackside, "draw backside")
 				))
