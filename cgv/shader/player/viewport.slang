@@ -42,5 +42,5 @@ func vertexMain (uint vertexID: SV_VertexID) -> ViewportGeometry {
 [shader("fragment")]
 func fragmentMain (vpIn: ViewportGeometry) -> float4 {
 	var srcUnpremultiplied: float4 = viewportSource.color.Sample(viewportSource.sampler, vpIn.uv);
-	return float4(srcUnpremultiplied.rgb * srcUnpremultiplied.a, srcUnpremultiplied.a);
+	return pow(float4(srcUnpremultiplied.rgb * srcUnpremultiplied.a, srcUnpremultiplied.a), 1/2.2); // transform to sRGB
 }
