@@ -436,12 +436,17 @@ impl cgv::Application for ExampleApplication
 		renderPass.set_bind_group(2, &self.texBindGroup, &[]);
 		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-		renderPass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+		renderPass.draw_indexed(
+			0..if self.guiState.drawBackside {10} else {4}, 0, 0..1
+		);
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
 	{
+		// Keep track of whether we need to redraw our scene contents
+		let mut redraw = false;
+
 		// Appearance section
 		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
 		{
@@ -485,7 +490,7 @@ impl cgv::Application for ExampleApplication
 				// Upload new color values if something changed
 				if uploadFlag {
 					self.colorUniforms.upload(player.context());
-					player.postRedraw();
+					redraw = true;
 				}
 			});
 		});
@@ -496,11 +501,16 @@ impl cgv::Application for ExampleApplication
 			// Add the standard 2-column layout control grid
 			cgv::gui::layout::ControlTableLayouter::new(ui)
 			.layout(ui, "Cgv.Ex.Basic-render", |controlTable| {
-				controlTable.add("geometry", |ui, _| ui.add(
+				redraw |= controlTable.add("geometry", |ui, _| ui.add(
 					egui::Checkbox::new(&mut self.guiState.drawBackside, "draw backside")
-				))
+				)).changed();
 			});
 		});
+
+		// Post a redraw request if necessary
+		if redraw {
+			player.postRedraw();
+		}
 	}
 }
 
