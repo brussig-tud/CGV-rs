@@ -4,15 +4,11 @@
 // Imports
 //
 
-// Interface with managed uniforms handled by CGV-rs.
-import "cgv/api/uniforms.slang";
-
-// Enable linear algebra mathematical operators (allows using `*` for matrix multiplication like in GLSL)
-import "cgv/lin/operators.slang";
-
-// Pull in convenience helpers
-import "cgv/common.slang";
-import "cgv/math/field.slang";
+// CGV-rs core shader library
+import "cgv/api/uniforms.slang";   // interface with managed uniforms handled by CGV-rs.
+import "cgv/lin/operators.slang";  // enable GLSL-style linear algebra mathematical operators
+import "cgv/color/blending.slang"; // alpha blending operators
+import "cgv/math/field.slang";     // contains the checkerboard pattern
 
 
 
@@ -26,10 +22,10 @@ ParameterBlock<cgv::api::Viewing> viewing;
 
 // group(1): Visualization parameters. Are adjustable from the GUI and thus change from time to time, hence group(1).
 struct Colors {
-	float4 logoColor;
-	float4 bgColor;
-	float4 checkerColor_dark;
-	float4 checkerColor_light;
+	float4 logo;
+	float4 bg;
+	float4 oddCheckers;
+	float4 evenCheckers;
 };
 ParameterBlock<Colors> colors;
 
@@ -95,15 +91,16 @@ func fragmentMain (vsOut: VSOutput) -> float4
 {
 	// Checkerboard background
 	let checkers = cgv::math::field::Checkers<float, 2>::withInversePeriod(float2(16));
-	let bgColor = lerp(
-		/* dark: */colors.checkerColor_dark*vsOut.color, /* light: */colors.checkerColor_light*vsOut.color,
+	let canvas = lerp(
+		/* dark: */colors.oddCheckers*vsOut.color, /* light: */colors.evenCheckers*vsOut.color,
 		/* selector: */checkers.queryPreFiltered(vsOut.texcoord, (float mask) => fwidth(mask))
 	);
 
-	// Fetch and color texture samples
-	let texSample = texture.color.Sample(texture.sampler, vsOut.texcoord);
-	let texColor = lerp(colors.bgColor, colors.logoColor*texSample, texSample.a);
+	// Fetch logo texture samples and color them according to user setting
+	let logo = lerp(
+		colors.bg, colors.logo,  /* selector: */texture.color.Sample(texture.sampler, vsOut.texcoord).a
+    );
 
-	// Mix solid part of color according to texture alpha
-	return float4(lerp(bgColor.rgb, texColor.rgb, texColor.a), bgColor.a);
+	// Blend logo over the canvas
+	return cgv::color::blend::over(canvas, logo);
 }

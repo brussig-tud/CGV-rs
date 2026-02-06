@@ -33,44 +33,44 @@ use cgv::{self, util};
 // Statics
 //
 
-const NODES: &[HermiteNode; 8] = &[
-	HermiteNode {
+const QUAD_VERTS: &[QuadVertex; 8] = &[
+	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(-1., 1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 0.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., 1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 0.)
 	},
 
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 1.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(-1., 1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(1., 0.)
 	},
-	HermiteNode {
+	QuadVertex {
 		pos: glm::Vec4::new(1., 1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
 		texcoord: glm::Vec2::new(0., 0.)
@@ -91,15 +91,12 @@ const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-struct HermiteNode
-{
+struct QuadVertex {
 	pos: glm::Vec4,
-	//tan: glm::Vec4,
 	color: glm::Vec4,
-	//radius: glm::Vec2,
 	texcoord: glm::Vec2
 }
-impl HermiteNode
+impl QuadVertex
 {
 	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
 		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
@@ -157,7 +154,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	let vertexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
 			label: Some("ExBasic__HermiteNodes"),
-			contents: util::slicify(NODES),
+			contents: util::slicify(QUAD_VERTS),
 			usage: wgpu::BufferUsages::VERTEX
 		}
 	);
@@ -266,7 +263,8 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 		),
 		backgroundColor: egui::Color32::from_rgba_unmultiplied(255, 255, 255, 224),
 		checkerColor_dark: egui::Color32::from_rgba_premultiplied(213, 213, 213, 255),
-		checkerColor_light: egui::Color32::from_rgba_premultiplied(255, 255, 255, 255)
+		checkerColor_light: egui::Color32::from_rgba_premultiplied(255, 255, 255, 255),
+		drawBackside: true
 	};
 
 
@@ -292,7 +290,10 @@ struct GuiState {
 	pub checkerColor_light: egui::ecolor::Color32,
 
 	/// Proxy for [`UserColors::checkerColor_dark`].
-	pub checkerColor_dark: egui::ecolor::Color32
+	pub checkerColor_dark: egui::ecolor::Color32,
+
+	/// Whether to draw the quad's backside (relative to the initial viewing direction)
+	pub drawBackside: bool
 }
 
 #[derive(Debug)]
@@ -334,7 +335,7 @@ impl ExampleApplication
 			vertex: wgpu::VertexState {
 				module: &self.shader,
 				entry_point: Some("vertexMain"), // Slang (for now) requires explicitly stating entry points
-				buffers: &[HermiteNode::layoutDesc()],
+				buffers: &[QuadVertex::layoutDesc()],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState {
@@ -440,9 +441,12 @@ impl cgv::Application for ExampleApplication
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
 	{
-		// Add the standard 2-column layout control grid
-		cgv::gui::layout::ControlTableLayouter::new(ui).layout(
-			ui, "Cgv.Ex.Basic", |controlTable|
+		// Appearance section
+		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
+		{
+			// Add the standard 2-column layout control grid
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+			.layout(ui, "Cgv.Ex.Basic", |controlTable|
 			{
 				let mut uploadFlag = false;
 				controlTable.add("Logo colors", |ui, _| {
@@ -478,8 +482,20 @@ impl cgv::Application for ExampleApplication
 					self.userColors.upload(player.context());
 					player.postRedraw();
 				}
-			}
-		);
+			});
+		});
+
+		// Rendering section
+		egui::CollapsingHeader::new("Rendering").default_open(true).show(ui, |ui|
+		{
+			// Add the standard 2-column layout control grid
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+			.layout(ui, "Cgv.Ex.Basic", |controlTable| {
+				controlTable.add("geometry", |ui, _| ui.add(
+					egui::Checkbox::new(&mut self.guiState.drawBackside, "draw backside")
+				))
+			});
+		});
 	}
 }
 
