@@ -35,7 +35,6 @@ public interface IField<Real: __BuiltinFloatingPointType, int Dims>
 	public func query (in q: vector<Real, Dims>)->Real;
 
 	///
-	[ForceInline]
 	public func queryPreFiltered (in q: vector<Real, Dims>, filter: IFunc<Real, Real>) -> Real {
 		return query(q);
 	}
@@ -57,7 +56,6 @@ public interface IPeriodicField<Real : __BuiltinFloatingPointType, int Dims> : I
 	public static func withPeriod (in const period: vector<Real, Dims>) -> Self;
 
 	///
-	[ForceInline]
 	public static func withInversePeriod (in const invPeriod: vector<Real, Dims>) -> Self {
 		return withPeriod(Real(1)/invPeriod);
 	}
@@ -90,17 +88,14 @@ public struct Checkers<Real : __BuiltinFloatingPointType, uint Dims> : IPeriodic
 
 	public Vec invPeriod;
 
-	[ForceInline]
 	override static func withPeriod (in const period: vector<Real, Dims>) -> Self {
 		return withInversePeriod(Real(1)/period);
 	}
 
-	[ForceInline]
 	override static func withInversePeriod (in const invPeriod: vector<Real, Dims>) -> Self {
 		return Checkers<Real, Dims>(invPeriod);
 	}
 
-	[ForceInline]
 	func queryNormalized (in qNorm: Vec) -> Real
 	{
 		// Calculate if inside a "black" square by counting the number of even components. The logic behind it is that
@@ -163,7 +158,6 @@ public struct Checkers<Real : __BuiltinFloatingPointType, uint Dims> : IPeriodic
 		return mask;
 	}
 
-	[ForceInline]
 	__init (Vec invPeriod) {
 		this.invPeriod = invPeriod;
 	}
