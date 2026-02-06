@@ -23,7 +23,7 @@ struct ViewportGeometry {
 // Vertex shader
 
 /// Viewport-covering clip-space vertices
-static const var vpVertices: ViewportGeometry[] = {
+static constexpr let vpVertices: ViewportGeometry[] = {
 	{float4(-1,-1, 0, 1), float2(0, 1)}, {float4(1,-1, 0, 1), float2(1, 1)},
 	{float4(-1, 1, 0, 1), float2(0, 0)}, {float4(1, 1, 0, 1), float2(1, 0)}
 };
