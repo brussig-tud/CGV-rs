@@ -259,10 +259,10 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 
 	let guiState = GuiState {
 		logoColor: egui::Color32::from_rgba_premultiplied(
-			0, 120, 163, 255   // <- CGV blue in sRGB (linear  would be [0, 48, 94]
+			0, 48, 94, 255   // <- CGV blue in sRGB (linear  would be [0, 7.54, 28.55]
 		),
-		backgroundColor: egui::Color32::from_rgba_unmultiplied(255, 255, 255, 224),
-		oddCheckersColor: egui::Color32::from_rgba_premultiplied(232, 232, 232, 255),
+		backgroundColor: egui::Color32::from_rgba_unmultiplied(255, 255, 255, 166),
+		oddCheckersColor: egui::Color32::from_rgba_premultiplied(144, 144, 144, 255),
 		evenCheckersColor: egui::Color32::from_rgba_premultiplied(255, 255, 255, 255),
 		drawBackside: true
 	};
