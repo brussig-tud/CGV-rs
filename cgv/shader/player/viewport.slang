@@ -2,11 +2,16 @@
 ////
 // Uniforms
 
+/// The incoming viewport image
 struct ViewportSource {
 	Texture2D color;
 	SamplerState sampler;
 };
 ParameterBlock<ViewportSource> viewportSource;
+
+/// The global gamma values
+ParameterBlock<float3> gamma;
+
 
 
 ////
@@ -41,6 +46,9 @@ func vertexMain (uint vertexID: SV_VertexID) -> ViewportGeometry {
 /// Fragment shader entry point
 [shader("fragment")]
 func fragmentMain (vpIn: ViewportGeometry) -> float4 {
-	var srcUnpremultiplied: float4 = viewportSource.color.Sample(viewportSource.sampler, vpIn.uv);
-	return pow(float4(srcUnpremultiplied.rgb * srcUnpremultiplied.a, srcUnpremultiplied.a), 1/2.2); // transform to sRGB
+	let unpremultiplied: float4 = viewportSource.color.Sample(viewportSource.sampler, vpIn.uv);
+	return float4(
+		pow(unpremultiplied.rgb * unpremultiplied.a, gamma), // pre-multiply and transform to sRGB
+		unpremultiplied.a
+	);
 }

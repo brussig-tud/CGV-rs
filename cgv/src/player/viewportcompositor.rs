@@ -23,6 +23,9 @@ use crate::*;
 /// A helper handling the final compositing of the rendered scene onto the egui viewport panel.
 pub(crate) struct ViewportCompositor
 {
+	pub(crate) invGamma_all: f32,
+	pub(crate) invGamma: glm::Vec3,
+	pub(crate) gammaUniform: hal::UniformGroup<glm::Vec3>,
 	texBindGroupName: Option<String>,
 	sampler: wgpu::Sampler,
 	texBindGroupLayout: wgpu::BindGroupLayout,
@@ -34,6 +37,14 @@ impl ViewportCompositor
 	pub fn new (context: &Context, renderSetup: &RenderSetup, source: &hal::Texture, name: Option<&str>) -> Result<Self>
 	{
 		let name = name.map(String::from);
+
+		let invGamma_all = 2.2;
+		let invGamma = glm::Vec3::from_element(invGamma_all);
+		let gammaUniform = hal::UniformGroup::create(
+			context, wgpu::ShaderStages::FRAGMENT, util::concatIfSome(&name, "_gammaUniform").as_deref()
+		);
+		*gammaUniform.borrowData_mut() = invGamma.map(|c| 1./c);
+		gammaUniform.upload(context);
 
 		let shader = shader::Package::deserialize(
 			util::sourceGeneratedBytes!("/shader/player/viewport.spk")
@@ -97,7 +108,7 @@ impl ViewportCompositor
 
 		let pipelineLayout = context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: util::concatIfSome(&name, "_pipelineLayout").as_deref(),
-			bind_group_layouts: &[&texBindGroupLayout],
+			bind_group_layouts: &[&texBindGroupLayout, &gammaUniform.bindGroupLayout],
 			push_constant_ranges: &[],
 		});
 
@@ -131,7 +142,7 @@ impl ViewportCompositor
 			cache: None,
 		});
 
-		Ok(Self { texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline })
+		Ok(Self { invGamma_all, invGamma, gammaUniform, texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline })
 	}
 
 	pub fn updateSource (&mut self, context: &Context, source: &hal::Texture)
@@ -155,6 +166,7 @@ impl ViewportCompositor
 	pub fn composit (&self, renderPass: &mut wgpu::RenderPass) {
 		renderPass.set_pipeline(&self.pipeline);
 		renderPass.set_bind_group(0, &self.texBindGroup, &[]);
+		renderPass.set_bind_group(1, &self.gammaUniform.bindGroup, &[]);
 		renderPass.draw(0..4, 0..1);
 	}
 }

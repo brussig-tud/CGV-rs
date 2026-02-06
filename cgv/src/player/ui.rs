@@ -8,8 +8,7 @@
 use egui;
 
 // Local imports
-use crate::*;
-use crate::view::CameraParameters;
+use crate::{*, view::CameraParameters};
 
 
 
@@ -155,17 +154,15 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 	ui.centered_and_justified(|ui| ui.heading("▶ Player"));
 	ui.separator();
 
-	// Player control flow configuration
-	egui::CollapsingHeader::new("Control flow")
-		.id_salt("CGV__player_control")
-		.default_open(true)
+	// Player main loop configuration
+	egui::CollapsingHeader::new("Main loop").id_salt("CGV__player_loop").default_open(true)
 		.show(ui, |ui| gui::layout::ControlTableLayouter::new(ui).layout(
-			ui, "CGV__player_control_layout", |ui|
+			ui, "CGV__player_loop_layout", |controlTable|
 			{
-				ui.add("Instant redraw",|ui, _idealSize|
+				controlTable.add("Instant redraw", |ui, _idealSize|
 					ui.label(format!("{} requests", player.continousRedrawRequests))
 				);
-				ui.add("force:", |ui, _|
+				controlTable.add("force:", |ui, _|
 					if ui.add(gui::widget::toggle(&mut player.userInstantRedraw)).clicked() {
 						if player.userInstantRedraw {
 							player.pushContinuousRedrawRequest();
@@ -175,6 +172,53 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 						}
 					}
 				)
+			}
+		)
+	);
+
+	// Main viewport configuration
+	egui::CollapsingHeader::new("Main view").id_salt("CGV__player_viewp").default_open(true)
+		.show(ui, |ui| gui::layout::ControlTableLayouter::new(ui).layout(
+			ui, "CGV__player_viewp_layout", |controlTable|
+			{
+				const GAMMA_RANGE: core::ops::RangeInclusive<f32> = 0.25..=7.5;
+				let mut changed = false;
+				controlTable.add("Gamma", |ui, idealSize| {
+					// --- prepare box dimensions -------
+					let itemSpacing = ui.spacing().item_spacing.x;
+					let boxSize = egui::vec2(
+						(idealSize-7.*itemSpacing)/3., ui.style().spacing.interact_size.y
+					);
+					// --- add UI -----------------------
+					ui.horizontal(|ui| {
+						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+						ui.add_space(-2.); ui.label("R"); ui.add_space(-5.);
+						changed |= ui.add_sized(boxSize, egui::DragValue::new(
+							&mut player.viewportCompositor.invGamma.x
+						).range(GAMMA_RANGE).speed(0.025)).changed();
+						ui.label("G"); ui.add_space(-5.);
+						changed |= ui.add_sized(boxSize, egui::DragValue::new(
+							&mut player.viewportCompositor.invGamma.y
+						).range(GAMMA_RANGE).speed(0.025)).changed();
+						ui.label("B"); ui.add_space(-5.);
+						changed |= ui.add_sized(boxSize, egui::DragValue::new(
+							&mut player.viewportCompositor.invGamma.z
+						).range(GAMMA_RANGE).speed(0.025)).changed();
+					})
+				});
+				controlTable.add("all", |ui, _| {
+					if ui.add(egui::Slider::new(&mut player.viewportCompositor.invGamma_all, GAMMA_RANGE)).changed() {
+						player.viewportCompositor.invGamma = glm::Vec3::from_element(
+							player.viewportCompositor.invGamma_all
+						);
+						changed = true;
+					};
+				});
+				if changed {
+					*player.viewportCompositor.gammaUniform.borrowData_mut() =
+						player.viewportCompositor.invGamma.map(|c| 1./c);
+					player.viewportCompositor.gammaUniform.upload(player.context())
+				}
 			}
 		)
 	);
@@ -219,12 +263,10 @@ pub(crate) fn view (player: &mut Player, ui: &mut egui::Ui)
 
 	// Settings from active camera and interactor
 	ui.add_space(6.);
-	egui::CollapsingHeader::new("Interactor settings")
-		.id_salt("CGV_view_inter_s")
+	egui::CollapsingHeader::new("Interactor settings").id_salt("CGV_view_inter_s")
 		.show(ui, |ui| player.cameraInteractors[player.activeCameraInteractor].ui(
 			player.camera.as_mut(), ui
 		));
-	egui::CollapsingHeader::new("Active camera settings")
-		.id_salt("CGV_view_act_s")
+	egui::CollapsingHeader::new("Active camera settings").id_salt("CGV_view_act_s")
 		.show(ui, |ui| CameraParameters::ui(player.camera.as_mut(), ui));
 }
