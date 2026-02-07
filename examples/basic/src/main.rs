@@ -507,9 +507,9 @@ impl cgv::Application for ExampleApplication
 			});
 		});
 
-		// Post a redraw request if necessary
+		// Make sure the scene will get re-rendered in the current draw pass
 		if redraw {
-			player.postRedraw();
+			player.requireRedraw();
 		}
 	}
 }
