@@ -181,43 +181,69 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 		.show(ui, |ui| gui::layout::ControlTableLayouter::new(ui).layout(
 			ui, "CGV__player_viewp_layout", |controlTable|
 			{
+				controlTable.add("Clear values", |ui, _| ui.horizontal(|ui|
+				{
+					if ui.color_edit_button_srgba(&mut player.defaultClearColor).changed() {
+						let rgba: egui::Rgba = player.defaultClearColor.into();
+						player.renderSetup.defaultClearColor.r = rgba.r() as f64;
+						player.renderSetup.defaultClearColor.g = rgba.g() as f64;
+						player.renderSetup.defaultClearColor.b = rgba.b() as f64;
+						player.renderSetup.defaultClearColor.a = rgba.a() as f64;
+						player.camera.onRenderSetupChange(&player.renderSetup);
+						player.requireSceneRedraw();
+					}
+					ui.add_space(-5.); ui.label("Color");
+					ui.add_space(8.);
+					if ui.add(egui::DragValue::new(
+						&mut player.renderSetup.defaultDepthClearValue
+					).range(0f32..=1.).speed(0.0009765625).max_decimals(3)).changed() {
+						player.camera.onRenderSetupChange(&player.renderSetup);
+						player.requireSceneRedraw();
+					}
+					ui.add_space(-4.); ui.label("Depth");
+				}));
 				const GAMMA_RANGE: core::ops::RangeInclusive<f32> = 0.25..=7.5;
-				let mut changed = false;
-				controlTable.add("Gamma", |ui, idealSize| {
-					// --- prepare box dimensions -------
-					let itemSpacing = ui.spacing().item_spacing.x;
-					let boxSize = egui::vec2(
-						(idealSize-7.*itemSpacing)/3., ui.style().spacing.interact_size.y
-					);
-					// --- add UI -----------------------
-					ui.horizontal(|ui| {
-						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-						ui.add_space(-2.); ui.label("R"); ui.add_space(-5.);
-						changed |= ui.add_sized(boxSize, egui::DragValue::new(
-							&mut player.viewportCompositor.invGamma.x
-						).range(GAMMA_RANGE).speed(0.025)).changed();
-						ui.label("G"); ui.add_space(-5.);
-						changed |= ui.add_sized(boxSize, egui::DragValue::new(
-							&mut player.viewportCompositor.invGamma.y
-						).range(GAMMA_RANGE).speed(0.025)).changed();
-						ui.label("B"); ui.add_space(-5.);
-						changed |= ui.add_sized(boxSize, egui::DragValue::new(
-							&mut player.viewportCompositor.invGamma.z
-						).range(GAMMA_RANGE).speed(0.025)).changed();
-					})
-				});
-				controlTable.add("all", |ui, _| {
+				let mut gammaChanged = false;
+				controlTable.add("Gamma", |ui, _| ui.horizontal(|ui| {
+					ui.add_space(1.);
 					if ui.add(egui::Slider::new(&mut player.viewportCompositor.invGamma_all, GAMMA_RANGE)).changed() {
 						player.viewportCompositor.invGamma = glm::Vec3::from_element(
 							player.viewportCompositor.invGamma_all
 						);
-						changed = true;
+						gammaChanged = true;
 					};
+				}));
+				controlTable.add("", |ui, idealSize|
+				{
+					// --- prepare box dimensions -------
+					let itemSpacing = ui.spacing().item_spacing.x;
+					let boxSize = egui::vec2(
+						(idealSize-7.5*itemSpacing)/3., ui.style().spacing.interact_size.y
+					);
+					// --- add controls -----------------
+					ui.horizontal(|ui|
+					{
+						ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+						ui.label("R"); ui.add_space(-5.);
+						gammaChanged |= ui.add_sized(boxSize, egui::DragValue::new(
+							&mut player.viewportCompositor.invGamma.x
+						).range(GAMMA_RANGE).speed(0.025)).changed();
+						ui.add_space(1.); ui.label("G"); ui.add_space(-5.);
+						gammaChanged |= ui.add_sized(boxSize, egui::DragValue::new(
+							&mut player.viewportCompositor.invGamma.y
+						).range(GAMMA_RANGE).speed(0.025)).changed();
+						ui.add_space(1.); ui.label("B"); ui.add_space(-5.);
+						gammaChanged |= ui.add_sized(boxSize, egui::DragValue::new(
+							&mut player.viewportCompositor.invGamma.z
+						).range(GAMMA_RANGE).speed(0.025)).changed();
+					})
 				});
-				if changed {
+				if gammaChanged {
 					*player.viewportCompositor.gammaUniform.borrowData_mut() =
 						player.viewportCompositor.invGamma.map(|c| 1./c);
 					player.viewportCompositor.gammaUniform.upload(player.context())
+					// We actually don't need a `player.requireRedraw()` as viewport compositing will happen regardless;
+					// final gamma is not a property of the 3D scene.
 				}
 			}
 		)

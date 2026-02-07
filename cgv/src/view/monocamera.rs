@@ -26,13 +26,27 @@ pub struct MonoCamera<'own> {
 	name: String,
 	framebuffer: &'own hal::Framebuffer,
 	renderState: Box<RenderState>,
+	defaultClearColor: wgpu::Color, // <- cached default clear color (we need it to be able to undo overrides)
 	globalPasses: Vec<GlobalPassDeclaration<'own>>,
 	parameters: CameraParameters,
 	dirty: bool
 }
-
 impl MonoCamera<'_>
 {
+	fn declareRenderPasses<'rs> (renderSetup: &RenderSetup, renderState: &'static RenderState)
+		-> Vec<GlobalPassDeclaration<'rs>>
+	{
+		vec![GlobalPassDeclaration {
+			info: GlobalPassInfo {
+				pass: GlobalPass::Simple,
+				renderState: &renderState,
+				clearColor: *renderSetup.defaultClearColor(),
+				depthClearValue: renderSetup.defaultDepthClearValue(),
+			},
+			completionCallback: None,
+		}]
+	}
+
 	pub fn new (
 		context: &Context, renderSetup: &RenderSetup, resolution: glm::UVec2, colorFormat: wgpu::TextureFormat,
 		depthStencilFormat: hal::DepthStencilFormat, name: Option<&str>
@@ -55,17 +69,9 @@ impl MonoCamera<'_>
 
 		// Construct
 		Self {
-			name,
+			name, defaultClearColor: *renderSetup.defaultClearColor(),
 			framebuffer: util::statify(&renderState.framebuffer),
-			globalPasses: vec![GlobalPassDeclaration {
-				info: GlobalPassInfo {
-					pass: GlobalPass::Simple,
-					renderState: util::statify(&renderState),
-					clearColor: *renderSetup.defaultClearColor(),
-					depthClearValue: renderSetup.defaultDepthClearValue(),
-				},
-				completionCallback: None,
-			}],
+			globalPasses: Self::declareRenderPasses(renderSetup, util::statify(&renderState)),
 			renderState,
 			parameters: CameraParameters::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
 			dirty: true
@@ -89,12 +95,6 @@ impl Camera for MonoCamera<'_>
 		&self.renderState.viewingUniforms.borrowData().view
 	}
 
-	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
-		self.renderState.framebuffer.resize(context, viewportDims);
-		self.parameters.intrinsics.aspect = viewportDims.x as f32 / viewportDims.y as f32;
-		self.dirty = true;
-	}
-
 	fn parameters (&self) -> &CameraParameters {
 		&self.parameters
 	}
@@ -102,6 +102,35 @@ impl Camera for MonoCamera<'_>
 	fn parameters_mut (&mut self) -> &mut CameraParameters {
 		self.dirty = true;
 		&mut self.parameters
+	}
+
+	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup) {
+		self.globalPasses[0].info.clearColor = *renderSetup.defaultClearColor();
+		self.globalPasses = Self::declareRenderPasses(renderSetup, util::statify(&self.renderState));
+	}
+
+	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
+		self.renderState.framebuffer.resize(context, viewportDims);
+		self.parameters.intrinsics.aspect = viewportDims.x as f32 / viewportDims.y as f32;
+		self.dirty = true;
+	}
+
+	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassDeclaration]>, clearColor: Option<wgpu::Color>)
+	{
+		// Sanity-check that the indicated provided global pass declaration actually belongs to us
+		if let Some(passes) = passes {
+			let reqPtr = passes[0] as *const GlobalPassDeclaration;
+			let ourPtr = &self.globalPasses[0] as *const GlobalPassDeclaration;
+			if passes.len() > 1 || reqPtr != ourPtr {
+				panic!("FATAL: overrideClearColor received a reference to a pass we don't own!");
+			}
+		}
+		if let Some(clearColor) = clearColor {
+			self.globalPasses[0].info.clearColor = clearColor;
+		}
+		else {
+			self.globalPasses[0].info.clearColor = self.defaultClearColor;
+		}
 	}
 
 	fn update (&mut self) -> bool
@@ -139,7 +168,7 @@ impl Camera for MonoCamera<'_>
 		}
 	}
 
-	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration<'_>] {
+	fn globalPasses (&self) -> &[GlobalPassDeclaration<'_>] {
 		self.globalPasses.as_slice()
 	}
 	fn framebuffer (&self) -> &hal::Framebuffer {

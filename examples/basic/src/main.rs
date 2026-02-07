@@ -509,7 +509,7 @@ impl cgv::Application for ExampleApplication
 
 		// Make sure the scene will get re-rendered in the current draw pass
 		if redraw {
-			player.requireRedraw();
+			player.requireSceneRedraw();
 		}
 	}
 }

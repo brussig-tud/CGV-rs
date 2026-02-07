@@ -254,7 +254,7 @@ pub trait Camera
 	/// # Arguments
 	///
 	/// * `pass` – The declaration of the global pass the [`Player`] requires the projection matrix for. The [`Player`]
-	///            will only ever query matrices for passes the camera [declared itself](Camera::declareGlobalPasses).
+	///            will only ever query matrices for passes the camera [declared itself](Camera::globalPasses).
 	fn projection (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
 
 	/// Get the projection matrix that is effective at the given pixel coordinates.
@@ -265,7 +265,7 @@ pub trait Camera
 	/// # Arguments
 	///
 	/// * `pass` – The declaration of the global pass the [`Player`] requires the view matrix for. The [`Player`] will
-	///            only ever query matrices for passes the camera [declared itself](Camera::declareGlobalPasses).
+	///            only ever query matrices for passes the camera [declared itself](Camera::globalPasses).
 	fn view (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
 
 	/// Get the view matrix that is effective at the given pixel coordinates.
@@ -278,6 +278,10 @@ pub trait Camera
 	/// have changed when the borrow expires and take appropriate measures to mark their internal state as dirty.
 	fn parameters_mut (&mut self) -> &mut CameraParameters;
 
+	/// Notify the camera that the render setup has changed (e.g. because the user changed a default value in the player
+	/// settings).
+	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup);
+
 	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
 	/// cameras which are *inactive* as far as the [`Player`] is concerned, resizing is the responsibility of the
@@ -289,15 +293,32 @@ pub trait Camera
 	/// * `viewportDims` – The dimensions of the viewport the camera should produce images for.
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2);
 
+	/// Indicate that the camera should use a specific clear color overriding the current
+	/// [render setup](onRenderSetupChange) until further notice.
+	///
+	/// # Arguments
+	///
+	/// * `passes` – The declaration of the global pass to override the clear color for. The caller should only ever
+	///              reference passes here that the camera [declared itself](Camera::globalPasses).
+	///              ←**TODO: come up with a better solution.**<br/>
+	///              Passing `None` will install the clear color override on all passes.
+	/// * `clearColor` – The clear color to use. Providing `None` removes the override. Typically the camera will then
+	///                  fall back to whatever the current [render setup](Camera::onRenderSetupChange) defines.
+	///
+	/// # Panics
+	///
+	/// Implementations may panic if `passes` references a pass the camera does not know about.
+	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassDeclaration]>, clearColor: Option<wgpu::Color>);
+
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
 	/// transformation matrices or anything else it might need to provide [render state](RenderState) to the
-	/// [global passes over the scene](Camera::declareGlobalPasses) it declared. The framework guarantees that the
+	/// [global passes over the scene](Camera::globalPasses) it declared. The framework guarantees that the
 	/// *active* camera will get this method called at least once before any rendering. For manually managed cameras
 	/// which are *inactive* as far as the [`Player`] is concerned, the [`Application`] is responsible for updating.
 	fn update (&mut self) -> bool;
 
-	/// Make the camera declare the global passes it needs to perform to produce its output image.
-	fn declareGlobalPasses (&self) -> &[GlobalPassDeclaration<'_>];
+	/// Reference the global passes that the camera needs to perform to produce its output image(s).
+	fn globalPasses(&self) -> &[GlobalPassDeclaration<'_>];
 
 	/// Reference the framebuffer containing the rendering of the scene acquired by the camera.
 	fn framebuffer (&self) -> &hal::Framebuffer;
@@ -359,6 +380,7 @@ pub trait CameraInteractor
 	/// The [outcome](EventOutcome) of the event processing.
 	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome;
 
+	///
 	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
 }
 

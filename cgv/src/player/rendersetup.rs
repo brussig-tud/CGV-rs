@@ -21,13 +21,16 @@ use crate::player::*;
 /// need in order to interface with the managed [render passes](GlobalPassInfo) over the scene.
 pub struct RenderSetup
 {
+	// Relevant for pipeline construction
 	surfaceFormat: wgpu::TextureFormat,
 	defaultColorFormat: wgpu::TextureFormat,
 	defaultDepthStencilFormat: wgpu::TextureFormat,
-	defaultClearColor: wgpu::Color,
-	defaultDepthClearValue: f32,
 	defaultDepthCompare: wgpu::CompareFunction,
-	bindGroupLayouts: ManagedBindGroupLayouts
+	bindGroupLayouts: ManagedBindGroupLayouts,
+
+	// Relevant for renderpasses 
+	pub(crate) defaultClearColor: wgpu::Color,
+	pub(crate) defaultDepthClearValue: f32
 }
 impl RenderSetup
 {

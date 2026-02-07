@@ -182,13 +182,13 @@ pub struct Player
 
 	egui: egui::Context,
 	context: Context,
-	renderSetup: RenderSetup,
+	pub(crate) renderSetup: RenderSetup,
+	pub(crate) defaultClearColor: egui::Color32,
 	prevFramebufferResolution: glm::UVec2,
 
 	viewportCompositor: ViewportCompositor,
 
 	camera: Box<dyn Camera>,
-	globalPasses: &'static [GlobalPassDeclaration<'static>],
 
 	cameraInteractors: Vec<Box<dyn CameraInteractor>>,
 	activeCameraInteractor: usize,
@@ -235,18 +235,22 @@ impl Player
 		let context = Context::new(eguiRs);
 
 		// Log render setup
+		let defaultClearColor = egui::Rgba::from_rgb(0.0707, 0.217, 0.457);
 		let renderSetup = RenderSetup::new(
 			&context, eguiRs.target_format, eguiRs.target_format, hal::DepthStencilFormat::D32,
-			wgpu::Color{r: 0.3, g: 0.5, b: 0.7, a: 1.}, 1.,
-			wgpu::CompareFunction::Less
+			wgpu::Color{
+				r: defaultClearColor.r() as f64, g: defaultClearColor.g() as f64,
+				b: defaultClearColor.b() as f64, a: defaultClearColor.a() as f64
+			},
+			1., wgpu::CompareFunction::Less
 		);
+		let defaultClearColor = defaultClearColor.into();
 
 		// Create stateful rendering components
 		let camera = Box::new(view::MonoCamera::new(
 			&context, &renderSetup, glm::vec2(2, 2), renderSetup.defaultColorFormat(),
 			renderSetup.defaultDepthStencilFormat().into(), Some("MonoCamera0")
 		));
-		let globalPasses = util::statify(&camera).declareGlobalPasses();
 		let viewportCompositor = ViewportCompositor::new(
 			&context, &renderSetup, camera.framebuffer().color0(), Some("CGV__MainViewportCompositor")
 		)?;
@@ -258,12 +262,11 @@ impl Player
 
 			context,
 			renderSetup,
+			defaultClearColor,
 
 			prevFramebufferResolution: glm::vec2(0u32, 0u32),
 
 			camera,
-			globalPasses,
-
 			cameraInteractors: vec![Box::new(view::OrbitInteractor::new()), Box::new(view::WASDInteractor::new())],
 			activeCameraInteractor: 0,
 
@@ -290,7 +293,7 @@ impl Player
 		activeApplication.preInit(player.context(), player_ref)?;
 		activeApplication.recreatePipelines(
 			&player.context, &player.renderSetup,
-			Self::extractInfoFromGlobalPassDeclarations(player.globalPasses).as_slice(), player_ref
+			Self::extractInfoFromGlobalPassDeclarations(player.camera.globalPasses()).as_slice(), player_ref
 		);
 		activeApplication.postInit(player.context(), player_ref)?;
 		player.activeApplication = Some(activeApplication);
@@ -654,10 +657,11 @@ impl Player
 		// Make all global passes needed by the active camera
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let cameraName = self.camera.name();
-		for passNr in 0..self.globalPasses.len()
+		let globalPasses = self.camera.globalPasses();
+		for passNr in 0..globalPasses.len()
 		{
 			// Get actual pass information
-			let pass = &self.globalPasses[passNr];
+			let pass = &globalPasses[passNr];
 			let renderState = util::mutify(pass.info.renderState);
 			tracing::debug!("Camera[{:?}]: Preparing global pass #{passNr} ({:?})", cameraName, pass.info.pass);
 
@@ -705,10 +709,11 @@ impl Player
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let mut cmdEncoder = self.context.device().create_command_encoder(&Default::default());
 		let cameraName = self.camera.name();
-		for passNr in 0..self.globalPasses.len()
+		let globalPasses = self.camera.globalPasses();
+		for passNr in 0..globalPasses.len()
 		{
 			// Get actual pass information
-			let pass = &self.globalPasses[passNr];
+			let pass = &globalPasses[passNr];
 			let renderState = util::mutify(pass.info.renderState);
 
 			/* Update managed render state */ {
@@ -808,14 +813,21 @@ impl Player
 		}
 	}
 
+	/// **TODO:** Highlight differences between this and [`Self::postRedraw`].
+	pub fn requireSceneRedraw (&self) {
+		unsafe {
+			// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
+			#[allow(invalid_reference_casting)]
+			std::ptr::write_volatile(&self.pendingRedraw as *const bool as *mut bool, true)
+		}
+	}
+
+	/// **TODO:** Highlight differences between this and [`Self::requireSceneRedraw`].
 	pub fn postRedraw (&self)
 	{
-		if self.continousRedrawRequests < 1
-		{
-			// Cause cameras to be redrawn instead of just the GUI
-			unsafe { #[allow(invalid_reference_casting)] std::ptr::write_volatile(
-				&self.pendingRedraw as *const bool as *mut bool, true
-			)}
+		if self.continousRedrawRequests < 1 {
+			// Make sure the cameras are redrawn also (otherwise just the GUI might get redrawn)
+			self.requireSceneRedraw();
 
 			// Tell Egui to start drawing immediately
 			self.egui.request_repaint();
