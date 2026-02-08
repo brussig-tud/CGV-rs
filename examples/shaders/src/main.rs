@@ -178,10 +178,13 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 		)?
 	};
 	// - step 4: load a module that provides the `instantiateGlyph` function that our "sdf_demo.slang" module expects
+	let userShaderCode =
+		"import \"lib/glyph.slang\"; \
+		export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
+	.to_string();
 	tracing::info!("Preparing shader: generating specialization module 'glyphProvider'");
 	let instantiateCircleModule = slangCtx.compileFromNamedSource(
-		"glyph_provider",
-		"import \"lib/glyph.slang\"; export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
+		"glyph_provider", &userShaderCode
 	)?;
 	// - step 5: link into usable program
 	tracing::info!("Preparing shader: linking final program");
@@ -208,14 +211,13 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 
 	// Construct the instance and put it in a box
 	Ok(Box::new(OnlineShadersDemo {
-		shader, pipelines: Vec::new(), vertexBuffer, indexBuffer, guiState: Default::default()
+		shader, pipelines: Vec::new(), vertexBuffer, indexBuffer, userShaderCode, guiState: Default::default()
 	}))
 }
 
 #[derive(Default,Debug)]
 struct GuiState {
-	pub dummy_bool: bool,
-	pub dummy_float: f32
+	pub showEditor: bool
 }
 
 #[derive(Debug)]
@@ -226,6 +228,9 @@ struct OnlineShadersDemo
 	pipelines: Vec<wgpu::RenderPipeline>,
 	vertexBuffer: wgpu::Buffer,
 	indexBuffer: wgpu::Buffer,
+
+	// The user shader
+	userShaderCode: String,
 
 	// GUI-controllable state
 	guiState: GuiState
@@ -347,21 +352,21 @@ impl cgv::Application for OnlineShadersDemo
 
 	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
 	{
-		// Add the standard 2-column layout control grid
-		cgv::gui::layout::ControlTableLayouter::new(ui).layout(
-			ui, "Cgv.Ex.Shaders",
-			|controlTable|
-			{
-				controlTable.add("check", |ui, _| ui.add(
-					egui::Checkbox::new(&mut self.guiState.dummy_bool, "dummy bool")
-				));
-				controlTable.add("dummy f32", |ui, _| ui.add(
-					egui::Slider::new(&mut self.guiState.dummy_float, 0.1..=100.)
-						.logarithmic(true)
-						.clamping(egui::SliderClamping::Always)
-				));
-			}
-		);
+		// Code editor
+		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
+		if self.guiState.showEditor
+		{
+			egui::Window::new("Shader Code").show(ui, |ui| {
+				ui.label("Hello World!");
+				let mut editor = egui_code_editor::CodeEditor::default()
+					.id_source("code editor")
+					.with_rows(24)
+					.with_fontsize(11.0)
+					.with_numlines(true)
+					.vscroll(true);
+				editor.show(ui, &mut self.userShaderCode);
+			});
+		}
 	}
 }
 
