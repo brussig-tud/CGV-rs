@@ -11,7 +11,6 @@ short-nice-name = "CGV-rs Shaders"
 [dependencies]
 cgv = {path="../../cgv", default-features=false, features=["slang_runtime"]} # we need the Slang runtime for online
                                                                              # compilation of our editable shaders
-egui_code_editor = {path="../../vendor/egui_code_editor"}
 
 [build-dependencies]
 cgv-build = {path="../../cgv-build"}
