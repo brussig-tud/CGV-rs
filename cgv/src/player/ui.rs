@@ -37,20 +37,12 @@ pub(crate) fn menuBar (player: &mut Player, ui: &mut egui::Ui)
 		{
 			egui::MenuBar::new().ui(ui, |ui|
 			{
-				// The global [ESC] quit shortcut
-				let quit_shortcut = egui::KeyboardShortcut::new(
-					egui::Modifiers::NONE, egui::Key::Escape
-				);
-				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
-					player.exit(ui.ctx());
-				}
-
 				// Menu bar
 				ui.menu_button("File", |ui| {
 					ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
 					#[cfg(not(target_arch="wasm32"))]
 					if ui.add(
-						egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&quit_shortcut))
+						egui::Button::new("Quit").shortcut_text(ui.ctx().format_shortcut(&player.quitShortcut))
 					).clicked() {
 						player.exit(ui.ctx());
 					}

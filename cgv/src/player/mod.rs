@@ -178,6 +178,7 @@ pub struct ManagedBindGroupLayouts {
 /// The central application host class.
 pub struct Player
 {
+	quitShortcut: egui::KeyboardShortcut,
 	activeSidePanel: usize,
 
 	egui: egui::Context,
@@ -257,6 +258,7 @@ impl Player
 
 		// Now construct
 		let mut player = Self {
+			quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
 			egui: cc.egui_ctx.clone(),
 			activeSidePanel: 0,
 
@@ -903,6 +905,11 @@ impl eframe::App for Player
 		// Draw the side panel
 		ui::sidepanel(self, ui);
 
+		// If nobody else did, consume the global [ESC] quit shortcut
+		if ui.input_mut(|i| i.consume_shortcut(&self.quitShortcut)) {
+			self.exit(ui.ctx());
+		}
+
 
 		////
 		// 3D viewport
@@ -962,7 +969,6 @@ impl eframe::App for Player
 
 /// Helper object for interfacing the [`Player`] with egui_wgpu's draw callbacks.
 struct RenderManager<'player> {
-	//redrawScene: bool, ToDo: investigate why we can't use this depending on the initial value of Playr.activeSidePanel
 	player: &'player Player,
 	viewportCompositor: &'player ViewportCompositor
 }
