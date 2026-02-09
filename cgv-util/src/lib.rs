@@ -180,7 +180,7 @@ macro_rules! sourceGeneratedBytes {
 ///
 /// A slice of `u8` over the bytes in memory of the provided data.
 pub fn slicify<T: ?Sized> (data: &T) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(data as *const T as *const u8, size_of_val(data)) }
+	unsafe { std::slice::from_raw_parts(data as *const T as *const u8, size_of_val(data)) }
 }
 
 /// Converts any kind of data that can have its size known at compile or at runtime into a slice of elements of generic
@@ -194,11 +194,11 @@ pub fn slicify<T: ?Sized> (data: &T) -> &[u8] {
 ///
 /// A slice of `E` over the bytes in memory of the provided data.
 pub fn slicifyInto<T: Sized, E> (data: &T) -> &[E] {
-    let remainder = const { size_of::<T>() }  %  const { size_of::<E>() };
-    assert_eq!(remainder,   0);
-    unsafe { std::slice::from_raw_parts(
-        data as *const T as *const E,    const { size_of::<T>() }  /  const { size_of::<E>() })
-    }
+	let remainder = const { size_of::<T>() }  %  const { size_of::<E>() };
+	assert_eq!(remainder,   0);
+	unsafe { std::slice::from_raw_parts(
+		data as *const T as *const E,    const { size_of::<T>() }  /  const { size_of::<E>() })
+	}
 }
 
 /// Decorates the given reference with a `'static` lifetime.
@@ -212,7 +212,7 @@ pub fn slicifyInto<T: Sized, E> (data: &T) -> &[E] {
 /// A `'static` reference to the data that the input reference pointed to.
 #[inline(always)]
 pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
-    unsafe { &*(reference as *const T) }
+	unsafe { &*(reference as *const T) }
 }
 
 /// Returns a mutable reference to the given object behind the given immutable reference.
@@ -226,8 +226,8 @@ pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
 /// A mutable `'static` reference to the data that the input reference pointed to.
 #[inline(always)]
 pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T {
-    #[allow(invalid_reference_casting)]
-    unsafe { &mut *((reference as *const T) as *mut T) }
+	#[allow(invalid_reference_casting)]
+	unsafe { &mut *((reference as *const T) as *mut T) }
 }
 
 /// Turns a [`Ref`](std::cell::Ref) into an actual (primitive) reference.
@@ -241,7 +241,7 @@ pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T {
 /// A `'static` reference to the same data the input [`RefMut`](std::cell::Ref) references.
 #[inline(always)]
 fn refify<T> (reference: std::cell::Ref<T>) -> &'static T {
-    unsafe { &*(reference.deref() as *const T) }
+	unsafe { &*(reference.deref() as *const T) }
 }
 
 /// Turns a [`RefMut`](std::cell::RefMut) into an actual (primitive) mutable reference.
@@ -255,8 +255,60 @@ fn refify<T> (reference: std::cell::Ref<T>) -> &'static T {
 /// A mutable `'static` reference to the same data the input [`RefMut`](std::cell::RefMut) references.
 #[inline(always)]
 fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
-    let mut refMut = reference;
-    unsafe { &mut *(refMut.deref_mut() as *mut T) }
+	let mut refMut = reference;
+	unsafe { &mut *(refMut.deref_mut() as *mut T) }
+}
+
+/// Safely extend the lifetime of a reference as required by the caller, up to the maximum time that the referenced
+/// object is known to be valid for.
+///
+/// **NOTE:** The true lifetime of an object might not be known in all cases (in which case this function will do
+/// nothing). This function is most useful to turn a reference of the kind `&'1 Object<'2>` into `&'2 Object<'2>`.
+///
+/// # Arguments
+///
+/// * `object` – A reference to some object.
+///
+/// # Returns
+///
+/// A reference to the same data as `object`, with a lifetime extended to match the type of the receiver of the result.
+/// If the underlying object is not known to live long enough, calling this function will result in a compiler error.
+#[inline(always)]
+pub fn extendLifetime<'out, Object> (object: &mut Object) -> &'out mut Object
+where Object: 'out // Constrain the lifetimes that this operation is safe for
+{
+	unsafe {
+		// SAFETY:
+		// Our lifetime constraint on the function body limits the resulting reference to a sound lifetime.
+		&mut *(object as *mut Object)
+	}
+}
+
+/// Safely extend the lifetime of a mutable reference as required by the caller, up to the maximum time that the
+/// referenced object is known to be valid for.
+///
+/// **NOTE:** The true lifetime of an object might not be known in all cases (in which case this function will do
+/// nothing). This function is most useful to turn a reference of the kind `&'1 mut Object<'2>` into
+/// `&'2 mut Object<'2>`.
+///
+/// # Arguments
+///
+/// * `object` – A mutable reference to some object.
+///
+/// # Returns
+///
+/// A mutable reference to the same data as `object`, with a lifetime extended to match the type of the receiver of the
+/// result. If the underlying object is not known to live long enough, calling this function will result in a compiler
+/// error.
+#[inline(always)]
+pub fn extendLifetime_mut<'out, Object> (object: &mut Object) -> &'out mut Object
+where Object: 'out // Constrain the lifetimes that this operation is safe for
+{
+	unsafe {
+		// SAFETY:
+		// Our lifetime constraint on the function body limits the resulting reference to a sound lifetime.
+		&mut *(object as *mut Object)
+	}
 }
 
 /// If the given option contains a string or string slice, returns an option containing the concatenation of the two
@@ -272,5 +324,5 @@ fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
 /// The concatenation of both strings in case `option` contained something, [`None`] otherwise.
 #[inline(always)]
 pub fn concatIfSome<Str: AsRef<str>> (option: &Option<Str>, concat: &str) -> Option<String> {
-    option.as_ref().map(|source| format!("{}{concat}", source.as_ref()))
+	option.as_ref().map(|source| format!("{}{concat}", source.as_ref()))
 }
