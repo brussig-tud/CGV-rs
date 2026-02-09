@@ -274,13 +274,13 @@ fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
 /// A reference to the same data as `object`, with a lifetime extended to match the type of the receiver of the result.
 /// If the underlying object is not known to live long enough, calling this function will result in a compiler error.
 #[inline(always)]
-pub fn extendLifetime<'out, Object> (object: &mut Object) -> &'out mut Object
+pub fn extendLifetime<'out, Object> (object: &Object) -> &'out Object
 where Object: 'out // Constrain the lifetimes that this operation is safe for
 {
 	unsafe {
 		// SAFETY:
 		// Our lifetime constraint on the function body limits the resulting reference to a sound lifetime.
-		&mut *(object as *mut Object)
+		&*(object as *const Object)
 	}
 }
 
