@@ -201,6 +201,14 @@ pub struct GlobalPassInfo<'rs> {
 // Application
 
 /// An application that can be [run](Player::run) by a [`Player`].
+///
+/// ## A note on lifetime parameters
+///
+/// If your concrete application needs to introduce a lifetime parameter (e.g. because it defines a field that needs
+/// one), then the `&mut self` references provided by the `Application` trait methods might end up with a lifetime that
+/// is too short to interact with your fields. The functions [`util::extendLifetime`] and [`util::extendLifetime_mut`]
+/// are provided to deal with this exact problem. They allow you to safely extend the lifetime of `&mut self` to
+/// whatever lifetime your application instance is tagged with.
 pub trait Application
 {
 	/// Report a short title for the application that can be displayed in the application tab bar of the [`Player`].
