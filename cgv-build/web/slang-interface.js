@@ -98,9 +98,10 @@ export class SlangEntryPoint
 // A container storing a `Slang` *module* and references to its *entry point* components.
 export class SlangModule
 {
-	constructor(slangContext, moduleHandle, moduleObject)
+	constructor(slangContext, session, moduleHandle, moduleObject)
 	{
 		this.object = moduleObject;
+		this.session = session;
 		this.entryPoints = {};
 		[...Array(this.object.getDefinedEntryPointCount()).keys()].map(
 			(i) => {
@@ -175,7 +176,7 @@ export class SlangSession
 			if (!newModule)
 				return slangContext.handleContextError();
 			const handle = SlangContext.getUniqueNumber();
-			slangContext.modules.set(handle, new SlangModule(slangContext, handle, newModule));
+			slangContext.modules.set(handle, new SlangModule(slangContext, this, handle, newModule));
 			this.modules.add(handle);
 			console.debug("Session #"+this.handle+": loaded new Slang module #."+handle+":");
 			console.debug(newModule);
@@ -420,7 +421,25 @@ export class SlangContext
 			console.debug("All sessions now:");
 			console.debug(this.sessions);
 		}
-		/* this.dropModule = (handle) */ // <- not implemented (Slang does not allow removing modules from a session)
+		this.dropModule = (handle) => {
+			const handle_bg = Number(handle);
+			let module = this.getModule(handle_bg);
+			if (module === undefined) {
+				console.error("Attempted to drop non-existent module handle: "+handle_bg);
+				return;
+			}
+			let session = module.session;
+			module.cleanup();
+			if (!session.modules.delete(handle_bg))
+				console.error("INTERNAL STATE CORRUPTION: module #."+handle_bg+" was orphaned from its parent session");
+			this.modules.delete(handle_bg);
+			module = null;
+			console.debug("Session #"+session.handle+": dropped module #."+handle_bg);
+			console.debug("Session #"+session.handle+": modules now:");
+			console.debug(session.modules);
+			console.debug("All modules now:");
+			console.debug(this.modules);
+		}
 		/* this.dropEntryPoint = (handle) */ // <- not implemented (Entry points are intrinsically linked to modules)
 		this.dropComposite = (handle) => {
 			const handle_bg = Number(handle);
@@ -467,9 +486,6 @@ export default async function slang_setupAndAddInterface (targetObj)
 		let globalSession = targetObj.slangCtx.getGlobalSession(globalSessionHandle);
 		return globalSession.createSession();
 	};
-	targetObj.slangjs_GlobalSession_dropSession = function (handle) {
-		targetObj.slangCtx.dropSession(handle);
-	};
 	targetObj.slangjs_createComponentList = function () {
 		return targetObj.slangCtx.createComponentList();
 	};
@@ -494,6 +510,9 @@ export default async function slang_setupAndAddInterface (targetObj)
 		const composite = ctx.getComposite(handle)
 		componentList.push(composite.object);
 	};
+	targetObj.slangjs_Session_drop = function (handle) {
+		targetObj.slangCtx.dropSession(handle);
+	};
 	targetObj.slangjs_Session_loadModuleFromSource = function (sessionHandle, moduleName, modulePath, moduleSourceCode) {
 		let session = targetObj.slangCtx.getSession(sessionHandle);
 		return session.loadModuleFromSource(moduleName, modulePath, moduleSourceCode);
@@ -506,6 +525,9 @@ export default async function slang_setupAndAddInterface (targetObj)
 	};
 	targetObj.slangjs_Session_dropComposite = function (handle) {
 		targetObj.slangCtx.dropComposite(handle);
+	};
+	targetObj.slangjs_Module_drop = function (handle) {
+		targetObj.slangCtx.dropModule(handle);
 	};
 	targetObj.slangjs_Module_getEntryPoints = function (moduleHandle) {
 		let module = targetObj.slangCtx.getModule(moduleHandle);

@@ -134,7 +134,7 @@ impl Session<'_>
 }
 impl Drop for Session<'_> {
 	fn drop (&mut self) {
-		slangjs_GlobalSession_dropSession(self.handle);
+		slangjs_Session_drop(self.handle);
 	}
 }
 
@@ -155,6 +155,11 @@ impl Module<'_> {
 			handle, virtualFilepath: virtualFilepath.as_ref().to_owned(),
 			entryPoints, sessionPhantom: PhantomData
 		})
+	}
+}
+impl Drop for Module<'_> {
+	fn drop (&mut self) {
+		slangjs_Module_drop(self.handle);
 	}
 }
 impl<'this> compile::Module<EntryPoint<'this>> for Module<'this>
@@ -620,7 +625,6 @@ extern "C" {
 	fn slangjs_dropGlobalSession (handle: u64);
 
 	fn slangjs_GlobalSession_createSession (globalSessionHandle: u64) -> i64;
-	fn slangjs_GlobalSession_dropSession (handle: u64);
 
 	fn slangjs_createComponentList () -> u64;
 	fn slangjs_dropComponentList (handle: u64);
@@ -629,11 +633,14 @@ extern "C" {
 	fn slangjs_ComponentList_addEntryPoint (componentListHandle: u64, handle: u64);
 	fn slangjs_ComponentList_addComposite (componentListHandle: u64, handle: u64);
 
+	fn slangjs_Session_drop (handle: u64);
 	fn slangjs_Session_loadModuleFromSource (
 		sessionHandle: u64, moduleName: &str, modulePath: &str, moduleSourceCode: &str
 	) -> i64;
 	fn slangjs_Session_createComposite (sessionHandle: u64, componentListHandle: u64) -> i64;
 	fn slangjs_Session_dropComposite (handle: u64);
+
+	fn slangjs_Module_drop (handle: u64);
 
 	fn slangjs_Module_getEntryPoints (moduleHandle: u64) -> Vec<u64>;
 
