@@ -54,12 +54,17 @@ use crate::*;
 // Errors
 //
 
+///
 #[derive(Debug)]
 pub enum CreateContextError {
+	///
 	UnsupportedTarget(compile::Target),
+
+	///
 	Backend(anyhow::Error),
 }
-impl Display for CreateContextError {
+impl Display for CreateContextError
+{
 	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::UnsupportedTarget(target) => format!("unsupported target: {target}"),
@@ -70,17 +75,26 @@ impl Display for CreateContextError {
 }
 impl Error for CreateContextError {}
 
+///
 #[derive(Debug)]
-pub enum LoadModuleError {
+pub enum LoadModuleError
+{
+	///
 	CompilationError(anyhow::Error),
-	InvalidModulePath(PathBuf),
+
+	///
+	InvalidModulePaths(PathBuf),
+
+	///
 	DuplicatePath(PathBuf)
 }
-impl Display for LoadModuleError {
-	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for LoadModuleError
+{
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result
+	{
 		let desc = match self {
 			Self::CompilationError(desc) => &format!("Compilation failed: {desc}"),
-			Self::InvalidModulePath(path) => &format!("invalid module path: {}", path.display()),
+			Self::InvalidModulePaths(path) => &format!("invalid module path: {}", path.display()),
 			Self::DuplicatePath(path) => &format!("module already present at path: {}", path.display()),
 		};
 		write!(formatter, "LoadModuleError[{desc}]")
@@ -88,11 +102,14 @@ impl Display for LoadModuleError {
 }
 impl Error for LoadModuleError {}
 
+///
 #[derive(Debug)]
 pub enum CreateCompositeError {
+	///
 	Backend(anyhow::Error)
 }
-impl Display for CreateCompositeError {
+impl Display for CreateCompositeError
+{
 	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::Backend(st) => &format!("backend error: {st}"),
@@ -102,27 +119,14 @@ impl Display for CreateCompositeError {
 }
 impl Error for CreateCompositeError {}
 
-#[derive(Debug)]
-pub enum BuildError<'this> {
-	InvalidEntryPoint(&'this str),
-	Backend(anyhow::Error)
-}
-impl Display for BuildError<'_> {
-	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-		let desc = match self {
-			Self::InvalidEntryPoint(ep) => &format!("invalid entry point: '{ep}'"),
-			Self::Backend(err) => &format!("backend error: {err}"),
-		};
-		write!(formatter, "BuildError[{desc}]")
-	}
-}
-impl Error for BuildError<'_> {}
-
+///
 #[derive(Debug)]
 pub enum LinkError {
+	///
 	Backend(anyhow::Error)
 }
-impl Display for LinkError {
+impl Display for LinkError
+{
 	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::Backend(st) => &format!("backend error: {st}"),
@@ -132,12 +136,105 @@ impl Display for LinkError {
 }
 impl Error for LinkError {}
 
+///
+#[derive(Debug)]
+pub enum BuildError<'this>
+{
+	///
+	InvalidEntryPoint(&'this str),
+
+	///
+	CreateCompositeError(anyhow::Error),
+
+	///
+	LinkError(anyhow::Error)
+}
+impl From<CreateCompositeError> for BuildError<'_> {
+	fn from (err: CreateCompositeError) -> Self { match err {
+		CreateCompositeError::Backend(err) => Self::CreateCompositeError(err)
+	}}
+}
+impl From<LinkError> for BuildError<'_> {
+	fn from (err: LinkError) -> Self { match err {
+		LinkError::Backend(err) => Self::CreateCompositeError(err)
+	}}
+}
+impl Display for BuildError<'_>
+{
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result
+	{
+		let desc = match self {
+			Self::InvalidEntryPoint(ep) => &format!("invalid entry point: '{ep}'"),
+			Self::CreateCompositeError(err) => &format!("composite creation: {err}"),
+			Self::LinkError(err) => &format!("linking failed: {err}")
+		};
+		write!(formatter, "BuildError[{desc}]")
+	}
+}
+impl Error for BuildError<'_> {}
+
+///
+#[derive(Debug)]
+pub enum CompileOrBuildError {
+	///
+	InvalidModulePath(PathBuf),
+
+	///
+	DuplicateModulePaths(PathBuf),
+
+	///
+	CompilationError(anyhow::Error),
+
+	///
+	CreateCompositeError(anyhow::Error),
+
+	///
+	LinkError(anyhow::Error)
+}
+impl From<LoadModuleError> for CompileOrBuildError {
+	fn from (err: LoadModuleError) -> Self { match err {
+		LoadModuleError::InvalidModulePaths(path) => CompileOrBuildError::InvalidModulePath(path),
+		LoadModuleError::DuplicatePath(path) => CompileOrBuildError::DuplicateModulePaths(path),
+		LoadModuleError::CompilationError(err) => CompileOrBuildError::CompilationError(err)
+	}}
+}
+impl From<CreateCompositeError> for CompileOrBuildError {
+	fn from (err: CreateCompositeError) -> Self { match err {
+		CreateCompositeError::Backend(err) => Self::CreateCompositeError(err)
+	}}
+}
+impl From<LinkError> for CompileOrBuildError {
+	fn from (err: LinkError) -> Self { match err {
+		LinkError::Backend(err) => Self::CreateCompositeError(err)
+	}}
+}
+impl Display for CompileOrBuildError
+{
+	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result
+	{
+		let desc = match self {
+			Self::InvalidModulePath(path) => &format!("invalid module path: '{}'", path.display()),
+			Self::DuplicateModulePaths(path) => &format!("duplicate module paths: '{}'", path.display()),
+			Self::CompilationError(err) => &format!("compiler error: '{err}'"),
+			Self::CreateCompositeError(err) => &format!("composite creation: {err}"),
+			Self::LinkError(err) => &format!("linking failed: {err}")
+		};
+		write!(formatter, "CompileOrBuildError[{desc}]")
+	}
+}
+impl Error for CompileOrBuildError {}
+
+///
 #[derive(Debug)]
 pub enum SetEnvironmentError {
+	///
 	IncompatibleEnvironment,
+
+	///
 	Backend(anyhow::Error)
 }
-impl Display for SetEnvironmentError {
+impl Display for SetEnvironmentError
+{
 	fn fmt (&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
 		let desc = match self {
 			Self::IncompatibleEnvironment => "incompatible environment",
@@ -164,7 +261,8 @@ pub enum TargetFormat {
 	/// UTF-8 encoded text.
 	Text
 }
-impl Display for TargetFormat {
+impl Display for TargetFormat
+{
 	fn fmt (&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Binary => write!(f, "binary"),
@@ -266,7 +364,8 @@ impl Target
 	/// The corresponding *slot* of a certain target. This will always be one less than [`compile::Target::NUM_SLOTS`]
 	/// less-than-or-equal to [`compile::Target::MAX_SLOT`].
 	#[inline(always)]
-	pub const fn slot (&self) -> usize {
+	pub const fn slot (&self) -> usize
+	{
 		unsafe {
 			// SAFETY:
 			// `compile::Target` is a `repr(u8)`, and the Rust specification states that the discriminants of enums with
@@ -424,18 +523,24 @@ pub trait ContextBuilder: Default
 ///
 pub trait BuildsContextWithFilesystemAccess: ContextBuilder
 {
+	///
 	#[inline(always)]
 	fn withSearchPath (path: impl AsRef<Path>) -> Self
 	where Self: ContextBuilder {
 		Self::withSearchPaths(&[path])
 	}
+
+	///
 	fn withSearchPaths (paths: &[impl AsRef<Path>]) -> Self where Self: ContextBuilder;
 
+	///
 	#[inline(always)]
 	fn addSearchPath (self, path: impl AsRef<Path>) -> Self
 	where Self: ContextBuilder {
 		self.addSearchPaths(&[path.as_ref()])
 	}
+
+	///
 	fn addSearchPaths (self, paths: &[impl AsRef<Path>]) -> Self where Self: ContextBuilder ;
 }
 
@@ -670,12 +775,8 @@ pub fn buildModule<'ctx, 'outer, Context: compile::Context> (context: &'ctx Cont
 	}
 
 	// Combine
-	let composite = context.createComposite(&components).map_err(
-		|err| BuildError::Backend(err.into())
-	)?;
+	let composite = context.createComposite(&components)?;
 
 	// Link
-	context.linkComposite(&composite).map_err(
-		|err| BuildError::Backend(err.into())
-	)
+	Ok(context.linkComposite(&composite)?)
 }

@@ -177,14 +177,14 @@ impl CompatOptions {
 fn validateModulePath (targetPath: &Path) -> Result<&str, compile::LoadModuleError>
 {
 	targetPath.parent().ok_or(
-		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePaths(targetPath.to_owned())
 	)?;
 	targetPath.file_stem().ok_or(
-		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePaths(targetPath.to_owned())
 	)?;
 
 	Ok(targetPath.as_os_str().to_str().ok_or(
-		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePaths(targetPath.to_owned())
 	)?)
 }
 

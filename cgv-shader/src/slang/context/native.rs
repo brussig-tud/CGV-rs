@@ -677,10 +677,10 @@ fn constructTargetDescs<'td> (sessionConfig: &SessionConfig, activeTargetsMap: &
 fn encodeValidModulePath (targetPath: &Path) -> Cow<'_, str>
 {
 	targetPath.parent().ok_or(
-		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePaths(targetPath.to_owned())
 	).unwrap();
 	targetPath.file_stem().ok_or(
-		compile::LoadModuleError::InvalidModulePath(targetPath.to_owned())
+		compile::LoadModuleError::InvalidModulePaths(targetPath.to_owned())
 	).unwrap();
 	targetPath.as_os_str().to_string_lossy()
 }
