@@ -815,7 +815,7 @@ impl Player
 		}
 	}
 
-	/// **TODO:** Highlight differences between this and [`Self::postRedraw`].
+	/// **TODO:** Highlight differences between this, [`Self::postFullRedraw`] and [`Self::postGuiRedraw`].
 	pub fn requireSceneRedraw (&self) {
 		unsafe {
 			// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
@@ -824,8 +824,16 @@ impl Player
 		}
 	}
 
-	/// **TODO:** Highlight differences between this and [`Self::requireSceneRedraw`].
-	pub fn postRedraw (&self)
+	/// **TODO:** Highlight differences between this, [`Self::requireSceneRedraw`] and [`Self::postFullRedraw`].
+	pub fn postGuiRedraw (&self) {
+		if self.continousRedrawRequests < 1 {
+			// Tell Egui to start drawing immediately
+			self.egui.request_repaint();
+		}
+	}
+
+	/// **TODO:** Highlight differences between this, [`Self::requireSceneRedraw`] and [`Self::postGuiRedraw`].
+	pub fn postFullRedraw (&self)
 	{
 		if self.continousRedrawRequests < 1 {
 			// Make sure the cameras are redrawn also (otherwise just the GUI might get redrawn)
