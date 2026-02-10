@@ -62,9 +62,7 @@ pub extern crate nalgebra_glm as glm;
 
 /// Re-export important 3rd party libraries/library components
 pub use tracing;
-pub use anyhow::Result as Result;
-pub use anyhow::Error as Error;
-pub use anyhow::anyhow as anyhow;
+pub use anyhow::{anyhow, Result, Error};
 pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
