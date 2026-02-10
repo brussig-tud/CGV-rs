@@ -167,6 +167,78 @@ macro_rules! sourceGeneratedBytes {
 
 //////
 //
+// Structs
+//
+
+///
+#[derive(Debug,Ord,PartialOrd,Eq,PartialEq,Copy,Clone)]
+pub struct LaterInit<Object> {
+	object: Option<Object>
+}
+impl<Object> LaterInit<Object>
+{
+	///
+	#[inline(always)]
+	pub fn uninit () -> Self {
+		Self { object: None }
+	}
+
+	///
+	pub fn with (object: Object) -> Self { Self {
+		object: Some(object)
+	}}
+
+	///
+	#[inline(always)]
+	pub fn set (&mut self, object: Object) {
+		self.object.replace(object);
+	}
+
+	///
+	#[inline(always)]
+	pub fn swap (&mut self, object: Object) -> Option<Object> {
+		self.object.replace(object)
+	}
+
+	///
+	#[inline(always)]
+	pub fn isInitialized (&self) -> bool {
+		self.object.is_some()
+	}
+}
+impl<Object: Default> Default for LaterInit<Object> {
+	fn default () -> Self { Self {
+		object: Some(Object::default())
+	}}
+}
+impl<Object> Deref for LaterInit<Object> {
+	type Target = Object;
+
+	#[inline(always)]
+	fn deref (&self) -> &Self::Target {
+		self.object.as_ref().expect("a LaterInit should be initialized before dereferencing")
+	}
+}
+impl<Object> DerefMut for LaterInit<Object> {
+	#[inline(always)]
+	fn deref_mut (&mut self) -> &mut Self::Target {
+		self.object.as_mut().expect("a LaterInit should be initialized before dereferencing")
+	}
+}
+impl<Object> AsRef<Object> for LaterInit<Object> {
+	#[inline(always)]
+	fn as_ref (&self) -> &Object { self }
+}
+impl<Object> AsMut<Object> for LaterInit<Object> {
+	#[inline(always)]
+	fn as_mut (&mut self) -> &mut Object { self }
+}
+
+
+
+
+//////
+//
 // Functions
 //
 
