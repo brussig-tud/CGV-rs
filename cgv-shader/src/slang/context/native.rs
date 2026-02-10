@@ -390,10 +390,10 @@ impl Context<'_>
 }
 impl<'this> compile::Context for Context<'this>
 {
-	type ModuleType<'module> = Module<'module> where Self: 'module;
-	type EntryPointType<'ep> = EntryPoint<'ep> where Self: 'ep;
-	type CompositeType<'cp> = Composite<'cp> where Self: 'cp;
-	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where Self: 'lct;
+	type ModuleType<'module> = Module<'module> where 'this: 'module;
+	type EntryPointType<'ep> = EntryPoint<'ep> where 'this: 'ep;
+	type CompositeType<'cp> = Composite<'cp> where 'this: 'cp;
+	type LinkedCompositeType<'lct> = LinkedComposite<'lct> where 'this: 'lct;
 	type Builder = ContextBuilder<'this>;
 
 	fn supportsTarget (&self, target: compile::Target) -> bool {
@@ -401,13 +401,16 @@ impl<'this> compile::Context for Context<'this>
 	}
 
 	#[inline]
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
+	fn compileFromSource<'ctx> (&self, sourceCode: &str) -> Result<Module<'ctx>, compile::LoadModuleError>
+		where 'this: 'ctx
+	{
 		let targetPath = uniqueAnonymousSlangFilename();
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
-	fn compileFromNamedSource (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module<'_>, compile::LoadModuleError>
+	fn compileFromNamedSource<'ctx> (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<Module<'ctx>, compile::LoadModuleError>
+		where 'this: 'ctx
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
@@ -428,8 +431,9 @@ impl<'this> compile::Context for Context<'this>
 		Ok(Module { component: module, virtualPath: virtualFilepath.as_ref().to_owned(), entryPoints })
 	}
 
-	fn createComposite<'outer, 'ctx> (&'ctx self, components: &'outer [ComponentRef<'outer, 'ctx, Self>])
+	fn createComposite<'ctx> (&self, components: &[ComponentRef<'_, '_, Self>])
 		-> Result<Self::CompositeType<'ctx>, compile::CreateCompositeError>
+		where 'this: 'ctx
 	{
 		// Gather component list
 		let components: Vec<_> = components.iter().map(|component| match component {
@@ -447,7 +451,8 @@ impl<'this> compile::Context for Context<'this>
 		Ok(Composite { component: composite, sessionPhantom: Default::default() })
 	}
 
-	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'_>, compile::LinkError>
+	fn linkComposite<'ctx> (&'ctx self, composite: &Composite) -> Result<LinkedComposite<'ctx>, compile::LinkError>
+		where 'this: 'ctx
 	{
 		// Link
 		let componentType = composite.component.link().or_else(|err| Err(
@@ -487,7 +492,8 @@ impl<'this> compile::Context for Context<'this>
 }
 impl compile::HasFileSystemAccess for Context<'_>
 {
-	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Module<'_>, compile::LoadModuleError>
+	fn compile<'ctx> (&self, sourceFile: impl AsRef<Path>) -> Result<Module<'ctx>, compile::LoadModuleError>
+		where Self: 'ctx
 	{
 		// Let slang load and compile the module
 		let module =  self.session.load_module(

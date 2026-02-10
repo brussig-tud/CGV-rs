@@ -101,10 +101,10 @@ pub struct Session<'this> {
 	activeTargetsMap: ActiveTargetsMap,
 	gsPhantom: PhantomData<&'this GlobalSession>
 }
-impl Session<'_>
+impl<'this> Session<'this>
 {
 	pub fn loadModuleFromSourceString (&self, virtualFilepath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module<'_>, compile::LoadModuleError>
+		-> Result<Module<'this>, compile::LoadModuleError>
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(virtualFilepath.as_ref())?;
@@ -120,7 +120,7 @@ impl Session<'_>
 		Module::new(moduleHandle as u64, targetPath)
 	}
 
-	fn createComposite (&self, componentList: &ComponentList) -> Result<Composite<'_>, compile::CreateCompositeError>
+	fn createComposite (&self, componentList: &ComponentList) -> Result<Composite<'this>, compile::CreateCompositeError>
 	{
 		// Composit via JavaScript bridge
 		let compositeHandle = slangjs_Session_createComposite(self.handle, componentList.0);
@@ -443,13 +443,16 @@ impl<'this> compile::Context for Context<'this>
 	}
 
 	#[inline]
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Module<'_>, compile::LoadModuleError> {
+	fn compileFromSource<'ctx> (&self, sourceCode: &str) -> Result<Module<'ctx>, compile::LoadModuleError>
+		where 'this: 'ctx
+	{
 		let targetPath = uniqueAnonymousSlangFilename();
 		self.compileFromNamedSource(&targetPath, sourceCode)
 	}
 
-	fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Module<'_>, compile::LoadModuleError>
+	fn compileFromNamedSource<'ctx> (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<Module<'ctx>, compile::LoadModuleError>
+		where 'this: 'ctx
 	{
 		// Make sure we get a valid target path
 		let targetPath = validateModulePath(targetPath.as_ref())?;
@@ -461,8 +464,9 @@ impl<'this> compile::Context for Context<'this>
 		Ok(module)
 	}
 
-	fn createComposite<'outer, 'ctx> (&'ctx self, components: &'outer [ComponentRef<'outer, 'ctx, Self>])
+	fn createComposite<'ctx> (&self, components: & [ComponentRef<'_, '_, Self>])
 		-> Result<Self::CompositeType<'ctx>, compile::CreateCompositeError>
+		where 'this: 'ctx
 	{
 		// Build JavaScript-side component list
 		let componentList = ComponentList::new();
@@ -478,7 +482,8 @@ impl<'this> compile::Context for Context<'this>
 		self.session.createComposite(&componentList)
 	}
 
-	fn linkComposite (&self, composite: &Composite) -> Result<LinkedComposite<'_>, compile::LinkError>
+	fn linkComposite<'ctx> (&'ctx self, composite: &Composite) -> Result<LinkedComposite<'ctx>, compile::LinkError>
+		where 'this: 'ctx
 	{
 		// Link
 		let handle = slangjs_Composite_link(composite.handle);
@@ -517,7 +522,7 @@ impl compile::EnvironmentEnabled for Context<'_>
 
 	#[inline(always)]
 	fn loadModule (&mut self, _: impl AsRef<Path>) -> Result<(), compile::LoadModuleError>
-	where Self: compile::HasFileSystemAccess
+		where Self: compile::HasFileSystemAccess
 	{
 		// File loading is not currently supported by WASM Slang
 		unsafe {

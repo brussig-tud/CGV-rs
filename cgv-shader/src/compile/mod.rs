@@ -475,27 +475,32 @@ pub trait Context
 	}
 
 	///
-	fn compileFromSource (&self, sourceCode: &str) -> Result<Self::ModuleType<'_>, LoadModuleError>;
+	fn compileFromSource<'ctx> (&self, sourceCode: &str) -> Result<Self::ModuleType<'ctx>, LoadModuleError>
+		where Self: 'ctx;
 
 	///
-	fn compileFromNamedSource (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
-		-> Result<Self::ModuleType<'_>, LoadModuleError>;
+	fn compileFromNamedSource<'ctx> (&self, targetPath: impl AsRef<Path>, sourceCode: &str)
+		-> Result<Self::ModuleType<'ctx>, LoadModuleError>
+		where Self: 'ctx;
 
 	///
-	fn createComposite<'outer, 'ctx> (
-		&'ctx self, components: &'outer [ComponentRef<'outer, 'ctx, Self>]
-	) -> Result<Self::CompositeType<'ctx>, CreateCompositeError>;
+	fn createComposite<'ctx> (&self, components: &[ComponentRef<'_, '_, Self>])
+		-> Result<Self::CompositeType<'ctx>, CreateCompositeError>
+		where Self: 'ctx;
 
 	///
-	fn linkComposite<'outer, 'ctx> (&'ctx self, composite: &'outer Self::CompositeType<'ctx>)
-		-> Result<Self::LinkedCompositeType<'ctx>, LinkError>;
+	fn linkComposite<'ctx>  (&'ctx self, composite: &Self::CompositeType<'_>)
+		-> Result<Self::LinkedCompositeType<'ctx>, LinkError>
+		where Self: 'ctx;
 }
 
 
 /// The trait of a [`compile::Context`] that can access a filesystem for loading source files
 pub trait HasFileSystemAccess: Context<Builder: BuildsContextWithFilesystemAccess> {
 	///
-	fn compile (&self, sourceFile: impl AsRef<Path>) -> Result<Self::ModuleType<'_>, LoadModuleError>;
+	fn compile<'outer, 'ctx> (&'outer self, sourceFile: impl AsRef<Path>)
+		-> Result<Self::ModuleType<'ctx>, LoadModuleError>
+		where Self: 'ctx;
 }
 
 
