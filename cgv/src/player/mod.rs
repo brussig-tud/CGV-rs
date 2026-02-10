@@ -764,10 +764,16 @@ impl Player
 	}
 
 	#[inline(always)]
+	pub fn renderSetup (&self) -> &RenderSetup {
+		&self.renderSetup
+	}
+
+	#[inline(always)]
 	pub fn egui (&self) -> &egui::Context {
 		&self.egui
 	}
 
+	///
 	pub fn pushContinuousRedrawRequest (&self)
 	{
 		// We have to use volatile writes throughout this function for some reason to make sure the optimizer doesn't
@@ -792,6 +798,7 @@ impl Player
 		}
 	}
 
+	///
 	pub fn dropContinuousRedrawRequest (&self)
 	{
 		// We have to use volatile writes throughout this function for some reason to make sure the optimizer doesn't
@@ -812,6 +819,18 @@ impl Player
 				);
 			}
 			tracing::info!("Stopping continuous redrawing");
+		}
+	}
+
+	///
+	pub fn postRecreatePipelines (&self)
+	{
+		if let Some(app) =  util::mutify(&self.activeApplication) {
+			app.recreatePipelines(
+				&self.context, &self.renderSetup,
+				Self::extractInfoFromGlobalPassDeclarations(self.camera.globalPasses()).as_slice(),
+				util::statify(self)
+			);
 		}
 	}
 
@@ -844,23 +863,28 @@ impl Player
 		}
 	}
 
+	///
 	pub fn lastFrameTime (&self) -> f32 {
 		self.prevFrameDuration.as_secs_f32()
 	}
 
+	///
 	pub fn exit (&self, eguiContext: &egui::Context) {
 		tracing::info!("Exiting...");
 		eguiContext.send_viewport_cmd(egui::ViewportCommand::Close);
 	}
 
+	///
 	pub fn activeCamera (&self) -> &dyn Camera {
 		self.camera.as_ref()
 	}
 
+	///
 	pub fn activeCamera_mut (&self) -> &mut dyn Camera {
 		util::mutify(self.camera.as_ref()) // we use interior mutability
 	}
 
+	///
 	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: glm::UVec2, callback: Closure
 	){
@@ -874,6 +898,7 @@ impl Player
 		}
 	}
 
+	///
 	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: glm::UVec2, callback: Closure
 	){
@@ -887,6 +912,7 @@ impl Player
 		}
 	}
 
+	///
 	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
 		&self, pixelCoords: glm::UVec2, callback: Closure
 	){
