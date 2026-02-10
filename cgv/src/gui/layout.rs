@@ -79,7 +79,7 @@ impl<'ui> ControlTable<'ui>
 			ui.set_min_width(self.lhsWidth);
 			ui.label(label.as_ref());
 		});
-		let response = control(self.ui, self.rhsWidth);
+		let response = self.ui.horizontal(|ui| control(ui, self.rhsWidth)).inner;
 		self.ui.end_row();
 		response
 	}
