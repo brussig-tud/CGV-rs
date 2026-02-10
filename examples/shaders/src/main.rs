@@ -152,40 +152,36 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	let env = cgv::obtainShaderCompileEnvironment();
 	slangCtx.replaceEnvironment(Some(env))?;
 
-	let slangCtxRef = unsafe {
-		&mut *(&mut slangCtx as *mut cgv::shader::slang::Context)
-	};
-
 	// The user-editable shader code
 	let userShaderCode =
 		"import \"lib/glyph.slang\";
 
 export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
 			.to_string();
-	tracing::info!("Preparing shader: compiling main module '/shader/sdf_demo.slang'");
+	tracing::info!("Preparing shader: compiling static main module '/shader/sdf_demo.slang'");
 
 	// Compile and link our modules
 	#[cfg(not(target_arch="wasm32"))] let mainModule = {
 		// On native, we can load the shader source from the filesystem
-		slangCtxRef.compile(util::pathInsideCrate!("/shader/sdf_demo.slang"))?
+		slangCtx.compile(util::pathInsideCrate!("/shader/sdf_demo.slang"))?
 	};
 	#[cfg(target_arch="wasm32")] let mainModule = {
 		// On WASM, we currently have to resort to baking shader source files into the crate. For the same reason (the
 		// context does not have runtime filesystem access), we also need to load our local shader "library" into the
-		// context manually. This could be largely automated by creating a local *compile environment* and merging it
-		// with the one we get from *CGV-rs*, but for our two files we can just do it here.
+		// context manually. This could be largely automated by creating a local *compile environment* in the build
+		// script and merging it with the one we get from *CGV-rs*, but for our two files, we can just do it here.
 		use cgv::shader::slang::EnvironmentStorage;
-		slangCtxRef.loadModuleFromSource(
+		slangCtx.loadModuleFromSource(
 			EnvironmentStorage::SourceCode, "lib/sdf.slang",
 			util::sourceFile!("/shader/lib/sdf.slang")
 		)?;
-		slangCtxRef.loadModuleFromSource(
+		slangCtx.loadModuleFromSource(
 			EnvironmentStorage::SourceCode, "lib/glyph.slang",
 			util::sourceFile!("/shader/lib/glyph.slang")
 		)?;
 
 		// Now load our actual main module
-		slangCtxRef.compileFromNamedSource(
+		slangCtx.compileFromNamedSource(
 			"sdf_demo.slang", util::sourceFile!("/shader/sdf_demo.slang")
 		)?
 	};
@@ -194,18 +190,11 @@ export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
 	////
 	// Done!
 
-	let shaderState = ShaderState { slangCtx, mainModule };
-
 	// Construct the instance and put it in a box
 	Ok(Box::new(OnlineShadersDemo {
-		statusText: "<STATUS UNKNOWN>".into(), shaderState, userShaderCode, pipelines: Vec::new(), vertexBuffer,
-		indexBuffer, shader: None, guiState: Default::default()
+		statusText: "<STATUS UNKNOWN>".into(), mainModule, slangCtx, userShaderCode, pipelines: Vec::new(),
+		vertexBuffer, indexBuffer, shader: cgv::util::LaterInit::uninit(), guiState: Default::default()
 	}))
-}
-
-struct ShaderState<'this> {
-	slangCtx: cgv::shader::slang::Context<'this>,
-	mainModule: cgv::shader::slang::Module<'this>
 }
 
 #[derive(Default)]
@@ -217,11 +206,12 @@ struct OnlineShadersDemo<'this>
 {
 	// Online shader compilation
 	statusText: String,
-	shaderState: ShaderState<'this>,
+	slangCtx: cgv::shader::slang::Context<'this>,
+	mainModule: cgv::shader::slang::Module<'this>,
 	userShaderCode: String,
 
 	// Rendering related
-	shader: Option<wgpu::ShaderModule>,
+	shader: cgv::util::LaterInit<wgpu::ShaderModule>,
 	pipelines: Vec<wgpu::RenderPipeline>,
 	vertexBuffer: wgpu::Buffer,
 	indexBuffer: wgpu::Buffer,
@@ -229,7 +219,7 @@ struct OnlineShadersDemo<'this>
 	// GUI-controllable state
 	guiState: GuiState
 }
-impl<'this> OnlineShadersDemo<'this>
+impl OnlineShadersDemo<'_>
 {
 	/// Helper function: create the interfacing pipeline for the given render state.
 	fn createPipeline (
@@ -239,7 +229,7 @@ impl<'this> OnlineShadersDemo<'this>
 		// Tracing
 		tracing::info!("Creating pipelines");
 
-		let shader = self.shader.as_ref().unwrap();
+		// Create the pipeline
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExShaders__RenderPipelineLayout"),
@@ -250,13 +240,13 @@ impl<'this> OnlineShadersDemo<'this>
 			label: Some("ExShaders__RenderPipeline"),
 			layout: Some(&pipelineLayout),
 			vertex: wgpu::VertexState {
-				module: &shader,
+				module: &self.shader,
 				entry_point: Some("vertexMain"), // Slang (for now) requires explicitly stating entry points
 				buffers: &[QuadVertex::layoutDesc()],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState {
-				module: &shader,
+				module: &self.shader,
 				entry_point: Some("fragmentMain"), // Slang (for now) requires explicitly stating entry points
 				targets: &[Some(renderState.colorTargetState().clone())],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -275,138 +265,36 @@ impl<'this> OnlineShadersDemo<'this>
 		})
 	}
 
-	fn relink (
-		context: &cgv::Context, slangCtx: &cgv::shader::slang::Context<'this>,
-		mainModule: &cgv::shader::slang::Module<'this>, glyphModule: cgv::shader::slang::Module<'this>
-	) -> cgv::Result<wgpu::ShaderModule>
+	fn rebuildShader (&mut self, context: &cgv::Context) -> Result<(), cgv::shader::compile::CompileOrBuildError>
 	{
-		tracing::info!("Preparing shader: specializing for custom glyph");
+		// Load our concrete `IGlyph`-implementing type that our "sdf_demo.slang" module expects into the context
+		tracing::info!("(Re-)building shader: specializing for custom glyph");
+		let glyphModule = self.slangCtx.compileFromSource(&self.userShaderCode)?;
 
 		// Link into usable program
-		tracing::info!("Preparing shader: linking final program");
-		let linked = slangCtx.linkComposite(&slangCtx.createComposite(&[
-			cgv::shader::compile::ComponentRef::Module(mainModule),
+		tracing::info!("(Re-)building shader: linking final program");
+		let linked = self.slangCtx.linkComposite(&self.slangCtx.createComposite(&[
+			cgv::shader::compile::ComponentRef::Module(&self.mainModule),
 			cgv::shader::compile::ComponentRef::Module(&glyphModule),
 		])?)?;
 		let shaderPackage = cgv::shader::Package::fromLinkedComposite(
-			cgv::shader::WgpuSourceType::mostSuitable(), slangCtx, &linked,
+			cgv::shader::WgpuSourceType::mostSuitable(), &self.slangCtx, &linked,
 			None, // <- we don't require our purely on-line package to have any particular name
 			None  // <- no cherry-picked entry point specializations, just include all possible variants
-		)?;
-		// - final: obtain the *WGPU* shader module
-		tracing::info!("Preparing shader: converting to WGPU shader");
-		let shader = shaderPackage.createShaderModuleFromBestInstance(
+		).expect("creating a package from a linked composite should not fail as we set everything up correctly");
+
+		// Obtain the *WGPU* shader module
+		tracing::info!("(Re-)building shader: converting to WGPU shader");
+		self.shader.set(shaderPackage.createShaderModuleFromBestInstance(
 			context.device(), None, Some("ExShaders__ShaderModule")
 		).ok_or(
 			cgv::anyhow!("Could not create example shader module")
-		)?;
-
-		// Done!
-		Ok(shader)
-	}
-
-	fn initialCompile (&'this mut self, context: &cgv::Context) -> cgv::Result<()>
-	{
-		// Load our concrete `IGlyph`-implementing type that our "sdf_demo.slang" module expects into the context
-		let glyphModule = self.recompileGlyphModule()?;
-
-		// Link everything together
-		self.shader = Some(
-			Self::relink(context, &self.shaderState.slangCtx, &self.shaderState.mainModule, glyphModule)?
+		).expect(
+			"creating the WGPU shader from the package should not fail as we compiled to the correct target")
 		);
 
 		// Done!
 		Ok(())
-	}
-
-	fn recompileGlyphModule (&self)
-	-> Result<cgv::shader::slang::Module<'this>, cgv::shader::compile::LoadModuleError> {
-		util::extendLifetime(self).shaderState.slangCtx.compileFromSource(&self.userShaderCode)
-	}
-
-	fn ui (&'this mut self, ui: &mut egui::Ui, player: &'static cgv::Player) where Self: 'this
-	{
-		// Code editor
-		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
-		if self.guiState.showEditor
-		{
-			egui::Window::new("Shader Code").show(ui, |ui|
-			{
-				// Enable closing with [ESC]
-				let quit_shortcut = egui::KeyboardShortcut::new(
-					egui::Modifiers::NONE, egui::Key::Escape
-				);
-				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
-					self.guiState.showEditor = false;
-				}
-
-				// Calculate editor size
-				// TODO: lots of empirically determined magic numbers, need to rigorously calculate this
-				const CODE_EDITOR_LINES: usize = 5;
-				const MESSAGE_PANEL_LINES: usize = 5;
-				let availableSize = ui.available_size();
-				let lineSize = ui.style().text_styles[&egui::TextStyle::Monospace].size;
-				let messagePaneSize = egui::vec2(
-					f32::max(64., availableSize.x), MESSAGE_PANEL_LINES as f32 * lineSize
-				);
-				let editorSize = egui::vec2(
-					messagePaneSize.x,
-					f32::max(
-						CODE_EDITOR_LINES as f32*lineSize, availableSize.y-messagePaneSize.y - 8.
-					)
-				);
-
-				// Actual editor
-				ui.allocate_ui(
-					editorSize, |ui| egui::Frame::canvas(ui.style())
-					.corner_radius(3.).show(ui, |ui|
-					{
-						egui::ScrollArea::vertical().id_salt("editorPane").show(ui, |ui|
-						{
-							let editor = egui::TextEdit::multiline(&mut self.userShaderCode)
-								.code_editor()
-								.desired_rows(CODE_EDITOR_LINES)
-								.lock_focus(true)
-								.desired_width(f32::INFINITY)
-								.frame(false);
-							if ui.add(editor).changed()
-							{
-								use cgv::shader::compile::LoadModuleError;
-								let result = self.recompileGlyphModule();
-								self.statusText = match result {
-									Ok(glyphModule) => {
-										self.shader = Self::relink(
-											player.context(), &self.shaderState.slangCtx, &self.shaderState.mainModule,
-											glyphModule
-										).ok();
-										"Code OK.".into()
-									},
-									Err(err) => match err {
-										LoadModuleError::CompilationError(err) => {
-											tracing::error!("{err}");
-											format!("{err}")
-										},
-
-										LoadModuleError::DuplicatePath(_) | LoadModuleError::InvalidModulePath(_)
-										=> unreachable!("")
-									}
-								}
-							}
-						})
-					})
-				);
-
-				// Messages panel
-				ui.allocate_ui(messagePaneSize, |ui| egui::Frame::NONE.corner_radius(3.).show(ui, |ui|
-				{
-					egui::ScrollArea::vertical().id_salt("msgPane").show(ui, |ui| {
-						let msgPanel = egui::widgets::TextEdit::multiline(&mut self.statusText)
-							.frame(false).desired_rows(MESSAGE_PANEL_LINES).desired_width(f32::INFINITY);
-						ui.add_enabled(false, msgPanel)
-					})
-				}));
-			});
-		}
 	}
 }
 impl<'this> cgv::Application for OnlineShadersDemo<'this>
@@ -416,7 +304,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 	}
 
 	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
-		util::extendLifetime_mut(self).initialCompile(context)
+		self.rebuildShader(context).map_err(|err| err.into())
 	}
 
 	fn recreatePipelines (
@@ -478,9 +366,86 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player) {
-		// Delegate to extended-lifetime method
-		util::extendLifetime_mut(self).ui(ui, player);
+	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
+	{
+		// Code editor
+		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
+		if self.guiState.showEditor
+		{
+			egui::Window::new("Shader Code").show(ui, |ui|
+			{
+				// Enable closing with [ESC]
+				let quit_shortcut = egui::KeyboardShortcut::new(
+					egui::Modifiers::NONE, egui::Key::Escape
+				);
+				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+					self.guiState.showEditor = false;
+				}
+
+				// Calculate editor size
+				// TODO: lots of empirically determined magic numbers, need to rigorously calculate this
+				const CODE_EDITOR_LINES: usize = 5;
+				const MESSAGE_PANEL_LINES: usize = 5;
+				let availableSize = ui.available_size();
+				let lineSize = ui.style().text_styles[&egui::TextStyle::Monospace].size;
+				let messagePaneSize = egui::vec2(
+					f32::max(64., availableSize.x), MESSAGE_PANEL_LINES as f32 * lineSize
+				);
+				let editorSize = egui::vec2(
+					messagePaneSize.x,
+					f32::max(
+						CODE_EDITOR_LINES as f32*lineSize, availableSize.y-messagePaneSize.y - 8.
+					)
+				);
+
+				// Actual editor
+				ui.allocate_ui(
+					editorSize, |ui| egui::Frame::canvas(ui.style())
+						.corner_radius(3.).show(ui, |ui|
+						{
+							egui::ScrollArea::vertical().id_salt("editorPane").show(ui, |ui|
+								{
+									let editor = egui::TextEdit::multiline(&mut self.userShaderCode)
+										.code_editor()
+										.desired_rows(CODE_EDITOR_LINES)
+										.lock_focus(true)
+										.desired_width(f32::INFINITY)
+										.frame(false);
+									if ui.add(editor).changed()
+									{
+										use cgv::shader::compile::CompileOrBuildError;
+										self.statusText = match self.rebuildShader(player.context())
+										{
+											Ok(_) => "Code OK.".into(),
+											Err(  CompileOrBuildError::CompilationError(err)
+											      | CompileOrBuildError::CreateCompositeError(err)
+											      | CompileOrBuildError::LinkError(err))
+											=> {
+												tracing::error!("{err}");
+												format!("{err}")
+											},
+
+											Err(  CompileOrBuildError::DuplicateModulePaths(_)
+											      | CompileOrBuildError::InvalidModulePath(_))
+											=> unreachable!("")
+										}
+									}
+								})
+						})
+				);
+
+				// Messages panel
+				ui.allocate_ui(messagePaneSize, |ui| egui::Frame::NONE.corner_radius(3.).show(
+					ui, |ui| {
+						egui::ScrollArea::vertical().id_salt("msgPane").show(ui, |ui| {
+							let msgPanel = egui::widgets::TextEdit::multiline(&mut self.statusText)
+								.frame(false).desired_rows(MESSAGE_PANEL_LINES).desired_width(f32::INFINITY);
+							ui.add_enabled(false, msgPanel)
+						})
+					})
+				);
+			});
+		}
 	}
 }
 
