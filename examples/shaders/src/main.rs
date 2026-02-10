@@ -153,14 +153,10 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	slangCtx.replaceEnvironment(Some(env))?;
 
 	// The user-editable shader code
-	let userShaderCode =
-		"import \"lib/glyph.slang\";
-
-export struct Glyph: ex::IGlyph = ex::glyphs::Circle;"
-			.to_string();
-	tracing::info!("Preparing shader: compiling static main module '/shader/sdf_demo.slang'");
+	let userShaderCode = util::sourceFile!("/shader/user.slang").into();
 
 	// Compile and link our modules
+	tracing::info!("Preparing shader: compiling static main module '/shader/sdf_demo.slang'");
 	#[cfg(not(target_arch="wasm32"))] let mainModule = {
 		// On native, we can load the shader source from the filesystem
 		slangCtx.compile(util::pathInsideCrate!("/shader/sdf_demo.slang"))?
@@ -265,7 +261,7 @@ impl OnlineShadersDemo<'_>
 		})
 	}
 
-	fn rebuildShader (&mut self, context: &cgv::Context) -> Result<(), cgv::shader::compile::CompileOrBuildError>
+	fn rebuildShader (&mut self, context: &cgv::Context) -> Result<&str, cgv::shader::compile::CompileOrBuildError>
 	{
 		// Load our concrete `IGlyph`-implementing type that our "sdf_demo.slang" module expects into the context
 		tracing::info!("(Re-)building shader: specializing for custom glyph");
@@ -294,7 +290,7 @@ impl OnlineShadersDemo<'_>
 		);
 
 		// Done!
-		Ok(())
+		Ok("Code OK.")
 	}
 }
 impl<'this> cgv::Application for OnlineShadersDemo<'this>
@@ -304,7 +300,8 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 	}
 
 	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
-		self.rebuildShader(context).map_err(|err| err.into())
+		self.statusText = self.rebuildShader(context).map_err(|err| cgv::Error::from(err))?.into();
+		Ok(())
 	}
 
 	fn recreatePipelines (
@@ -416,7 +413,12 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 										use cgv::shader::compile::CompileOrBuildError;
 										self.statusText = match self.rebuildShader(player.context())
 										{
-											Ok(_) => "Code OK.".into(),
+											Ok(statusText) => {
+												player.postRecreatePipelines();
+												player.requireSceneRedraw();
+												statusText.into()
+											},
+
 											Err(  CompileOrBuildError::CompilationError(err)
 											      | CompileOrBuildError::CreateCompositeError(err)
 											      | CompileOrBuildError::LinkError(err))
@@ -456,7 +458,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 //
 
 /// The application entry point.
-pub fn main() -> cgv::Result<()> {
+pub fn main () -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our online shader compilation demo app
 	cgv::Player::run(createOnlineShadersDemo)
 }
