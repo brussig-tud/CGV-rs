@@ -21,13 +21,15 @@ import "cgv/math/field.slang";     // contains the checkerboard pattern
 ParameterBlock<cgv::api::Viewing> viewing;
 
 // group(1): Visualization parameters. Are adjustable from the GUI and thus change from time to time, hence group(1).
-struct Colors {
-	float4 logo;
-	float4 bg;
-	float4 oddCheckers;
-	float4 evenCheckers;
+struct Appearance
+{
+	float4 logoColor;
+	float4 bgColor;
+	float4 oddCheckersColor;
+	float4 evenCheckersColor;
+	float2 checkersCount;
 };
-ParameterBlock<Colors> colors;
+ParameterBlock<Appearance> appearance;
 
 // group(2): Material parameters (just a texture and its sampler in this simple example). Won't change, thus group(2).
 struct Texture {
@@ -90,15 +92,15 @@ func vertexMain (vert: VSInput) -> VSOutput {
 func fragmentMain (vsOut: VSOutput) -> float4
 {
 	// Checkerboard background
-	let checkers = cgv::math::field::Checkers<float, 2>::withInversePeriod(float2(16));
+	let checkers = cgv::math::field::Checkers<float, 2>::withInversePeriod(appearance.checkersCount);
 	let canvas = lerp(
-		/* dark: */colors.oddCheckers*vsOut.color, /* light: */colors.evenCheckers*vsOut.color,
+		/* dark: */appearance.oddCheckersColor*vsOut.color, /* light: */appearance.evenCheckersColor*vsOut.color,
 		/* selector: */checkers.queryPreFiltered(vsOut.texcoord, (float mask) => fwidth(mask))
 	);
 
 	// Fetch logo texture samples and color them according to user setting
 	let logo = lerp(
-		colors.bg, colors.logo,  /* selector: */texture.color.Sample(texture.sampler, vsOut.texcoord).a
+		appearance.bgColor, appearance.logoColor, /* selector: */texture.color.Sample(texture.sampler, vsOut.texcoord).a
     );
 
 	// Blend logo over the canvas

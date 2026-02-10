@@ -114,23 +114,27 @@ impl QuadVertex
 ////
 // Our color data we'll send to the shader as a uniform block
 
-#[repr(C)]
+///
+#[repr(C,align(16))] // Slang currently imposes that everything in a buffer must be 16-byte aligned
 #[derive(Default, Debug, Copy, Clone)]
-pub struct UserColors
+pub struct Appearance
 {
 	/// The color of the CGV logo.
-	pub logo: egui::Rgba,
+	pub logoColor: egui::Rgba,
 
 	/// The color of the CGV logo.
-	pub background: egui::Rgba,
+	pub backgroundColor: egui::Rgba,
 
 	/// The color of light checkers (visible where the CGV logo texture is not fully opaque).
-	pub oddCheckers: egui::Rgba,
+	pub oddCheckersColor: egui::Rgba,
 
 	/// The color of dark checkers (visible where the CGV logo texture is not fully opaque).
-	pub evenCheckers: egui::Rgba
+	pub evenCheckersColor: egui::Rgba,
+
+	/// How many checkers to draw on the canvas in each direction
+	pub checkerCounts: egui::Vec2
 }
-pub type UserColorsUniformGroup = cgv::hal::UniformGroup<UserColors>;
+pub type AppearanceUniformGroup = cgv::hal::UniformGroup<Appearance>;
 
 
 ////
@@ -199,7 +203,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	// Bind groups
 
 	// Colors uniform
-	let colorUniforms = cgv::hal::UniformGroup::create(
+	let appearanceUniforms = cgv::hal::UniformGroup::create(
 		context, wgpu::ShaderStages::FRAGMENT, Some("ExBasic__colorUniforms").as_deref()
 	);
 
@@ -273,23 +277,23 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 
 	// Construct the instance and put it in a box
 	Ok(Box::new(ExampleApplication {
-		shader, colorUniforms, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState,
+		shader, appearanceUniforms, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState,
 		pipelines: Vec::new(), // <- delayed, *CGV-rs* has a dedicated cycle for this as typically we don't have all
 	}))                        //    required information at this point, like viewport dimensions
 }
 
 #[derive(Default,Debug)]
 struct GuiState {
-	/// Proxy for [`UserColors::logo`].
+	/// Proxy for [`Appearance::logo`].
 	pub logoColor: egui::ecolor::Color32,
 
-	/// Proxy for [`UserColors::background`].
+	/// Proxy for [`Appearance::background`].
 	pub backgroundColor: egui::ecolor::Color32,
 
-	/// Proxy for [`UserColors::oddCheckers`].
+	/// Proxy for [`Appearance::oddCheckers`].
 	pub oddCheckersColor: egui::ecolor::Color32,
 
-	/// Proxy for [`UserColors::evenCheckers`].
+	/// Proxy for [`Appearance::evenCheckers`].
 	pub evenCheckersColor: egui::ecolor::Color32,
 
 	/// Whether to draw the quad's backside (relative to the initial viewing direction)
@@ -301,7 +305,7 @@ struct ExampleApplication
 {
 	// Rendering related
 	shader: wgpu::ShaderModule,
-	colorUniforms: UserColorsUniformGroup,
+	appearanceUniforms: AppearanceUniformGroup,
 	texBindGroupLayout: wgpu::BindGroupLayout,
 	texBindGroup: wgpu::BindGroup,
 	pipelines: Vec<wgpu::RenderPipeline>,
@@ -325,7 +329,7 @@ impl ExampleApplication
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExBasic__RenderPipelineLayout"),
 				bind_group_layouts: &[
-					&renderSetup.bindGroupLayouts().viewing, &self.colorUniforms.bindGroupLayout,
+					&renderSetup.bindGroupLayouts().viewing, &self.appearanceUniforms.bindGroupLayout,
 					&self.texBindGroupLayout
 				],
 				push_constant_ranges: &[],
@@ -368,12 +372,13 @@ impl cgv::Application for ExampleApplication
 	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()>
 	{
 		// Upload initial uniform values
-		let colors = self.colorUniforms.borrowData_mut();
-		colors.logo = self.guiState.logoColor.into();
-		colors.background = self.guiState.backgroundColor.into();
-		colors.evenCheckers = self.guiState.oddCheckersColor.into();
-		colors.oddCheckers = self.guiState.evenCheckersColor.into();
-		self.colorUniforms.upload(context);
+		let appearance = self.appearanceUniforms.borrowData_mut();
+		appearance.logoColor = self.guiState.logoColor.into();
+		appearance.backgroundColor = self.guiState.backgroundColor.into();
+		appearance.evenCheckersColor = self.guiState.oddCheckersColor.into();
+		appearance.oddCheckersColor = self.guiState.evenCheckersColor.into();
+		appearance.checkerCounts = egui::Vec2::new(16., 16.);
+		self.appearanceUniforms.upload(context);
 
 		// Done!
 		Ok(())
@@ -432,7 +437,7 @@ impl cgv::Application for ExampleApplication
 	{
 		renderPass.set_pipeline(&self.pipelines[0]);
 		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-		renderPass.set_bind_group(1, &self.colorUniforms.bindGroup, &[]);
+		renderPass.set_bind_group(1, &self.appearanceUniforms.bindGroup, &[]);
 		renderPass.set_bind_group(2, &self.texBindGroup, &[]);
 		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
 		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -451,48 +456,63 @@ impl cgv::Application for ExampleApplication
 		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
 		{
 			// Mutable access to our color uniforms in case something changes
-			let colorUniforms = self.colorUniforms.borrowData_mut();
+			let appearance = self.appearanceUniforms.borrowData_mut();
 
 			// Add the standard 2-column layout control grid
-			cgv::gui::layout::ControlTableLayouter::new(ui)
-			.layout(ui, "Cgv.Ex.Basic-color", |controlTable|
-			{
-				let mut uploadFlag = false;
-				controlTable.add("Logo colors", |ui, _| {
-					if ui.color_edit_button_srgba(&mut self.guiState.logoColor).changed() {
-						colorUniforms.logo = self.guiState.logoColor.into();
-						uploadFlag = true;
-					}
-					ui.label("logo (foreground)");
-				});
-				controlTable.add("", |ui, _| {
-					if ui.color_edit_button_srgba(&mut self.guiState.backgroundColor).changed() {
-						colorUniforms.background = self.guiState.backgroundColor.into();
-						uploadFlag = true;
-					};
-					ui.label("background");
-				});
-				controlTable.add("Canvas colors", |ui, _| {
-					if ui.color_edit_button_srgba(&mut self.guiState.oddCheckersColor).changed() {
-						colorUniforms.evenCheckers = self.guiState.oddCheckersColor.into();
-						uploadFlag = true;
-					}
-					ui.label("odd checkers");
-				});
-				controlTable.add("", |ui, _| {
-					if ui.color_edit_button_srgba(&mut self.guiState.evenCheckersColor).changed() {
-						colorUniforms.oddCheckers = self.guiState.evenCheckersColor.into();
-						uploadFlag = true;
-					};
-					ui.label("even checkers");
-				});
+			cgv::gui::layout::ControlTableLayouter::new(ui).layout(ui, "Cgv.Ex.Basic-color",
+				|controlTable|
+				{
+					let mut uploadFlag = false;
+					controlTable.add("Logo colors", |ui, _| {
+						if ui.color_edit_button_srgba(&mut self.guiState.logoColor).changed() {
+							appearance.logoColor = self.guiState.logoColor.into();
+							uploadFlag = true;
+						}
+						ui.label("logo (foreground)");
+					});
+					controlTable.add("", |ui, _| {
+						if ui.color_edit_button_srgba(&mut self.guiState.backgroundColor).changed() {
+							appearance.backgroundColor = self.guiState.backgroundColor.into();
+							uploadFlag = true;
+						};
+						ui.label("background");
+					});
+					controlTable.add("Canvas colors", |ui, _| {
+						if ui.color_edit_button_srgba(&mut self.guiState.oddCheckersColor).changed() {
+							appearance.evenCheckersColor = self.guiState.oddCheckersColor.into();
+							uploadFlag = true;
+						}
+						ui.label("odd checkers");
+					});
+					controlTable.add("", |ui, _| {
+						if ui.color_edit_button_srgba(&mut self.guiState.evenCheckersColor).changed() {
+							appearance.oddCheckersColor = self.guiState.evenCheckersColor.into();
+							uploadFlag = true;
+						};
+						ui.label("even checkers");
+					});
+					controlTable.add("Checker counts", |ui, _| {
+						ui.spacing_mut().slider_width -= 16.;
+						ui.label("x");
+						uploadFlag |= ui.add(
+							egui::Slider::new(&mut appearance.checkerCounts.x, 1f32..=64.)
+						).changed();
+					});
+					controlTable.add("", |ui, _| {
+						ui.spacing_mut().slider_width -= 16.;
+						ui.label("y");
+						uploadFlag |= ui.add(
+							egui::Slider::new(&mut appearance.checkerCounts.y, 1f32..=64.)
+						).changed();
+					});
 
-				// Upload new color values if something changed
-				if uploadFlag {
-					self.colorUniforms.upload(player.context());
-					redraw = true;
+					// Upload new color values if something changed
+					if uploadFlag {
+						self.appearanceUniforms.upload(player.context());
+						redraw = true;
+					}
 				}
-			});
+			);
 		});
 
 		// Rendering section
@@ -522,7 +542,7 @@ impl cgv::Application for ExampleApplication
 //
 
 /// The application entry point.
-pub fn main() -> cgv::Result<()> {
+pub fn main () -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our ExampleApplication
 	cgv::Player::run(createBasicExampleApp)
 }
