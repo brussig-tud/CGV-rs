@@ -320,13 +320,24 @@ pub trait Application
 		globalPass: &GlobalPass
 	) -> Option<Vec<wgpu::CommandBuffer>>;
 
-	/// Called when the [player](Player) needs the application to define its graphical UI.
+	/// Called when the [player](Player) needs the application to define its graphical main UI (which goes in the
+	/// player's application panel). Independent or free-floating UI should be drawn in [`Application::freeUi`] instead.
 	///
 	/// # Arguments
 	///
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
 	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved operations.
 	fn ui (&mut self, ui: &mut egui::Ui, player: &'static Player);
+
+	/// Called when the [player](Player) needs the application to define its free/independent UI (e.g. floating windows
+	/// that should stay open even if the app loses player focus)
+	///
+	/// # Arguments
+	///
+	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
+	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved operations.
+	#[expect(unused_variables)]
+	fn freeUi (&mut self, ui: &mut egui::Ui, player: &'static Player) {}
 }
 
 
@@ -357,8 +368,7 @@ where
 	F: for<'a, 'b> Fn(&'a Context, &'b RenderSetup, run::Environment)->Result<Box<dyn Application>>
 {
 	fn create (&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment)
-		-> Result<Box<dyn Application>>
-	{
+	-> Result<Box<dyn Application>> {
 		self(context, renderSetup, environment)
 	}
 }
@@ -379,7 +389,7 @@ pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader:
 	use util::uuid::Uuid;
 	use util::unique::Realm;
 
-	// Statically keep the environment in memopry
+	// Statically keep the environment in memory
 	static SHADER_LIB_ENVIRONMENT: LazyLock<shader::compile::Environment<shader::slang::EnvModule>> = LazyLock::new(||
 		shader::compile::Environment::deserialize(util::sourceGeneratedBytes!("/coreshaderlib.env")).expect(
 			"core shader library environment could not be deserialized"

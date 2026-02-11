@@ -945,6 +945,11 @@ impl eframe::App for Player
 		// Draw the side panel
 		ui::sidepanel(self, ui);
 
+		/* Draw any free-floating UIs */ {
+			let this = util::statify(self);
+			self.activeApplication.as_mut().unwrap().freeUi(ui, this);
+		}
+
 		// If nobody else did, consume the global [ESC] quit shortcut
 		if ui.input_mut(|i| i.consume_shortcut(&self.quitShortcut)) {
 			self.exit(ui.ctx());
@@ -1053,7 +1058,8 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		self.viewportCompositor.composit(eguiRenderPass);
 
 		// Update frame stats
-		if self.player.continousRedrawRequests > 0 {
+		if self.player.continousRedrawRequests > 0
+		{
 			let player = util::mutify(self.player); // we use interior mutability
 			let elapsed = player.startInstant.elapsed();
 			player.prevFrameDuration = elapsed - player.prevFrameElapsed;

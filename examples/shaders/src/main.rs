@@ -18,16 +18,14 @@
 use std::default::Default;
 
 // CGV re-imports
-use cgv::{wgpu, glm, egui, tracing};
+use cgv::{wgpu, glm, egui, tracing, Player};
 
 // WGPU API
 use wgpu::util::DeviceExt;
 
 // CGV Framework
 use cgv::{self, util, shader::compile::prelude::*};
-
-
-
+use cgv::egui::Ui;
 //////
 //
 // Statics
@@ -363,91 +361,93 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
+	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player) {
+		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
+	}
+
+	fn freeUi(&mut self, ui: &mut Ui, player: &'static Player)
 	{
 		// Code editor
-		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
-		let mut showEditor = self.guiState.showEditor;
-		if showEditor
+		let mut showEditor = self.guiState.showEditor; if showEditor
 		{
 			egui::Window::new("Shader Code").default_width(768.).open(&mut showEditor).show(ui, |ui|
-			{
-				// Enable closing with [ESC]
-				let quit_shortcut = egui::KeyboardShortcut::new(
-					egui::Modifiers::NONE, egui::Key::Escape
-				);
-				if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
-					self.guiState.showEditor = false;
-				}
+				{
+					// Enable closing with [ESC]
+					let quit_shortcut = egui::KeyboardShortcut::new(
+						egui::Modifiers::NONE, egui::Key::Escape
+					);
+					if ui.input_mut(|i| i.consume_shortcut(&quit_shortcut)) {
+						self.guiState.showEditor = false;
+					}
 
-				// Calculate editor size
-				// TODO: lots of empirically determined magic numbers, need to rigorously calculate this
-				const CODE_EDITOR_LINES: usize = 5;
-				const MESSAGE_PANEL_LINES: usize = 5;
-				let availableSize = ui.available_size();
-				let lineSize = ui.style().text_styles[&egui::TextStyle::Monospace].size;
-				let messagePaneSize = egui::vec2(
-					f32::max(64., availableSize.x), MESSAGE_PANEL_LINES as f32 * lineSize
-				);
-				let editorSize = egui::vec2(
-					messagePaneSize.x,
-					f32::max(
-						CODE_EDITOR_LINES as f32*lineSize, availableSize.y-messagePaneSize.y - 8.
-					)
-				);
+					// Calculate editor size
+					// TODO: lots of empirically determined magic numbers, need to rigorously calculate this
+					const CODE_EDITOR_LINES: usize = 5;
+					const MESSAGE_PANEL_LINES: usize = 5;
+					let availableSize = ui.available_size();
+					let lineSize = ui.style().text_styles[&egui::TextStyle::Monospace].size;
+					let messagePaneSize = egui::vec2(
+						f32::max(64., availableSize.x), MESSAGE_PANEL_LINES as f32 * lineSize
+					);
+					let editorSize = egui::vec2(
+						messagePaneSize.x,
+						f32::max(
+							CODE_EDITOR_LINES as f32*lineSize, availableSize.y-messagePaneSize.y - 8.
+						)
+					);
 
-				// Actual editor
-				ui.allocate_ui(
-					editorSize, |ui| egui::Frame::canvas(ui.style())
-						.corner_radius(3.).show(ui, |ui|
-						{
-							egui::ScrollArea::vertical().id_salt("editorPane").show(ui, |ui|
-								{
-									let editor = egui::TextEdit::multiline(&mut self.userShaderCode)
-										.code_editor()
-										.desired_rows(CODE_EDITOR_LINES)
-										.lock_focus(true)
-										.desired_width(f32::INFINITY)
-										.frame(false);
-									if ui.add(editor).changed()
+					// Actual editor
+					ui.allocate_ui(
+						editorSize, |ui| egui::Frame::canvas(ui.style())
+							.corner_radius(3.).show(ui, |ui|
+							{
+								egui::ScrollArea::vertical().id_salt("editorPane").show(ui, |ui|
 									{
-										use cgv::shader::compile::CompileOrBuildError;
-										self.statusText = match self.rebuildShader(player.context())
+										let editor = egui::TextEdit::multiline(&mut self.userShaderCode)
+											.code_editor()
+											.desired_rows(CODE_EDITOR_LINES)
+											.lock_focus(true)
+											.desired_width(f32::INFINITY)
+											.frame(false);
+										if ui.add(editor).changed()
 										{
-											Ok(statusText) => {
-												player.postRecreatePipelines();
-												player.requireSceneRedraw();
-												statusText.into()
-											},
+											use cgv::shader::compile::CompileOrBuildError;
+											self.statusText = match self.rebuildShader(player.context())
+											{
+												Ok(statusText) => {
+													player.postRecreatePipelines();
+													player.requireSceneRedraw();
+													statusText.into()
+												},
 
-											Err(  CompileOrBuildError::CompilationError(err)
-											      | CompileOrBuildError::CreateCompositeError(err)
-											      | CompileOrBuildError::LinkError(err))
-											=> {
-												tracing::error!("{err}");
-												format!("{err}")
-											},
+												Err(  CompileOrBuildError::CompilationError(err)
+												      | CompileOrBuildError::CreateCompositeError(err)
+												      | CompileOrBuildError::LinkError(err))
+												=> {
+													tracing::error!("{err}");
+													format!("{err}")
+												},
 
-											Err(  CompileOrBuildError::DuplicateModulePaths(_)
-											      | CompileOrBuildError::InvalidModulePath(_))
-											=> unreachable!("")
+												Err(  CompileOrBuildError::DuplicateModulePaths(_)
+												      | CompileOrBuildError::InvalidModulePath(_))
+												=> unreachable!("")
+											}
 										}
-									}
-								})
-						})
-				);
+									})
+							})
+					);
 
-				// Messages panel
-				ui.allocate_ui(messagePaneSize, |ui| egui::Frame::NONE.corner_radius(3.).show(
-					ui, |ui| {
-						egui::ScrollArea::vertical().id_salt("msgPane").show(ui, |ui| {
-							let msgPanel = egui::widgets::TextEdit::multiline(&mut self.statusText)
-								.frame(false).desired_rows(MESSAGE_PANEL_LINES).desired_width(f32::INFINITY);
-							ui.add_enabled(false, msgPanel)
+					// Messages panel
+					ui.allocate_ui(messagePaneSize, |ui| egui::Frame::NONE.corner_radius(3.).show(
+						ui, |ui| {
+							egui::ScrollArea::vertical().id_salt("msgPane").show(ui, |ui| {
+								let msgPanel = egui::widgets::TextEdit::multiline(&mut self.statusText)
+									.frame(false).desired_rows(MESSAGE_PANEL_LINES).desired_width(f32::INFINITY);
+								ui.add_enabled(false, msgPanel)
+							})
 						})
-					})
-				);
-			});
+					);
+				});
 		}
 		self.guiState.showEditor &= showEditor;
 	}
