@@ -226,10 +226,16 @@ impl Player
 
 		// Adjust GUI styling to our own CGV-rs defaults
 		font::replaceDefaults(&cc.egui_ctx);
-		cc.egui_ctx.all_styles_mut(|style| {
+		cc.egui_ctx.all_styles_mut(|style|
+		{
+			// Slightly smaller font overall
 			for (_, fontId) in style.text_styles.iter_mut() {
 				fontId.size *= 0.984375; // ToDo: consider 0.96875
 			}
+
+			// Significantly smaller window headers
+			let em = style.text_styles[&egui::TextStyle::Body].size;
+			style.text_styles.get_mut(&egui::TextStyle::Heading).map(|font| font.size = 1.25*em);
 		});
 
 		// Create context
