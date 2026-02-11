@@ -367,9 +367,10 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 	{
 		// Code editor
 		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
-		if self.guiState.showEditor
+		let mut showEditor = self.guiState.showEditor;
+		if showEditor
 		{
-			egui::Window::new("Shader Code").show(ui, |ui|
+			egui::Window::new("Shader Code").default_width(768.).open(&mut showEditor).show(ui, |ui|
 			{
 				// Enable closing with [ESC]
 				let quit_shortcut = egui::KeyboardShortcut::new(
@@ -448,6 +449,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 				);
 			});
 		}
+		self.guiState.showEditor &= showEditor;
 	}
 }
 
