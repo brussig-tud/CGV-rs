@@ -23,9 +23,14 @@ use cgv::{wgpu, glm, egui, tracing, Player};
 // WGPU API
 use wgpu::util::DeviceExt;
 
+// Egui library
+use cgv::egui_extras as egui_extras;
+
 // CGV Framework
 use cgv::{self, util, shader::compile::prelude::*};
-use cgv::egui::Ui;
+
+
+
 //////
 //
 // Statics
@@ -113,6 +118,25 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 
 
 	////
+	// Setup syntax highlighting
+
+	// Syntect
+	// - language definitions
+	let syntaxSet = {
+		let mut builder = syntect::parsing::SyntaxSet::load_defaults_newlines().into_builder();
+		builder.add(syntect::parsing::SyntaxDefinition::load_from_str(
+			util::sourceFile!("/res/syntax/HLSL.sublime-syntax"), true, Some("HLSL")
+		)?);
+		builder.build()
+	};
+	// - egui interfacing
+	let highlighterSettings = egui_extras::syntax_highlighting::SyntectSettings {
+		ps: syntaxSet,
+		ts: syntect::highlighting::ThemeSet::load_defaults()
+	};
+
+
+	////
 	// Prepare buffers
 
 	// Vertex buffer
@@ -187,7 +211,8 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	// Construct the instance and put it in a box
 	Ok(Box::new(OnlineShadersDemo {
 		statusText: "<STATUS UNKNOWN>".into(), mainModule, slangCtx, userShaderCode, pipelines: Vec::new(),
-		vertexBuffer, indexBuffer, shader: cgv::util::LaterInit::uninit(), guiState: Default::default()
+		vertexBuffer, indexBuffer, shader: cgv::util::LaterInit::uninit(), highlighterSettings,
+		guiState: Default::default()
 	}))
 }
 
@@ -210,7 +235,8 @@ struct OnlineShadersDemo<'this>
 	vertexBuffer: wgpu::Buffer,
 	indexBuffer: wgpu::Buffer,
 
-	// GUI-controllable state
+	// GUI-related
+	highlighterSettings: egui_extras::syntax_highlighting::SyntectSettings,
 	guiState: GuiState
 }
 impl OnlineShadersDemo<'_>
@@ -361,11 +387,20 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player) {
+	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
+	{
+		// Editor toggle
 		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
+
+		// Editor theme controls (should move into editor window once we get flex box layouting figured out)
+		let mut theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(
+			ui.ctx(), ui.style()
+		).with_font_size(11.);
+		ui.collapsing("Editor theme", |ui| theme.ui(ui) );
+		theme.store_in_memory(ui.ctx());
 	}
 
-	fn freeUi(&mut self, ui: &mut Ui, player: &'static Player)
+	fn freeUi (&mut self, ui: &mut egui::Ui, player: &'static Player)
 	{
 		// Code editor
 		let mut showEditor = self.guiState.showEditor;
@@ -405,16 +440,31 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 					{
 						egui::ScrollArea::vertical().id_salt("editorPane").show(ui, |ui|
 						{
-							// Reduce text size
-							ui.style_mut().text_styles.get_mut(&egui::TextStyle::Monospace).map(
-								|font| font.size = 11.
-							);
+							// Retrieve highlighter theme
+							let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(
+								ui.ctx(), ui.style()
+							).with_font_size(11.);
+
+							// Setup layouter
+							let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrapWidth: f32|
+							{
+								let mut layoutJob = egui_extras::syntax_highlighting::highlight_with(
+									ui.ctx(), ui.style(), &theme, text.as_str(),
+									"hlsl", // <- wait until there is a sublime-text theme for Slang
+									&self.highlighterSettings
+								);
+								layoutJob.wrap.max_width = wrapWidth;
+								ui.fonts_mut(|f| f.layout_job(layoutJob))
+							};
+
+							// Add editor pane
 							let editor = egui::TextEdit::multiline(&mut self.userShaderCode)
 								.code_editor()
 								.desired_rows(CODE_EDITOR_LINES)
 								.lock_focus(true)
 								.desired_width(f32::INFINITY)
-								.frame(false);
+								.frame(false)
+								.layouter(&mut layouter);
 							if ui.add(editor).changed()
 							{
 								use cgv::shader::compile::CompileOrBuildError;

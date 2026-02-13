@@ -11,6 +11,7 @@ short-nice-name = "CGV-rs Shaders"
 [dependencies]
 cgv = {path="../../cgv", default-features=false, features=["slang_runtime"]} # we need the Slang runtime for online
                                                                              # compilation of our editable shaders
+syntect = {version="*", default-features = false, features = ["default-fancy"]}
 
 [build-dependencies]
 cgv-build = {path="../../cgv-build"}
