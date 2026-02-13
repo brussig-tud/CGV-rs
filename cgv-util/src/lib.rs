@@ -398,3 +398,37 @@ where Object: 'out // Constrain the lifetimes that this operation is safe for
 pub fn concatIfSome<Str: AsRef<str>> (option: &Option<Str>, concat: &str) -> Option<String> {
 	option.as_ref().map(|source| format!("{}{concat}", source.as_ref()))
 }
+
+/// Construct a [`Range`](std::ops::Range) byte view on a subslice of the given `whole` `&str` slice.
+///
+/// # Arguments
+///
+/// * `whole` – The `&str` slice which the resulting byte range will be relative to (i.e. the parent slice).
+/// * `sub` – A subslice of `whole` of which we want to get the corresponding byte `Range` for.
+///
+/// # Returns
+///
+/// The `Range` representing the bytes of `sub` inside `whole`.
+///
+/// # Panics
+///
+/// When `sub` is not a subslice of `whole`, i.e. when the start or end character of `sub` (or both) lie outside of
+/// `whole`.
+pub fn substrByteRange (whole: &str, sub: &str) -> std::ops::Range<usize>
+{
+	// Preamble
+	let wholeStart = whole.as_ptr() as usize;
+	let rangeStart = sub.as_ptr() as usize;
+
+	// Sanity checks
+	assert!(wholeStart <= rangeStart, "sub must be within whole, but was {sub}");
+	assert!(
+		rangeStart + sub.len() <= wholeStart + whole.len(),
+		"rangeStart + sub length must be smaller than wholeStart + whole length, but was {}",
+		rangeStart + sub.len()
+	);
+
+	// Calculate and construct
+	let offset = rangeStart - wholeStart;
+	offset..(offset+sub.len())
+}
