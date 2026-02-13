@@ -21,7 +21,7 @@ dashmap = "*"
 web-time = "*"
 winit = "*"
 egui = {git="https://github.com/emilk/egui.git", default-features=true, features=[
-	"color-hex", "rayon"
+	"serde", "color-hex", "rayon"
 ]}
 egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"

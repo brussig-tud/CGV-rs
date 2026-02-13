@@ -66,8 +66,8 @@ pub use anyhow::{anyhow, Result, Error};
 pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
-pub use eframe::wgpu as wgpu;
-pub use eframe::egui as egui;
+pub use eframe::{wgpu as wgpu, egui as egui};
+pub use egui_extras as egui_extras;
 
 
 
@@ -329,8 +329,8 @@ pub trait Application
 	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved operations.
 	fn ui (&mut self, ui: &mut egui::Ui, player: &'static Player);
 
-	/// Called when the [player](Player) needs the application to define its free/independent UI (e.g. floating windows
-	/// that should stay open even if the app loses player focus)
+	/// Called when the [player](Player) asks the application to define its free/independent UI (e.g. floating windows
+	/// that should stay open even if the app loses player focus). Can be left unimplemented when not needed.
 	///
 	/// # Arguments
 	///
