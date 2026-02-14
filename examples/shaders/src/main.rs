@@ -11,6 +11,16 @@
 
 //////
 //
+// Module definitions
+//
+
+/// Private submodule holding the code for setting up our custom fonts
+mod slang_completer;
+
+
+
+//////
+//
 // Imports
 //
 
@@ -29,6 +39,9 @@ use cgv::egui_extras as egui_extras;
 // CGV Framework
 use cgv::{self, util, shader::compile::prelude::*};
 
+// Local imports
+use slang_completer::*;
+
 
 
 //////
@@ -36,6 +49,12 @@ use cgv::{self, util, shader::compile::prelude::*};
 // Statics
 //
 
+/// The completer syntax definition for the *Slang* shading language.
+const SLANG_COMPLETION: std::sync::LazyLock<egui_code_editor::Syntax> = std::sync::LazyLock::new(
+	|| egui_code_editor::Syntax::slang()
+);
+
+/// The vertices of our example quad that will hold the shaded glyph.
 const QUAD_VERTS: &[QuadVertex; 8] = &[
 	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
@@ -118,9 +137,9 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 
 
 	////
-	// Setup syntax highlighting
+	// Setup code editing
 
-	// Syntect
+	// Syntax highlighting
 	// - language definitions
 	let syntaxSet = {
 		let mut builder = syntect::parsing::SyntaxSet::load_defaults_newlines().into_builder();
@@ -134,6 +153,9 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 		ps: syntaxSet,
 		ts: syntect::highlighting::ThemeSet::load_defaults()
 	};
+
+	// Keyword-based text completer
+	let syntaxCompleter = egui_code_editor::Completer::new_with_syntax(&SLANG_COMPLETION).with_user_words();
 
 
 	////
@@ -211,7 +233,7 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	// Construct the instance and put it in a box
 	Ok(Box::new(OnlineShadersDemo {
 		statusText: "<STATUS UNKNOWN>".into(), mainModule, slangCtx, userShaderCode, pipelines: Vec::new(),
-		vertexBuffer, indexBuffer, shader: cgv::util::LaterInit::uninit(), highlighterSettings,
+		vertexBuffer, indexBuffer, shader: cgv::util::LaterInit::uninit(), highlighterSettings, syntaxCompleter,
 		guiState: Default::default()
 	}))
 }
@@ -237,6 +259,7 @@ struct OnlineShadersDemo<'this>
 
 	// GUI-related
 	highlighterSettings: egui_extras::syntax_highlighting::SyntectSettings,
+	syntaxCompleter: egui_code_editor::Completer,
 	guiState: GuiState
 }
 impl OnlineShadersDemo<'_>
@@ -458,14 +481,21 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 							};
 
 							// Add editor pane
-							let editor = egui::TextEdit::multiline(&mut self.userShaderCode)
-								.code_editor()
-								.desired_rows(CODE_EDITOR_LINES)
-								.lock_focus(true)
-								.desired_width(f32::INFINITY)
-								.frame(false)
-								.layouter(&mut layouter);
-							if ui.add(editor).changed()
+							// - completer gets first dips on input
+							self.syntaxCompleter.handle_input(ui.ctx());
+							// - define editor
+							let mut editorOutput = egui::TextEdit::multiline(&mut self.userShaderCode)
+								.code_editor().desired_rows(CODE_EDITOR_LINES).lock_focus(true)
+								.desired_width(f32::INFINITY).frame(false).layouter(&mut layouter)
+								.show(ui);
+							// - define completer window
+							self.syntaxCompleter.show(
+								&SLANG_COMPLETION, &egui_code_editor::ColorTheme::AYU_MIRAGE, 11.,
+								&mut editorOutput
+							);
+
+							// Handle code edits
+							if editorOutput.response.changed()
 							{
 								use cgv::shader::compile::CompileOrBuildError;
 								self.statusText = match self.rebuildShader(player.context())
