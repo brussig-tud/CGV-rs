@@ -238,6 +238,10 @@ impl Player
 			style.text_styles.get_mut(&egui::TextStyle::Heading).map(|font| font.size = 1.25*em);
 		});
 
+		// On WASM, increase the double click distance to make it easier to use double-taps on mobile devices
+		#[cfg(target_arch="wasm32")]
+		cc.egui_ctx.options_mut(|options| options.input_options.max_click_dist *= 5.);
+
 		// Create context
 		let context = Context::new(eguiRs);
 
