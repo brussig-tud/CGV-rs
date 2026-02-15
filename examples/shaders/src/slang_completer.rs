@@ -69,6 +69,7 @@ impl SlangSyntax for Syntax
 				// Complex primitive generic types
 				"vector",
 				"matrix",
+				"ParameterBlock",
 
 				// Primitive traits
 				"__BuiltinType",
@@ -87,6 +88,7 @@ impl SlangSyntax for Syntax
 				"IFunc",
 
 				// Builtin functions
+				"%",
 				"abs",
 				"floor",
 				"ceil",
