@@ -4,7 +4,7 @@
 // Language config
 //
 
-// Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
+// Eff this convention.
 #![allow(non_snake_case)]
 
 
@@ -28,7 +28,7 @@ mod slang_completer;
 use std::default::Default;
 
 // CGV re-imports
-use cgv::{wgpu, glm, egui, tracing, Player};
+use cgv::{wgpu, glm, egui, tracing};
 
 // WGPU API
 use wgpu::util::DeviceExt;
@@ -421,9 +421,21 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		).with_font_size(11.);
 		ui.collapsing("Editor theme", |ui| theme.ui(ui) );
 		theme.store_in_memory(ui.ctx());
+
+		// Links section
+		ui.add_space(ui.style().spacing.item_spacing.y * 3.);
+		egui::CollapsingHeader::new("Links").default_open(true).show(ui, |ui|
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+			.layout(ui, "Cgv.Ex.Basic-render", |controlTable| {
+				controlTable.add("Source code:", |ui, _|
+					ui.hyperlink_to(format!("{} examples/shaders", egui::special_emojis::GITHUB),
+					"https://github.com/brussig-tud/CGV-rs/tree/main/examples/shaders")
+				)
+			})
+		);
 	}
 
-	fn freeUi (&mut self, ui: &mut egui::Ui, player: &'static Player)
+	fn freeUi (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
 	{
 		// Code editor
 		let mut showEditor = self.guiState.showEditor;

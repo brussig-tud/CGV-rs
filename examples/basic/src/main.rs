@@ -4,7 +4,7 @@
 // Language config
 //
 
-// Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
+// Eff this convention.
 #![allow(non_snake_case)]
 
 
@@ -526,6 +526,18 @@ impl cgv::Application for ExampleApplication
 				)).changed();
 			});
 		});
+
+		// Links section
+		ui.add_space(ui.style().spacing.item_spacing.y * 3.);
+		egui::CollapsingHeader::new("Links").default_open(true).show(ui, |ui|
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+			.layout(ui, "Cgv.Ex.Basic-render", |controlTable| {
+				controlTable.add("Source code:", |ui, _|
+					ui.hyperlink_to(format!("{} examples/basic", egui::special_emojis::GITHUB),
+					"https://github.com/brussig-tud/CGV-rs/tree/main/examples/basic")
+				)
+			})
+		);
 
 		// Make sure the scene will get re-rendered in the current draw pass
 		if redraw {
