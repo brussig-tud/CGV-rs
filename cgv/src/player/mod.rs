@@ -944,19 +944,14 @@ impl eframe::App for Player
 		// Main GUI
 
 		// Draw the main menu bar
-		ui::menuBar(self, ui);
+		let menubarResponse = ui::menuBar(self, ui);
 
 		// Draw the side panel
-		ui::sidepanel(self, ui);
+		let sidepanelResponse = ui::sidepanel(self, ui);
 
 		/* Draw any free-floating UIs */ {
 			let this = util::statify(self);
 			self.activeApplication.as_mut().unwrap().freeUi(ui, this);
-		}
-
-		// If nobody else did, consume the global [ESC] quit shortcut
-		if ui.input_mut(|i| i.consume_shortcut(&self.quitShortcut)) {
-			self.exit(ui.ctx());
 		}
 
 
@@ -990,12 +985,21 @@ impl eframe::App for Player
 			let (rect, response) =
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
 
-			// Gather input
-			let inputState = ui.input(|state| util::statify(state));
-			let complexEvents = self.prepareEvents(inputState, &response, pxlsPerPoint);
+			// Gather input if user is active on central (scene) panel
+			let mouseInCenterPanel = ui.ui_contains_pointer();
+			if mouseInCenterPanel {
+				// Route all other input events
+				let inputState = ui.input(|state| util::statify(state));
+				let complexEvents = self.prepareEvents(inputState, &response, pxlsPerPoint);
+				redrawScene |= self.dispatchEvents(&inputState.events, &complexEvents);
+			}
 
-			// Dispatch all gathered events
-			redrawScene |= self.dispatchEvents(&inputState.events, &complexEvents);
+			// If nobody else did, consume the global [ESC] quit shortcut
+			if   (mouseInCenterPanel || menubarResponse.contains_pointer() || sidepanelResponse.contains_pointer())
+			   && ui.input_mut(|i| i.consume_shortcut(&self.quitShortcut))
+			{
+				self.exit(ui.ctx());
+			}
 
 			// Update camera interactor
 			let this = util::statify(self);
