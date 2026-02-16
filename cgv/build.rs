@@ -4,7 +4,7 @@
 // Language config
 //
 
-// Eff this convention. Probably the worst aspect of Rust after the lack of a standardized ABI
+// Eff this convention.
 #![allow(non_snake_case)]
 
 
