@@ -522,14 +522,44 @@ impl Player
 	}
 
 	fn prepareEvents<'is> (
-		&self, inputState: &'is egui::InputState, viewportResponse: &egui::Response, highDpiScaleFactor: f32
+		&self, inputState: &'is egui::InputState, viewportResponse: &egui::Response, menubarResponse: &egui::Response,
+		sidepanelResponse: &egui::Response, highDpiScaleFactor: f32
 	) -> Vec<InputEvent<'is>>
 	{
 		// Pre-allocate event list
 		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
 
+		// Mouse wheel
+		let (didntPinch, zoom, amount)
+		 = if     viewportResponse.contains_pointer()
+		      && (inputState.smooth_scroll_delta.x != 0. || inputState.smooth_scroll_delta.y != 0.)
+		{
+			(true, true, glm::vec2(inputState.smooth_scroll_delta.x, inputState.smooth_scroll_delta.y))
+		}
+		else
+		{
+			// Try pinch zoom next
+			let zoomDelta = inputState.zoom_delta_2d();
+			let forwardPinch =    viewportResponse.contains_pointer() || menubarResponse.contains_pointer()
+			                        || sidepanelResponse.contains_pointer();
+			if forwardPinch && (zoomDelta.x != 1. || zoomDelta.y != 1.) {
+				const PINCH_SENSITIVITY: f32 = 20./3.;
+				(false, true, glm::vec2(
+					PINCH_SENSITIVITY*if zoomDelta.x > 1. { zoomDelta.x } else { -1./zoomDelta.x },
+					PINCH_SENSITIVITY*if zoomDelta.y > 1. { zoomDelta.y } else { -1./zoomDelta.y }
+				))
+			}
+			else {
+				// No zooming action at all this frame
+				(true, false, glm::Vec2::zeros())
+			}
+		};
+		if zoom {
+			preparedEvents.push(InputEvent::MouseWheel(MouseWheelInfo { amount, modifiers: &inputState.modifiers }));
+		}
+
 		// Dragging action
-		if viewportResponse.dragged()
+		if didntPinch && viewportResponse.dragged()
 		{
 			let dm = viewportResponse.drag_motion();
 			if dm.length_sq() > 0.
@@ -545,14 +575,6 @@ impl Player
 					direction: glm::vec2(dm.x, dm.y)
 				}));
 			}
-		}
-
-		// Mouse wheel
-		if inputState.smooth_scroll_delta.y.abs() > 0. {
-			preparedEvents.push(InputEvent::MouseWheel(MouseWheelInfo {
-				amount: glm::vec2(inputState.smooth_scroll_delta.x, inputState.smooth_scroll_delta.y),
-				modifiers: &inputState.modifiers
-			}));
 		}
 
 		// Clicks
@@ -985,17 +1007,17 @@ impl eframe::App for Player
 			let (rect, response) =
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
 
-			// Gather input if user is active on central (scene) panel
-			let mouseInCenterPanel = ui.ui_contains_pointer();
-			if mouseInCenterPanel {
-				// Route all other input events
+			/* Route input events */ {
 				let inputState = ui.input(|state| util::statify(state));
-				let complexEvents = self.prepareEvents(inputState, &response, pxlsPerPoint);
+				let complexEvents = self.prepareEvents(
+					inputState, &response, &menubarResponse, &sidepanelResponse, pxlsPerPoint
+				);
 				redrawScene |= self.dispatchEvents(&inputState.events, &complexEvents);
 			}
 
 			// If nobody else did, consume the global [ESC] quit shortcut
-			if   (mouseInCenterPanel || menubarResponse.contains_pointer() || sidepanelResponse.contains_pointer())
+			if   (   response.contains_pointer() || menubarResponse.contains_pointer()
+			      || sidepanelResponse.contains_pointer())
 			   && ui.input_mut(|i| i.consume_shortcut(&self.quitShortcut))
 			{
 				self.exit(ui.ctx());
