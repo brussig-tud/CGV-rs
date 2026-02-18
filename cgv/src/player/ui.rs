@@ -100,11 +100,8 @@ pub(crate) fn menuBar (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 /// Draw (and act upon) the [`crate::Player`] side panel GUI.
 pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 {
-	egui::Panel::right("CGV__sidePanel")
-	.resizable(true)
-	.default_size(320.)
+	egui::Panel::right("CGV__sidePanel").resizable(true).default_size(320.)
 	.show_inside(ui, |ui|
-	{
 		egui::ScrollArea::both().show(ui, |ui|
 		{
 			ui.horizontal(|ui|
@@ -133,10 +130,9 @@ pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Respon
 						}
 					}
 				});
-			});
-			ui.allocate_space(ui.available_size());
-		});
-	}).response
+			})
+		})
+	).response
 }
 
 /// Draw (and act upon) the side panel GUI for configuring and controlling [`crate::Player`] behavior.
