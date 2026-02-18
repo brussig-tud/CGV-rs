@@ -100,39 +100,41 @@ pub(crate) fn menuBar (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 /// Draw (and act upon) the [`crate::Player`] side panel GUI.
 pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 {
-	egui::Panel::right("CGV__sidePanel").resizable(true).default_size(320.)
+	// Scale panel slightly wider than the 320pt default to prevent premature horizontal scrollbars when DPI scaling
+	egui::Panel::right("CGV__sidePanel").resizable(true).default_size(320.0625)
 	.show_inside(ui, |ui|
+	{
 		egui::ScrollArea::both().show(ui, |ui|
 		{
-			ui.horizontal(|ui|
+			ui.horizontal(|ui| ui.vertical(|ui|
 			{
-				ui.vertical(|ui|
+				match player.activeSidePanel
 				{
-					match player.activeSidePanel
-					{
-						0 => self::player(player, ui),
-						1 => self::view(player, ui),
-						2 => {
-							// Application UI
-							ui.centered_and_justified(|ui| ui.heading(
-								player.activeApplication.as_ref().unwrap().title()
-							));
-							ui.separator();
-							let this = util::statify(player);
-							player.activeApplication.as_mut().unwrap().ui(ui, this);
-						},
+					0 => self::player(player, ui),
+					1 => self::view(player, ui),
+					2 => {
+						// Application UI
+						ui.centered_and_justified(|ui| ui.heading(
+							player.activeApplication.as_ref().unwrap().title()
+						));
+						ui.separator();
+						let this = util::statify(player);
+						player.activeApplication.as_mut().unwrap().ui(ui, this);
+					},
 
-						_ => {
-							// We can only get here if there is a logic bug somewhere
-							macro_rules! MSG {() => {"INTERNAL LOGIC ERROR: UI state corrupted!"};}
-							tracing::error!(MSG!());
-							unreachable!(MSG!());
-						}
+					_ => {
+						// We can only get here if there is a logic bug somewhere
+						macro_rules! MSG {() => {"INTERNAL LOGIC ERROR: UI state corrupted!"};}
+						tracing::error!(MSG!());
+						unreachable!(MSG!());
 					}
-				});
-			})
+				}
+			}));
+
+			// Ensure horizontal scrollbar is at the bottom, while preventing premature vertical scrollbars
+			ui.allocate_space(ui.available_size() - egui::vec2(0., 0.0625));
 		})
-	).response
+	}).response
 }
 
 /// Draw (and act upon) the side panel GUI for configuring and controlling [`crate::Player`] behavior.
