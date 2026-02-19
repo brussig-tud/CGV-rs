@@ -11,7 +11,7 @@
 use egui;
 
 // Local imports
-use crate::gui;
+use crate::{gui, player::SIDEPANEL_SAFETY_MARGINS};
 
 
 
@@ -151,7 +151,7 @@ impl ControlTableLayouter
 	/// * `minRhsWidth` – The desired minimum width that the right-hand-side of the defined
 	///                   [control tables](ControlTable) will never be smaller than.
 	pub fn withMinRhsWidth (ui: &egui::Ui, minRhsWidth: f32) -> Self {
-		let availableWidth = ui.available_width();
+		let availableWidth = ui.available_width()-SIDEPANEL_SAFETY_MARGINS.x;
 		let rhsWidth = f32::max(minRhsWidth, availableWidth*1./2.);
 		Self { rhsWidth,  lhsWidth: f32::max(availableWidth-rhsWidth - ui.spacing().item_spacing.x, 0.) }
 	}

@@ -9,6 +9,7 @@ mod font;
 
 /// Private submodule holding the factored-out built-in GUI definitions
 mod ui;
+pub use ui::SIDEPANEL_SAFETY_MARGINS; // re-export
 
 /// Submodule providing the [`RenderSetup`].
 mod rendersetup;
