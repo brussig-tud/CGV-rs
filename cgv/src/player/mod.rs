@@ -815,6 +815,7 @@ impl Player
 		if this.continousRedrawRequests < 1
 		{
 			unsafe {
+				// SAFETY: Unknown. See comment above.
 				std::ptr::write_volatile(
 					&mut this.prevFrameElapsed as *mut time::Duration, this.startInstant.elapsed()
 				);
@@ -826,6 +827,7 @@ impl Player
 			this.egui.request_repaint();
 		}
 		unsafe {
+			// SAFETY: Unknown. See comment above.
 			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests+1)
 		}
 	}
@@ -841,11 +843,13 @@ impl Player
 			panic!("logic error - more continuous redraw requests dropped than were pushed");
 		}
 		unsafe {
+			// SAFETY: Unknown. See comment above.
 			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests-1)
 		}
 		if this.continousRedrawRequests < 1
 		{
 			unsafe {
+				// SAFETY: Unknown. See comment above.
 				std::ptr::write_volatile(
 					&mut this.prevFrameDuration as *mut time::Duration, time::Duration::from_secs(0)
 				);
@@ -1069,11 +1073,16 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Only redraw the scene if requested
-		if self.player.pendingRedraw {
+		if self.player.pendingRedraw
+		{
 			let cmdBuffers = self.player.redraw(device, queue, eguiEncoder);
-			unsafe { #[allow(invalid_reference_casting)] std::ptr::write_volatile(
-				&self.player.pendingRedraw as *const bool as *mut bool, false
-			)}
+			unsafe {
+				// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
+				#[allow(invalid_reference_casting)]
+				std::ptr::write_volatile(
+					&self.player.pendingRedraw as *const bool as *mut bool, false
+				)
+			}
 			cmdBuffers
 		} else {
 			Vec::new()
