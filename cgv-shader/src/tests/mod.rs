@@ -18,7 +18,8 @@ mod compile;
 // Imports
 
 // Local imports
-#[expect(unused_imports)] use crate::*;
+#[expect(unused_imports)]
+use crate::*;
 
 
 ////

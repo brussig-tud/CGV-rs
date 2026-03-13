@@ -293,13 +293,19 @@ impl<ModuleType> Environment<ModuleType>
 		self.compatHash
 	}
 
+	/// Report the number of [modules](ModuleEntry) currently in the environment.
+	#[inline]
+	pub fn numModules (&self) -> usize {
+		self.modules.len()
+	}
+
 	/// Obtain an iterator over all [modules](ModuleEntry) in the environment.
 	#[inline]
 	pub fn modules (&self) -> impl Iterator<Item=&ModuleEntry<ModuleType>> {
 		self.modules.iter()
 	}
 
-	/// Adds a new module to the collection of modules in the current context.
+	/// Adds a new module to the collection of modules in the environment.
 	///
 	/// **Note**: By convention, modules added this way will **always** be considered to be introduced by *this*
 	/// environment. Externally sourced modules can only be added via [merging](Environment::mergeWith) with other
@@ -345,9 +351,9 @@ impl<ModuleType> Environment<ModuleType>
 	/// Produce a new `Environment` that is the result of merging `other` to a copy of `self`.
 	///
 	/// The language in the above sentence is chosen very deliberately – this operation is, technically, **not
-	/// commutative**! Merging env 'b' to env 'a' will mean that 'a' will reference 'b'. This will make little
-	/// difference in practice, as the modules contained in the merger will be the same no matter the order. But the
-	/// *references* semantics will be reverses of each other.
+	/// commutative**! Merging env `b` to env `a` will mean that `a` *references* `b`. This will make little difference
+	/// in practice, as the modules contained in the merger will be the same no matter the order. But the *references*
+	/// semantics will be reverses of each other.
 	///
 	/// # Arguments
 	///
