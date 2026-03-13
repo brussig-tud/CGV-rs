@@ -11,7 +11,7 @@ pub use model::{
 }; // re-export
 
 // Submodule implementing compilation environments.
-mod environment;
+pub(crate) mod environment;
 pub use environment::{Environment, AddModuleError}; // re-export
 
 /// Submodule providing assorted facilities for working with [`compile::Environment`](super::Environment)s.

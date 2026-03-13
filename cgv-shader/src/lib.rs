@@ -32,6 +32,10 @@ pub use pak::Package; // re-export
 #[cfg(feature="slang_runtime")]
 pub mod slang;
 
+/// Unit tests
+#[cfg(test)]
+mod tests;
+
 
 
 //////
