@@ -10,7 +10,7 @@ anyhow = "*"
 bitcode = "*"
 serde = {version="*", optional=true}
 postcard = {version="*", optional=true, features=["alloc"]}
-crc64fast-nvme = "*"
+crc32fast = "*"
 cgv-util = {path="../cgv-util"}
 shader-slang = {git="https://github.com/brussig-tud/slang-rs.git", optional=true, features=[
 	"download_slang_binaries", "build_slang_from_source"

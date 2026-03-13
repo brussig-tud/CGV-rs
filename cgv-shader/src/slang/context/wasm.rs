@@ -374,7 +374,13 @@ impl ContextBuilder<'_>
 		let session = Context::freshSession(&globalSession, &sessionConfig).map_err(
 			|err| compile::CreateContextError::Backend(err.into())
 		)?;
-		Ok(Context { session, sessionConfig, compatHash: 0, environment: None })
+
+		// Done!
+		Ok(Context {
+			session, sessionConfig,
+			compatHash: CompatOptions::default().digest(), // WASM Slang compile contexts are always 100% default
+			environment: None
+		})
 	}
 }
 impl Default for ContextBuilder<'_> {
@@ -563,9 +569,9 @@ impl compile::EnvironmentEnabled for Context<'_>
 		-> Result<Option<compile::Environment<EnvModule>>, compile::SetEnvironmentError>
 	{
 		// Check if the new environment is compatible (in case it's `Some`)
-		/*if let Some(newEnv) = &environment && self.compatHash != newEnv.compatHash() {
+		if let Some(newEnv) = &environment && self.compatHash != newEnv.compatHash() {
 			return Err(compile::SetEnvironmentError::IncompatibleEnvironment)
-		}*/
+		}
 
 		// Start from a fresh session
 		let newSession = Self::freshSession(&GLOBAL_SESSION, &self.sessionConfig).expect(

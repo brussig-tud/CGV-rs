@@ -38,11 +38,20 @@ use serde;
 use shader_slang as slang;
 
 // CRC64-fast library
-#[cfg(not(target_arch="wasm32"))]
-use crc64fast_nvme as crc64;
+use crc32fast as crc32;
 
 // Local imports
 use crate::{*, compile::AddModuleError};
+
+
+
+//////
+//
+// Constants
+//
+
+/// The salt we use in [compatibility hashes](Context::environmentCompatHash) to mark our two *Slang* implementations.
+const SLANG_COMPILER_SALT: u64 = u64::from_be_bytes(*b"SLNG\0\0\0\0");
 
 
 
@@ -126,16 +135,14 @@ impl compile::env::Module for EnvModule {}
 //
 
 /// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
-#[cfg(not(target_arch="wasm32"))]
 struct CompatOptions {
 	matrixLayoutColumn: bool
 }
-#[cfg(not(target_arch="wasm32"))]
 impl Default for CompatOptions {
 	fn default() -> Self { Self { matrixLayoutColumn: false } }
 }
-#[cfg(not(target_arch="wasm32"))]
-impl CompatOptions {
+impl CompatOptions
+{
 	///
 	#[allow(dead_code)]
 	#[inline(always)]
@@ -151,6 +158,7 @@ impl CompatOptions {
 	}
 
 	///
+	#[cfg(not(target_arch="wasm32"))]
 	pub fn toCompilerOptions (&self) -> slang::CompilerOptions {
 		let options = slang::CompilerOptions::default();
 		if self.matrixLayoutColumn {
@@ -160,9 +168,7 @@ impl CompatOptions {
 
 	///
 	pub fn digest (self) -> u64 {
-		let mut digest = crc64::Digest::new();
-		digest.write(util::slicify(&self));
-		digest.sum64()
+		SLANG_COMPILER_SALT | (crc32::hash(util::slicify(&self)) as u64)
 	}
 }
 
