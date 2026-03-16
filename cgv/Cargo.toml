@@ -26,7 +26,7 @@ egui = {git="https://github.com/emilk/egui.git", default-features=true, features
 egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
-wgpu = {version="27", features=["spirv"] }
+wgpu = {version="28", features=["spirv"] }
 eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
 	"default_fonts", "wgpu"
 ]}
@@ -48,7 +48,7 @@ tracing-wasm = "*"
 wasm-bindgen-futures = "*"
 getrandom = {version="0.3", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
-wgpu = {version="27", default-features=false, features=["webgpu", "spirv"]}
+wgpu = {version="28", default-features=false, features=["webgpu", "spirv"]}
 egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
 	"fragile-send-sync-non-atomic-wasm"
 ]}

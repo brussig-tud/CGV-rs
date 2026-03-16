@@ -246,7 +246,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 						&wgpu::SamplerDescriptor {
 							mag_filter: wgpu::FilterMode::Linear,
 							min_filter: wgpu::FilterMode::Linear,
-							mipmap_filter: wgpu::FilterMode::Linear,
+							mipmap_filter: wgpu::MipmapFilterMode::Linear,
 							anisotropy_clamp: 16,
 							..Default::default()
 						}
@@ -332,7 +332,7 @@ impl ExampleApplication
 					&renderSetup.bindGroupLayouts().viewing, &self.appearanceUniforms.bindGroupLayout,
 					&self.texBindGroupLayout
 				],
-				push_constant_ranges: &[],
+				immediate_size: 0
 			});
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("ExBasic__RenderPipeline"),
@@ -358,8 +358,8 @@ impl ExampleApplication
 			},
 			depth_stencil: Some(renderState.depthStencilState().clone()),
 			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-			cache: None,
+			multiview_mask: None,
+			cache: None
 		})
 	}
 }

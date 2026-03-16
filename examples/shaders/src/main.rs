@@ -277,7 +277,7 @@ impl OnlineShadersDemo<'_>
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExShaders__RenderPipelineLayout"),
 				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing],
-				push_constant_ranges: &[],
+				immediate_size: 0
 			});
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("ExShaders__RenderPipeline"),
@@ -303,8 +303,8 @@ impl OnlineShadersDemo<'_>
 			},
 			depth_stencil: Some(renderState.depthStencilState().clone()),
 			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-			cache: None,
+			multiview_mask: None,
+			cache: None
 		})
 	}
 

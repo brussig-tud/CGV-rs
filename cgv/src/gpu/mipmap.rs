@@ -154,8 +154,8 @@ pub trait Generator
 				entry_point: Some("kernel"),
 				layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 					bind_group_layouts: &[&bindGroupLayout],
-					push_constant_ranges: &[],
-					label: Some("CGV__gpu_mipmapGenComputePipelineLayout")
+					label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
+					immediate_size: 0
 				})),
 				compilation_options: Default::default(),
 				cache: None,

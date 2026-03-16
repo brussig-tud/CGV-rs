@@ -63,7 +63,7 @@ impl ViewportCompositor
 			address_mode_w: wgpu::AddressMode::ClampToEdge,
 			mag_filter: wgpu::FilterMode::Nearest,
 			min_filter: wgpu::FilterMode::Nearest,
-			mipmap_filter: wgpu::FilterMode::Nearest,
+			mipmap_filter: wgpu::MipmapFilterMode::Nearest,
 			..Default::default()
 		});
 
@@ -109,7 +109,7 @@ impl ViewportCompositor
 		let pipelineLayout = context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: util::concatIfSome(&name, "_pipelineLayout").as_deref(),
 			bind_group_layouts: &[&texBindGroupLayout, &gammaUniform.bindGroupLayout],
-			push_constant_ranges: &[],
+			immediate_size: 0
 		});
 
 		let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -138,8 +138,8 @@ impl ViewportCompositor
 			},
 			depth_stencil: None,
 			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-			cache: None,
+			multiview_mask: None,
+			cache: None
 		});
 
 		Ok(Self { invGamma_all, invGamma, gammaUniform, texBindGroupName, sampler, texBindGroupLayout, texBindGroup, pipeline })

@@ -769,6 +769,7 @@ impl Player
 				depth_stencil_attachment: renderState.getMainDepthStencilAttachment(Some(pass.info.depthClearValue)),
 				occlusion_query_set: None,
 				timestamp_writes: None,
+				multiview_mask: None
 			};
 			let mut renderPass = cmdEncoder.begin_render_pass(&desc);
 
