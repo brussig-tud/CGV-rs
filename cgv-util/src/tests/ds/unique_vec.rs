@@ -15,7 +15,7 @@ use crate::ds::unique_vec::*;
 //
 
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Default,Debug,PartialEq,Eq)]
+#[derive(Clone,Default,Debug,PartialEq,Eq)]
 struct LargeKeyElement {
 	id: String,
 	data: i32,
@@ -29,7 +29,7 @@ impl UniqueVecElement for LargeKeyElement {
 }
 
 #[cfg_attr(feature="serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Default,Debug,PartialEq,Eq)]
+#[derive(Clone, Default,Debug,PartialEq,Eq)]
 struct RefKeyElement {
 	id: String,
 	data: i32,
@@ -67,6 +67,23 @@ impl UniqueVecElement for HashElement
 //
 // Tests
 //
+
+#[test]
+fn test_empty_collection_behavior() {
+	let mut v: BTreeUniqueVec<i32> = BTreeUniqueVec::new();
+	assert_eq!(v.pop(), None);
+	assert_eq!(v.first(), None);
+	assert_eq!(v.get(0), None);
+	assert!(v.isEmpty());
+}
+#[test]
+fn test_hash_empty_collection_behavior() {
+	let mut v: HashUniqueVec<i32> = HashUniqueVec::new();
+	assert_eq!(v.pop(), None);
+	assert_eq!(v.first(), None);
+	assert_eq!(v.get(0), None);
+	assert!(v.isEmpty());
+}
 
 #[test]
 fn test_from_vec()
@@ -582,6 +599,117 @@ fn test_hash_join_move()
 	assert_eq!(v[1], 2);
 	assert_eq!(v[2], 3);
 }
+
+#[test]
+fn test_remove_and_readd() {
+	let mut v = BTreeUniqueVec::new();
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.remove(0);
+	assert!(v.push(LargeKeyElement { id: "a".into(), data: 2 }), "Should be able to re-add after removal");
+}
+#[test]
+fn test_hash_remove_and_readd() {
+	let mut v = HashUniqueVec::new();
+	v.push(LargeKeyElement { id: "a".into(), data: 1 });
+	v.remove(0);
+	assert!(v.push(LargeKeyElement { id: "a".into(), data: 2 }), "Should be able to re-add after removal");
+}
+
+#[test]
+fn test_remove_and_readd_ref_keys() {
+	let mut v = BTreeUniqueVec::new();
+	v.push(RefKeyElement { id: "a".into(), data: 1 });
+	v.remove(0);
+	assert!(v.push(RefKeyElement { id: "a".into(), data: 2 }), "Should be able to re-add after removal");
+}
+#[test]
+fn test_hash_remove_and_readd_ref_keys() {
+	let mut v = HashUniqueVec::new();
+	v.push(RefKeyElement { id: "a".into(), data: 1 });
+	v.remove(0);
+	assert!(v.push(RefKeyElement { id: "a".into(), data: 2 }), "Should be able to re-add after removal");
+}
+
+#[test]
+fn test_contains_and_contains_key() {
+	let mut v = BTreeUniqueVec::new();
+	let elem = LargeKeyElement { id: "a".into(), data: 1 };
+	v.push(elem.clone());
+	assert!(v.contains(&elem));
+	assert!(v.containsKey(&"a".to_string()));
+}
+#[test]
+fn test_hash_contains_and_contains_key() {
+	let mut v = HashUniqueVec::new();
+	let elem = LargeKeyElement { id: "a".into(), data: 1 };
+	v.push(elem.clone());
+	assert!(v.contains(&elem));
+	assert!(v.containsKey(&"a".to_string()));
+}
+
+#[test]
+fn test_contains_and_contains_ref_key() {
+	let mut v = BTreeUniqueVec::new();
+	let elem = RefKeyElement { id: "a".into(), data: 1 };
+	v.push(elem.clone());
+	assert!(v.contains(&elem));
+	assert!(v.containsKey(&"a"));
+}
+#[test]
+fn test_hash_contains_and_contains_ref_key() {
+	let mut v = HashUniqueVec::new();
+	let elem = RefKeyElement { id: "a".into(), data: 1 };
+	v.push(elem.clone());
+	assert!(v.contains(&elem));
+	assert!(v.containsKey(&"a"));
+}
+
+#[test]
+fn test_clone_independence()
+{
+	let mut v1 = BTreeUniqueVec::new();
+	v1.push(1);
+	let mut v2 = v1.clone();
+	v2.push(2);
+	assert_eq!(v1.len(), 1);
+	assert_eq!(v2.len(), 2);
+	assert!(!v2.push(1), "Clone should still enforce uniqueness");
+}
+#[test]
+fn test_hash_clone_independence()
+{
+	let mut v1 = HashUniqueVec::new();
+	v1.push(1);
+	let mut v2 = v1.clone();
+	v2.push(2);
+	assert_eq!(v1.len(), 1);
+	assert_eq!(v2.len(), 2);
+	assert!(!v2.push(1), "Clone should still enforce uniqueness");
+}
+
+#[test]
+fn test_clone_independence_ref_keys()
+{
+	let mut v1 = BTreeUniqueVec::new();
+	v1.push("111");
+	let mut v2 = v1.clone();
+	v2.push("222");
+	assert_eq!(v1.len(), 1);
+	assert_eq!(v2.len(), 2);
+	assert!(!v2.push("111"), "Clone should still enforce uniqueness");
+}
+#[test]
+fn test_hash_clone_independence_ref_keys()
+{
+	let mut v1 = HashUniqueVec::new();
+	v1.push("111");
+	let mut v2 = v1.clone();
+	v2.push("222");
+	assert_eq!(v1.len(), 1);
+	assert_eq!(v2.len(), 2);
+	assert!(!v2.push("111"), "Clone should still enforce uniqueness");
+}
+
 
 #[cfg(feature="serde")]
 #[test]
