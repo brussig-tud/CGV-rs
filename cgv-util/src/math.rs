@@ -47,6 +47,37 @@ pub use rad2deg;
 
 //////
 //
+// Traits
+//
+
+/// The trait used to represent generic numbers throughout the *CGV-rs*. It basically relies on [`nalgebra_glm::Number`]
+/// to do the heavy lifting, but adds various constructors to enable formulating generic expressions with constants.
+pub trait Number<S=i8>: glm::Number+From<S>
+{
+	///
+	#[inline(always)]
+	fn new (value: S) -> Self {
+		value.into()
+	}
+
+	///
+	#[inline(always)]
+	fn two () -> Self where Self: From<i8> {
+		2.into()
+	}
+
+	///
+	#[inline(always)]
+	fn three () -> Self where Self: From<i8> {
+		3.into()
+	}
+}
+impl<S: Sized, T: glm::Number+From<S>> Number<S> for T {}
+
+
+
+//////
+//
 // Functions
 //
 
@@ -65,23 +96,51 @@ pub fn roundUpToQuantization<T: Copy + Rem<Output=T> + Add<Output=T> + Sub<Outpu
 	number + ((stride - (number % stride)) % stride)
 }
 
-/// Generic cubic polynomial for C1-smooth interpolation.
-pub fn smoothstep (t_linear: f32) -> f32 {
+/// Performs linear interpolation between two values.
+///
+/// # Arguments
+///
+/// * `v1` – The value at `t=0`.
+/// * `v2` – The value at `t=1`.
+/// * `t` – The interpolation factor.
+///
+/// # Returns
+///
+/// The value of the expression `v1·(1-t) + v2·t`, that is, the linearly interpolated value between `v1` and `v2`.
+pub fn lerp<S: glm::Number, V: Copy+Mul<S>+Add> (v1: V, v2: V, t: S) -> V
+	where <V as Mul<S>>::Output: Copy+Add<Output=V>
+{
+	v1*(S::one()-t) + v2*t
+}
+
+/// Generic evaluation of the polynomial -2·*t*³ + 3·*t*² for *C*1-smooth cubic interpolation.
+///
+/// # Arguments
+///
+/// * `t_linear` – The linear interpolation factor to transform. This will not be clamped; callers that require
+///                interpolation strictly within the range `[0, 1]` must clamp this argument themselves.
+///
+/// # Returns
+///
+/// The value of the cubic interpolator polynomial at `t_linear`.
+pub fn smoothstep<T: Number> (t_linear: T) -> T {
 	let t2 = t_linear*t_linear;
-	glm::clamp_scalar(-2.*t2*t_linear + 3.*t2, 0., 1.)
+	t2*(T::three()-T::two()*t_linear)
 }
 
-/// Generic C1-smooth cubic interpolation for scalars.
-pub fn smoothLerp (v1: f32, v2: f32, t_linear: f32) -> f32 {
-	glm::mix_scalar(v1, v2, smoothstep(t_linear))
-}
-
-/// C1-smooth cubic interpolation for 2D vectors.
-pub fn smoothLerp2 (v1: &glm::Vec2, v2: &glm::Vec2, t_linear: f32) -> glm::Vec2 {
-	glm::mix(v1, v2, smoothstep(t_linear))
-}
-
-/// C1-smooth cubic interpolation for 3D vectors.
-pub fn smoothLerp3 (v1: &glm::Vec3, v2: &glm::Vec3, t_linear: f32) -> glm::Vec3 {
-	glm::mix(v1, v2, smoothstep(t_linear))
+/// Performs *C*1-smooth cubic interpolation between two values.
+///
+/// # Arguments
+///
+/// * `v1` – The value at `t_linear=0`.
+/// * `v2` – The value at `t_linear=1`.
+/// * `t_linear` – The linear interpolation factor, internally transformed via [`smoothstep`].
+///
+/// # Returns
+///
+/// The cubically interpolated value at `t_linear`.
+pub fn smoothLerp<S: Number, V: Copy+Mul<S>+Add> (v1: V, v2: V, t_linear: S) -> V
+	where <V as Mul<S>>::Output: Copy+Add<Output=V>
+{
+	lerp(v1, v2, smoothstep(t_linear))
 }

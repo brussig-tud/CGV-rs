@@ -139,7 +139,7 @@ impl FocusChange
 	pub fn update (&mut self, dt: f32, cameraParameters: &mut CameraParameters) -> bool
 	{
 		self.t = f32::min(self.t + self.speed*dt, 1f32);
-		cameraParameters.extrinsics.eye = util::math::smoothLerp3(&self.oldEye, &self.newEye, self.t);
+		cameraParameters.extrinsics.eye = util::math::smoothLerp(self.oldEye, self.newEye, self.t);
 		cameraParameters.intrinsics.f = util::math::smoothLerp(self.oldF, self.newF, self.t);
 		cameraParameters.extrinsics.eye == self.newEye
 	}
