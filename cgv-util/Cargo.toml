@@ -20,4 +20,4 @@ serde_json = "*"
 
 [features]
 default = []
-serde = ["dep:serde", "uuid/serde"]
+serde = ["dep:serde", "serde/serde_derive", "uuid/serde"]
