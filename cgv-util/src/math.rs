@@ -50,18 +50,19 @@ pub use rad2deg;
 // Functions
 //
 
-/// Returns the next biggest multiple (times the given factor) of the given number.
+/// Quantize the given number with upwards rounding, i.e. return the smallest multiple of `stride` that is greater than
+/// or equal to `number`.
 ///
 /// # Arguments
 ///
-/// * `number` – t.b.d
-/// * `factor` – t.b.d.
+/// * `number` – The number to quantize.
+/// * `stride` – The quantization step size.
 ///
 /// # Returns
 ///
-/// The number rounded up to the nearest multiple of `factor`
-pub fn alignToFactor<T: Copy + Rem<Output=T> + Add<Output=T> + Sub<Output=T>> (number: T, factor: T) -> T {
-	number + factor - (number % factor)
+/// The quantized value of `number`.
+pub fn roundUpToQuantization<T: Copy + Rem<Output=T> + Add<Output=T> + Sub<Output=T>> (number: T, stride: T) -> T {
+	number + ((stride - (number % stride)) % stride)
 }
 
 /// Generic cubic polynomial for C1-smooth interpolation.

@@ -14,8 +14,8 @@ use crate::wgpu;
 use image::GenericImageView;
 
 // Local imports
+use util::math::roundUpToQuantization;
 use crate::{*, hal::texture};
-use util::math::alignToFactor;
 
 
 
@@ -199,7 +199,7 @@ impl Texture
 				let heightTimesDepth = (mipDims.y * mipDims.z) as usize;
 				TextureSize {
 					logical: logicalBytesPerRow * heightTimesDepth,
-					actual: heightTimesDepth * alignToFactor(
+					actual: heightTimesDepth * roundUpToQuantization(
 						logicalBytesPerRow, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize
 					)
 				}
@@ -237,7 +237,7 @@ impl Texture
 			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
 				buffer: util::statify(buffer.as_ref()),
 				layout: wgpu::TexelCopyBufferLayout {
-					bytes_per_row: Some(alignToFactor(
+					bytes_per_row: Some(roundUpToQuantization(
 						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
 						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
 					)),
