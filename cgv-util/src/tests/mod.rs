@@ -7,6 +7,9 @@
 /// Tests for the `ds` module.
 mod ds;
 
+/// Tests for the `math` module.
+mod math;
+
 
 
 //////
