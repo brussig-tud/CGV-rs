@@ -5,6 +5,7 @@
 //
 
 /// Tests for the `compile` module.
+#[cfg(feature="compilation")]
 mod compile;
 
 
