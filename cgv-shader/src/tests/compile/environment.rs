@@ -160,22 +160,91 @@ fn test_merge_same_source()
 	env1.mergeWith(&env2).unwrap();
 
 	assert_eq!(env1.numModules(), 1);
-	let common = env1.modules().find(|m| m.path == PathBuf::from("/common")).unwrap();
+	let common = env1.modules().find(
+		|m| m.path == PathBuf::from("/common")
+	).unwrap();
 	assert_eq!(common.sourceEnv, Some(base.uuid()));
+}
+
+#[test]
+fn test_merge_partially_same_source()
+{
+	let mut base = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "base");
+	base.addModule("/common", BytesModule::new(vec![0])).unwrap();
+
+	let mut env1 = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "env1");
+	env1.addModule("/mod1", BytesModule::new(vec![1])).unwrap();
+	let mut env2 = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "env2");
+	env2.addModule("/mod2", BytesModule::new(vec![1])).unwrap();
+
+	env1.mergeWith(&base).unwrap();
+	env2.mergeWith(&base).unwrap();
+
+	// Both env1 and env2 have /common sourced from base
+	env1.mergeWith(&env2).unwrap();
+
+	// After final merge, env1 should now have /common from base, /mod1 from self (i.e. src==None), and /mod2 from env2
+	assert_eq!(env1.numModules(), 3);
+	let common = env1.modules().find(
+		|m| m.path == PathBuf::from("/common")
+	).unwrap();
+	assert_eq!(common.sourceEnv, Some(base.uuid()));
+	let mod1 = env1.modules().find(
+		|m| m.path == PathBuf::from("/mod1")
+	).unwrap();
+	assert_eq!(mod1.sourceEnv, None); // <- None is internally sourced
+	let mod2 = env1.modules().find(
+		|m| m.path == PathBuf::from("/mod2")
+	).unwrap();
+	assert_eq!(mod2.sourceEnv, Some(env2.uuid()));
+}
+
+#[test]
+fn test_merge_immutable_partially_same_source()
+{
+	let mut base = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "base");
+	base.addModule("/common", BytesModule::new(vec![0])).unwrap();
+
+	let mut env1 = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "env1");
+	env1.addModule("/mod1", BytesModule::new(vec![1])).unwrap();
+	let mut env2 = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "env2");
+	env2.addModule("/mod2", BytesModule::new(vec![1])).unwrap();
+
+	env1.mergeWith(&base).unwrap();
+	env2.mergeWith(&base).unwrap();
+	// Both env1 and env2 have /common sourced from base
+
+	// Merge into new env3 without own modules should cause all modules be externalized to their original sources
+	let env3 = env1.merge(&env2, Uuid::new_v4(), "env3").unwrap();
+
+	// After final merge, env3 should have /common from base, /mod1 from env1, and /mod2 from env2
+	assert_eq!(env3.numModules(), 3);
+	let common = env3.modules().find(
+		|m| m.path == PathBuf::from("/common")
+	).unwrap();
+	assert_eq!(common.sourceEnv, Some(base.uuid()));
+	let mod1 = env3.modules().find(
+		|m| m.path == PathBuf::from("/mod1")
+	).unwrap();
+	assert_eq!(mod1.sourceEnv, Some(env1.uuid()));
+	let mod2 = env3.modules().find(
+		|m| m.path == PathBuf::from("/mod2")
+	).unwrap();
+	assert_eq!(mod2.sourceEnv, Some(env2.uuid()));
 }
 
 #[test]
 fn test_serialization()
 {
-	let mut env = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "test");
-	env.addModule("/a", BytesModule::new(vec![1])).unwrap();
+	let mut env_orig = Environment::<BytesModule>::withUuid(Uuid::new_v4(), "test");
+	env_orig.addModule("/a", BytesModule::new(vec![1])).unwrap();
 
-	let bytes = env.serialize();
-	let env2 = Environment::<BytesModule>::deserialize(&bytes).unwrap();
+	let bytes = env_orig.serialize();
+	let env = Environment::<BytesModule>::deserialize(&bytes).unwrap();
 
-	assert_eq!(env.uuid(), env2.uuid());
-	assert_eq!(env.label(), env2.label());
-	assert_eq!(env.numModules(), env2.numModules());
+	assert_eq!(env.uuid(), env_orig.uuid());
+	assert_eq!(env.label(), env_orig.label());
+	assert_eq!(env.numModules(), env_orig.numModules());
 }
 
 #[test]
