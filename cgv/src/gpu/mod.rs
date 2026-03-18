@@ -5,8 +5,8 @@
 // Module definitions
 //
 
-/// Submodule providing linear data processing functionality
-pub mod data;
+/// Deprecated submodule providing linear data processing functionality, ignore and don't use.
+pub mod DEPRECATED_data;
 
 /// Submodule providing utilities for fast mip map computation
 pub mod mipmap;

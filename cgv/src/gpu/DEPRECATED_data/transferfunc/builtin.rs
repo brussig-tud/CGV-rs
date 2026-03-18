@@ -12,7 +12,7 @@ use glm;
 
 // Local imports
 use crate::*;
-use gpu::data::{GPUTransferFunction, HasWGSLEquivalent};
+use gpu::DEPRECATED_data::{GPUTransferFunction, HasWGSLEquivalent};
 
 
 

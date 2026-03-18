@@ -27,35 +27,6 @@ use crate::*;
 // Globals
 //
 
-/*/// A simple pass-through hasher for u64 ints.
-#[derive(Clone,Copy,Default)]
-struct U64Hasher {
-	value: u64
-}
-impl Hasher for U64Hasher
-{
-	#[inline(always)]
-	fn finish (&self) -> u64 {
-		self.value
-	}
-
-	fn write(&mut self, _: &[u8]) {
-		unimplemented!()
-	}
-
-	#[inline(always)]
-	fn write_u64 (&mut self, value: u64) {
-		self.value = value;
-	}
-}
-impl BuildHasher for U64Hasher {
-	type Hasher = U64Hasher;
-
-	fn build_hasher (&self) -> Self::Hasher {
-		U64Hasher::default()
-	}
-}*/
-
 /// The database of cached compute pipeline configurations
 static COMPUTE_PIPELINE_CACHE: LazyLock<DashMap<
 	(wgpu::TextureFormat, wgpu::TextureViewDimension, u64),
