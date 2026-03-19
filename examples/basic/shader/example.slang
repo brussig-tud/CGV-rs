@@ -21,8 +21,7 @@ import "cgv/math/field.slang";     // contains the checkerboard pattern
 ParameterBlock<cgv::api::Viewing> viewing;
 
 // group(1): Visualization parameters. Are adjustable from the GUI and thus change from time to time, hence group(1).
-struct Appearance
-{
+struct Appearance {
 	float4 logoColor;
 	float4 bgColor;
 	float4 oddCheckersColor;
@@ -63,6 +62,7 @@ struct VSOutput
 		pos_clip = _pos_clip; color = _color; texcoord = _texcoord;
 	}
 }
+
 
 
 //////

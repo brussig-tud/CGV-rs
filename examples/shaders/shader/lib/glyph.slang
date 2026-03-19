@@ -12,7 +12,7 @@ module glyph;
 // Imports
 
 // CGV-rs core shader library
-import "cgv/common.slang";
+import "cgv/prelude.slang";
 import "cgv/geom/common.slang";
 
 // Local imports

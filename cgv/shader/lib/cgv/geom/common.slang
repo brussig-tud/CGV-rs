@@ -12,7 +12,7 @@ module common;
 // Imports
 
 // Local imports
-import "cgv/common.slang";
+import "cgv/prelude.slang";
 
 
 /////

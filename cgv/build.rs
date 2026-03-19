@@ -60,11 +60,12 @@ fn main() -> cgv_build::Result<()>
 
 	// Generate the runtime shader compilation environment exposing the core CGV shader library
 	cgv_build::generateShaderEnvironment(
-		cgv_build::shader::slang::ContextBuilder::withPlatformDefaults(cgv_build::cargoBuildTargetPlatform())
-			.addSearchPaths(buildSetup.shaderPath()),
+		cgv_build::shader::slang::ContextBuilder::withPlatformDefaults(
+			cgv_build::cargoBuildTargetPlatform()
+		).addSearchPaths(buildSetup.shaderPath()),
 		"coreshaderlib.env", "shader/lib",
 		"CgvCoreShaderLib", |mut env, recommendedStorage| {
-			env.addModule(recommendedStorage, "cgv/common.slang")?;
+			env.addModule(recommendedStorage, "cgv/prelude.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/misc.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/field.slang")?;
 			env.addModule(recommendedStorage, "cgv/color/blending.slang")?;
