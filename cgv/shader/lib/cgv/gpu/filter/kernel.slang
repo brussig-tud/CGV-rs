@@ -63,10 +63,10 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 	public typealias Index = vector<int, Dims>;
 
 	/// The number of elements in the box filter kernel.
-	public static const int KERNEL_SIZE = 2^Dims;
+	public static constexpr int KERNEL_SIZE = int(pow(2, Dims));
 
 	/// The resulting (constant) weight of each element in the kernel.
-	public static const DataType::Repr weight = DataType::Repr(1)/DataType::Repr(KERNEL_SIZE);
+	public static constexpr float WEIGHT = 1/float(KERNEL_SIZE);
 
 	/// Filter the value at the query point `q` through the given data accessor.
 	/// # Arguments
@@ -76,18 +76,30 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 	/// The filtered value.
 	override func apply (q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>) -> DataType
 	{
+        // Work around bug in emitted Slang debug info by mirroring with a local constant
+		let weight = DataType::Repr(WEIGHT);
+
+		// Convolve value with 2^N box kernel
 		var val = DataType(0);
-		//[ForceUnroll]
-		for (int i=0; i<KERNEL_SIZE; ++i)
-		{
+		for (int i=0; i<KERNEL_SIZE; ++i) {
 			var ki = Index(0);
-			//[ForceUnroll]
+			[ForceUnroll]
 			for (int d=0; d<Dims; ++d) // Since each dimension is 2 wide, the per-dimension indices correspond to the
 				ki[d] = (i>>d) & 1;    // bits of i.
-			let dataValue = data(q+ki);
-			val.add(dataValue.scale(weight));
+			val = val.add(data(q+ki).scale(weight));
 		}
+
+		// Done!
+		return val;
 	}
+}
+
+/// Function-style access to the `Box2` filter kernel.
+public func box2<DataType, int Dims> (q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>) -> DataType
+	where DataType: IFloat, lin::IElement
+{
+	static constexpr Box2<DataType, Dims> kernel;
+	return kernel.apply(q, data);
 }
 
 // Sub-namespace close
