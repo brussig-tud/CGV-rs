@@ -122,7 +122,7 @@ pub trait Generator
 			// - pipeline
 			let pipeline = context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
 				module: &shader,
-				entry_point: Some("kernel"),
+				entry_point: Some("main"),
 				layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 					bind_group_layouts: &[&bindGroupLayout],
 					label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
@@ -214,11 +214,14 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		*ID | fid
 	}
 
-	fn ensureShaderModule (context: &Context) -> Option<wgpu::ShaderModule> {
-		Some(context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: Some("CGV__gpu_mipmapGenComputeShaderModule"),
-			source: wgpu::ShaderSource::Wgsl(util::sourceFile!("/shader/gpu/mipmapgen.wgsl").into()),
-		}))
+	fn ensureShaderModule (context: &Context) -> Option<wgpu::ShaderModule>
+	{
+		let shaderPackage = shader::Package::deserialize(
+			util::sourceGeneratedBytes!("/shader/gpu/mipmapgen.spk")
+		).ok()?;
+		shaderPackage.createShaderModuleFromBestInstance(
+			context.device(), None, Some("CGV__gpu_mipmapGenComputeShaderModule")
+		)
 	}
 
 	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
@@ -276,6 +279,10 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 
 /// An implementation of a mipmap generator that applies a given [shader-based filter](MipmapShaderFilter) to the texels
 /// in a *blit*-like application of the classical render pipeline.
+///
+/// # TODO
+///
+/// This is still a stub, actually implement it!
 pub struct RenderPipelineGenerator<'filter, Filter: ShaderFilter+'filter> {
 	_filter: &'filter Filter
 }

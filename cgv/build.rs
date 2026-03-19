@@ -81,7 +81,7 @@ fn main() -> cgv_build::Result<()>
 
 	// Compile our internally used shaders
 	cgv_build::prepareShaders(
-		&buildSetup, None, "shader", /* exclude: */Some(&["common", "gpu", "lib"])
+		&buildSetup, None, "shader", /* exclude: */Some(&["common", "lib"])
 	)?;
 
 	// Done!
