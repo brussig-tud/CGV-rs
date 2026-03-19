@@ -63,7 +63,7 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 	public typealias Index = vector<int, Dims>;
 
 	/// The number of elements in the box filter kernel.
-	public static constexpr int KERNEL_SIZE = int(pow(2, Dims));
+	public static constexpr int KERNEL_SIZE = int(powr(2, Dims));
 
 	/// The resulting (constant) weight of each element in the kernel.
 	public static constexpr float WEIGHT = 1/float(KERNEL_SIZE);
@@ -95,6 +95,7 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 }
 
 /// Function-style access to the `Box2` filter kernel.
+[ForceInline]
 public func box2<DataType, int Dims> (q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>) -> DataType
 	where DataType: IFloat, lin::IElement
 {
