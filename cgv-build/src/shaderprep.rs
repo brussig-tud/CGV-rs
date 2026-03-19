@@ -121,18 +121,31 @@ pub fn prepareShaders (
 	// subdirectory
 	util::fs::doRecursively(absoluteShaderDir, |srcPath, destStack, fileType|
 	{
-		if !fileType.is_dir() {
+		if !fileType.is_dir()
+		{
+			// Check skip conditions
+			let extension = srcPath.extension();
+			if let Some(exp) = extension {
+				if exp.to_ascii_lowercase() != "slang" {
+					// Not a slang source file, skip
+					return Ok(());
+				}
+			}
+			else {
+				// Not a slang source file, skip
+				return Ok(());
+			}
 			let destStackParent = destStack.parent().ok_or_else(|| anyhow!("INTERNAL LOGIC ERROR"))?;
-			let tgtPath = targetDir.join(destStack).with_extension("spk");
-			let tgtParent = targetDir.join(destStackParent);
 			if let Some(skipSubDirs) = skipSubDirs {
 				for skipDir in skipSubDirs {
 					if destStackParent.starts_with(skipDir.as_ref()) {
 						// We're in a skipped directory
-						return Ok(())
+						return Ok(());
 					}
 				}
 			}
+			let tgtPath = targetDir.join(destStack).with_extension("spk");
+			let tgtParent = targetDir.join(destStackParent);
 			dependOnFile(srcPath);
 			fs::create_dir_all(tgtParent)?;
 			let package = shader::Package::fromSourceFileMultipleTypes(
