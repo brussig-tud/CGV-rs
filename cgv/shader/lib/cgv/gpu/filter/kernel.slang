@@ -76,9 +76,6 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 	/// The filtered value.
 	override func apply (q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>) -> DataType
 	{
-        // Work around bug in emitted Slang debug info by mirroring with a local constant
-		let weight = DataType::Repr(WEIGHT);
-
 		// Convolve value with 2^N box kernel
 		var val = DataType(0);
 		for (int i=0; i<KERNEL_SIZE; ++i) {
@@ -86,11 +83,12 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 			[ForceUnroll]
 			for (int d=0; d<Dims; ++d) // Since each dimension is 2 wide, the per-dimension indices correspond to the
 				ki[d] = (i>>d) & 1;    // bits of i.
-			val = val.add(data(q+ki).scale(weight));
+			val = val.add(data(q+ki));
 		}
 
-		// Done!
-		return val;
+		// Renormalize
+		let weight = DataType::Repr(WEIGHT); // ← work around bug in emitted Slang debug info by mirroring with a local
+		return val.scale(weight);            //   constant
 	}
 }
 
