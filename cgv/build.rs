@@ -74,8 +74,8 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/lin/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/operators.slang")?;
 			env.addModule(recommendedStorage, "cgv/lin/transform.slang")?;
-			env.addModule(recommendedStorage, "cgv/gpu/filter.slang")?;
-			env.addModule(recommendedStorage, "cgv/gpu/filter/kernel.slang")
+			env.addModule(recommendedStorage, "cgv/gpu/filter/kernel.slang")?;
+			env.addModule(recommendedStorage, "cgv/gpu/filter.slang")
 		}
 	)?;
 
