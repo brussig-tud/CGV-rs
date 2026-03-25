@@ -498,7 +498,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 							// - define editor
 							let mut editorOutput = egui::TextEdit::multiline(&mut self.userShaderCode)
 								.code_editor().desired_rows(CODE_EDITOR_LINES).lock_focus(true)
-								.desired_width(f32::INFINITY).frame(false).layouter(&mut layouter)
+								.desired_width(f32::INFINITY).frame(egui::Frame::new()).layouter(&mut layouter)
 								.show(ui);
 							// - define completer window
 							self.syntaxCompleter.show(
@@ -541,7 +541,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 					ui, |ui| {
 						egui::ScrollArea::vertical().id_salt("msgPane").show(ui, |ui| {
 							let msgPanel = egui::widgets::TextEdit::multiline(&mut self.statusText)
-								.frame(false).desired_rows(MESSAGE_PANEL_LINES).desired_width(f32::INFINITY);
+								.frame(egui::Frame::new()).desired_rows(MESSAGE_PANEL_LINES).desired_width(f32::INFINITY);
 							ui.add_enabled(false, msgPanel)
 						})
 					})
