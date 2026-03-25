@@ -11,6 +11,9 @@ module kernel;
 //////
 // Imports
 
+// Metaprogramming module
+import "cgv/meta.slang";
+
 // Linear algebra module
 import "cgv/lin/common.slang";
 
@@ -62,11 +65,11 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 	/// The vector-valued integer index into data.
 	public typealias Index = vector<int, Dims>;
 
-	/// The number of elements in the box filter kernel.
-	public static constexpr int KERNEL_SIZE = int(powr(2, Dims));
+	/// The number 2^Dims of elements in the box filter kernel.
+	public static const int KERNEL_SIZE = meta::pow2<Dims>();
 
 	/// The resulting (constant) weight of each element in the kernel.
-	public static constexpr float WEIGHT = 1/float(KERNEL_SIZE);
+	public static const DataType::Repr WEIGHT = DataType::Repr(1)/DataType::Repr(KERNEL_SIZE);
 
 	/// Filter the value at the query point `q` through the given data accessor.
 	/// # Arguments
@@ -85,10 +88,7 @@ public struct Box2<DataType, int Dims> : IKernel<DataType, Dims>
 				ki[d] = (i>>d) & 1;    // bits of i.
 			val = val.add(data(q+ki));
 		}
-
-		// Renormalize
-		let weight = DataType::Repr(WEIGHT); // ← work around bug in emitted Slang debug info by mirroring with a local
-		return val.scale(weight);            //   constant
+		return val.scale(WEIGHT);
 	}
 }
 
