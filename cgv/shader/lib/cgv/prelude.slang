@@ -5,13 +5,13 @@
 //
 
 /// Commonly used assorted functionality that is relevant across problem domains.
-module common;
+module prelude;
 
 
 /////
 // Module namespace
 
-// Insert into cgv::geom namespace
+// Insert into cgv namespace
 public namespace cgv {
 
 
