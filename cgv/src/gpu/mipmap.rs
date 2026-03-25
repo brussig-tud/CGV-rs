@@ -124,7 +124,7 @@ pub trait Generator
 				module: &shader,
 				entry_point: Some("main"),
 				layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-					bind_group_layouts: &[&bindGroupLayout],
+					bind_group_layouts: &[Some(&bindGroupLayout)],
 					label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
 					immediate_size: 0
 				})),

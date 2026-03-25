@@ -91,7 +91,7 @@ impl RenderState
 
 	/// Query the depth compare function to be used for visibility testing when interfacing with the current managed
 	/// [render pass](GlobalPassInfo) the render state belongs to.
-	pub fn depthCompareFunction (&self) -> wgpu::CompareFunction {
+	pub fn depthCompareFunction (&self) -> Option<wgpu::CompareFunction> {
 		self.depthStencilState.depth_compare
 	}
 
@@ -208,8 +208,8 @@ pub fn defaultColorTargetState (colorTex: &hal::Texture) -> wgpu::ColorTargetSta
 pub fn defaultDepthStencilState (depthStencilTex: &hal::Texture) -> wgpu::DepthStencilState {
 	wgpu::DepthStencilState {
 		format: depthStencilTex.descriptor.format,
-		depth_write_enabled: true,
-		depth_compare: wgpu::CompareFunction::Less,
+		depth_write_enabled: Some(true),
+		depth_compare: Some(wgpu::CompareFunction::Less),
 		stencil: Default::default(),
 		bias: Default::default(),
 	}

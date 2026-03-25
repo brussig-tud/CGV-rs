@@ -329,8 +329,8 @@ impl ExampleApplication
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExBasic__RenderPipelineLayout"),
 				bind_group_layouts: &[
-					&renderSetup.bindGroupLayouts().viewing, &self.appearanceUniforms.bindGroupLayout,
-					&self.texBindGroupLayout
+					Some(&renderSetup.bindGroupLayouts().viewing), Some(&self.appearanceUniforms.bindGroupLayout),
+					Some(&self.texBindGroupLayout)
 				],
 				immediate_size: 0
 			});

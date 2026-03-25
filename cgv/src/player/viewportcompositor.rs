@@ -108,7 +108,7 @@ impl ViewportCompositor
 
 		let pipelineLayout = context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: util::concatIfSome(&name, "_pipelineLayout").as_deref(),
-			bind_group_layouts: &[&texBindGroupLayout, &gammaUniform.bindGroupLayout],
+			bind_group_layouts: &[Some(&texBindGroupLayout), Some(&gammaUniform.bindGroupLayout)],
 			immediate_size: 0
 		});
 

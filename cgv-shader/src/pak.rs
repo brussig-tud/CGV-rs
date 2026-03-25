@@ -453,7 +453,7 @@ impl Package
 						shaderModule = unsafe {
 							// SAFETY: we already verified that the code is SPIR-V
 							device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-								entry_point: "NOT_USED".into(), label, spirv: Some(wgpu::util::make_spirv_raw(code)),
+								label, spirv: Some(wgpu::util::make_spirv_raw(code)),
 								..Default::default()
 							})
 						}

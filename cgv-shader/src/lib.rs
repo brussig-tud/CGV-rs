@@ -136,20 +136,14 @@ pub const fn feasibleSourceTypesForPlatform(platform: &util::meta::SupportedPlat
 {
 	// WebGPU/WASM
 	if platform.isWasm() {
-		const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::WGSL, WgpuSourceType::SPIRV];
+		const SOURCE_TYPES: [WgpuSourceType; 1] = [WgpuSourceType::WGSL];
 		&SOURCE_TYPES
 	}
 	// All native backends
 	else {
 		// Currently always considers SPIR-V preferable even on non-Vulkan backends
-		if !platform.isDebug() {
-			const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::SPIRV, WgpuSourceType::WGSL];
-			&SOURCE_TYPES
-		}
-		else {
-			const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::SPIRV, WgpuSourceType::WGSL];
-			&SOURCE_TYPES
-		}
+		const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::SPIRV, WgpuSourceType::WGSL];
+		&SOURCE_TYPES
 	}
 }
 

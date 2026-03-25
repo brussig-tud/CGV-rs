@@ -276,7 +276,7 @@ impl OnlineShadersDemo<'_>
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExShaders__RenderPipelineLayout"),
-				bind_group_layouts: &[&renderSetup.bindGroupLayouts().viewing],
+				bind_group_layouts: &[Some(&renderSetup.bindGroupLayouts().viewing)],
 				immediate_size: 0
 			});
 		context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {

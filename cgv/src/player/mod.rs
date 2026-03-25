@@ -354,7 +354,7 @@ impl Player
 		// Prepare default player icon
 		let icon = image::load_from_memory(util::sourceBytes!("/res/ico/defaultIcon.png"))?;
 
-		// Run the event loop
+		// Setup WGPU native
 		let options = eframe::NativeOptions {
 			viewport: egui::ViewportBuilder::default()
 				.with_inner_size([1216., 800.])
@@ -390,7 +390,7 @@ impl Player
 				//desired_maximum_frame_latency: None,
 				//native_adapter_selector: None,
 				//trace_path: None,
-				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew( egui_wgpu::WgpuSetupCreateNew {
+				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew(egui_wgpu::WgpuSetupCreateNew {
 					instance_descriptor: wgpu::InstanceDescriptor {
 						#[cfg(all(not(target_os="windows"),not(target_os="macos")))]
 							backends: wgpu::Backends::VULKAN,
@@ -399,20 +399,25 @@ impl Player
 						#[cfg(target_os="macos")]
 							backends: wgpu::Backends::METAL,
 						#[cfg(debug_assertions)]
-							flags: wgpu::InstanceFlags::DEBUG,
-						..Default::default()
+							flags: wgpu::InstanceFlags::debugging(),
+						#[cfg(not(debug_assertions))]
+							flags: wgpu::InstanceFlags::empty(),
+						backend_options: wgpu::BackendOptions::from_env_or_default(),
+						memory_budget_thresholds: Default::default(),
+						display: None
 					},
+					native_adapter_selector: None,
 					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
 						experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
 						  required_features: wgpu::Features::INDIRECT_FIRST_INSTANCE
-						| wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+						| wgpu::Features::PASSTHROUGH_SHADERS,
 						//required_limits: Default::default(),
 						//memory_hints: Default::default(),
 						..Default::default()
 					}),
-					..Default::default()
+					display_handle: None
 				}),
 				..Default::default()
 			},
@@ -447,6 +452,7 @@ impl Player
 		tracing::info!("Starting up...");
 		tracing::info!("Platform: {}", util::meta::platformTargetTriple().full());
 
+		// Setup WebGPU
 		let webOptions = eframe::WebOptions {
 			//depth_buffer: 0,
 			wgpu_options: egui_wgpu::WgpuConfiguration {
@@ -455,8 +461,15 @@ impl Player
 				wgpu_setup: egui_wgpu::WgpuSetup::CreateNew( egui_wgpu::WgpuSetupCreateNew {
 					instance_descriptor: wgpu::InstanceDescriptor {
 						backends: wgpu::Backends::BROWSER_WEBGPU,
-						..Default::default()
+						#[cfg(debug_assertions)]
+							flags: wgpu::InstanceFlags::debugging(),
+						#[cfg(not(debug_assertions))]
+							flags: wgpu::InstanceFlags::empty(),
+						backend_options: wgpu::BackendOptions::from_env_or_default(),
+						memory_budget_thresholds: Default::default(),
+						display: None
 					},
+					native_adapter_selector: None,
 					power_preference: wgpu::PowerPreference::HighPerformance,
 					device_descriptor: Arc::new(|_| wgpu::DeviceDescriptor {
 						label: Some("CGV__WgpuDevice"),
@@ -465,7 +478,7 @@ impl Player
 						//memory_hints: Default::default(),
 						..Default::default()
 					}),
-					..Default::default()
+					display_handle: None
 				}),
 				..Default::default()
 			},
@@ -473,6 +486,7 @@ impl Player
 			..Default::default()
 		};
 
+		// Dispatch the main loop
 		use eframe::wasm_bindgen::JsCast as _;
 		use eframe::web_sys;
 		wasm_bindgen_futures::spawn_local(async move {
@@ -1081,9 +1095,7 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 			unsafe {
 				// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
 				#[allow(invalid_reference_casting)]
-				std::ptr::write_volatile(
-					&self.player.pendingRedraw as *const bool as *mut bool, false
-				)
+				std::ptr::write_volatile(&self.player.pendingRedraw as *const bool as *mut bool, false)
 			}
 			cmdBuffers
 		} else {
@@ -1099,8 +1111,7 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		self.viewportCompositor.composit(eguiRenderPass);
 
 		// Update frame stats
-		if self.player.continousRedrawRequests > 0
-		{
+		if self.player.continousRedrawRequests > 0 {
 			let player = util::mutify(self.player); // we use interior mutability
 			let elapsed = player.startInstant.elapsed();
 			player.prevFrameDuration = elapsed - player.prevFrameElapsed;
