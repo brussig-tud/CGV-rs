@@ -217,7 +217,7 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 	fn ensureShaderModule (context: &Context) -> Option<wgpu::ShaderModule>
 	{
 		let shaderPackage = shader::Package::deserialize(
-			util::sourceGeneratedBytes!("/shader/gpu/mipmapgen.spk")
+			util::sourceGeneratedBytes!("/shader/gpu/mipmapgen/box_polyphase.spk")
 		).ok()?;
 		shaderPackage.createShaderModuleFromBestInstance(
 			context.device(), None, Some("CGV__gpu_mipmapGenComputeShaderModule")
