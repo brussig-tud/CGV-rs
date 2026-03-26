@@ -8,6 +8,10 @@
 #[cfg(feature="compilation")]
 mod compile;
 
+/// Tests for the `slang_runtime` module.
+#[cfg(feature="slang_runtime")]
+mod slang;
+
 
 
 //////
