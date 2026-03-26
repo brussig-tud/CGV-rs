@@ -29,3 +29,13 @@ opt-level = 3  # We don't need debug stuff in the dependencies by default
 
 [profile.release.package."*"]
 opt-level = 3
+
+[workspace.dependencies]
+anyhow = "*"
+tracing = "*"
+tracing-subscriber = {version="*"}
+eframe = {version="*", default-features=false}  # git="https://github.com/emilk/egui.git"
+egui-wgpu = {version="*", default-features=false}
+wgpu = {version="*", default-features=false}
+egui = "*"
+egui_extras = "*"

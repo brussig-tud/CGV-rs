@@ -11,24 +11,22 @@ rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-anyhow = "*"
-tracing = "*"
-tracing-subscriber = {version="*", features=["env-filter"]}
+anyhow = {workspace=true}
+tracing = {workspace=true}
+tracing-subscriber = {workspace=true, features=["env-filter"]}
 cfg-if = "*"
 ctor = "*"
 arrayvec = "*"
 dashmap = "*"
 web-time = "*"
+eframe = {workspace=true, features=["default_fonts", "wgpu"]}
 winit = "*"
-egui = {git="https://github.com/emilk/egui.git", default-features=true, features=[
+wgpu = {workspace=true, features=["spirv"] }
+egui = {workspace=true, default-features=true, features=[
 	"serde", "color-hex", "rayon"
 ]}
-egui_extras = {git="https://github.com/emilk/egui.git", default-features=true, features=[
+egui_extras = {workspace=true, default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
-]}
-wgpu = {version="29", features=["spirv"] }
-eframe = {git="https://github.com/emilk/egui.git", default-features=false, features=[
-	"default_fonts", "wgpu"
 ]}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
@@ -48,10 +46,8 @@ tracing-wasm = "*"
 wasm-bindgen-futures = "*"
 getrandom = {version="0.3", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
-wgpu = {version="29", default-features=false, features=["webgpu", "spirv"]}
-egui-wgpu = {git="https://github.com/emilk/egui.git", default-features=false, features=[
-	"fragile-send-sync-non-atomic-wasm"
-]}
+egui-wgpu = {workspace=true, features=["fragile-send-sync-non-atomic-wasm"]}
+wgpu = {workspace=true, default-features=false, features=["webgpu", "spirv"]}
 
 [build-dependencies]
 cgv-build = {path="../cgv-build"}
