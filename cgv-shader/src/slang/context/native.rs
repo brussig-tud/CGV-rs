@@ -24,9 +24,7 @@ use crate::{compile::{self, ComponentRef}, slang::{*, context::*}};
 //
 
 /// The singleton global session instance.
-static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(
-	|| GlobalSession(Mutex::new(slang::GlobalSession::new().unwrap()))
-);
+static GLOBAL_SESSION: LazyLock<GlobalSession> = LazyLock::new(|| GlobalSession::new());
 
 /// The common error message for all instances where entry point names are queried from *Slang*.
 static MISSING_ENTRY_POINT_NAME_MSG: &str = "entry points should always have a name";
@@ -44,6 +42,12 @@ type ActiveTargetsMap = GenericActiveTargetsMap<i64>;
 
 ///
 pub struct GlobalSession(Mutex<slang::GlobalSession>);
+impl GlobalSession {
+	/// Create a new *Slang* global session object.
+	pub fn new () -> GlobalSession {
+		GlobalSession(Mutex::new(slang::GlobalSession::new().unwrap()))
+	}
+}
 impl Deref for GlobalSession {
 	type Target =  Mutex<slang::GlobalSession>;
 	fn deref (&self) -> &Self::Target {

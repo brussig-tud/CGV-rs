@@ -40,12 +40,14 @@ type ActiveTargetsMap = GenericActiveTargetsMap<u32>;
 pub struct GlobalSession(u64);
 impl GlobalSession
 {
-	pub fn new () -> Option<Self> {
+	/// Create a new *Slang* global session object.
+	pub fn new () -> Self
+	{
 		let handle = slangjs_createGlobalSession();
-		if handle > 0 {
-			Some(Self(handle as u64))
+		if handle < 1 {
+			panic!("Unknown error while attempting to create Slang global session");
 		}
-		else { None }
+		Self(handle as u64)
 	}
 
 	fn createSession (&self, sessionConfig: &SessionConfig) -> Result<Session<'_>, CreateSessionError>
