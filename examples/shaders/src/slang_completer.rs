@@ -30,6 +30,7 @@ impl SlangSyntax for Syntax
 			case_sensitive: true,
 			comment: "//",
 			comment_multiline: ["/*", "*/"],
+			quotes: ['\'', '"'].into(),
 			hyperlinks: BTreeSet::from(["http"]),
 			keywords: BTreeSet::from([
 				"module", "func", "struct", "interface", "break", "continue", "if", "else", "const", "static", "let",
