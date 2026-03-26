@@ -4,10 +4,10 @@
 // Module definition
 //
 
-// A module providing the common uniforms defined by the CGV-rs rendering API.
+/// A module providing the common uniforms defined by the CGV-rs rendering API.
 module uniforms;
 
-// Insert into cgv::lin namespace
+// Insert into cgv::api namespace
 namespace cgv::api {
 
 
@@ -17,13 +17,13 @@ namespace cgv::api {
 // Structs
 //
 
-// The uniform group containing viewing information. Corresponds to cgv::RenderState::viewingUniforms.
+/// The uniform group containing viewing information. Corresponds to cgv::RenderState::viewingUniforms.
 public struct Viewing
 {
-	// The modelview matrix.
+	/// The modelview matrix.
 	public float4x4 modelview;
 
-	// The projection matrix.
+	/// The projection matrix.
 	public float4x4 projection;
 }
 
