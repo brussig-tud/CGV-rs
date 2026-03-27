@@ -285,7 +285,7 @@ impl ContextBuilder<'_>
 		// - compile flags
 		let compilerOptions = compatOptions.toCompilerOptions();
 		let compilerOptions = if self.targets.contains(&compile::Target::SPIRV) {
-			compilerOptions.emit_spirv_directly(true)
+			compilerOptions.vulkan_use_entry_point_name(true).emit_spirv_directly(true)
 		}
 		else { compilerOptions };
 		let compilerOptions = compilerOptions
