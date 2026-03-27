@@ -29,7 +29,7 @@ use crate::*;
 
 /// The database of cached compute pipeline configurations
 static COMPUTE_PIPELINE_CACHE: LazyLock<DashMap<
-	(wgpu::TextureFormat, wgpu::TextureViewDimension, u64),
+	(wgpu::TextureFormat, MipmappableTextureShape, u64),
 	Box<ComputePipelineInfo> // TODO: Try without boxing the `ComputePipelineInfo` once we have sufficiently many to test
 >> = LazyLock::new(|| {
 	DashMap::with_capacity(8)
@@ -41,6 +41,54 @@ static COMPUTE_PIPELINE_CACHE: LazyLock<DashMap<
 //
 // Structs and enums
 //
+
+///
+#[derive(Copy,Clone,Debug,Hash,Eq,PartialEq)]
+pub enum MipmappableTextureShape {
+	/// Corresponds to `wgpu::TextureViewDimension::D2`
+	D2,
+
+	/// Corresponds to `wgpu::TextureViewDimension::D2Array`
+	D2Array,
+
+	/// Corresponds to `wgpu::TextureViewDimension::Cube`
+	Cube,
+
+	/// Corresponds to `wgpu::TextureViewDimension::CubeArray`
+	CubeArray,
+
+	/// Corresponds to `wgpu::TextureViewDimension::D3`
+	D3
+}
+impl MipmappableTextureShape
+{
+	#[inline]
+	pub fn from (viewDimensionality: wgpu::TextureViewDimension) -> Option<Self>
+	{
+		match viewDimensionality {
+			wgpu::TextureViewDimension::D1 => None,
+			wgpu::TextureViewDimension::D2 => Some(MipmappableTextureShape::D2),
+			wgpu::TextureViewDimension::D2Array => Some(MipmappableTextureShape::D2Array),
+			wgpu::TextureViewDimension::Cube => Some(MipmappableTextureShape::Cube),
+			wgpu::TextureViewDimension::CubeArray => Some(MipmappableTextureShape::CubeArray),
+			wgpu::TextureViewDimension::D3 => Some(MipmappableTextureShape::D3)
+		}
+	}
+}
+impl From<MipmappableTextureShape> for wgpu::TextureViewDimension
+{
+	#[inline]
+	fn from (mipmappableTextureShape: MipmappableTextureShape) -> Self
+	{
+		match mipmappableTextureShape {
+			MipmappableTextureShape::D2 => wgpu::TextureViewDimension::D2,
+			MipmappableTextureShape::D2Array => wgpu::TextureViewDimension::D2Array,
+			MipmappableTextureShape::Cube => wgpu::TextureViewDimension::Cube,
+			MipmappableTextureShape::CubeArray => wgpu::TextureViewDimension::CubeArray,
+			MipmappableTextureShape::D3 => wgpu::TextureViewDimension::D3
+		}
+	}
+}
 
 /// Stores a compute pipeline and associated objects the pipeline references, for use by compute shader-based mipmap
 /// generators.
@@ -61,16 +109,17 @@ pub trait Generator
 {
 	fn uniqueId () -> u64;
 
-	fn ensureShaderModule (context: &Context) -> Option<wgpu::ShaderModule>;
+	fn ensureShaderModule (context: &Context, textureShape: MipmappableTextureShape)
+		-> Option<(wgpu::ShaderModule, Option<&str>)>;
 
 	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_>;
 
 	fn ensureComputePipeline (
-		context: &Context, textureFormat: wgpu::TextureFormat, dimensionality: wgpu::TextureViewDimension
+		context: &Context, textureFormat: wgpu::TextureFormat, textureShape: MipmappableTextureShape
 	) -> &ComputePipelineInfo
 	{
 		let generatorId = Self::uniqueId();
-		let query = (textureFormat, dimensionality, generatorId);
+		let query = (textureFormat, textureShape, generatorId);
 		let pipelineInfo = COMPUTE_PIPELINE_CACHE.get(&query);
 		if let Some(pipelineInfo) = pipelineInfo {
 			// We already have a suitable pipeline for this combination
@@ -94,7 +143,7 @@ pub trait Generator
 					ty: wgpu::BindingType::Texture {
 						multisampled: false,
 						sample_type: wgpu::TextureSampleType::Float { filterable: false },
-						view_dimension: dimensionality
+						view_dimension: textureShape.into()
 					},
 					count: None
 				},
@@ -104,7 +153,7 @@ pub trait Generator
 					ty: wgpu::BindingType::StorageTexture {
 						access: wgpu::StorageTextureAccess::WriteOnly,
 						format: textureFormat,
-						view_dimension: dimensionality
+						view_dimension: textureShape.into()
 					},
 					count: None
 				}
@@ -118,11 +167,13 @@ pub trait Generator
 
 			// Create pipeline
 			// - shader
-			let shader =  Self::ensureShaderModule(context).unwrap();
+			let (shader, specificEntryPoint) = Self::ensureShaderModule(
+				context, textureShape
+			).unwrap();
 			// - pipeline
 			let pipeline = context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
 				module: &shader,
-				entry_point: Some("main"),
+				entry_point: specificEntryPoint,
 				layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 					bind_group_layouts: &[Some(&bindGroupLayout)],
 					label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
@@ -171,9 +222,12 @@ pub trait Generator
 /// Provider of a reusable compute/shader function implementing a filter strategy for calculating the value of mipmap
 /// texels. It provides shader code following the to-be-documented mipmap filter shader protocol.
 pub trait ShaderFilter {
+	///
 	fn uniqueId () -> u32;
 
-	fn provideShader (&self);
+	///
+	fn provideShader (context: &Context, textureShape: MipmappableTextureShape)
+		-> Option<(wgpu::ShaderModule, Option<&str>)>;
 }
 
 
@@ -183,15 +237,31 @@ pub trait ShaderFilter {
 // Classes
 //
 
-pub struct BoxFilter;
-impl ShaderFilter for BoxFilter {
+pub struct PolyphaseBoxFilter;
+impl ShaderFilter for PolyphaseBoxFilter {
 	fn uniqueId () -> u32 {
 		static ID: LazyLock<u32> = LazyLock::new(|| util::unique::uint32());
 		*ID
 	}
 
-	fn provideShader(&self) {
-		todo!()
+	fn provideShader (context: &Context, textureShape: MipmappableTextureShape) -> Option<(
+		wgpu::ShaderModule, Option<&str>
+	)>{
+		let shaderPackage = shader::Package::deserialize(
+			util::sourceGeneratedBytes!("/shader/gpu/mipmapgen/box_polyphase.spk")
+		).ok()?;
+		use MipmappableTextureShape::*;
+		shaderPackage.createShaderModuleFromBestInstance(
+			context.device(), None, Some("CGV__gpu_mipmapGenComputeShaderModule")
+		).map(
+			|sm| (sm, /* entryPointName: */Some(match textureShape {
+				D2 => "boxPolyphase2D",
+				D3 => "boxPolyphase3D",
+				D2Array | Cube | CubeArray => unimplemented!(
+					"Polyphase box filter is not yet implemented for cube and/or array textures!"
+				)
+			}))
+		)
 	}
 }
 
@@ -214,14 +284,10 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		*ID | fid
 	}
 
-	fn ensureShaderModule (context: &Context) -> Option<wgpu::ShaderModule>
+	fn ensureShaderModule (context: &Context, textureShape: MipmappableTextureShape)
+		-> Option<(wgpu::ShaderModule, Option<&str>)>
 	{
-		let shaderPackage = shader::Package::deserialize(
-			util::sourceGeneratedBytes!("/shader/gpu/mipmapgen/box_polyphase.spk")
-		).ok()?;
-		shaderPackage.createShaderModuleFromBestInstance(
-			context.device(), None, Some("CGV__gpu_mipmapGenComputeShaderModule")
-		)
+		Filter::provideShader(context, textureShape)
 	}
 
 	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
@@ -235,7 +301,11 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		let vdim = texture.mipLevels[0].desc.dimension.expect(
 			"Texture mip level views should be created with explicit dimensionality!"
 		);
-		let pi = Self::ensureComputePipeline(context, texture.descriptor.format, vdim);
+		let pi = Self::ensureComputePipeline(
+			context, texture.descriptor.format, MipmappableTextureShape::from(vdim).expect(
+				"Mipmap generation must be performed on a texture with mip-mappable shape!"
+			)
+		);
 
 		let numMipLevels = texture.mipLevels.len();
 		let mut bindGroups = ArrayVec::<_, 32>::new();
@@ -300,7 +370,9 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for RenderPipelineGenerato
 		*ID | fid
 	}
 
-	fn ensureShaderModule (_context: &Context) -> Option<wgpu::ShaderModule> {
+	fn ensureShaderModule (_context: &Context, _textureShape: MipmappableTextureShape)
+		-> Option<(wgpu::ShaderModule, Option<&str>)>
+	{
 		None
 	}
 
