@@ -56,8 +56,8 @@ pub enum AlphaUsage {
 
 /// The default mipmap generator that will be referenced by [`defaultMipmapping()`].
 static DEFAULT_MIPMAP_GENERATOR: LazyLock<
-	gpu::mipmap::ComputeShaderGenerator<gpu::mipmap::BoxFilter>
-> = LazyLock::new(|| gpu::mipmap::ComputeShaderGenerator::new(&gpu::mipmap::BoxFilter{}));
+	gpu::mipmap::ComputeShaderGenerator<gpu::mipmap::PolyphaseBoxFilter>
+> = LazyLock::new(|| gpu::mipmap::ComputeShaderGenerator::new(&gpu::mipmap::PolyphaseBoxFilter{}));
 
 /// A `None` constant for the `Option` type used in [`Texture::fromImage()`] and related methods. For a reasonable default
 /// choice of `Some` [mipmap generator](gpu::mipmap::Generator), use [`defaultMipmapping()`].
@@ -80,7 +80,7 @@ impl gpu::mipmap::Generator for NoopMipmapGenerator
 		u64::MAX
 	}
 
-	fn ensureShaderModule (_: &Context) -> Option<wgpu::ShaderModule> {
+	fn ensureShaderModule (_: &Context, _: gpu::mipmap::MipmappableTextureShape) -> Option<(wgpu::ShaderModule, Option<&str>)> {
 		None
 	}
 
@@ -536,7 +536,9 @@ pub fn textureDimensionsFromVec (dims: &glm::UVec3) -> wgpu::TextureDimension
 /// shader-based poly-phase box filter.
 ///
 /// To indicate that no mipmapping should be done at all, use the `None` constant [`NO_MIPMAPS`] instead.
-pub fn defaultMipmapping () -> Option<&'static gpu::mipmap::ComputeShaderGenerator<'static, gpu::mipmap::BoxFilter>> {
+pub fn defaultMipmapping () -> Option<
+	&'static gpu::mipmap::ComputeShaderGenerator<'static, gpu::mipmap::PolyphaseBoxFilter>
+>{
 	Some(&DEFAULT_MIPMAP_GENERATOR)
 }
 
