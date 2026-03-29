@@ -59,8 +59,8 @@ static DEFAULT_MIPMAP_GENERATOR: LazyLock<
 	gpu::mipmap::ComputeShaderGenerator<gpu::mipmap::PolyphaseBoxFilter>
 > = LazyLock::new(|| gpu::mipmap::ComputeShaderGenerator::new(&gpu::mipmap::PolyphaseBoxFilter{}));
 
-/// A `None` constant for the `Option` type used in [`Texture::fromImage()`] and related methods. For a reasonable default
-/// choice of `Some` [mipmap generator](gpu::mipmap::Generator), use [`defaultMipmapping()`].
+/// A `None` constant for the `Option` type used in [`Texture::fromImage()`] and related methods. For a reasonable
+/// default choice of `Some` [mipmap generator](gpu::mipmap::Generator), use [`defaultMipmapping()`].
 pub const NO_MIPMAPS: Option<&NoopMipmapGenerator> = None;
 
 
@@ -70,9 +70,9 @@ pub const NO_MIPMAPS: Option<&NoopMipmapGenerator> = None;
 // Classes
 //
 
-/// A stub implementation of a [`gpu::mipmap::MipmapGenerator`] that does nothing. It's sole reason for existance is to
-/// serve as the type parameter of [`NO_MIPMAPS`]'s `Option` type, such that automatic type inference is possible when
-/// calling [`Texture::fromImage`] and related functions with mipmap generation disabled.
+/// A stub implementation of a [`gpu::mipmap::Generator`] that does nothing. It's sole reason for existance is to serve
+/// as the type parameter of [`NO_MIPMAPS`]'s `Option` type, such that automatic type inference is possible when calling
+/// [`Texture::fromImage`] and related functions with mipmap generation disabled.
 pub struct NoopMipmapGenerator;
 impl gpu::mipmap::Generator for NoopMipmapGenerator
 {
@@ -262,9 +262,8 @@ impl Texture
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
 	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::COPY_DST`]).
-	///    Note that making use of automatic `mipmapGeneration` may enforce additional usages depending on the chosen
-	///    [`gpu::mipmap::MipmapGenerator`].
-	/// * `mipmapGeneration` – If automatic mipmap generation is desired, which [`gpu::mipmap::MipmapGenerator`] to use.
+	       #[doc=include_str!("_doc/_texture_specialUsageFlagsMipmapping.md")]
+	/// * `mipmapGeneration` –
 	       #[doc=include_str!("_doc/_texture_defaultMipmapping.md")]
 	/// * `label` – An optional name to internally label the GPU-side texture object with.
 	///
@@ -290,9 +289,8 @@ impl Texture
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `specialUsageFlags` – An optional set of [texture usage flags](wgpu::TextureUsages) to add on to the minimum
 	///    required usages for creating a texture from host-data (currently, only [`wgpu::TextureUsages::COPY_DST`]).
-	///    Note that making use of automatic `mipmapGeneration` may enforce additional usages depending on the chosen
-	///    [`gpu::mipmap::MipmapGenerator`].
-	/// * `mipmapGeneration` – If automatic mipmap generation is desired, which [`gpu::mipmap::MipmapGenerator`] to use.
+	       #[doc=include_str!("_doc/_texture_specialUsageFlagsMipmapping.md")]
+	/// * `mipmapGeneration` –
 	       #[doc=include_str!("_doc/_texture_defaultMipmapping.md")]
 	/// * `label` – The string to internally label the GPU-side texture object with.
 	///
@@ -531,9 +529,9 @@ pub fn textureDimensionsFromVec (dims: &glm::UVec3) -> wgpu::TextureDimension
 	}
 }
 
-/// References a reasonable, conservative default choice of `Some` [mipmap generator](gpu::mipmap::Generator) for use
-/// with the corresponding `Option` of [`Texture::fromImage()`] and related methods. Currently, this is a compute
-/// shader-based poly-phase box filter.
+/// References a reasonably fast, conservative default choice of `Some` [mipmap generator](gpu::mipmap::Generator) for
+/// use with the corresponding `Option` of [`Texture::fromImage()`] and related methods. Currently, this is a compute
+/// shader-based polyphase box filter.
 ///
 /// To indicate that no mipmapping should be done at all, use the `None` constant [`NO_MIPMAPS`] instead.
 pub fn defaultMipmapping () -> Option<
