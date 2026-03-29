@@ -336,9 +336,10 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		pass.set_pipeline(&pi.pipeline);
 		for (ref dims, ref bindGroup) in bindGroups {
 			pass.set_bind_group(0, bindGroup, &[]);
-			let workgroupsX = (dims.x + 8 - 1) / 8;
-			let workgroupsY = (dims.y + 8 - 1) / 8;
-			pass.dispatch_workgroups(workgroupsX, workgroupsY, 1);
+			let workgroups = glm::vec3(
+				(dims.x+7)/8, (dims.y+7)/8, (dims.z+7)/8
+			);
+			pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
 		}
 	}
 

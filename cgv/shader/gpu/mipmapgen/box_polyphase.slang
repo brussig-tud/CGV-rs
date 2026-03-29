@@ -18,26 +18,26 @@ using namespace cgv;
 // Uniforms
 //
 
-/// Input/output set of textures (2D variant)
+/// The input/output set of textures (2D variant).
 struct TextureInOut2D
 {
-	/// Previous mip level
+	/// The previous mip level.
 	Texture2D prevMipmap;
 
-	/// Current mip level
+	/// The current (to be calculated) mip level.
 	[format("rgba8")]
 	WTexture2D curMipmap;
 };
 [vk::binding(0,0)]
 ParameterBlock<TextureInOut2D> tex2d;
 
-/// Input/output set of textures (3D variant)
+/// The input/output set of textures (3D variant).
 struct TextureInOut3D
 {
-	/// Previous mip level
+	/// The previous mip level.
 	Texture3D prevMipmap;
 
-	/// Current mip level
+	/// The current (to be calculated) mip level.
 	[format("rgba8")]
 	WTexture3D curMipmap;
 };
