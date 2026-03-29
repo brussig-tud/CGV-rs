@@ -32,11 +32,63 @@ pub struct TextureSize {
 }
 
 /// Encapsulates per-mip level data that [`Texture`] needs to store.
-pub struct MipLevel<'labels> {
+pub struct MipLevel<'labels>
+{
+	/// The resolution in each dimenension of the mipmap level.
 	pub dims: glm::UVec3,
+
+	/// The in-memory size of the contents of the mipmap level.
 	pub size: TextureSize,
+
+	/// A suitable descriptor for creating a [wgpu::TextureView] on the mipmap level.
 	pub desc: wgpu::TextureViewDescriptor<'labels>,
+
+	/// A pre-created [wgpu::TextureView] of the mipmap level.
 	pub view: wgpu::TextureView,
+}
+impl MipLevel<'_>
+{
+	/// Constructs a `glm::BVec3` indicating for each dimension if the resolution is a power of two.
+	///
+	/// # Returns
+	///
+	/// A `glm::BVec3` where each component is a boolean value indicating `true` if the corresponding component of
+	/// [`MipLevel::dims`] is a power of two, or `false` otherwise.
+	#[inline(always)]
+	pub fn isPowerOfTwo (&self) -> glm::BVec3 {
+		glm::vec3(self.dims.x.is_power_of_two(), self.dims.y.is_power_of_two(), self.dims.z.is_power_of_two())
+	}
+
+	/// Indicates if the resolution in *x*-direction (a.k.a. the texture *width*) of the mipmap level is a power of two.
+	///
+	/// # Returns
+	///
+	/// `true` if the width of this mipmap level is a power of two, or `false` otherwise.
+	#[inline(always)]
+	pub fn isXpowerOfTwo (&self) -> bool {
+		self.dims.x.is_power_of_two()
+	}
+
+	/// Indicates if the resolution in *y*-direction (a.k.a. the texture *height*) of the mipmap level is a power of
+	/// two.
+	///
+	/// # Returns
+	///
+	/// `true` if the height of this mipmap level is a power of two, or `false` otherwise.
+	#[inline(always)]
+	pub fn isYpowerOfTwo (&self) -> bool {
+		self.dims.y.is_power_of_two()
+	}
+
+	/// Indicates if the resolution in *z*-direction (a.k.a. the texture *depth*) of the mipmap level is a power of two.
+	///
+	/// # Returns
+	///
+	/// `true` if the depth of this mipmap level is a power of two, or `false` otherwise.
+	#[inline(always)]
+	pub fn isZpowerOfTwo (&self) -> bool {
+		self.dims.z.is_power_of_two()
+	}
 }
 
 /// Encapsulates the slice of texels provided during [texture readback](Texture::readback).
@@ -148,7 +200,7 @@ impl Texture
 	/// * `numMipLevels` – How many mipmap levels to create for the texture. Setting this to zero will determine the
 	///    number of mipmap levels automatically as calculated by [`numMipLevels`] for the given `dims`, while setting a
 	///    value greater than what [`numMipLevels`] would compute will result in undefined behavior.
-	///    **TODO: take explicit chain of miplevel descriptors instead**
+	///    **TODO: introduce NumMipLevels newtype for more explicitness**
 	/// * `alphaUsage` – How the alpha channel of the texture (if any) should be used when blending.
 	/// * `usageFlags` – The set of [texture usages](wgpu::TextureUsages) the texture is intended for.
 	/// * `label` – The string to internally label the GPU-side texture object with.
