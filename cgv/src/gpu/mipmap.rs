@@ -107,18 +107,18 @@ pub struct ComputePipelineInfo {
 /// An algorithm for generating the full chain of mipmap levels for a given texture.
 pub trait Generator
 {
-	fn uniqueId () -> u64;
+	fn uniqueId (&self) -> u64;
 
-	fn ensureShaderModule (context: &Context, textureShape: MipmappableTextureShape)
+	fn ensureShaderModule (&self, context: &Context, textureShape: MipmappableTextureShape)
 		-> Option<(wgpu::ShaderModule, Option<&str>)>;
 
-	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_>;
+	fn createPass<'outer> (&'outer self, encoder: &'outer mut wgpu::CommandEncoder) -> gpu::Pass<'outer>;
 
 	fn ensureComputePipeline (
-		context: &Context, textureFormat: wgpu::TextureFormat, textureShape: MipmappableTextureShape
+		&self, context: &Context, textureFormat: wgpu::TextureFormat, textureShape: MipmappableTextureShape
 	) -> &ComputePipelineInfo
 	{
-		let generatorId = Self::uniqueId();
+		let generatorId = self.uniqueId();
 		let query = (textureFormat, textureShape, generatorId);
 		let pipelineInfo = COMPUTE_PIPELINE_CACHE.get(&query);
 		if let Some(pipelineInfo) = pipelineInfo {
@@ -127,7 +127,7 @@ pub trait Generator
 				pipelineInfo.value().as_ref()
 			);
 			unsafe {
-				// SAFETY: - COMPUTE_PIPELINE_CACHE is static, so it may report 'static references
+				// SAFETY: - COMPUTE_PIPELINE_CACHE is static, so it is allowed to report 'static references
 				//         - the values are boxed, so their addresses never change even when iterators are invalidated
 				pipelineInfo.as_ref()
 			}
@@ -167,7 +167,7 @@ pub trait Generator
 
 			// Create pipeline
 			// - shader
-			let (shader, specificEntryPoint) = Self::ensureShaderModule(
+			let (shader, specificEntryPoint) = self.ensureShaderModule(
 				context, textureShape
 			).unwrap();
 			// - pipeline
@@ -198,7 +198,7 @@ pub trait Generator
 	fn perform<'encoder> (&self, context: &Context, pass: &mut gpu::Pass<'encoder>, texture: &mut hal::Texture);
 
 	fn performWithEncoder (&self, context: &Context, encoder: &mut wgpu::CommandEncoder, texture: &mut hal::Texture) {
-		let mut pass = Self::createPass(encoder);
+		let mut pass = self.createPass(encoder);
 		self.perform(context, &mut pass, texture);
 	}
 
@@ -226,7 +226,7 @@ pub trait ShaderFilter {
 	fn uniqueId () -> u32;
 
 	///
-	fn provideShader (context: &Context, textureShape: MipmappableTextureShape)
+	fn provideShader (&self, context: &Context, textureShape: MipmappableTextureShape)
 		-> Option<(wgpu::ShaderModule, Option<&str>)>;
 }
 
@@ -244,7 +244,7 @@ impl ShaderFilter for PolyphaseBoxFilter {
 		*ID
 	}
 
-	fn provideShader (context: &Context, textureShape: MipmappableTextureShape) -> Option<(
+	fn provideShader (&self, context: &Context, textureShape: MipmappableTextureShape) -> Option<(
 		wgpu::ShaderModule, Option<&str>
 	)>{
 		let shaderPackage = shader::Package::deserialize(
@@ -268,29 +268,29 @@ impl ShaderFilter for PolyphaseBoxFilter {
 /// An implementation of a mipmap generator that applies a given [shader-based filter](MipmapShaderFilter) to the texels
 /// in a compute shader.
 pub struct ComputeShaderGenerator<'filter, Filter: ShaderFilter+'filter> {
-	_filter: &'filter Filter
+	filter: &'filter Filter
 }
 impl<'filter, Filter: ShaderFilter+'filter> ComputeShaderGenerator<'filter, Filter>
 {
-	pub fn new (filter: &'filter Filter) -> Self {
-		Self { _filter: filter }
-	}
+	pub fn new (filter: &'filter Filter) -> Self { Self {
+		filter
+	}}
 }
 impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator<'filter, Filter>
 {
-	fn uniqueId () -> u64 {
+	fn uniqueId (&self) -> u64 {
 		static ID: LazyLock<u64> = LazyLock::new(|| util::unique::uint64()<<32);
 		let fid = Filter::uniqueId() as u64;
 		*ID | fid
 	}
 
-	fn ensureShaderModule (context: &Context, textureShape: MipmappableTextureShape)
+	fn ensureShaderModule (&self, context: &Context, textureShape: MipmappableTextureShape)
 		-> Option<(wgpu::ShaderModule, Option<&str>)>
 	{
-		Filter::provideShader(context, textureShape)
+		self.filter.provideShader(context, textureShape)
 	}
 
-	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
+	fn createPass<'outer> (&'outer self, encoder: &'outer mut wgpu::CommandEncoder) -> gpu::Pass<'outer> {
 		gpu::Pass::Compute(encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()))
 	}
 
@@ -301,7 +301,7 @@ impl<'filter, Filter: ShaderFilter+'filter> Generator for ComputeShaderGenerator
 		let vdim = texture.mipLevels[0].desc.dimension.expect(
 			"Texture mip level views should be created with explicit dimensionality!"
 		);
-		let pi = Self::ensureComputePipeline(
+		let pi = self.ensureComputePipeline(
 			context, texture.descriptor.format, MipmappableTextureShape::from(vdim).expect(
 				"Mipmap generation must be performed on a texture with mip-mappable shape!"
 			)
@@ -364,19 +364,19 @@ impl<'filter, Filter: ShaderFilter+'filter> RenderPipelineGenerator<'filter, Fil
 }
 impl<'filter, Filter: ShaderFilter+'filter> Generator for RenderPipelineGenerator<'filter, Filter>
 {
-	fn uniqueId () -> u64 {
+	fn uniqueId (&self) -> u64 {
 		static ID: LazyLock<u64> = LazyLock::new(|| util::unique::uint64()<<32);
 		let fid = Filter::uniqueId() as u64;
 		*ID | fid
 	}
 
-	fn ensureShaderModule (_context: &Context, _textureShape: MipmappableTextureShape)
-		-> Option<(wgpu::ShaderModule, Option<&str>)>
-	{
+	fn ensureShaderModule (&self, _context: &Context, _textureShape: MipmappableTextureShape) -> Option<(
+		wgpu::ShaderModule, Option<&str>
+	)>{
 		None
 	}
 
-	fn createPass (encoder: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
+	fn createPass<'outer> (&'outer self, encoder: &'outer mut wgpu::CommandEncoder) -> gpu::Pass<'outer> {
 		gpu::Pass::Render(encoder.begin_render_pass(&wgpu::RenderPassDescriptor::default()))
 	}
 

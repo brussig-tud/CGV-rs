@@ -76,15 +76,17 @@ pub const NO_MIPMAPS: Option<&NoopMipmapGenerator> = None;
 pub struct NoopMipmapGenerator;
 impl gpu::mipmap::Generator for NoopMipmapGenerator
 {
-	fn uniqueId () -> u64 {
+	fn uniqueId (&self) -> u64 {
 		u64::MAX
 	}
 
-	fn ensureShaderModule (_: &Context, _: gpu::mipmap::MipmappableTextureShape) -> Option<(wgpu::ShaderModule, Option<&str>)> {
+	fn ensureShaderModule (&self, _: &Context, _: gpu::mipmap::MipmappableTextureShape) -> Option<(
+		wgpu::ShaderModule, Option<&str>
+	)>{
 		None
 	}
 
-	fn createPass (_: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
+	fn createPass (&self, _: &mut wgpu::CommandEncoder) -> gpu::Pass<'_> {
 		panic!("The NoopMipmapGenerator is a dummy and cannot create any actual GPU passes!");
 	}
 
