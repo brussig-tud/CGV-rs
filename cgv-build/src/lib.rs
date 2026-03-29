@@ -70,7 +70,7 @@ pub use cgv_shader as shader; // re-export
 //
 
 #[ctor::ctor]
-static SCRIPT_START_TIME: std::time::SystemTime = {
+static SCRIPT_START_TIME: std::time::SystemTime = unsafe {
 	std::time::SystemTime::now().sub(std::time::Duration::from_secs(3))
 };
 
