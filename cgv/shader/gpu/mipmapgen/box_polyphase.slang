@@ -5,7 +5,8 @@
 //
 
 // CGV-rs core shader library
-import "cgv/media/util.slang";        // for the texture utility functions
+import "cgv/api/uniforms.slang";      // for the standardized texture in-/ouput uniform block
+import "cgv/media/texture.slang";     // for the texture utility functions
 import "cgv/lin/common.slang";        // enables the cgv::lin::IElement interface for all float-based builtins
 import "cgv/gpu/filter/kernel.slang"; // various filter kernels
 
@@ -19,31 +20,16 @@ using namespace cgv;
 // Uniforms
 //
 
-/// The input/output set of textures (2D variant).
-struct TextureInOut2D
-{
-	/// The previous mip level.
-	Texture2D prevMipmap;
+/// Common input output type, for now only parametrized over texture shape.
+typealias TextureInOut<Shape: __ITextureShape> = api::TextureInOut<Shape, media::tex::Format::RGBA8>;
 
-	/// The current (to be calculated) mip level.
-	[format("rgba8")]
-	WTexture2D curMipmap;
-};
-[vk::binding(0,0)]
-ParameterBlock<TextureInOut2D> tex2d;
+/// The input/output set of textures (2D variant).
+[vk::binding(0, 0)] // <- start at binding(0) of group(0)
+ParameterBlock<TextureInOut<__Shape2D>> mip2d;
 
 /// The input/output set of textures (3D variant).
-struct TextureInOut3D
-{
-	/// The previous mip level.
-	Texture3D prevMipmap;
-
-	/// The current (to be calculated) mip level.
-	[format("rgba8")]
-	WTexture3D curMipmap;
-};
-[vk::binding(0,0)]
-ParameterBlock<TextureInOut3D> tex3d;
+[vk::binding(0, 0)] // <- start at binding(0) of group(0)
+ParameterBlock<TextureInOut<__Shape3D>> mip3d;
 
 
 
@@ -55,26 +41,25 @@ ParameterBlock<TextureInOut3D> tex3d;
 /// Entry point for the 2D generator.
 [shader("compute")]
 [numthreads(8, 8, 1)]
-func boxPolyphase2D (int3 id : SV_DispatchThreadID)
+func boxPolyphase2D (int3 id: SV_DispatchThreadID)
 {
-	let tgtSize = media::getTexResolution(tex2d.curMipmap);
-	let origSize = media::getTexResolution(tex2d.prevMipmap);
-	let pow2 = media::areTexDimsPow2(tex2d.prevMipmap);
-	let filtered = gpu::filter::kernel::polyphaseBox3(
-		tgtSize, origSize, 2*id.xy, (int2 q) => tex2d.prevMipmap.Load(int3(q, 0))
+	mip2d.output.Store(
+		id.xy, gpu::filter::kernel::polyphaseBox3(
+			/* orig: */ media::tex::getResolution(mip2d.input),  /* sampleLocation: */ 2*id.xy,
+			/* dataAccessor: */ (int2 q) => mip2d.input.Load(int3(q, 0))
+		)
 	);
-	tex2d.curMipmap.Store(id.xy, filtered);
 }
 
 /// Entry point for the 3D generator.
 [shader("compute")]
 [numthreads(8, 8, 1)]
-func boxPolyphase3D (int3 id : SV_DispatchThreadID)
+func boxPolyphase3D (int3 id: SV_DispatchThreadID)
 {
-	tex3d.curMipmap.Store(
+	mip3d.output.Store(
 		id, gpu::filter::kernel::polyphaseBox3(
-			media::getTexResolution(tex3d.curMipmap), media::getTexResolution(tex3d.prevMipmap), 2*id,
-			(int3 q) => tex3d.prevMipmap.Load(int4(q, 0))
+			/* orig: */ media::tex::getResolution(mip3d.input),  /* sampleLocation: */ 2*id,
+			/* dataAccessor: */ (int3 q) => mip3d.input.Load(int4(q, 0))
 		)
 	);
 }

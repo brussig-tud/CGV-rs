@@ -67,9 +67,9 @@ fn main() -> cgv_build::Result<()>
 		"CgvCoreShaderLib", |mut env, recommendedStorage| {
 			env.addModule(recommendedStorage, "cgv/prelude.slang")?;
 			env.addModule(recommendedStorage, "cgv/meta.slang")?;
-			env.addModule(recommendedStorage, "cgv/media/util.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/util.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/field.slang")?;
+			env.addModule(recommendedStorage, "cgv/media/texture.slang")?;
 			env.addModule(recommendedStorage, "cgv/color/blending.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
