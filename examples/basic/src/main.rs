@@ -194,7 +194,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 
 	// The example texture
 	let tex = cgv::hal::Texture::fromBlob(
-		context, util::sourceBytes!("/res/tex/cgvCube_np2.png"), cgv::hal::AlphaUsage::DontCare, None,
+		context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
 		cgv::hal::defaultMipmapping(), Some("ExBasic__TestTexture")
 	)?;
 

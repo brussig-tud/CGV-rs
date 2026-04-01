@@ -116,7 +116,6 @@ constexpr func i2coord<int N, int EXTENT> (in const i: int) -> vector<int, N>
 }
 
 /// **TODO: Factor out into appropriate utility module**
-[ForceInline]
 func odometer<int EXTENT, int N> (inout index: vector<int, N>)
 {
 	[ForceUnroll]
@@ -221,8 +220,7 @@ public struct PolyphaseBox3<DataType, int N> : IKernel<DataType, N>
 				// For non-divisible-by-2 dimensions, we use a 3-wide trapezoidal filter (the result of reconstructing
 				// the box filter on the misaligned output grid) phase-shifted according to the respective coordinate in
 				// the output domain.
-				let p = q[d]>>1;
-				let tgtSize = size[d]>>1;
+				let p = q[d]>>1;  let tgtSize = size[d]>>1;
 				weights[d][0] = Scalar(tgtSize-p);
 				weights[d][1] = Scalar(tgtSize  );
 				weights[d][2] = Scalar(   1   +p);
