@@ -14,7 +14,7 @@
 // Module definitions
 //
 
-/// Private submodule holding the code for setting up our custom fonts
+/// Private submodule holding the code for setting up our custom fonts.
 mod slang_completer;
 
 
