@@ -14,6 +14,16 @@ use egui_code_editor::Syntax;
 
 //////
 //
+// Statics
+//
+
+/// A reusable instance of the [`SlangSyntax`] completer definition.
+pub const INSTANCE: std::sync::LazyLock<Syntax> = std::sync::LazyLock::new(|| Syntax::slang());
+
+
+
+//////
+//
 // Traits
 //
 
@@ -47,12 +57,15 @@ impl SlangSyntax for Syntax
 				"half2x3", "half3x3", "half4x3", "half2x4", "half3x4", "half4x4",
 
 				// Complex primitive generic types
-				"vector", "matrix", "ParameterBlock",
+				"vector", "matrix", "ParameterBlock", "_Texture", "Texture1D", "Texture1DArray", "Texture2D",
+				"TextureCube", "TextureCubeArray", "Texture3D", "WTexture1D", "WTexture1DArray", "WTexture2D",
+				"WTexture2DArray", "WTexture3D", "RWTexture1D", "RWTexture1DArray", "RWTexture2D", "RWTexture2DArray",
+				"RWTexture3D",
 
-				// Primitive traits
+				// Primitive interfaces
 				"__BuiltinType", "__BuiltinArithmeticType", "__BuiltinSignedArithmeticType", "__BuiltinIntegerType",
 				"__BuiltinLogicalType", "__BuiltinInt32Type", "__BuiltinRealType", "__BuiltinFloatingPointType",
-				"IInteger", "IFloat", "IArithmetic", "IArray", "IRWArray", "IFunc",
+				"IInteger", "IFloat", "IArithmetic", "ILogical", "IArray", "IRWArray", "IFunc",
 
 				// Builtin functions
 				"abs", "floor", "ceil", "fract", "modf", "fmod", "pow", "exp", "exp2", "mul", "sin", "cos", "tan",

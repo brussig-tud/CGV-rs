@@ -30,22 +30,29 @@ ParameterBlock<cgv::api::Viewing> viewing;
 // Streams
 //
 
-// Vertex shader input attributes.
-struct VSInput {
-	float4 pos;
-	float2 texcoord;
-}
-
-// Vertex shader output attributes.
-struct VSOutput
+// The vertex attributes of our target quad.
+struct Vertex
 {
-	float4 pos_clip : SV_Position;
+	float4 pos : SV_Position;
 	float2 texcoord;
 
-	__init (float4 _pos_clip, float2 _texcoord) {
-		pos_clip = _pos_clip; texcoord = _texcoord;
+	__init (float4 pos, float2 texcoord) {
+		this.pos = pos; this.texcoord = texcoord;
 	}
 }
+
+
+
+//////
+//
+// Constants
+//
+
+/// Our quad vertices in model space.
+constexpr static let qVerts: Vertex[] = {
+	Vertex(float4(-1.,-1., 0., 1.), float2(-1., 1.)),  Vertex(float4(1.,-1., 0., 1.), float2(1., 1.)),
+	Vertex(float4(-1., 1., 0., 1.), float2(-1.,-1.)),  Vertex(float4(1., 1., 0., 1.), float2(1.,-1.))
+};
 
 
 
@@ -59,10 +66,10 @@ struct VSOutput
 
 /// Our sole vertex shader entry point.
 [shader("vertex")]
-func vertexMain (vert: VSInput) -> VSOutput {
-	return VSOutput(
-		/* pos_clip: */ viewing.projection*viewing.modelview * vert.pos,
-		/* texcoord: */ vert.texcoord
+func vertexMain (int vertexID: SV_VertexID) -> Vertex {
+	return Vertex(
+		/*      pos: */ viewing.projection*viewing.modelview * qVerts[vertexID].pos,
+		/* texcoord: */ qVerts[vertexID].texcoord
 	);
 }
 
@@ -85,8 +92,7 @@ extern struct Glyph: ex::IGlyph;
 
 /// Our sole fragment shader entry point.
 [shader("fragment")]
-func fragmentMain (fsIn: VSOutput) -> float4 {
-	let glyph = Glyph::default();
-	let shadedColor = glyph.colorAt(fsIn.texcoord);
-	return shadedColor;
+func fragmentMain (fsInput: Vertex) -> float4 {
+	let glyph = Glyph::default(); // construct user glyph
+	return glyph.colorAt(fsInput.texcoord); // shade according to user glyph
 }

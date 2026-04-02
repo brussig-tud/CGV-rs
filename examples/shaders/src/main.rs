@@ -30,68 +30,11 @@ use std::default::Default;
 // CGV re-imports
 use cgv::{wgpu, glm, egui, tracing};
 
-// WGPU API
-use wgpu::util::DeviceExt;
-
 // Egui library
 use cgv::egui_extras as egui_extras;
 
 // CGV Framework
 use cgv::{self, util, shader::compile::prelude::*};
-
-// Local imports
-use slang_completer::*;
-
-
-
-//////
-//
-// Statics
-//
-
-/// The completer syntax definition for the *Slang* shading language.
-const SLANG_COMPLETION: std::sync::LazyLock<egui_code_editor::Syntax> = std::sync::LazyLock::new(
-	|| egui_code_editor::Syntax::slang()
-);
-
-/// The vertices of our example quad that will hold the shaded glyph.
-const QUAD_VERTS: &[QuadVertex; 8] = &[
-	QuadVertex {
-		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		texcoord: glm::Vec2::new(-1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., -1., 0., 1.),
-		texcoord: glm::Vec2::new(1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(-1., -1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(1., -1.)
-	},
-
-	QuadVertex {
-		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		texcoord: glm::Vec2::new(1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., -1., 0., 1.),
-		texcoord: glm::Vec2::new(-1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(1., -1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., 1., 0., 1.),
-		texcoord: glm::Vec2::new(-1., -1.)
-	}
-];
-
-const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5, 4, 7, 6];
 
 
 
@@ -101,34 +44,10 @@ const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5
 //
 
 ////
-// QuadVertex
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-struct QuadVertex {
-	pos: glm::Vec4,
-	texcoord: glm::Vec2
-}
-impl QuadVertex
-{
-	const GPU_ATTRIBS: [wgpu::VertexAttribute; 2] =
-		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x2];
-
-	fn layoutDesc () -> wgpu::VertexBufferLayout<'static> {
-		wgpu::VertexBufferLayout {
-			array_stride: size_of::<Self>() as wgpu::BufferAddress,
-			step_mode: wgpu::VertexStepMode::Vertex,
-			attributes: &Self::GPU_ATTRIBS,
-		}
-	}
-}
-
-
-////
 // OnlineShadersDemo
 
 /// Factory function.
-fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
+fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
 	-> cgv::Result<Box<dyn cgv::Application>>
 {
 	// Tracing
@@ -155,26 +74,8 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	};
 
 	// Keyword-based text completer
-	let syntaxCompleter = egui_code_editor::Completer::new_with_syntax(&SLANG_COMPLETION).with_user_words();
-
-
-	////
-	// Prepare buffers
-
-	// Vertex buffer
-	let vertexBuffer = context.device().create_buffer_init(
-		&wgpu::util::BufferInitDescriptor {
-			label: Some("ExShaders__HermiteNodes"), contents: util::slicify(QUAD_VERTS),
-			usage: wgpu::BufferUsages::VERTEX
-		}
-	);
-
-	// Index buffer
-	let indexBuffer = context.device().create_buffer_init(
-		&wgpu::util::BufferInitDescriptor {
-			label: Some("ExShaders__HermiteIndices"), contents: util::slicify(INDICES), usage: wgpu::BufferUsages::INDEX
-		}
-	);
+	let syntaxCompleter = egui_code_editor::Completer::new_with_syntax(&slang_completer::INSTANCE)
+		.with_user_words();
 
 
 	////
@@ -233,8 +134,7 @@ fn createOnlineShadersDemo (context: &cgv::Context, _: &cgv::RenderSetup, enviro
 	// Construct the instance and put it in a box
 	Ok(Box::new(OnlineShadersDemo {
 		statusText: "<STATUS UNKNOWN>".into(), mainModule, slangCtx, userShaderCode, pipelines: Vec::new(),
-		vertexBuffer, indexBuffer, shader: cgv::util::LaterInit::uninit(), highlighterSettings, syntaxCompleter,
-		guiState: Default::default()
+		shader: cgv::util::LaterInit::uninit(), highlighterSettings, syntaxCompleter, guiState: Default::default()
 	}))
 }
 
@@ -254,8 +154,6 @@ struct OnlineShadersDemo<'this>
 	// Rendering related
 	shader: cgv::util::LaterInit<wgpu::ShaderModule>,
 	pipelines: Vec<wgpu::RenderPipeline>,
-	vertexBuffer: wgpu::Buffer,
-	indexBuffer: wgpu::Buffer,
 
 	// GUI-related
 	highlighterSettings: egui_extras::syntax_highlighting::SyntectSettings,
@@ -285,7 +183,7 @@ impl OnlineShadersDemo<'_>
 			vertex: wgpu::VertexState {
 				module: &self.shader,
 				entry_point: Some("vertexMain"), // Slang (for now) requires explicitly stating entry points
-				buffers: &[QuadVertex::layoutDesc()],
+				buffers: &[],                    // We use ad-hoc vertices in the shader for simplicity
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState {
@@ -298,7 +196,7 @@ impl OnlineShadersDemo<'_>
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
 				strip_index_format: Some(wgpu::IndexFormat::Uint32),
 				front_face: wgpu::FrontFace::Ccw,
-				cull_mode: Some(wgpu::Face::Back),
+				cull_mode: None,
 				..Default::default()
 			},
 			depth_stencil: Some(renderState.depthStencilState().clone()),
@@ -404,9 +302,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 	{
 		renderPass.set_pipeline(&self.pipelines[0]);
 		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-		renderPass.set_vertex_buffer(0, self.vertexBuffer.slice(..));
-		renderPass.set_index_buffer(self.indexBuffer.slice(..), wgpu::IndexFormat::Uint32);
-		renderPass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+		renderPass.draw(0..4, 0..1);
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
@@ -469,8 +365,8 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 				);
 
 				// Actual editor
-				ui.allocate_ui(editorSize,
-					|ui| egui::Frame::canvas(ui.style()).corner_radius(3.)
+				ui.allocate_ui(
+					editorSize, |ui| egui::Frame::canvas(ui.style()).corner_radius(3.)
 					.show(ui, |ui|
 					{
 						egui::ScrollArea::vertical().id_salt("editorPane").show(ui, |ui|
@@ -502,7 +398,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 								.show(ui);
 							// - define completer window
 							self.syntaxCompleter.show(
-								&SLANG_COMPLETION, &egui_code_editor::ColorTheme::AYU_MIRAGE, 11.,
+								&slang_completer::INSTANCE, &egui_code_editor::ColorTheme::AYU_MIRAGE, 11.,
 								&mut editorOutput
 							);
 
