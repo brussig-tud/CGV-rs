@@ -16,19 +16,26 @@ description = "A high performance, web-enabled rapid prototyping framework for c
 license = "MIT"
 license-file = "LICENSE"
 
+[profile.dev]
+incremental = false  # Don't use incremental compilation to enable full use of sccache
+
 [profile.dev.build-override]
 debug = true
+incremental = false  # Don't use incremental compilation to enable full use of sccache
 
 [profile.release]
 opt-level = 3
 lto = true
 panic = "abort" # This leads to better optimizations and smaller binaries (and is the default in Wasm anyways).
+incremental = false  # Don't use incremental compilation to enable full use of sccache
 
 [profile.dev.package."*"]
 opt-level = 3  # We don't need debug stuff in the dependencies by default
+incremental = false  # Don't use incremental compilation to enable full use of sccache
 
 [profile.release.package."*"]
 opt-level = 3
+incremental = false  # Don't use incremental compilation to enable full use of sccache
 
 [workspace.dependencies]
 anyhow = "*"
