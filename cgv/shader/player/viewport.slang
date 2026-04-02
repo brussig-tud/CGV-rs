@@ -20,8 +20,8 @@ struct ViewportGeometry {
 // Constants
 //
 
-/// Our quad vertices in model space.
-static constexpr let vpVertices: ViewportGeometry[] = {
+/// Viewport-covering clip-space vertices.
+constexpr static let vpVertices: ViewportGeometry[] = {
 	{float4(-1,-1, 0, 1), float2(0, 1)}, {float4(1,-1, 0, 1), float2(1, 1)},
 	{float4(-1, 1, 0, 1), float2(0, 0)}, {float4(1, 1, 0, 1), float2(1, 0)}
 };
@@ -53,16 +53,17 @@ func vertexMain (uint vertexID: SV_VertexID) -> ViewportGeometry {
 ////
 // Uniforms
 
-//// The incoming viewport image.
-struct ViewportSource {
+/// Data layout of the uniform block providing the texture with the viewport contents.
+struct ViewportTexture {
 	/// The color buffer.
 	Texture2D color;
 
 	/// The sampler for reading the color buffer.
 	SamplerState sampler;
 };
+/// The texture with the viewport contents.
 [vk::binding(0, 0)] // <- start at binding(0) of group(0)
-ParameterBlock<ViewportSource> viewportSource;
+ParameterBlock<ViewportTexture> vpTex;
 
 /// The global gamma values.
 [vk::binding(0, 1)] // <- start at binding(0) of group(1)
@@ -75,7 +76,7 @@ ParameterBlock<float3> gamma;
 /// Our sole fragment shader entry point.
 [shader("fragment")]
 func fragmentMain (vpIn: ViewportGeometry) -> float4 {
-	let unpremultiplied: float4 = viewportSource.color.Sample(viewportSource.sampler, vpIn.uv);
+	let unpremultiplied: float4 = vpTex.color.Sample(vpTex.sampler, vpIn.uv);
 	return float4(
 		pow(unpremultiplied.rgb * unpremultiplied.a, gamma), // pre-multiply and transform to sRGB
 		unpremultiplied.a
