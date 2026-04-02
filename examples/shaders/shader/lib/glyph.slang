@@ -22,7 +22,7 @@ import "lib/sdf.slang";
 /////
 // Module namespace
 
-// The common example namespace
+// The common example namespace.
 public namespace ex {
 
 

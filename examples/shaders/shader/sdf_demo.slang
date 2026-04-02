@@ -5,8 +5,8 @@
 //
 
 // CGV-rs core shader library
-import "cgv/api/uniforms.slang";
-import "cgv/lin/operators.slang";
+import "cgv/api/uniforms.slang";   // interface with managed uniforms handled by CGV-rs
+import "cgv/lin/operators.slang";  // enable GLSL-style linear algebra mathematical operators
 
 // Local imports
 import "lib/sdf.slang";
@@ -16,10 +16,11 @@ import "lib/glyph.slang";
 
 //////
 //
-// Uniforms
+// Common uniforms
 //
 
-// group(0): Viewing parameters.
+// Viewing parameters.
+[vk::binding(0, 0)] // <- start at binding(0) of group(0)
 ParameterBlock<cgv::api::Viewing> viewing;
 
 
@@ -47,12 +48,16 @@ struct VSOutput
 }
 
 
+
 //////
 //
 // Vertex shader
 //
 
-// Vertex shader entry point
+////
+// Entry points
+
+/// Our sole vertex shader entry point.
 [shader("vertex")]
 func vertexMain (vert: VSInput) -> VSOutput {
 	return VSOutput(
@@ -71,10 +76,14 @@ func vertexMain (vert: VSInput) -> VSOutput {
 ////
 // Specialization points
 
-// The Glyph to draw
+/// The Glyph type to draw.
 extern struct Glyph: ex::IGlyph;
 
-// Fragment shader entry point
+
+////
+// Entry points
+
+/// Our sole fragment shader entry point.
 [shader("fragment")]
 func fragmentMain (fsIn: VSOutput) -> float4 {
 	let glyph = Glyph::default();
