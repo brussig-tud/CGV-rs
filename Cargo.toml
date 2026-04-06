@@ -38,6 +38,8 @@ opt-level = 3
 incremental = false  # Don't use incremental compilation to enable full use of sccache
 
 [workspace.dependencies]
+wasm-bindgen = "*"
+wasm-bindgen-futures = "*"
 anyhow = "*"
 tracing = "*"
 tracing-subscriber = {version="*"}

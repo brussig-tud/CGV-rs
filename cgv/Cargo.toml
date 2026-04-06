@@ -43,7 +43,7 @@ ansi_term = "*"
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "*"
 tracing-wasm = "*"
-wasm-bindgen-futures = "*"
+wasm-bindgen-futures = {workspace=true}
 getrandom = {version="0.3", default-features=true, features=["wasm_js"]}
 #web-sys = {version="*", features=["Document", "Element", "Window", "DomQuad", "DomRect"]}
 egui-wgpu = {workspace=true, features=["fragile-send-sync-non-atomic-wasm"]}
