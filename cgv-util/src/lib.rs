@@ -283,6 +283,7 @@ pub fn slicifyInto<T: Sized, E> (data: &T) -> &[E] {
 ///
 /// A `'static` reference to the data that the input reference pointed to.
 #[inline(always)]
+#[deprecated(note="please use sane references in your code instead of this hack")]
 pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
 	unsafe { &*(reference as *const T) }
 }
@@ -297,6 +298,7 @@ pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
 ///
 /// A mutable `'static` reference to the data that the input reference pointed to.
 #[inline(always)]
+#[deprecated(note="please use proper techniques for interior mutability instead of this hack")]
 pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T {
 	#[allow(invalid_reference_casting)]
 	unsafe { &mut *((reference as *const T) as *mut T) }
