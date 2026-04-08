@@ -168,7 +168,7 @@ impl CameraInteractor for OrbitInteractor
 			},
 
 			InputEvent::DoubleClick(info) => {
-				let this = util::mutify(self);
+				let this = util::extendLifetime_mut(self);
 				let mut focusChange = FocusChange::new(camera.parameters(), 0.5);
 				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
 					if let Some(point) = point {

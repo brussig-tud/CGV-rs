@@ -270,7 +270,7 @@ impl CameraInteractor for WASDInteractor
 			InputEvent::DoubleClick(info) => {
 				if self.continousRedrawing.notMovingWASD()
 				{
-					let this = util::mutify(self);
+					let this = util::extendLifetime_mut(self);
 					let mut focusChange = FocusChange::new(camera.parameters(), 0.5);
 					player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
 						if let Some(point) = point {
