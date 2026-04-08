@@ -11,15 +11,6 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-// No point allowing unstable features if we still get warnings.
-#![allow(incomplete_features)]
-
-// Experimental language features
-#![feature(generic_const_exprs)] // required for notsafe::Phony
-#![feature(str_from_raw_parts)]  // required for notsafe::offsetStr
-#![feature(const_option_ops)]    // required for meta::*
-#![feature(const_trait_impl)]    // required for meta::*
-
 
 
 //////
@@ -63,8 +54,7 @@ mod tests;
 use std::ops::{Deref, DerefMut};
 
 // static_assertions
-pub use static_assertions;
-pub use static_assertions::*; // re-export
+pub use static_assertions::{self, *}; // re-export
 
 // Uuid library
 pub use uuid; // re-export

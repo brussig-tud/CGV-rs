@@ -4,10 +4,6 @@
 // Language config
 //
 
-// Allow debugging the build script
-#![allow(internal_features)]
-#![feature(core_intrinsics)]
-
 // Eff this convention.
 #![allow(non_snake_case)]
 
@@ -32,6 +28,12 @@ pub use shaderprep::{prepareShaders, generateShaderEnvironment}; // re-export
 /// The module providing all kinds of additional assorted utilities specific to building (will get inserted verbatim
 /// into the exported [`util`] module).
 mod build_util;
+
+/// Optional module providing the build script debug facilities (can only be used with nightly Rust).
+#[cfg(feature="build_script_debug")]
+mod build_script_debug;
+#[cfg(feature="build_script_debug")]
+pub use build_script_debug::debugWithVsCode;
 
 /// The compound utilities module
 pub mod util {
@@ -69,6 +71,7 @@ pub use cgv_shader as shader; // re-export
 // Ctor
 //
 
+/// The time at which the currently running build script *should be assumed* to have been invoked.
 #[ctor::ctor]
 static SCRIPT_START_TIME: std::time::SystemTime = unsafe {
 	std::time::SystemTime::now().sub(std::time::Duration::from_secs(3))
@@ -178,33 +181,6 @@ pub fn dependOnGeneratedDirectory (dirpath: impl AsRef<Path>) -> Result<()> {
 	util::setTimestampRecursively(&dirpath, getScriptStartTime())?;
 	dependOnDirectory(dirpath);
 	Ok(())
-}
-
-/// Attach VS Code debugger to the build process, optionally halting execution right after
-pub fn debugWithVsCode (halt: bool) -> Result<()>
-{
-	// Build launch config URL
-	let url = format!(
-		"vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}", std::process::id()
-	);
-
-	// Start VS Code
-	match std::process::Command::new("code").arg("--open-url").arg(url).output()
-	{
-		Ok(output) => {
-			if output.status.success() {
-				std::thread::sleep(std::time::Duration::from_secs(3)); // <- give debugger time to attach
-				if halt {
-					std::intrinsics::breakpoint();
-				}
-				Ok(())
-			} else {
-				Err(anyhow!("Could not attach debugger to build process: {}", String::from_utf8_lossy(&output.stderr)))
-			}
-		},
-
-		Err(err) => Err(anyhow!("Could not attach debugger to build process: {}", err))
-	}
 }
 
 /// Reference the target triple of the currently running *Cargo* build.

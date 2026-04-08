@@ -10,4 +10,4 @@ pub use wgslequiv::*; // re-export everything
 
 // Submodule implementing the HasWGSLEquivalent trait
 mod transferfunc;
-pub use transferfunc::{GPUTransferFunction, builtin}; // re-export
+pub use transferfunc::{GPUTransferFunction/*, builtin*/}; // re-export

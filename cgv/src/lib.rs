@@ -10,10 +10,6 @@
 // Eff this convention.
 #![allow(non_snake_case)]
 
-// Experimental language features
-#![feature(associated_type_defaults)] // required throughout data::* modules
-#![feature(generic_const_exprs)] // required for util::Phony
-
 
 
 //////

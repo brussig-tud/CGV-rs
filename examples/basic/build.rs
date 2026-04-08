@@ -5,10 +5,10 @@
 fn main() -> cgv_build::Result<()>
 {
 	// Support debugging this build script (currently hard-wired to VS Code until IDEs start providing proper means of
-	// build script debugging)
-	if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
+	// build script debugging). Needs nightly and is thus requires manual uncommenting by the user.
+	/*if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
 		cgv_build::debugWithVsCode(true)?;
-	}
+	}*/
 
 	// Apply CGV-rs build setup
 	let buildSetup = cgv_build::applyBuildSetup()?;

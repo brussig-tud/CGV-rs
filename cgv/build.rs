@@ -31,10 +31,11 @@ fn main() -> cgv_build::Result<()>
 	////
 	// Preamble
 
-	// Launch VS Code LLDB debugger if it is installed and attach to the build script
-	if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
+	// Launch VS Code LLDB debugger if it is installed and attach to the build script. Needs nightly and thus requires
+	// manual uncommenting by the user.
+	/*if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
 		cgv_build::debugWithVsCode(true)?;
-	}
+	}*/
 
 	// Get source directory
 	let cgvSrcDir = cgv_build::getCargoSourceDir();

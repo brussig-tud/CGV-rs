@@ -24,3 +24,4 @@ cgv-shader = {path="../cgv-shader", features=["slang_runtime"]}
 
 [features]
 default = []
+build_script_debug = []

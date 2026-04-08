@@ -4,8 +4,9 @@
 // Module definitions
 //
 
-// Submodule exposing GPU implementation providers for the built-in transfer functions in `cgv::data`.
-pub mod builtin;
+// Commented-out for now, pending a better design.
+/*// Submodule exposing GPU implementation providers for the built-in transfer functions in `cgv::data`.
+pub mod builtin;*/
 
 
 

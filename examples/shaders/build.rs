@@ -1,4 +1,3 @@
-use cgv_build::getCargoSourceDir;
 
 /// Custom build steps – set up build script debugging, apply the build setup as passed on from *CGV-rs*, compile
 /// shaders and support WASM deployment.
@@ -6,16 +5,16 @@ use cgv_build::getCargoSourceDir;
 fn main() -> cgv_build::Result<()>
 {
 	// Support debugging this build script (currently hard-wired to VS Code until IDEs start providing proper means of
-	// build script debugging)
-	if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
+	// build script debugging). Needs nightly and thus requires manual uncommenting by the user.
+	/*if std::env::var("CARGO_FEATURE_BUILD_SCRIPT_DEBUG").is_ok() {
 		cgv_build::debugWithVsCode(true)?;
-	}
+	}*/
 
 	// Apply CGV-rs build setup
 	let mut buildSetup = cgv_build::applyBuildSetup()?;
 	if !cgv_build::isWasm()? {
 		// Append our own shader path
-		buildSetup.addShaderPath(getCargoSourceDir().join("shader"));
+		buildSetup.addShaderPath(cgv_build::getCargoSourceDir().join("shader"));
 
 		// Also get an "ENVIRONMENT.yaml"
 		cgv_build::generateRuntimeEnvironmentFile(&buildSetup)?;

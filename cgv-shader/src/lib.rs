@@ -89,7 +89,7 @@ impl WgpuSourceType
 	}
 
 	/// Get the most suitable *WGPU* source type for the given platform.
-	pub const fn mostSuitableForPlatform (platform: &util::meta::SupportedPlatform) ->WgpuSourceType
+	pub fn mostSuitableForPlatform (platform: &util::meta::SupportedPlatform) ->WgpuSourceType
 	{
 		// WebGPU/WASM
 		if platform.isWasm() {
@@ -116,7 +116,7 @@ impl std::fmt::Display for WgpuSourceType {
 /// Return a list of feasible *WGPU* source types for the platform the caller is running on, from most to least
 /// suitable.
 #[inline(always)]
-pub const fn feasibleSourceTypes() -> &'static [WgpuSourceType]
+pub fn feasibleSourceTypes() -> &'static [WgpuSourceType]
 {
 	// WebGPU/WASM
 	#[cfg(target_arch="wasm32")]
@@ -132,7 +132,7 @@ pub const fn feasibleSourceTypes() -> &'static [WgpuSourceType]
 /// Return a list of feasible *WGPU* source types for the platform the caller is running on, from most to least
 /// suitable.
 #[inline(always)]
-pub const fn feasibleSourceTypesForPlatform(platform: &util::meta::SupportedPlatform) -> &'static [WgpuSourceType]
+pub fn feasibleSourceTypesForPlatform(platform: &util::meta::SupportedPlatform) -> &'static [WgpuSourceType]
 {
 	// WebGPU/WASM
 	if platform.isWasm() {

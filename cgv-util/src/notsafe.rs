@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
+// for commented-out `Phony`: use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 
 
 
@@ -36,13 +36,24 @@ pub unsafe fn copyAssign<T: Sized> (target: &mut T, source: &T) {
 	unsafe { std::ptr::copy_nonoverlapping(source as *const T, target as *mut T, 1); }
 }
 
-/// Construct an version of the given `str` slice offset by the given amount of `u8`s.
+/// Construct a version of the given `str` slice "slid" to another memory location at `offset` bytes from its original
+/// place.
+///
+/// # Safety
+///
+/// The caller is responsible for ensuring that the memory at the new location contains valid UTF-8.
 ///
 /// # Arguments
 ///
+/// * `source` – The source `str` to slide.
+/// * `offset` – The delta (in bytes) to slide the `str` by.
+///
+/// # Returns
+///
+/// A new slice of the same length as `source` offset to the new location.
 #[inline(always)]
 pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
-	unsafe { std::str::from_raw_parts(source.as_ptr().offset(offset), source.len()) }
+	unsafe { str::from_utf8_unchecked(std::slice::from_raw_parts(source.as_ptr().offset(offset), source.len())) }
 }
 
 
@@ -52,7 +63,7 @@ pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
 // Classes
 //
 
-////
+/*////
 // Phony
 
 /// A container for holding a *phony* object of the given type.
@@ -100,7 +111,7 @@ impl<T: Sized> DerefMut for Phony<T> where [(); size_of::<T>()]: {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		self.as_mut()
 	}
-}
+}*/
 
 
 ////

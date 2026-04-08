@@ -291,20 +291,24 @@ impl FromStr for TargetTriple<'_> {
 	}
 }
 impl PartialEq<TargetTriple<'_>> for TargetTriple<'_> {
-	fn eq(&self, other: &TargetTriple<'_>) -> bool {
+	fn eq (&self, other: &TargetTriple<'_>) -> bool {
 		self.full == other.full
 	}
 }
 impl Clone for TargetTriple<'_>
 {
 	#[inline(always)]
-	fn clone(&self) -> Self {
+	fn clone (&self) -> Self {
 		let mut new = Self::uninitialized();
-		new.clone_from(self);
+		new.clone_from(self); // actually clone without re-parsing the target triple string
 		new
 	}
 
-	fn clone_from(&mut self, source: &Self) {
+	fn clone_from (&mut self, source: &Self)
+	{
+		// In this implementation, we re-use the parsing results from `source` since we know the contents of the cloned
+		// `self.full` string are identical to that of `source.full`. The unsafe code below basically "slides" the
+		// source slices onto the cloned target triple string.
 		self.full = source.full.clone();
 		let offset = unsafe {
 			// SAFETY: We are violating the "from the same allocation" invariant here, but we know the behavior of the
@@ -453,13 +457,13 @@ impl SupportedPlatform
 
 	/// This is merely a convenience shorthand for [`Self::arch::isWasm`](PlatformArchitecture::isWasm).
 	#[inline(always)]
-	pub const fn isWasm (&self) -> bool {
+	pub fn isWasm (&self) -> bool {
 		self.arch.isWasm()
 	}
 
 	/// Evaluates to `true` if and only if [`Self::debug`] is `Some(true)`. Evaluates to `false` in all other cases.
 	#[inline(always)]
-	pub const fn isDebug (&self) -> bool {
+	pub fn isDebug (&self) -> bool {
 		self.debug.unwrap_or(false)
 	}
 }
