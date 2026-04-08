@@ -329,11 +329,11 @@ impl CameraParameters
 						changed = true;
 					}
 				});
-				/* -- vertigo (affects f, fov, eye) --------------------------------- */
+				/* -- dolly (affects f, fov, eye) ----------------------------------- */
 				let mut fov = if let FoV::Perspective(fov) = params.intrinsics.fovY { math::rad2deg!(fov) }
 				                     else                                                      { FOV_ORTHO_THRESHOLD };
 				let fov_old = fov;
-				compoundsUi.add("vertigo", |ui, _| {
+				compoundsUi.add("dolly", |ui, _| {
 					if ui.add(egui::Slider::new(&mut fov, 5f32..=179.)
 						.drag_value_speed(0.03125*fov_old as f64)
 						.clamping(egui::SliderClamping::Always)
