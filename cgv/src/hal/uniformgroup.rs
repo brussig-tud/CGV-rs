@@ -78,8 +78,8 @@ impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 	}
 
 	#[inline(always)]
-	pub fn borrowData_mut (&self) -> &mut UniformsStruct {
-		util::mutify(&self.data) // zero-abstraction interior mutability
+	pub fn borrowData_mut (&mut self) -> &mut UniformsStruct {
+		&mut self.data
 	}
 
 	pub fn upload (&self, context: &Context) {
