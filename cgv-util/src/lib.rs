@@ -347,7 +347,7 @@ fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
 /// If the underlying object is not known to live long enough, calling this function will result in a compiler error.
 #[inline(always)]
 pub fn extendLifetime<'out, Object> (object: &Object) -> &'out Object
-where Object: 'out // Constrain the lifetimes that this operation is safe for
+where Object: 'out + ?Sized // Constrain the lifetimes that this operation is safe for
 {
 	unsafe {
 		// SAFETY:
@@ -374,7 +374,7 @@ where Object: 'out // Constrain the lifetimes that this operation is safe for
 /// error.
 #[inline(always)]
 pub fn extendLifetime_mut<'out, Object> (object: &mut Object) -> &'out mut Object
-where Object: 'out // Constrain the lifetimes that this operation is safe for
+where Object: 'out + ?Sized // Constrain the lifetimes that this operation is safe for
 {
 	unsafe {
 		// SAFETY:
