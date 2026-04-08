@@ -212,7 +212,7 @@ impl Texture
 		// Store name in owned memory
 		let name = label.map(String::from);
 		let label = if let Some(name) = &name {
-			Some(util::statify(name.as_str()))
+			Some(util::extendLifetime(name).as_str())
 		} else {
 			None
 		};
@@ -280,7 +280,7 @@ impl Texture
 		);
 		let readbackView_tex = match &readbackBuffer {
 			Some(_) => Some(wgpu::TexelCopyTextureInfo {
-				texture: util::statify(texture.as_ref()),
+				texture: util::extendLifetime(texture.as_ref()),
 				mip_level: 0,
 				origin: Default::default(),
 				aspect: wgpu::TextureAspect::DepthOnly,
@@ -289,7 +289,7 @@ impl Texture
 		};
 		let readbackView_buf = match &readbackBuffer {
 			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
-				buffer: util::statify(buffer.as_ref()),
+				buffer: util::extendLifetime(buffer.as_ref()),
 				layout: wgpu::TexelCopyBufferLayout {
 					bytes_per_row: Some(roundUpToQuantization(
 						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
@@ -477,7 +477,7 @@ impl Texture
 		);
 		context.queue().submit(Some(enc.finish()));
 		let dims = self.dimsWH();
-		let this = util::statify(self);
+		let this = util::extendLifetime(self);
 		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
 		buf.slice(0..self.size().actual as u64).map_async(
 			wgpu::MapMode::Read, move |result| {
