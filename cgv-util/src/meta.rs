@@ -217,7 +217,7 @@ impl TargetTriple<'_>
 	#[inline]
 	fn uninitialized() -> Self {
 		let triple = String::default();
-		let full: &'static str = statify(triple.as_str());
+		let full = extendLifetime(&triple).as_str();
 		Self {
 			full: triple, arch: full, vendor: full, sys: full, abi: full
 		}
@@ -226,7 +226,7 @@ impl TargetTriple<'_>
 	/// Create from the given target triple descriptor string.
 	pub fn fromString (triple: String) -> Result<Self>
 	{
-		let full: &'static str = statify(&triple);
+		let full = extendLifetime(&triple);
 		let generateTripleErrorMsg = || {
 			Err(anyhow!("Invalid target triple: {full}"))
 		};
