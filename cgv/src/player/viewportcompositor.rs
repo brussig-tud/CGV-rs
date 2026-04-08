@@ -40,7 +40,7 @@ impl ViewportCompositor
 
 		let invGamma_all = 2.2;
 		let invGamma = glm::Vec3::from_element(invGamma_all);
-		let gammaUniform = hal::UniformGroup::create(
+		let mut gammaUniform = hal::UniformGroup::create(
 			context, wgpu::ShaderStages::FRAGMENT, util::concatIfSome(&name, "_gammaUniform").as_deref()
 		);
 		*gammaUniform.borrowData_mut() = invGamma.map(|c| 1./c);
