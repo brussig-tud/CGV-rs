@@ -203,8 +203,8 @@ impl<'a> DepthReadbackDispatcher<'a>
 	){
 		let pixelCoords = self.pixelCoords;
 		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
-		let projection = util::statify(self.projection);
-		let view = util::statify(self.view);
+		let projection = util::extendLifetime(self.projection);
+		let view = util::extendLifetime(self.view);
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			let projected = glm::vec4(
@@ -223,8 +223,8 @@ impl<'a> DepthReadbackDispatcher<'a>
 	){
 		let pixelCoords = self.pixelCoords;
 		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
-		let projection = util::statify(self.projection);
-		let view = util::statify(self.view);
+		let projection = util::extendLifetime(self.projection);
+		let view = util::extendLifetime(self.view);
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			let projected = glm::vec4(

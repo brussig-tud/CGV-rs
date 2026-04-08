@@ -22,12 +22,12 @@ use view::*;
 // MonoCamera
 
 /// A camera producing a single, monoscopic image of the scene.
-pub struct MonoCamera<'own> {
+pub struct MonoCamera<'this> {
 	name: String,
-	framebuffer: &'own hal::Framebuffer,
+	framebuffer: &'this hal::Framebuffer,
 	renderState: Box<RenderState>,
 	defaultClearColor: wgpu::Color, // <- cached default clear color (we need it to be able to undo overrides)
-	globalPasses: Vec<GlobalPassDeclaration<'own>>,
+	globalPasses: Vec<GlobalPassDeclaration<'this>>,
 	parameters: CameraParameters,
 	dirty: bool
 }
@@ -70,8 +70,8 @@ impl MonoCamera<'_>
 		// Construct
 		Self {
 			name, defaultClearColor: *renderSetup.defaultClearColor(),
-			framebuffer: util::statify(&renderState.framebuffer),
-			globalPasses: Self::declareRenderPasses(renderSetup, util::statify(&renderState)),
+			framebuffer: util::extendLifetime(&renderState.framebuffer),
+			globalPasses: Self::declareRenderPasses(renderSetup, util::extendLifetime(&renderState)),
 			renderState,
 			parameters: CameraParameters::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
 			dirty: true
@@ -106,7 +106,7 @@ impl Camera for MonoCamera<'_>
 
 	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup) {
 		self.globalPasses[0].info.clearColor = *renderSetup.defaultClearColor();
-		self.globalPasses = Self::declareRenderPasses(renderSetup, util::statify(&self.renderState));
+		self.globalPasses = Self::declareRenderPasses(renderSetup, util::extendLifetime(&self.renderState));
 	}
 
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
