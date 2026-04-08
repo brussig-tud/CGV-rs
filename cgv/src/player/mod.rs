@@ -662,7 +662,7 @@ impl Player
 
 		// Finally, the active camera interactor
 		match self.cameraInteractors[self.activeCameraInteractor].input(
-			&event, util::mutify(self.camera.as_mut()), this
+			&event, self.camera.as_mut(), this
 		){
 			// Event was handled
 			  EventOutcome::HandledExclusively(redrawRequested)
@@ -792,7 +792,7 @@ impl Player
 				application.render(&self.context, pass.info.renderState, &mut renderPass, &pass.info.pass);
 			}
 
-			// Prepare the other applications
+			// Render the other applications
 			for app in util::mutify(&self.applications) {
 				app.render(&self.context, pass.info.renderState, &mut renderPass, &pass.info.pass);
 			}
