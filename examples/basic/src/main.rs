@@ -455,14 +455,15 @@ impl cgv::Application for ExampleApplication
 		// Appearance section
 		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
 		{
-			// Mutable access to our color uniforms in case something changes
-			let appearance = self.appearanceUniforms.borrowData_mut();
-
 			// Add the standard 2-column layout control grid
 			cgv::gui::layout::ControlTableLayouter::new(ui).layout(ui, "Cgv.Ex.Basic-color",
 				|controlTable|
 				{
+					// Mutable access to our color uniforms in case something changes
+					let appearance = self.appearanceUniforms.borrowData_mut();
 					let mut uploadFlag = false;
+
+					// Add individual controls
 					controlTable.add("Logo colors", |ui, _| {
 						if ui.color_edit_button_srgba(&mut self.guiState.logoColor).changed() {
 							appearance.logoColor = self.guiState.logoColor.into();
