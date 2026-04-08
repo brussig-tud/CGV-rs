@@ -18,8 +18,8 @@ module common;
 /////
 // Module namespace
 
-// Insert into cgv::lin namespace
-public namespace cgv::lin {
+// Insert into cgv::math::lin namespace
+public namespace cgv::math::lin {
 
 
 

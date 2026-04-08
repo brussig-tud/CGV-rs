@@ -5,8 +5,8 @@
 //
 
 // CGV-rs core shader library
-import "cgv/api/uniforms.slang";   // interface with managed uniforms handled by CGV-rs
-import "cgv/lin/operators.slang";  // enable GLSL-style linear algebra mathematical operators
+import "cgv/api/uniforms.slang";       // interface with managed uniforms handled by CGV-rs
+import "cgv/math/lin/operators.slang"; // enable GLSL-style linear algebra mathematical operators
 
 // Local imports
 import "lib/sdf.slang";

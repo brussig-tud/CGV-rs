@@ -1,14 +1,25 @@
 
 //////
 //
-// Module definition
+// Module setup
 //
 
 // A module providing coordinate system transformation utilities.
 module transform;
 
-// Insert into cgv::lin namespace
-namespace cgv::lin {
+
+//////
+// Imports
+
+// Local imports
+/* nothing here yet */
+
+
+/////
+// Module namespace
+
+// Insert into cgv::math::lin namespace
+public namespace cgv::math::lin {
 
 
 

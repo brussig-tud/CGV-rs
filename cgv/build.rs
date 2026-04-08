@@ -73,9 +73,9 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/color/blending.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
-			env.addModule(recommendedStorage, "cgv/lin/common.slang")?;
-			env.addModule(recommendedStorage, "cgv/lin/operators.slang")?;
-			env.addModule(recommendedStorage, "cgv/lin/transform.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/lin/common.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/lin/operators.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/lin/transform.slang")?;
 			env.addModule(recommendedStorage, "cgv/gpu/filter/kernel.slang")?;
 			env.addModule(recommendedStorage, "cgv/gpu/filter.slang")
 		}

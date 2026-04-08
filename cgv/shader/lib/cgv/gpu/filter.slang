@@ -12,7 +12,7 @@ module filter;
 // Imports
 
 // Linear algebra module
-import "cgv/lin/common.slang";
+import "cgv/math/lin/common.slang";
 
 // Local imports
 import "cgv/gpu/filter/kernel.slang";
@@ -41,7 +41,7 @@ func filter<DataType, int Dims, Kernel>(
 	const res: vector<int, Dims>, kernel: Kernel,
 	writer: IFunc<void, vector<int, Dims>, DataType>, reader: IFunc<DataType, vector<int, Dims>>
 )
-where DataType: IFloat, lin::IElement
+where DataType: IFloat, math::lin::IElement
 where Kernel: filter::IKernel<DataType, Dims>
 {
 }

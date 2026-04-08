@@ -1,10 +1,10 @@
 
 //////
 //
-// Module definition
+// Module setup
 //
 
-// A module (re-)defining mathematical operators for linear algebra.
+/// A module (re-)defining mathematical operators for linear algebra.
 module operators;
 
 
