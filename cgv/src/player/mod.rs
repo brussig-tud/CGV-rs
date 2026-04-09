@@ -1044,18 +1044,25 @@ impl eframe::App for Player
 			}
 
 			// Update camera interactor
-			let this = util::statify(self);
-			self.cameraInteractors[self.activeCameraInteractor].update(self.camera.as_mut(), this);
+			let this = unsafe {
+				// SAFETY: We will pass this reference to an egui paint callback. The player is being kept alive by
+				// eframe, certainly long enough for any egui painter callback to finish, so we can safely assume that
+				// the player will outlive the callback.
+				util::notsafe::extendLifetime(self)
+			};
+			self.cameraInteractors[self.activeCameraInteractor].update(
+				// TODO: Dirty, dirty hack. We sidestep Rust's aliasing rules by passing in `this` instead of `self`.
+				/* camera: */self.camera.as_mut(), /* player: */this
+			);
 			if self.camera.update() {
 				redrawScene = true;
 			}
 
-			// Hand off remaining logic to render manager
+			// Schedule compositing of the scene view onto the eframe center panel, handled by the `RenderManager`
 			self.pendingRedraw |= redrawScene;
 			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
 				rect, RenderManager {
-					/*redrawScene, */player: &this, // ToDo: investigate, see below
-					viewportCompositor: util::statify(&self.viewportCompositor)
+					player: &this, viewportCompositor: &this.viewportCompositor
 				}
 			));
 		});
@@ -1078,7 +1085,9 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		if self.player.pendingRedraw /* || self.redrawScene*/ { // ToDo: investigate, see above
 			tracing::debug!("Redrawing");
 			self.player.prepare(device, queue, eguiEncoder)
-		} else {
+		}
+		else {
+			// No command buffers to submit
 			Vec::new()
 		}
 	}
@@ -1091,14 +1100,21 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		// Only redraw the scene if requested
 		if self.player.pendingRedraw
 		{
+			// Actually redraw the scene
 			let cmdBuffers = self.player.redraw(device, queue, eguiEncoder);
+
+			// Clear pending redraw flag
 			unsafe {
 				// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
 				#[allow(invalid_reference_casting)]
 				std::ptr::write_volatile(&self.player.pendingRedraw as *const bool as *mut bool, false)
 			}
+
+			// Let Egui submit our scene redraw command buffers.
 			cmdBuffers
-		} else {
+		}
+		else {
+			// No command buffers to submit
 			Vec::new()
 		}
 	}
