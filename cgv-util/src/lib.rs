@@ -323,58 +323,6 @@ fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
 	unsafe { &mut *(refMut.deref_mut() as *mut T) }
 }
 
-/// Safely extend the lifetime of a reference as required by the caller, up to the maximum time that the referenced
-/// object is known to be valid for.
-///
-/// **NOTE:** The true lifetime of an object might not be known in all cases (in which case this function will do
-/// nothing). This function is most useful to turn a reference of the kind `&'1 Object<'2>` into `&'2 Object<'2>`.
-///
-/// # Arguments
-///
-/// * `object` – A reference to some object.
-///
-/// # Returns
-///
-/// A reference to the same data as `object`, with a lifetime extended to match the type of the receiver of the result.
-/// If the underlying object is not known to live long enough, calling this function will result in a compiler error.
-#[inline(always)]
-pub fn extendLifetime<'out, Object> (object: &Object) -> &'out Object
-where Object: 'out + ?Sized // Constrain the lifetimes that this operation is safe for
-{
-	unsafe {
-		// SAFETY:
-		// Our lifetime constraint on the function body limits the resulting reference to a sound lifetime.
-		&*(object as *const Object)
-	}
-}
-
-/// Safely extend the lifetime of a mutable reference as required by the caller, up to the maximum time that the
-/// referenced object is known to be valid for.
-///
-/// **NOTE:** The true lifetime of an object might not be known in all cases (in which case this function will do
-/// nothing). This function is most useful to turn a reference of the kind `&'1 mut Object<'2>` into
-/// `&'2 mut Object<'2>`.
-///
-/// # Arguments
-///
-/// * `object` – A mutable reference to some object.
-///
-/// # Returns
-///
-/// A mutable reference to the same data as `object`, with a lifetime extended to match the type of the receiver of the
-/// result. If the underlying object is not known to live long enough, calling this function will result in a compiler
-/// error.
-#[inline(always)]
-pub fn extendLifetime_mut<'out, Object> (object: &mut Object) -> &'out mut Object
-where Object: 'out + ?Sized // Constrain the lifetimes that this operation is safe for
-{
-	unsafe {
-		// SAFETY:
-		// Our lifetime constraint on the function body limits the resulting reference to a sound lifetime.
-		&mut *(object as *mut Object)
-	}
-}
-
 /// If the given option contains a string or string slice, returns an option containing the concatenation of the two
 /// inputs.
 ///

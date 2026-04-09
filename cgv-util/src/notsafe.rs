@@ -5,7 +5,7 @@
 //
 
 // Standard library
-// for commented-out `Phony`: use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
+/* for commented-out `Phony`: */ //use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 
 
 
@@ -13,6 +13,65 @@
 //
 // Functions
 //
+
+/// Extend the lifetime of a reference as required by the caller.
+///
+/// The `Object: 'out` bound prevents extending beyond lifetimes that appear inside the type `Object` itself (e.g. in
+/// `Foo<'a>`, it ensures `'out ≤ 'a`). However, **it does not prevent extending beyond the lifetime of the allocation
+/// of `Foo` itself**. Notably, for owned types with no lifetime parameters (e.g. `String`, `i32`), the bound is
+/// vacuously satisfied for any `'out`, including `'static`.
+///
+/// # Safety
+///
+/// The caller must ensure that the referenced allocation remains valid (not dropped or deallocated) for the entirety of
+/// `'out`. The `where` bound is a necessary but insufficient condition for soundness – the caller must additionally
+/// uphold that the *memory* being pointed to lives at least as long as the returned reference.
+///
+/// # Arguments
+///
+/// * `object` – A reference to some object.
+///
+/// # Returns
+///
+/// A reference to the same data as `object`, with a lifetime as indicated by the receiver/call site.
+#[inline(always)]
+pub unsafe fn extendLifetime<'out, Object> (object: &Object) -> &'out Object
+	where Object: 'out + ?Sized
+{
+	unsafe {
+		&*(object as *const Object)
+	}
+}
+
+/// Extend the lifetime of a mutable reference as required by the caller.
+///
+/// The `Object: 'out` bound prevents extending beyond lifetimes that appear inside the type `Object` itself (e.g. in
+/// `Foo<'a>`, it ensures `'out ≤ 'a`). However, **it does not prevent extending beyond the lifetime of the allocation
+/// of `Foo` itself**. Notably, for owned types with no lifetime parameters (e.g. `String`, `i32`), the bound is
+/// vacuously satisfied for any `'out`, including `'static`.
+///
+/// # Safety
+///
+/// The caller must ensure that the referenced allocation remains valid (not dropped or deallocated) for the entirety of
+/// `'out`. The `where` bound is a necessary but insufficient condition for soundness – the caller must additionally
+/// uphold that the *memory* being pointed to lives at least as long as the returned reference. Furthermore, the caller
+/// must ensure that no other references (shared or mutable) to the same data exist for the duration of `'out`.
+///
+/// # Arguments
+///
+/// * `object` – A mutable reference to some object.
+///
+/// # Returns
+///
+/// A mutable reference to the same data as `object`, with a lifetime as indicated by the receiver/call site.
+#[inline(always)]
+pub unsafe fn extendLifetime_mut<'out, Object> (object: &mut Object) -> &'out mut Object
+	where Object: 'out + ?Sized
+{
+	unsafe {
+		&mut *(object as *mut Object)
+	}
+}
 
 /// Creates an (invalid if derefenced) reference to an object of the specified type.
 ///

@@ -215,9 +215,16 @@ impl TargetTriple<'_>
 {
 	/// Internal function to create a functionally uninitialized instance.
 	#[inline]
-	fn uninitialized() -> Self {
+	fn uninitialized() -> Self
+	{
 		let triple = String::default();
-		let full = extendLifetime(&triple).as_str();
+		let full = unsafe {
+			// SAFETY: `triple` is moved into `Self.full` below, so the heap allocation it owns remains valid for the
+			// lifetime of the struct. The returned `&str` slice (`full`) points into that allocation and is stored
+			// alongside it (and can thus not outlive it), making this a self-referential struct with a stable address
+			// for the referenced data.
+			notsafe::extendLifetime(&triple).as_str()
+		};
 		Self {
 			full: triple, arch: full, vendor: full, sys: full, abi: full
 		}
@@ -226,7 +233,13 @@ impl TargetTriple<'_>
 	/// Create from the given target triple descriptor string.
 	pub fn fromString (triple: String) -> Result<Self>
 	{
-		let full = extendLifetime(&triple);
+		let full = unsafe {
+			// SAFETY: `triple` is moved into the returned `TargetTriple.full` at the end of this function, so its heap
+			// allocation remains valid for the lifetime of the struct. All `&str` slices derived from `full` below
+			// point into that allocation and are stored alongside it (and can thus not outlive it), forming a
+			// self-referential struct with a stable backing allocation.
+			notsafe::extendLifetime(&triple)
+		};
 		let generateTripleErrorMsg = || {
 			Err(anyhow!("Invalid target triple: {full}"))
 		};
