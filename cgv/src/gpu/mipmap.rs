@@ -127,8 +127,9 @@ pub trait Generator
 				pipelineInfo.value().as_ref()
 			);
 			unsafe {
-				// SAFETY: - COMPUTE_PIPELINE_CACHE is static, so it is allowed to report 'static references
-				//         - the values are boxed, so their addresses never change even when iterators are invalidated
+				// SAFETY: - The values are boxed, so their addresses are stable even when iterators are invalidated.
+				//         - The lifetime of the reference we return is the same as &self, shorter than the true
+				//           lifetime of the pipeline record (which is actually 'static like the pipeline cache).
 				pipelineInfo.as_ref()
 			}
 		}
@@ -189,9 +190,12 @@ pub trait Generator
 			);
 			COMPUTE_PIPELINE_CACHE.insert(query, pipelineInfo);
 			unsafe {
-				// SAFETY: - the values are boxed, so their addresses never change, even when we move the newly
-				//           constructed items into the cache
-				pipelineInfo_unchecked.as_ref()}
+				// SAFETY: - The values are boxed, so their addresses are stable even when we move the newly constructed
+				//           items into the cache.
+				//         - The lifetime of the reference we return is the same as &self, shorter than the true
+				//           lifetime of the pipeline record (which is actually 'static like the pipeline cache).
+				pipelineInfo_unchecked.as_ref()
+			}
 		}
 	}
 
@@ -247,11 +251,13 @@ impl ShaderFilter for PolyphaseBoxFilter {
 	fn provideShader (&self, context: &Context, textureShape: MipmappableTextureShape) -> Option<(
 		wgpu::ShaderModule, Option<&str>
 	)>{
-		let shaderPackage = shader::Package::deserialize(
-			util::sourceGeneratedBytes!("/shader/gpu/mipmapgen/box_polyphase.spk")
-		).ok()?;
+		static SHADER_PACKAGE: LazyLock<shader::Package> = LazyLock::new(||
+			shader::Package::deserialize(
+				util::sourceGeneratedBytes!("/shader/gpu/mipmapgen/box_polyphase.spk")
+			).expect("baked 'box_polyphase.spk' shader package should be available and valid")
+		);
 		use MipmappableTextureShape::*;
-		shaderPackage.createShaderModuleFromBestInstance(
+		SHADER_PACKAGE.createShaderModuleFromBestInstance(
 			context.device(), None, Some("CGV__gpu_mipmapGenComputeShaderModule")
 		).map(
 			|sm| (sm, /* entryPointName: */Some(match textureShape {
