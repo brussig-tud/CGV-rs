@@ -34,6 +34,7 @@ use cgv::{self, util};
 //
 
 const QUAD_VERTS: &[QuadVertex; 8] = &[
+	// Front side:
 	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
@@ -55,6 +56,7 @@ const QUAD_VERTS: &[QuadVertex; 8] = &[
 		texcoord: glm::Vec2::new(1., 0.)
 	},
 
+	// Back side (texture coordinates flipped horizontally):
 	QuadVertex {
 		pos: glm::Vec4::new(-1., -1., 0., 1.),
 		color: glm::Vec4::new(1., 1., 1., 1.),
@@ -77,7 +79,7 @@ const QUAD_VERTS: &[QuadVertex; 8] = &[
 	}
 ];
 
-const INDICES: &[u32; 10] = &[/*quad 1*/0, 1, 2, 3,  /*degen*/3, 5,  /*quad 2*/5, 4, 7, 6];
+const INDICES: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
 
 
 
@@ -325,6 +327,7 @@ impl ExampleApplication
 		// Tracing
 		tracing::info!("Creating pipelines");
 
+		// Create for the provided render state
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("ExBasic__RenderPipelineLayout"),

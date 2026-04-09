@@ -415,15 +415,15 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 									},
 	
 									Err(  CompileOrBuildError::CompilationError(err)
-									      | CompileOrBuildError::CreateCompositeError(err)
-									      | CompileOrBuildError::LinkError(err))
+									    | CompileOrBuildError::CreateCompositeError(err)
+									    | CompileOrBuildError::LinkError(err))
 									=> {
 										tracing::error!("{err}");
 										format!("{err}")
 									},
 	
 									Err(  CompileOrBuildError::DuplicateModulePaths(_)
-									      | CompileOrBuildError::InvalidModulePath(_))
+									    | CompileOrBuildError::InvalidModulePath(_))
 									=> unreachable!("")
 								}
 							}
