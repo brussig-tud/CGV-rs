@@ -160,21 +160,31 @@ impl<T> UncheckedRef<T>
 
 	/// Immutable access to the reference.
 	///
+	/// # Safety
+	///
+	/// The caller is responsible for ensuring the `UncheckedRef` points to a valid object. Furthermore, the caller is
+	/// responsible for ensuring the lifetime of the receiver does not exceed the lifetime of the referenced object.
+	///
 	/// # Returns
 	///
-	/// A reference to the object with `'static` lifetime.
+	/// A reference to the object with the same lifetime as the receiver.
 	#[inline(always)]
-	pub unsafe fn as_ref (&self) -> &'static T {
+	pub unsafe fn as_ref<'outer> (&self) -> &'outer T {
 		unsafe { &*self.ptr }
 	}
 
 	/// Mutable access to the reference.
 	///
+	/// # Safety
+	///
+	/// The caller is responsible for ensuring the `UncheckedRef` points to a valid object. Furthermore, the caller is
+	/// responsible for ensuring the lifetime of the receiver does not exceed the lifetime of the referenced object.
+	///
 	/// # Returns
 	///
-	/// A mutable reference to the object with `'static` lifetime.
+	/// A mutable reference to the object with the same lifetime as the receiver.
 	#[inline(always)]
-	pub unsafe fn as_mut (&mut self) -> &'static mut T {
+	pub unsafe fn as_mut<'outer> (&mut self) -> &'outer mut T {
 		unsafe { &mut *self.ptr }
 	}
 }
