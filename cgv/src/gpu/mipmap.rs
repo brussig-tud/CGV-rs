@@ -29,11 +29,10 @@ use crate::*;
 
 /// The database of cached compute pipeline configurations
 static COMPUTE_PIPELINE_CACHE: LazyLock<DashMap<
-	(wgpu::TextureFormat, MipmappableTextureShape, u64),
-	Box<ComputePipelineInfo> // TODO: Try without boxing the `ComputePipelineInfo` once we have sufficiently many to test
->> = LazyLock::new(|| {
-	DashMap::with_capacity(8)
-});
+	(wgpu::TextureFormat, MipmappableTextureShape, u64), Box<ComputePipelineInfo>
+>> = LazyLock::new(
+	|| DashMap::with_capacity(8)
+);
 
 
 

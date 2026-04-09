@@ -70,8 +70,17 @@ impl MonoCamera<'_>
 		// Construct
 		Self {
 			name, defaultClearColor: *renderSetup.defaultClearColor(),
-			framebuffer: util::extendLifetime(&renderState.framebuffer),
-			globalPasses: Self::declareRenderPasses(renderSetup, util::extendLifetime(&renderState)),
+			framebuffer: unsafe {
+				// SAFETY: `renderState` is a `Box` moved into `Self.renderState` here. The heap allocation backing
+				// `renderState.framebuffer` and `renderState` itself remains valid and stable for the lifetime of
+				// `Self`. These references are stored alongside the owning `Box` in the same struct, so they cannot
+				// outlive it.
+				util::notsafe::extendLifetime(&renderState.framebuffer)
+			},
+			globalPasses: Self::declareRenderPasses(renderSetup, unsafe {
+				// SAFETY: see above.
+				util::notsafe::extendLifetime(&renderState)
+			}),
 			renderState,
 			parameters: CameraParameters::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
 			dirty: true
@@ -104,9 +113,15 @@ impl Camera for MonoCamera<'_>
 		&mut self.parameters
 	}
 
-	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup) {
+	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup)
+	{
 		self.globalPasses[0].info.clearColor = *renderSetup.defaultClearColor();
-		self.globalPasses = Self::declareRenderPasses(renderSetup, util::extendLifetime(&self.renderState));
+		self.globalPasses = Self::declareRenderPasses(renderSetup, unsafe {
+			// SAFETY: `self.renderState` is a `Box` owned by `Self`. The heap allocation remains valid and stable for
+			// the lifetime of `Self`. The resulting reference is stored in `Self.globalPasses` which, being stored
+			// alongside the owning `Box` in `Self`, cannot outlive it.
+			util::notsafe::extendLifetime(&self.renderState)
+		});
 	}
 
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {

@@ -203,8 +203,16 @@ impl<'a> DepthReadbackDispatcher<'a>
 	){
 		let pixelCoords = self.pixelCoords;
 		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
-		let projection = util::extendLifetime(self.projection);
-		let view = util::extendLifetime(self.view);
+		let projection = unsafe {
+			// SAFETY: `self.projection` is a reference into camera state that is guaranteed by the caller to outlive
+			// the async readback callback (the camera and its matrices persist across frames).
+			util::notsafe::extendLifetime(self.projection)
+		};
+		let view = unsafe {
+			// SAFETY: `self.view` is a reference into camera state that is guaranteed by the caller to outlive the
+			// async readback callback (the camera and its matrices persist across frames).
+			util::notsafe::extendLifetime(self.view)
+		};
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			let projected = glm::vec4(
@@ -223,8 +231,16 @@ impl<'a> DepthReadbackDispatcher<'a>
 	){
 		let pixelCoords = self.pixelCoords;
 		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
-		let projection = util::extendLifetime(self.projection);
-		let view = util::extendLifetime(self.view);
+		let projection = unsafe {
+			// SAFETY: `self.projection` is a reference into camera state that is guaranteed by the caller to outlive
+			// the async readback callback (the camera and its matrices persist across frames).
+			util::notsafe::extendLifetime(self.projection)
+		};
+		let view = unsafe {
+			// SAFETY: `self.view` is a reference into camera state that is guaranteed by the caller to outlive the
+			// async readback callback (the camera and its matrices persist across frames).
+			util::notsafe::extendLifetime(self.view)
+		};
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			let projected = glm::vec4(

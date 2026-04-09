@@ -199,10 +199,14 @@ pub struct GlobalPassInfo<'rs> {
 /// ## A note on lifetime parameters
 ///
 /// If your concrete application needs to introduce a lifetime parameter (e.g. because it defines a field that needs
-/// one), then the `&mut self` references provided by the `Application` trait methods might end up with a lifetime that
-/// is too short to interact with your fields. The functions [`util::extendLifetime`] and [`util::extendLifetime_mut`]
-/// are provided to deal with this exact problem. They allow you to safely extend the lifetime of `&mut self` to
-/// whatever lifetime your application instance is tagged with.
+/// one), then the `&mut self` references provided by the `Application` trait methods ([`update`](Application::update),
+/// [`ui`](Application::ui) etc.) might end up with a lifetime that is too short to interact with your fields.
+/// `cgv_util`'s [`notsafe`](cgv_util::notsafe) module contains the unsafe functions
+/// [`extendLifetime`](util::notsafe::extendLifetime) and [`extendLifetime_mut`](util::notsafe::extendLifetime_mut) to
+/// deal with this problem. They allow you to extend the lifetime of `&mut self` to whatever lifetime your application
+/// instance is tagged with. These functions are unsafe because they only work correctly for this purpose if your
+/// `Application` even defines lifetime parameters. It is your responsibility to use them correctly such that no
+/// dangling references are created.
 pub trait Application
 {
 	/// Report a short title for the application that can be displayed in the application tab bar of the [`Player`].

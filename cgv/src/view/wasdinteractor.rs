@@ -267,10 +267,16 @@ impl CameraInteractor for WASDInteractor
 				}
 			},
 
-			InputEvent::DoubleClick(info) => {
+			InputEvent::DoubleClick(info)
+			=> {
 				if self.continousRedrawing.notMovingWASD()
 				{
-					let this = util::extendLifetime_mut(self);
+					let this = unsafe {
+						// SAFETY: `self` is the interactor, which is owned by the player and persists across frames.
+						// The closure captures `this` and writes into `self.continousRedrawing`, which is valid because
+						// `self` outlives the async callback (the player keeps the interactor alive).
+						util::notsafe::extendLifetime_mut(self)
+					};
 					let mut focusChange = FocusChange::new(camera.parameters(), 0.5);
 					player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
 						if let Some(point) = point {

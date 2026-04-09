@@ -212,7 +212,13 @@ impl Texture
 		// Store name in owned memory
 		let name = label.map(String::from);
 		let label = if let Some(name) = &name {
-			Some(util::extendLifetime(name).as_str())
+			Some(unsafe {
+				// SAFETY: `name` is moved into `Self.name` at the end of this function, so its heap allocation remains
+				// valid and stable for the lifetime of the struct. The `&str` derived here is stored in the descriptor
+				// alongside it, producing a self-referential struct where the references can by construction not
+				// outlive their host.
+				util::notsafe::extendLifetime(name).as_str()
+			})
 		} else {
 			None
 		};
@@ -280,7 +286,13 @@ impl Texture
 		);
 		let readbackView_tex = match &readbackBuffer {
 			Some(_) => Some(wgpu::TexelCopyTextureInfo {
-				texture: util::extendLifetime(texture.as_ref()),
+				texture: unsafe {
+					// SAFETY: `texture` is a `Box` that is moved into `Self.texture` at the end of this function, so
+					// the heap allocation it owns remains valid and stable for the lifetime of the struct. This
+					// reference is stored in `Self.readbackView_tex` alongside it, producing a self-referential struct
+					// where the references can by construction not outlive their host.
+					util::notsafe::extendLifetime(texture.as_ref())
+				},
 				mip_level: 0,
 				origin: Default::default(),
 				aspect: wgpu::TextureAspect::DepthOnly,
@@ -289,7 +301,14 @@ impl Texture
 		};
 		let readbackView_buf = match &readbackBuffer {
 			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
-				buffer: util::extendLifetime(buffer.as_ref()),
+				buffer: unsafe {
+					// SAFETY: `buffer` (via `readbackBuffer`) is a `Box` that is moved into `Self.readbackBuffer` at
+					// the end of this function, so the heap allocation it owns remains valid and stable for the
+					// lifetime of the struct. This reference is stored in `Self.readbackView_buf` alongside the owning
+					// `Box`, producing a self-referential struct where the references can by construction not outlive
+					// their host.
+					util::notsafe::extendLifetime(buffer.as_ref())
+				},
 				layout: wgpu::TexelCopyBufferLayout {
 					bytes_per_row: Some(roundUpToQuantization(
 						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
@@ -477,7 +496,12 @@ impl Texture
 		);
 		context.queue().submit(Some(enc.finish()));
 		let dims = self.dimsWH();
-		let this = util::extendLifetime(self);
+		let this = unsafe {
+			// SAFETY: `self` is borrowed for the duration of the `map_async` callback. The callback is invoked by the
+			// wgpu runtime while the Texture (and therefore `self`) is still alive – the caller guarantees this by
+			// holding the Texture alive until the readback completes.
+			util::notsafe::extendLifetime(self)
+		};
 		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
 		buf.slice(0..self.size().actual as u64).map_async(
 			wgpu::MapMode::Read, move |result| {

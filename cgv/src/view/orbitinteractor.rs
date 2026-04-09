@@ -167,8 +167,14 @@ impl CameraInteractor for OrbitInteractor
 				}
 			},
 
-			InputEvent::DoubleClick(info) => {
-				let this = util::extendLifetime_mut(self);
+			InputEvent::DoubleClick(info)
+			=> {
+				let this = unsafe {
+					// SAFETY: `self` is the interactor, which is owned by the player and persists across frames. The
+					// `focusChange` closure captures `this` and stores into `self.focusChange`, which is valid because
+					// `self` outlives the async callback (the player keeps the interactor alive).
+					util::notsafe::extendLifetime_mut(self)
+				};
 				let mut focusChange = FocusChange::new(camera.parameters(), 0.5);
 				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
 					if let Some(point) = point {
