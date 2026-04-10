@@ -77,6 +77,7 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/math/lin/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/lin/operators.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/lin/transform.slang")?;
+			env.addModule(recommendedStorage, "cgv/geom/intersect/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/gpu/filter/kernel.slang")?;
 			env.addModule(recommendedStorage, "cgv/gpu/filter.slang")
 		}
