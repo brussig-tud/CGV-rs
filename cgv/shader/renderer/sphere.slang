@@ -8,6 +8,7 @@
 import "cgv/api/uniforms.slang";          // interface with managed uniforms handled by CGV-rs
 import "cgv/math/lin/common.slang";       // enables the cgv::math::lin::IElement interface for all float-based builtins
 import "cgv/math/lin/operators.slang";    // enable GLSL-style linear algebra mathematical operators
+import "cgv/geom/billboard.slang";        // access the pre-defined billboards
 import "cgv/geom/intersect/common.slang"; // test common intersection facilities
 
 // Use CGV namespace by default
@@ -31,7 +32,7 @@ using namespace cgv;
 
 /// The viewing parameters. Change often, thus group(0).
 [vk::binding(0, 0)] // <- start at binding(0) of group(0)
-ParameterBlock<cgv::api::Viewing> viewing;
+let viewing: ParameterBlock<cgv::api::Viewing>;
 
 /// The set of constant sphere attributes. Changed infrequently by the user, thus group(1).
 struct ConstantAttribs {
@@ -83,9 +84,10 @@ func evaluateHit (hit: geom::intersect::IHit<float3>) -> float4 {
 [shader("fragment")]
 func fragmentMain_posOnly (pos: float4) -> float4
 {
-	// Test intersect module
+	// Test intersect and billboard module
 	var hit: geom::intersect::Hit<float3>;
-	hit.point = pos.xyz / pos.w;
+	hit.point = geom::Billboards<float>::quad[1].xyz + pos.xyz / pos.w;
+	hit.l = pos.w;
 
 	// Just emit unlit default color for whole billboard
 	return evaluateHit(hit);
