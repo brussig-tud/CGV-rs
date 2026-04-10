@@ -7,7 +7,7 @@
 // CGV-rs core shader library
 import "cgv/api/uniforms.slang";      // for the standardized texture in-/ouput uniform block
 import "cgv/media/texture.slang";     // for the texture utility functions
-import "cgv/math/lin/common.slang";        // enables the cgv::math::lin::IElement interface for all float-based builtins
+import "cgv/math/lin/common.slang";   // enables the cgv::math::lin::IElement interface for all float-based builtins
 import "cgv/gpu/filter/kernel.slang"; // various filter kernels
 
 // Use CGV namespace by default

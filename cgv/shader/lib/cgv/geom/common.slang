@@ -11,7 +11,7 @@ module common;
 //////
 // Imports
 
-// Local imports
+// Shaderlib prelude
 import "cgv/prelude.slang";
 
 
