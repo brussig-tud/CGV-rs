@@ -1,0 +1,92 @@
+
+//////
+//
+// Imports
+//
+
+// CGV-rs core shader library
+import "cgv/api/uniforms.slang";          // interface with managed uniforms handled by CGV-rs
+import "cgv/math/lin/common.slang";       // enables the cgv::math::lin::IElement interface for all float-based builtins
+import "cgv/math/lin/operators.slang";    // enable GLSL-style linear algebra mathematical operators
+import "cgv/geom/intersect/common.slang"; // test common intersection facilities
+
+// Use CGV namespace by default
+using namespace cgv;
+
+
+
+//////
+//
+// Streams
+//
+
+/* no custom structs - for now we just use builtin primitives (float4 in our case). */
+
+
+
+//////
+//
+// Common uniforms
+//
+
+/// The viewing parameters. Change often, thus group(0).
+[vk::binding(0, 0)] // <- start at binding(0) of group(0)
+ParameterBlock<cgv::api::Viewing> viewing;
+
+/// The set of constant sphere attributes. Changed infrequently by the user, thus group(1).
+struct ConstantAttribs {
+	/// The user-defined default color for all spheres.
+	var color: float4;
+
+	/// The user-defined default radius of all spheres.
+	var radius: float;
+};
+[vk::binding(0, 1)] // <- start at binding(0) of group(1)
+ParameterBlock<ConstantAttribs> constAttribs;
+
+
+
+//////
+//
+// Vertex shader
+//
+
+////
+// Entry points
+
+/// Vertex shader entry point for spheres with default color and radius.
+[shader("vertex")]
+float4 vertexMain_posOnly (in const float4 pos) : SV_Position {
+	return viewing.projection*viewing.modelview * pos;
+}
+
+
+
+//////
+//
+// Fragment shader
+//
+
+////
+// Helper functions
+
+/// Tests the `IHit` interface.
+func evaluateHit (hit: geom::intersect::IHit<float3>) -> float4 {
+	return constAttribs.color * float4(hit.point, 1.);
+}
+
+
+////
+// Entry points
+
+/// Our sole fragment shader entry point.
+[shader("fragment")]
+func fragmentMain_posOnly (pos: float4) -> float4
+{
+	// Test intersect module
+	var hit: geom::intersect::Hit<float3>;
+	hit.point = pos.xyz / pos.w;
+
+	// Just emit unlit default color for whole billboard
+	return evaluateHit(hit);
+}
