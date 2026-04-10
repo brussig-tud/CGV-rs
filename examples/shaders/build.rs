@@ -2,7 +2,7 @@
 /// Custom build steps – set up build script debugging, apply the build setup as passed on from *CGV-rs*, compile
 /// shaders and support WASM deployment.
 #[allow(non_snake_case)]
-fn main() -> cgv_build::Result<()>
+fn main () -> cgv_build::Result<()>
 {
 	// Support debugging this build script (currently hard-wired to VS Code until IDEs start providing proper means of
 	// build script debugging). Needs nightly and thus requires manual uncommenting by the user.

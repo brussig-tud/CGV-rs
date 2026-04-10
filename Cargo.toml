@@ -2,7 +2,7 @@
 [workspace]
 members = [
     "cgv", "cgv-build", "cgv-runenv", "cgv-shader", "cgv-util", "vendor/egui_code_editor", "examples/basic",
-    "examples/shaders"
+    "examples/renderers", "examples/shaders"
 ]
 default-members = ["cgv"]
 resolver = "2"

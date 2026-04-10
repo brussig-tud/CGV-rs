@@ -1,0 +1,22 @@
+
+[package]
+name = "ex-renderers"
+version.workspace = true
+edition.workspace = true
+
+[package.metadata]
+nice-name = "CGV-rs Renderers Example"
+short-nice-name = "CGV-rs Renderers"
+#web-favicon-srcdir = "CGV-rs" # relative to the crate's manifest file (i.e. this Cargo.toml). We don't ship our own
+                               # though, so we don't actually define it, this is just here for documentation purposes.
+[dependencies]
+cgv = {path="../../cgv", default-features=false} # make sure only the features resulting from our own feature set are used
+
+[build-dependencies]
+cgv-build = {path="../../cgv-build"}
+
+[features]
+default = ["wayland", "x11"]
+build_script_debug = ["cgv-build/build_script_debug"]
+wayland = ["cgv/wayland"]
+x11 = ["cgv/x11"]
