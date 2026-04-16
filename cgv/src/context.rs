@@ -7,7 +7,7 @@
 // Standard library
 use std::hash::{Hash, Hasher};
 
-// Dashmap library
+// DashMap concurrent associative container library
 use dashmap::DashMap;
 
 // Egui library and framework

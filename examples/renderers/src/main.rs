@@ -128,7 +128,7 @@ impl DataPoint
 /// Factory function for our `RenderersDemo` defined right after. Regular functions with this signature implement the
 /// [`cgv::ApplicationFactory`] trait. If more flexibility is required to control how exactly your app is created, you
 /// can also write a factory class, i.e. a custom struct that implements `cgv::ApplicationFactory`.
-fn createRenderersDemo (context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
+fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, environment: cgv::run::Environment)
 	-> cgv::Result<Box<dyn cgv::Application>>
 {
 	// Tracing
@@ -159,6 +159,12 @@ fn createRenderersDemo (context: &cgv::Context, _: &cgv::RenderSetup, environmen
 
 
 	////
+	// Initialize renderers
+
+	let sphereRenderer = cgv::renderer::Spheres::new(context, renderSetup);
+
+
+	////
 	// Initialize GUI state
 
 	let guiState = GuiState {};
@@ -168,18 +174,16 @@ fn createRenderersDemo (context: &cgv::Context, _: &cgv::RenderSetup, environmen
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { vertexBuffer, indexBuffer, guiState }))
+	Ok(Box::new(RenderersDemo { sphereRenderer: cgv::renderer::Helper::new(sphereRenderer), guiState }))
 }
 
 #[derive(Default,Debug)]
 struct GuiState {}
 
-#[derive(Debug)]
 struct RenderersDemo
 {
-	// Rendering related
-	vertexBuffer: wgpu::Buffer,
-	indexBuffer: wgpu::Buffer,
+	// Test sphere renderer
+	sphereRenderer: cgv::renderer::Helper<cgv::renderer::Spheres>,
 
 	// GUI-controllable state
 	guiState: GuiState
@@ -199,7 +203,8 @@ impl cgv::Application for RenderersDemo
 		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
 		_: &cgv::Player
 	){
-		/* Nothing to do here (yet) */
+		// Let our renderers now of the new render states
+		self.sphereRenderer.rebuildForGlobalPasses(context, globalPasses);
 	}
 
 	fn postInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()>

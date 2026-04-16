@@ -4,9 +4,6 @@
 // Language config
 //
 
-// No point allowing unstable features if we still get warnings.
-#![allow(incomplete_features)]
-
 // Eff this convention.
 #![allow(non_snake_case)]
 
@@ -36,7 +33,7 @@ pub mod hal;
 pub mod gpu;
 
 /// The module containing high-level rendering facilities.
-pub mod render;
+pub mod renderer;
 
 /// The module containing all viewing functionality.
 pub mod view;
@@ -72,7 +69,7 @@ pub use egui_extras as egui_extras;
 // Imports
 //
 
-// Standart library
+// Standard library
 use std::any::Any;
 
 // Ctor library
@@ -93,7 +90,7 @@ pub use cgv_runenv as run; // re-export
 // Vault
 //
 
-// Populate the vault
+// Populate the vault.
 #[cfg(not(target_arch="wasm32"))]
 #[ctor::ctor]
 fn initTracingProxy ()
@@ -107,7 +104,7 @@ fn initTracingProxy ()
 		}
 }
 
-// Encapsulate common init tasks for the tracing crate
+// Encapsulate common init tasks for the tracing crate.
 fn initTracing ()
 {
 	// Set up logging
@@ -172,15 +169,26 @@ pub enum GlobalPass
 
 /// T.b.d.
 pub struct GlobalPassDeclaration<'info> {
+	///
 	pub info: GlobalPassInfo<'info>,
+
+	///
 	pub completionCallback: Option<Box<dyn FnMut(&Context, u32)>>
 }
 
 /// T.b.d.
-pub struct GlobalPassInfo<'rs> {
+pub struct GlobalPassInfo<'rs>
+{
+	///
 	pub pass: GlobalPass,
+
+	///
 	pub renderState: &'rs RenderState,
+
+	///
 	pub clearColor: wgpu::Color,
+
+	///
 	pub depthClearValue: f32
 }
 
