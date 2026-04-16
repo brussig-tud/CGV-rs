@@ -36,18 +36,10 @@ pub struct GpuObjects(wgpu::RenderPipeline);
 impl renderer::GpuObjects for GpuObjects {}
 
 ///
-#[derive(Default)]
-struct Parameters {
-	radius: f32,
-	color: Rgba,
-}
-pub type ParametersUniformGroup = hal::UniformGroup<Parameters>;
-
-///
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	paramUniforms: ParametersUniformGroup
+	constantAttribUniforms: ConstantAttribsUniformGroup
 }
 impl Spheres
 {
@@ -64,14 +56,15 @@ impl Spheres
 	pub fn new (context: &Context, renderSetup: &RenderSetup) -> Self
 	{
 		// Create constant (not state-dependent) GPU objects
-		let paramUniforms = ParametersUniformGroup::create(
-			context, wgpu::ShaderStages::VERTEX_FRAGMENT, Some("CGV__renderer_Spheres_paramUniforms").as_deref()
+		let constantAttribUniforms = ConstantAttribsUniformGroup::create(
+			context, wgpu::ShaderStages::VERTEX_FRAGMENT,
+			Some("CGV__renderer_Spheres_constantAttribUniforms").as_deref()
 		);
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("CGV__renderer_Spheres_renderPipelineLayout"),
 				bind_group_layouts: &[
-					Some(&renderSetup.bindGroupLayouts().viewing), Some(&paramUniforms.bindGroupLayout)
+					Some(&renderSetup.bindGroupLayouts().viewing), Some(&constantAttribUniforms.bindGroupLayout)
 				],
 				immediate_size: 0
 			});
@@ -80,9 +73,7 @@ impl Spheres
 		).expect("`renderer::Spheres` shader module could not be compiled by WGPU");
 
 		// Done!
-		Self {
-			shader, pipelineLayout, paramUniforms
-		}
+		Self { shader, pipelineLayout, constantAttribUniforms }
 	}
 }
 impl Renderer for Spheres
@@ -105,7 +96,9 @@ impl Renderer for Spheres
 			fragment: Some(wgpu::FragmentState {
 				module: &self.shader,
 				entry_point: Some("fragmentMain_posOnly"),
-				targets: &[Some(renderState.colorTargetState().clone())],
+				targets: &[Some(renderstate::changeColorTargetState_blending(
+					renderState.colorTargetState(), renderstate::BlendingOperation::AlphaPreMultiplied
+				))],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			}),
 			primitive: wgpu::PrimitiveState {

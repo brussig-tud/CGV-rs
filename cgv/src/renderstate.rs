@@ -20,7 +20,77 @@ use crate::*;
 
 //////
 //
-// Classes
+// Constants
+//
+
+/// Preset for pre-multiplied alpha blending.
+pub const BLEND_ALPHA_PREMULTIPLIED: wgpu::BlendState = wgpu::BlendState {
+	color: wgpu::BlendComponent {
+		src_factor: wgpu::BlendFactor::One,
+		dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+		operation: wgpu::BlendOperation::Add,
+	},
+	alpha: wgpu::BlendComponent {
+		src_factor: wgpu::BlendFactor::One,
+		dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+		operation: wgpu::BlendOperation::Add,
+	}
+};
+
+/// Preset for straight ("unmultiplied") alpha blending.
+pub const BLEND_ALPHA_STRAIGHT: wgpu::BlendState = wgpu::BlendState {
+	color: wgpu::BlendComponent {
+		src_factor: wgpu::BlendFactor::SrcAlpha,
+		dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+		operation: wgpu::BlendOperation::Add,
+	},
+	alpha: wgpu::BlendComponent {
+		src_factor: wgpu::BlendFactor::One,
+		dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+		operation: wgpu::BlendOperation::Add,
+	}
+};
+
+
+
+//////
+//
+// Enums
+//
+
+/// An enum describing a specific alpha blending operation for use with the [`colorTargetStateWithBlending`] convenience
+/// function.
+pub enum BlendingOperation
+{
+	/// Alpha blending with pre-multiplied alpha.
+	AlphaPreMultiplied,
+
+	/// Alpha Blending with straight alpha ("unmultiplied").
+	AlphaStraight,
+
+	/// A user-defined blending operation.
+	Custom(wgpu::BlendState)
+}
+impl BlendingOperation
+{
+	/// Construct a *WGPU* blend state that corresponds to the selected blenbding operation.
+	///
+	/// **NOTE**: Since this function cannot know about any additional context, [`BlendingOperation::Alpha`] will just
+	/// resolve to [`BLEND_ALPHA_STRAIGHT`].
+	pub fn getBlendState (&self) -> wgpu::BlendState {
+		match self {
+			BlendingOperation::AlphaPreMultiplied => BLEND_ALPHA_PREMULTIPLIED,
+			BlendingOperation::AlphaStraight => BLEND_ALPHA_STRAIGHT,
+			BlendingOperation::Custom(blend) => *blend
+		}
+	}
+}
+
+
+
+//////
+//
+// Structs
 //
 
 ////
@@ -149,46 +219,24 @@ impl RenderState
 // Functions
 //
 
-/// Convenience function for creating an opinionated default color target state for a given color texture.
+/// Convenience function for creating an opinionated default color target state for a given color target texture.
 ///
 /// # Arguments
 ///
-/// * `colorTex` – The color texture to base the state on.
+/// * `colorTarget` – The reference color texture to base the target state on.
 ///
 /// # Returns
 ///
-/// A color target state with opinionated defaults for the given reference texture.
-pub fn defaultColorTargetState (colorTex: &hal::Texture) -> wgpu::ColorTargetState
+/// A color target state with opinionated defaults for the reference target texture.
+pub fn defaultColorTargetState (colorTarget: &hal::Texture) -> wgpu::ColorTargetState
 {
 	wgpu::ColorTargetState {
-		format: colorTex.descriptor.format,
-		blend: if hal::hasAlpha(colorTex.descriptor.format) {
-			match colorTex.alphaUsage {
+		format: colorTarget.descriptor.format,
+		blend: if hal::hasAlpha(colorTarget.descriptor.format) {
+			match colorTarget.alphaUsage {
 				hal::AlphaUsage::DontCare => None,
-				hal::AlphaUsage::Straight => Some(wgpu::BlendState {
-					color: wgpu::BlendComponent {
-						src_factor: wgpu::BlendFactor::SrcAlpha,
-						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-						operation: wgpu::BlendOperation::Add,
-					},
-					alpha: wgpu::BlendComponent {
-						src_factor: wgpu::BlendFactor::One,
-						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-						operation: wgpu::BlendOperation::Add,
-					}
-				}),
-				hal::AlphaUsage::PreMultiplied => Some(wgpu::BlendState {
-					color: wgpu::BlendComponent {
-						src_factor: wgpu::BlendFactor::One,
-						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-						operation: wgpu::BlendOperation::Add,
-					},
-					alpha: wgpu::BlendComponent {
-						src_factor: wgpu::BlendFactor::One,
-						dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-						operation: wgpu::BlendOperation::Add,
-					}
-				})
+				hal::AlphaUsage::Straight => Some(BLEND_ALPHA_STRAIGHT),
+				hal::AlphaUsage::PreMultiplied => Some(BLEND_ALPHA_PREMULTIPLIED)
 			}
 		}
 		else { None },
@@ -212,5 +260,32 @@ pub fn defaultDepthStencilState (depthStencilTex: &hal::Texture) -> wgpu::DepthS
 		depth_compare: Some(wgpu::CompareFunction::Less),
 		stencil: Default::default(),
 		bias: Default::default(),
+	}
+}
+
+/// Convenience function for creating a copy of the given color target state with the [`wgpu::BlendState`] switched out
+/// according to the provided [`BlendingOperation`].
+///
+/// # Arguments
+///
+/// * `colorTargetState` – The base `wgpu::ColorTargetState` to manipulate.
+/// * `blending` – Description of the blending operation to use. Note that some [`BlendingOperation`]s require that
+///                the corresponding color target in a pipeline has an alpha channel. Specifying such a blending
+///                operation when no alpha channel exists in the target is a logic bug that will likely only manifest in
+///                wrong rendering results.
+/// # Returns
+///
+/// A color target state with the specified blending operation onto the given reference texture.
+pub fn changeColorTargetState_blending (colorTargetState: &wgpu::ColorTargetState, blending: BlendingOperation)
+	-> wgpu::ColorTargetState
+{
+	wgpu::ColorTargetState {
+		format: colorTargetState.format,
+		blend: match blending {
+			BlendingOperation::AlphaPreMultiplied                     => Some(BLEND_ALPHA_PREMULTIPLIED),
+			BlendingOperation::AlphaStraight                          => Some(BLEND_ALPHA_STRAIGHT),
+			BlendingOperation::Custom(customBlend)         => Some(customBlend)
+		},
+		write_mask: colorTargetState.write_mask
 	}
 }
