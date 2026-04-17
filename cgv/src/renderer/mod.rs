@@ -12,6 +12,15 @@ pub use spheres::Spheres; // re-export
 pub mod data;
 pub use data::Data; // re-export
 
+/// The module prelude.
+pub mod prelude {
+	pub use super::{
+		Data, renderer::data::Interleaved, renderer::data::NonInterleaved, renderer::data::HasPositions,
+		renderer::data::Indexed, renderer::data::HasNormals, renderer::data::HasTangents, renderer::data::HasRadii,
+		renderer::data::HasOrientation, renderer::data::HasScale, renderer::data::HasColors
+	};
+}
+
 
 
 //////

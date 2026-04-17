@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::{ops::Index, slice::SliceIndex};
+/* nothing here yet */
 
 // Local imports
 use crate::{self as cgv, *};
