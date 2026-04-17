@@ -131,7 +131,7 @@ pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
 ///
 /// # Safety
 ///
-/// The caller must ensure that:
+/// Users must ensure that:
 /// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
 /// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
 ///   allocation.
@@ -154,6 +154,7 @@ impl<T: Copy> StridedIter<T>
 	/// # Safety
 	///
 	/// See [struct-level](StridedIter) safety documentation.
+	#[inline(always)]
 	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
 		ptr: ptr as *const u8, stride, remaining: len, _phantom: PhantomData
 	}}
@@ -182,25 +183,102 @@ impl<T: Copy> ExactSizeIterator for StridedIter<T> {}
 /// Helper to construct a [`StridedIter`] over the same field in a series of structured data records (aka. interleaved
 /// data).
 ///
+/// # Safety
+///
+/// This macro internally uses raw pointer manipulation, so it can only be used inside `unsafe` blocks. The required
+/// invariants are documented in the struct-level documentation of [StridedIter].
+///
 /// # Arguments
 ///
-/// * `$data` – reference to the raw data container (or slice) holding the interleaved data
-/// * `$field` – field of a data record (e.g. tuple index `0`, `1`, or a named struct field)
-/// * `$T` – the type of the field
+/// * `data` – reference to the raw data container (or slice) holding the interleaved data
+/// * `field` – field of a data record (e.g. tuple index `0`, `1`, or a named struct field)
+/// * `T` – the type of the field
 #[macro_export]
-macro_rules! strided_iter {
-	($data:expr, $field:tt, $T:ty) => {
-		unsafe {
-			let base = ::std::ptr::addr_of!((*$data.as_ptr()).$field);
-			cgv_util::notsafe::StridedIter::<$T>::new(
-				base,
-				::std::mem::size_of::<(glm::Vec4, glm::Vec4, f32, cgv::RGBA)>(),
-				$data.len(),
-			)
-		}
-	};
+macro_rules! stridedIter
+{
+	($data:expr, $field:tt, $T:ty) => {{
+		let base = std::ptr::addr_of!((*$data.as_ptr()).$field);
+		cgv_util::notsafe::StridedIter::<$T>::new(
+			base, size_of_val(&*$data.as_ptr()), $data.len(),
+		)
+	}};
 }
-pub use crate::strided_iter;
+pub use crate::stridedIter;
+
+
+////
+// StridedRefIter
+
+/// An efficient iterator that references values of type `T` at a fixed byte stride from a contiguous buffer. This
+/// enables easy by-reference iteration over individual attributes in interleaved ("array of structs") data layouts
+/// without copying.
+///
+/// # Safety
+///
+/// Users must ensure that:
+/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
+/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
+///   allocation.
+pub struct StridedRefIter<'outer, T: Sized+'outer> {
+	ptr: *const u8,
+	stride: usize,
+	remaining: usize,
+	_phantom: PhantomData<&'outer T>,
+}
+impl<T: Sized> StridedRefIter<'_, T>
+{
+	/// Create a new strided referencing iterator.
+	///
+	/// # Arguments
+	///
+	/// * `ptr` – Pointer to the first `T` in the strided sequence (i.e. the `T` field in the first record).
+	/// * `stride` – The stride between subsequent records.
+	/// * `len` – The number of records after and including the one pointed to by `ptr` that can be iterated over.
+	///
+	/// # Safety
+	///
+	/// See [struct-level](StridedRefIter) safety documentation.
+	#[inline(always)]
+	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
+		ptr: ptr as *const u8, stride, remaining: len, _phantom: PhantomData
+	}}
+}
+impl<'outer, T: Sized+'outer> Iterator for StridedRefIter<'outer, T> {
+	type Item = &'outer T;
+
+	fn next (&mut self) -> Option<&'outer T>
+	{
+		if self.remaining == 0 {
+			return None;
+		}
+		let value = unsafe {
+			// SAFETY: guaranteed by caller (see struct-level docs), plus the reference we take here will be returned to
+			// the caller with a lifetime equal to the lifetime of the iterator, which is correct.
+			&*(self.ptr as *const T)
+		};
+		self.ptr = unsafe { self.ptr.add(self.stride) };
+		self.remaining -= 1;
+		Some(value)
+	}
+
+	fn size_hint (&self) -> (usize, Option<usize>) {
+		(self.remaining, Some(self.remaining))
+	}
+}
+impl<T: Sized> ExactSizeIterator for StridedRefIter<'_, T> {}
+
+///
+#[macro_export]
+macro_rules! stridedRefIter
+{
+	($data:expr, $field:tt, $T:ty) => {{
+		let base = std::ptr::addr_of!((*$data.as_ptr()).$field);
+		cgv_util::notsafe::StridedRefIter::<$T>::new(
+			base, size_of_val(&*$data.as_ptr()), $data.len(),
+		)
+	}};
+}
+pub use crate::stridedRefIter;
 
 
 /*////
