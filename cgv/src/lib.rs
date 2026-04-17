@@ -169,6 +169,26 @@ pub enum GlobalPass
 	/// A custom pass, with a custom value.
 	Custom(Box<dyn Any>)
 }
+impl GlobalPass {
+	/// Construct a `GlobalPass::Stereo` value for the given eye index, with the [`StereoEye::max`] field set to a
+	/// *don't care* value. Useful for interacting with various [`view::Camera`] APIs that require you to state a global
+	/// pass for the operation.
+	///
+	/// # Arguments
+	///
+	/// * `eye` – The eye index the stereo pass should refer to.
+	///
+	/// # Returns
+	///
+	/// A `GlobalPass::Stereo` value that refers to the specified eye index.
+	///
+	/// # Example
+	///
+	/// **TODO: add once [`view::Camera`] is overhauled**
+	pub fn stereoQuery (eye: u32) -> Self {
+		Self::Stereo(StereoEye { current: eye, max: u32::default() })
+	}
+}
 
 /// T.b.d.
 pub struct GlobalPassDeclaration<'info> {
