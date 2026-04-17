@@ -61,7 +61,11 @@ pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
 pub use eframe::{wgpu as wgpu, egui as egui};
-pub use egui_extras as egui_extras;
+pub use egui_extras;
+
+/// Unit tests
+#[cfg(test)]
+mod tests;
 
 
 
@@ -143,6 +147,10 @@ fn initTracing ()
 //
 // Enums and structs
 //
+
+/// The common color type.<br />
+/// **TODO**: put into to-be-done `media` module/crate.
+pub type RGBA = egui::ecolor::Rgba;
 
 /// Holds information about the eye(s) in a stereo render pass.
 #[derive(Debug)]

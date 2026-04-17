@@ -8,7 +8,7 @@
 use std::{ops::Index, slice::SliceIndex};
 
 // Local imports
-use crate::*;
+use crate::{self as cgv, *};
 
 
 
@@ -32,9 +32,9 @@ pub trait Interleaved: Data {}
 /// (aka. "struct of arrays").
 pub trait NonInterleaved: Data {}
 
-/// Trait indicating that the render data contains topological information; that is, indices into the data that connect
+/// Trait indicating that the render data contains index information; that is, indices into the data that connect
 /// individual data points to form complex primitives, like lines/line strips, triangles/triangle strips, etc.
-pub trait Topological: Data
+pub trait Indexed: Data
 {
 	/// The iterator type for iterating indices in the data.
 	type IndexIterator: Iterator<Item=u32>;
@@ -46,7 +46,7 @@ pub trait Topological: Data
 	fn indices (&self) -> Self::IndexIterator;
 
 	/// Reference a single data index or a slice of data indices.
-	fn index<I: SliceIndex<[u32]>> (&self, index: I) -> &I::Output;
+	fn index<I: SliceIndex<[u32]>> (&self, index: I) -> &u32;
 }
 
 ///
@@ -57,8 +57,8 @@ pub trait HasPositions: Data {
 	/// Iterate over the positions.
 	fn positions (&self) -> Self::PosIterator;
 
-	/// Reference a single position a slice of positions.
-	fn pos<I: SliceIndex<[glm::Vec4]>> (&self, index: I) -> &I::Output;
+	/// Reference a single position at the given index.
+	fn pos<I: Index<u32>> (&self, index: I) -> &glm::Vec4;
 }
 
 ///
@@ -69,8 +69,8 @@ pub trait HasNormals: Data {
 	/// Iterate over the normals.
 	fn normals (&self) -> Self::NormalIterator;
 
-	/// Reference a single normal a slice of normals.
-	fn normal<I: SliceIndex<[glm::Vec4]>> (&self, index: I) -> &I::Output;
+	/// Reference a single position at the given index.
+	fn normal<I: Index<u32>> (&self, index: I) -> &glm::Vec4;
 }
 
 ///
@@ -81,8 +81,8 @@ pub trait HasTangents: Data {
 	/// Iterate over the tangents.
 	fn tangents (&self) -> Self::TangentIterator;
 
-	/// Reference a single tangent a slice of tangents.
-	fn tangent<I: SliceIndex<[glm::Vec4]>> (&self, index: I) -> &I::Output;
+	/// Reference a single tangent at the given index.
+	fn tangent<I: Index<u32>> (&self, index: I) -> &glm::Vec4;
 }
 
 ///
@@ -93,8 +93,8 @@ pub trait HasRadii: Data {
 	/// Iterate over the radii.
 	fn radii (&self) -> Self::RadiusIterator;
 
-	/// Reference a single radius a slice of radii.
-	fn radius<I: SliceIndex<[f32]>> (&self, index: I) -> &I::Output;
+	/// Reference a single radius at the given index.
+	fn radius<I: Index<u32>> (&self, index: I) -> &f32;
 }
 
 ///
@@ -105,8 +105,8 @@ pub trait HasOrientation: Data {
 	/// Iterate over the orientations.
 	fn orientations (&self) -> Self::OrientationIterator;
 
-	/// Reference a single orientation a slice of orientations.
-	fn orientation<I: SliceIndex<[glm::Quat]>> (&self, index: I) -> &I::Output;
+	/// Reference a single orientation at the given index.
+	fn orientation<I: Index<u32>> (&self, index: I) -> &glm::Quat;
 }
 
 ///
@@ -117,71 +117,18 @@ pub trait HasScale: Data {
 	/// Iterate over the scaling values.
 	fn scales (&self) -> Self::ScaleIterator;
 
-	/// Reference a single scaling value a slice of scaling values.
-	fn scale<I: SliceIndex<[glm::Vec3]>> (&self, index: I) -> &I::Output;
+	/// Reference a single scaling vector at the given index.
+	fn scale<I: Index<u32>> (&self, index: I) -> &glm::Vec3;
 }
 
 ///
 pub trait HasColors: Data {
 	/// The iterator type for iterating colors in the data.
-	type ColorIterator: Iterator<Item=egui::ecolor::Rgba>;
+	type ColorIterator: Iterator<Item=cgv::RGBA>;
 
 	/// Iterate over the colors.
 	fn colors (&self) -> Self::ColorIterator;
 
-	/// Reference a single color a slice of colors.
-	fn color<I: SliceIndex<[egui::ecolor::Rgba]>> (&self, index: I) -> &I::Output;
-}
-
-
-
-//////
-//
-// Structs
-//
-
-///
-
-/// An interface for random-access to values of a single-attribute data series.
-pub trait AttributeAccessor<'accessor, T>
-{
-	/// Return the number of elements in the underlying series.
-	fn num (&self) -> usize;
-
-	/// Obtain a reference to the value at the given index `idx`.
-	///
-	/// # Panics
-	///
-	/// Accessing with an out-of-bounds `idx` is undefined behavior. This function may panic (depending on the
-	/// implementation) in this case.
-	fn at (&self, idx: usize) -> &'accessor T;
-
-	/// Obtain a mutable reference to the value at the given index `idx`.
-	///
-	/// # Panics
-	///
-	/// Accessing with an out-of-bounds `idx` is undefined behavior. This function may panic (depending on the
-	/// implementation) in this case.
-	fn at_mut (&mut self, idx: usize) -> &'accessor mut T;
-}
-
-/// The common interface for augmented position data containers.
-pub trait AugmentedPositionData<'container>
-{
-	/// Report whether the data is internally stored in an interleaved fashion (*"array of structs"*) or not (*"struct
-	/// of arrays"*).
-	fn isInterleaved (&self) -> bool;
-
-	/// Return an accessor for the 3D *positions* of the data points.
-	fn positions (&self) -> &'container dyn AttributeAccessor<'container, glm::Vec4>;
-
-	/// Temporarily gain mutable access to the 3D *positions* of the data points.
-	fn mutatePositions<R, Action> (&self, action: Action) -> R
-		where Action: FnOnce(&mut dyn AttributeAccessor<'_, glm::Vec4>)->R;
-}
-
-/// The common interface for all renderers that visualize augmented position data with any kind of 3D primitive.
-pub trait PrimitiveRenderer
-{
-	fn setData<'data> (&mut self, data: impl AugmentedPositionData<'data>);
+	/// Reference a single color at the given index.
+	fn color<I: Index<u32>> (&self, index: I) -> &cgv::RGBA;
 }
