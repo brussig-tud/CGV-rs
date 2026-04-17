@@ -5,6 +5,7 @@
 //
 
 // Standard library
+use std::marker::PhantomData;
 /* for commented-out `Phony`: */ //use std::{ops::Deref, ops::DerefMut, borrow::Borrow, borrow::BorrowMut};
 
 
@@ -119,8 +120,88 @@ pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
 
 //////
 //
-// Classes
+// Structs
 //
+
+////
+// StridedIter
+
+/// An efficient iterator that reads values of type `T` at a fixed byte stride from a contiguous buffer. This enables
+/// easy iteration over individual attributes in interleaved ("array of structs") data layouts without copying.
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
+/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
+///   allocation.
+pub struct StridedIter<T: Copy> {
+	ptr: *const u8,
+	stride: usize,
+	remaining: usize,
+	_phantom: PhantomData<T>,
+}
+impl<T: Copy> StridedIter<T>
+{
+	/// Create a new strided iterator.
+	///
+	/// # Arguments
+	///
+	/// * `ptr` – Pointer to the first `T` in the strided sequence (i.e. the `T` field in the first record).
+	/// * `stride` – The stride between subsequent records.
+	/// * `len` – The number of records after and including the one pointed to by `ptr` that can be iterated over.
+	///
+	/// # Safety
+	///
+	/// See [struct-level](StridedIter) safety documentation.
+	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
+		ptr: ptr as *const u8, stride, remaining: len, _phantom: PhantomData
+	}}
+}
+impl<T: Copy> Iterator for StridedIter<T> {
+	type Item = T;
+
+	fn next (&mut self) -> Option<T>
+	{
+		if self.remaining == 0 {
+			return None;
+		}
+		// SAFETY: guaranteed by caller (see struct-level docs)
+		let value = unsafe { *(self.ptr as *const T) };
+		self.ptr = unsafe { self.ptr.add(self.stride) };
+		self.remaining -= 1;
+		Some(value)
+	}
+
+	fn size_hint (&self) -> (usize, Option<usize>) {
+		(self.remaining, Some(self.remaining))
+	}
+}
+impl<T: Copy> ExactSizeIterator for StridedIter<T> {}
+
+/// Helper to construct a [`StridedIter`] over the same field in a series of structured data records (aka. interleaved
+/// data).
+///
+/// # Arguments
+///
+/// * `$data` – reference to the raw data container (or slice) holding the interleaved data
+/// * `$field` – field of a data record (e.g. tuple index `0`, `1`, or a named struct field)
+/// * `$T` – the type of the field
+#[macro_export]
+macro_rules! strided_iter {
+	($data:expr, $field:tt, $T:ty) => {
+		unsafe {
+			let base = ::std::ptr::addr_of!((*$data.as_ptr()).$field);
+			cgv_util::notsafe::StridedIter::<$T>::new(
+				base,
+				::std::mem::size_of::<(glm::Vec4, glm::Vec4, f32, cgv::RGBA)>(),
+				$data.len(),
+			)
+		}
+	};
+}
+pub use crate::strided_iter;
+
 
 /*////
 // Phony
