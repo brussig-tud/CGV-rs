@@ -46,7 +46,7 @@ pub trait Indexed: Data
 	fn indices (&self) -> Self::IndexIterator;
 
 	/// Reference a single data index or a slice of data indices.
-	fn index<I: SliceIndex<[u32]>> (&self, index: I) -> &u32;
+	fn index (&self, index: u32) -> u32;
 }
 
 ///
@@ -58,7 +58,7 @@ pub trait HasPositions: Data {
 	fn positions (&self) -> Self::PosIterator;
 
 	/// Reference a single position at the given index.
-	fn pos<I: Index<u32>> (&self, index: I) -> &glm::Vec4;
+	fn pos (&self, index: u32) -> &glm::Vec4;
 }
 
 ///
@@ -70,7 +70,7 @@ pub trait HasNormals: Data {
 	fn normals (&self) -> Self::NormalIterator;
 
 	/// Reference a single position at the given index.
-	fn normal<I: Index<u32>> (&self, index: I) -> &glm::Vec4;
+	fn normal (&self, index: u32) -> &glm::Vec4;
 }
 
 ///
@@ -82,7 +82,7 @@ pub trait HasTangents: Data {
 	fn tangents (&self) -> Self::TangentIterator;
 
 	/// Reference a single tangent at the given index.
-	fn tangent<I: Index<u32>> (&self, index: I) -> &glm::Vec4;
+	fn tangent (&self, index: u32) -> &glm::Vec4;
 }
 
 ///
@@ -94,7 +94,7 @@ pub trait HasRadii: Data {
 	fn radii (&self) -> Self::RadiusIterator;
 
 	/// Reference a single radius at the given index.
-	fn radius<I: Index<u32>> (&self, index: I) -> &f32;
+	fn radius (&self, index: u32) -> f32;
 }
 
 ///
@@ -106,7 +106,7 @@ pub trait HasOrientation: Data {
 	fn orientations (&self) -> Self::OrientationIterator;
 
 	/// Reference a single orientation at the given index.
-	fn orientation<I: Index<u32>> (&self, index: I) -> &glm::Quat;
+	fn orientation (&self, index: u32) -> &glm::Quat;
 }
 
 ///
@@ -118,7 +118,7 @@ pub trait HasScale: Data {
 	fn scales (&self) -> Self::ScaleIterator;
 
 	/// Reference a single scaling vector at the given index.
-	fn scale<I: Index<u32>> (&self, index: I) -> &glm::Vec3;
+	fn scale (&self, index: u32) -> &glm::Vec3;
 }
 
 ///
@@ -130,5 +130,5 @@ pub trait HasColors: Data {
 	fn colors (&self) -> Self::ColorIterator;
 
 	/// Reference a single color at the given index.
-	fn color<I: Index<u32>> (&self, index: I) -> &cgv::RGBA;
+	fn color (&self, index: u32) -> &cgv::RGBA;
 }
