@@ -8,8 +8,9 @@
 pub mod spheres;
 pub use spheres::Spheres; // re-export
 
-/// ABANDONED - just for future reference
-pub mod posdata_ABANDONDED;
+/// Module defining the render data model.
+pub mod data;
+pub use data::Data; // re-export
 
 
 

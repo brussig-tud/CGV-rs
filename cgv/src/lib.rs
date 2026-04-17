@@ -34,6 +34,7 @@ pub mod gpu;
 
 /// The module containing high-level rendering facilities.
 pub mod renderer;
+pub use renderer::Renderer; // re-export
 
 /// The module containing all viewing functionality.
 pub mod view;
@@ -394,8 +395,7 @@ pub fn obtainShaderCompileEnvironment () -> shader::compile::Environment<shader:
 {
 	// Imports we only need here, when the feature `slang_runtime` is enabled
 	use std::sync::LazyLock;
-	use util::uuid::Uuid;
-	use util::unique::Realm;
+	use util::{uuid::Uuid, unique::Realm};
 
 	// Statically keep the environment in memory
 	static SHADER_LIB_ENVIRONMENT: LazyLock<shader::compile::Environment<shader::slang::EnvModule>> = LazyLock::new(||
