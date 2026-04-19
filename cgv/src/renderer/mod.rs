@@ -15,9 +15,12 @@ pub use data::Data; // re-export
 /// The module prelude.
 pub mod prelude {
 	pub use super::{
-		Data, renderer::data::Interleaved, renderer::data::NonInterleaved, renderer::data::HasPositions,
-		renderer::data::Indexed, renderer::data::HasNormals, renderer::data::HasTangents, renderer::data::HasRadii,
-		renderer::data::HasOrientation, renderer::data::HasScale, renderer::data::HasColors
+		Data, renderer::data::Interleaved, renderer::data::NonInterleaved, renderer::data::Indexed,
+		renderer::data::CanHaveNormals, renderer::data::HasNormals, renderer::data::CanHaveTangents,
+		renderer::data::HasTangents, renderer::data::CanHaveRadii, renderer::data::HasRadii,
+		renderer::data::CanHaveRadiusDerivs, renderer::data::HasRadiusDerivs, renderer::data::CanHaveOrientations,
+		renderer::data::HasOrientations, renderer::data::CanHaveScalings, renderer::data::HasScalings,
+		renderer::data::CanHaveColors, renderer::data::HasColors
 	};
 }
 

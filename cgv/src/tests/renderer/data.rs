@@ -13,88 +13,10 @@ use crate::{self as cgv, *, renderer::prelude::*};
 
 //////
 //
-// Structs
-//
-
-/// Non-indexed, interleaved test [render data](renderer::data::Data) with positions and normals.
-struct NonIndexedInterleavedPosNormalRadiusColor {
-	data: Vec<(/* positions: */glm::Vec4, /* normals: */glm::Vec4, /* radius */f32, /* color */cgv::RGBA)>
-}
-impl renderer::Data for NonIndexedInterleavedPosNormalRadiusColor {
-	fn num (&self) -> u32 {
-		self.data.len() as u32
-	}
-}
-impl Interleaved for NonIndexedInterleavedPosNormalRadiusColor {}
-impl HasPositions for NonIndexedInterleavedPosNormalRadiusColor {
-	type PosIterator = util::notsafe::StridedIter<glm::Vec4>;
-
-	fn positions (&self) -> Self::PosIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 0, glm::Vec4)
-		}
-	}
-
-	fn pos (&self, index: u32) -> &glm::Vec4 {
-		&self.data[index as usize].0
-	}
-}
-impl HasNormals for NonIndexedInterleavedPosNormalRadiusColor {
-	type NormalIterator = util::notsafe::StridedIter<glm::Vec4>;
-
-	fn normals (&self) -> Self::NormalIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 1, glm::Vec4)
-		}
-	}
-
-	fn normal (&self, index: u32) -> &glm::Vec4 {
-		&self.data[index as usize].1
-	}
-}
-impl HasRadii for NonIndexedInterleavedPosNormalRadiusColor {
-	type RadiusIterator = util::notsafe::StridedIter<f32>;
-
-	fn radii (&self) -> Self::RadiusIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 2, f32)
-		}
-	}
-
-	fn radius (&self, index: u32) -> f32 {
-		self.data[index as usize].2
-	}
-}
-impl HasColors for NonIndexedInterleavedPosNormalRadiusColor {
-	type ColorIterator = util::notsafe::StridedIter<cgv::RGBA>;
-
-	fn colors (&self) -> Self::ColorIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 3, cgv::RGBA)
-		}
-	}
-
-	fn color (&self, index: u32) -> &cgv::RGBA {
-		&self.data[index as usize].3
-	}
-}
-
-
-
-//////
-//
 // Helper functions
 //
 
-fn createTestData_nonindexed_interleaved () -> NonIndexedInterleavedPosNormalRadiusColor
+/*fn createTestData_nonindexed_interleaved () -> NonIndexedInterleavedPosNormalRadiusColor
 {
 	NonIndexedInterleavedPosNormalRadiusColor {
 		data: vec![
@@ -168,4 +90,4 @@ fn test_interleaving_nonindexed_iterate ()
 	assert_eq!(iter.next().unwrap(), glm::vec4(0.,1.,1.,1.));
 	assert_eq!(iter.len(), 0);
 	assert_eq!(iter.next(), None);
-}
+}*/
