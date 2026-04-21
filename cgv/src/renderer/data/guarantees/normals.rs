@@ -56,6 +56,20 @@ impl<DataWithNormals: CanHaveNormals> Data for GuaranteeNormals<DataWithNormals>
 	#[inline(always)]
 	fn pos (&self, index: u32) -> &glm::Vec3 { self.0.pos(index) }
 }
+impl<T: CanHaveNormals+Indexed> Indexed for GuaranteeNormals<T>
+{
+	type IndexIterator = T::IndexIterator;
+
+	#[inline(always)]
+	fn numIndices (&self) -> u32 { self.0.numIndices() }
+	#[inline(always)]
+	fn indices (&self) -> Self::IndexIterator { self.0.indices() }
+	#[inline(always)]
+	fn index (&self, index: u32) -> u32 { self.0.index(index) }
+}
+impl<T: CanHaveNormals+Interleaved> Interleaved for GuaranteeNormals<T> {}
+impl<T: CanHaveNormals+NonInterleaved> NonInterleaved for GuaranteeNormals<T> {}
+
 impl<DataWithNormals: CanHaveNormals> CanHaveNormals for GuaranteeNormals<DataWithNormals>
 {
 	type NormalIterator = DataWithNormals::NormalIterator;

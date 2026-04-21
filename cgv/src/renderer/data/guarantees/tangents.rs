@@ -56,6 +56,20 @@ impl<DataWithTangents: CanHaveTangents> Data for GuaranteeTangents<DataWithTange
 	#[inline(always)]
 	fn pos (&self, index: u32) -> &glm::Vec3 { self.0.pos(index) }
 }
+impl<T: CanHaveTangents+Indexed> Indexed for GuaranteeTangents<T>
+{
+	type IndexIterator = T::IndexIterator;
+
+	#[inline(always)]
+	fn numIndices (&self) -> u32 { self.0.numIndices() }
+	#[inline(always)]
+	fn indices (&self) -> Self::IndexIterator { self.0.indices() }
+	#[inline(always)]
+	fn index (&self, index: u32) -> u32 { self.0.index(index) }
+}
+impl<T: CanHaveTangents+Interleaved> Interleaved for GuaranteeTangents<T> {}
+impl<T: CanHaveTangents+NonInterleaved> NonInterleaved for GuaranteeTangents<T> {}
+
 impl<DataWithTangents: CanHaveTangents> CanHaveTangents for GuaranteeTangents<DataWithTangents>
 {
 	type TangentIterator = DataWithTangents::TangentIterator;
