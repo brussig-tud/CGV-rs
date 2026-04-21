@@ -5,8 +5,8 @@
 //
 
 /// Module implementing runtime-wrappers for compile-time guarantees about presence of data attributes.
-pub mod guarantees;
-pub use guarantees::*; // re-export all guarantees
+mod guarantees;
+pub use guarantees::*; // re-export all public facilities (mainly the guarantee wrapper and combination aliases).
 
 
 
