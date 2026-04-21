@@ -228,7 +228,7 @@ pub trait CanHaveRadiusDerivs: CanHaveRadii
 }
 
 ///
-pub trait HasRadiusDerivs: CanHaveRadiusDerivs {}
+pub trait HasRadiusDerivs: CanHaveRadiusDerivs+HasRadii {}
 
 ///
 pub trait CanHaveOrientations: Data
