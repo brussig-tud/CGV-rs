@@ -6,6 +6,7 @@
 
 /// Private submodule defining our various GPU-side data representations.
 mod data;
+use data::Data;
 
 
 
@@ -32,14 +33,11 @@ use data::*;
 //
 
 ///
-pub struct GpuObjects(wgpu::RenderPipeline);
-impl renderer::GpuObjects for GpuObjects {}
-
-///
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	constantAttribUniforms: ConstantAttribsUniformGroup
+	constantAttribUniforms: ConstantAttribsUniformGroup,
+	data: Option<spheres::Data>
 }
 impl Spheres
 {
@@ -73,15 +71,18 @@ impl Spheres
 		).expect("`renderer::Spheres` shader module could not be compiled by WGPU");
 
 		// Done!
-		Self { shader, pipelineLayout, constantAttribUniforms }
+		Self { shader, pipelineLayout, constantAttribUniforms, data: None }
 	}
 }
 impl Renderer for Spheres
 {
-	type GpuObjects = GpuObjects;
+	type GpuState = wgpu::RenderPipeline;
 
-	fn createGpuObjects (&self, context: &Context, renderState: &RenderState)
-		-> Self::GpuObjects
+	fn setData<Data: renderer::Data> (&mut self, data: &Data) {
+        self.data.replace(data.into());
+    }
+
+	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState
 	{
 		// Create pipeline
 		let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -112,6 +113,10 @@ impl Renderer for Spheres
 		});
 
 		// Done!
-		GpuObjects(pipeline)
+		pipeline
+	}
+
+	fn render (&self, _context: &Context, _gpuObjects: &Self::GpuState) {
+		todo!()
 	}
 }

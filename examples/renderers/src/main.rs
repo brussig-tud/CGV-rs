@@ -174,7 +174,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { sphereRenderer: cgv::renderer::Helper::new(sphereRenderer), guiState }))
+	Ok(Box::new(RenderersDemo { sphereRenderer: cgv::renderer::Managed::new(sphereRenderer), guiState }))
 }
 
 #[derive(Default,Debug)]
@@ -183,7 +183,7 @@ struct GuiState {}
 struct RenderersDemo
 {
 	// Test sphere renderer
-	sphereRenderer: cgv::renderer::Helper<cgv::renderer::Spheres>,
+	sphereRenderer: cgv::renderer::Managed<cgv::renderer::Spheres>,
 
 	// GUI-controllable state
 	guiState: GuiState

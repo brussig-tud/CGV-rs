@@ -45,17 +45,23 @@ use crate::*;
 //
 
 ///
-pub trait GpuObjects {}
+pub trait GpuState {}
+impl GpuState for wgpu::RenderPipeline {}
 
 ///
 pub trait Renderer
 {
 	///
-	type GpuObjects: GpuObjects;
+	type GpuState: GpuState;
 
 	///
-	fn createGpuObjects (&self, context: &Context, renderState: &RenderState)
-		-> Self::GpuObjects;
+	fn setData<Data: renderer::Data> (&mut self, data: &Data);
+
+	///
+	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState;
+
+	/// **TODO: this is a placeholder, subject to extensive change as things develop**
+	fn render (&self, context: &Context, gpuObjects: &Self::GpuState);
 }
 
 
@@ -66,34 +72,45 @@ pub trait Renderer
 //
 
 ///
-pub struct Helper<R: Renderer> {
+pub struct Managed<R: Renderer> {
 	renderer: R,
-	gpuObjects: Vec<R::GpuObjects>
+	gpuStates: Vec<R::GpuState>
 }
-impl<R: Renderer> Helper<R>
+impl<R: Renderer> Managed<R>
 {
 	/// Create a new renderer with the given renderer implementation and render state.
 	pub fn new (renderer: R) -> Self { Self {
-		renderer, gpuObjects: Default::default()
+		renderer, gpuStates: Default::default()
 	}}
 
-	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuObjects) for the
+	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuState) for the
 	/// given single renderState.
 	pub fn rebuildForSingleRenderState (&mut self, context: &Context, renderState: &RenderState) {
-		self.gpuObjects = vec![self.renderer.createGpuObjects(context, renderState)];
+		self.gpuStates = vec![self.renderer.createGpuState(context, renderState)];
 	}
 
-	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuObjects) for the
+	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuState) for the
 	/// list of [managed global render passes](GlobalPassInfo).
 	pub fn rebuildForGlobalPasses (&mut self, context: &Context, globalPasses: &[&GlobalPassInfo]) {
-		self.gpuObjects.clear();
-		self.gpuObjects.reserve(globalPasses.len());
+		self.gpuStates.clear();
+		self.gpuStates.reserve(globalPasses.len());
 		for globalPass in globalPasses {
-			self.gpuObjects.push(self.renderer.createGpuObjects(context, globalPass.renderState));
+			self.gpuStates.push(self.renderer.createGpuState(context, globalPass.renderState));
 		}
 	}
+
+	/// Dispatch rendering for the very first set of [`GpuState`], typically for use when the managed renderer was
+	/// [built for a single render state](Self::rebuildForSingleRenderState).
+	pub fn render (&self, context: &Context) {
+		self.renderer.render(context, &self.gpuStates[0]);
+	}
+
+	/// Dispatch rendering for the set of [`GpuState`] associated with the specified [`GlobalPass`].
+	pub fn renderForGlobalPass (&self, context: &Context, globalPassIdx: usize) {
+		self.renderer.render(context, &self.gpuStates[globalPassIdx]);
+	}
 }
-impl<R: Renderer> Deref for Helper<R>
+impl<R: Renderer> Deref for Managed<R>
 {
 	type Target = R;
 
@@ -102,7 +119,7 @@ impl<R: Renderer> Deref for Helper<R>
 		&self.renderer
 	}
 }
-impl<R: Renderer> DerefMut for Helper<R>
+impl<R: Renderer> DerefMut for Managed<R>
 {
 	/// Deref to the underlying renderer.
 	fn deref_mut (&mut self) -> &mut Self::Target {
