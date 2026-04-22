@@ -32,13 +32,13 @@ use crate::{self as cgv, *};
 pub trait Data
 {
 	/// The iterator type for iterating positions in the data.
-	type PosIterator: Iterator<Item=glm::Vec3>;
+	type PosIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
 
 	/// Return the number of elements in the underlying data series.
 	fn num (&self) -> u32;
 
 	/// Iterate over the positions.
-	fn positions (&self) -> Self::PosIterator;
+	fn positions (&self) -> Self::PosIterator<'_>;
 
 	/// Reference a single position at the given index.
 	fn pos (&self, index: u32) -> &glm::Vec3;
@@ -56,14 +56,15 @@ pub trait NonInterleaved: Data {}
 /// individual data points to form complex primitives, like lines/line strips, triangles/triangle strips, etc.
 pub trait Indexed: Data
 {
-	/// The iterator type for iterating indices in the data.
-	type IndexIterator: Iterator<Item=u32>;
+	/// The iterator type for iterating indices in the data. The lifetime parameter `'data` ensures that implementations
+	/// can use borrowing iterators.
+	type IndexIterator<'data>: Iterator<Item=&'data u32> where Self: 'data;
 
 	/// Return the number of indices over the underlying data series.
 	fn numIndices (&self) -> u32;
 
 	/// Iterate over the indices.
-	fn indices (&self) -> Self::IndexIterator;
+	fn indices (&self) -> Self::IndexIterator<'_>;
 
 	/// Reference a single data index or a slice of data indices.
 	fn index (&self, index: u32) -> u32;
@@ -72,8 +73,9 @@ pub trait Indexed: Data
 ///
 pub trait CanHaveNormals: Data
 {
-	/// The iterator type for iterating normals in the data.
-	type NormalIterator: Iterator<Item=glm::Vec3>;
+	/// The iterator type for iterating normals in the data. The lifetime parameter `'data` ensures that implementations
+	/// can use borrowing iterators.
+	type NormalIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
 
 	/// Indicate whether normals are available in the data.
 	fn hasNormals (&self) -> bool;
@@ -88,7 +90,7 @@ pub trait CanHaveNormals: Data
 	///
 	/// If this method is called even though no normals are available (to be checked up-front via
 	/// [`hasNormals`](Self::hasNormals).
-	fn normals (&self) -> Self::NormalIterator;
+	fn normals (&self) -> Self::NormalIterator<'_>;
 
 	/// Reference a single position at the given index.
 	///
@@ -113,8 +115,9 @@ pub trait HasNormals: CanHaveNormals {}
 ///
 pub trait CanHaveTangents: Data
 {
-	/// The iterator type for iterating tangents in the data.
-	type TangentIterator: Iterator<Item=glm::Vec3>;
+	/// The iterator type for iterating tangents in the data. The lifetime parameter `'data` ensures that implementations
+	/// can use borrowing iterators.
+	type TangentIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
 
 	/// Indicate whether tangents are available in the data.
 	fn hasTangents (&self) -> bool;
@@ -129,7 +132,7 @@ pub trait CanHaveTangents: Data
 	///
 	/// If this method is called even though no tangents are available (to be checked up-front via
 	/// [`hasTangents`](Self::hasTangents).
-	fn tangents (&self) -> Self::TangentIterator;
+	fn tangents (&self) -> Self::TangentIterator<'_>;
 
 	/// Reference a single tangent at the given index.
 	///
@@ -154,8 +157,9 @@ pub trait HasTangents: CanHaveTangents {}
 ///
 pub trait CanHaveRadii: Data
 {
-	/// The iterator type for iterating radii in the data.
-	type RadiusIterator: Iterator<Item=f32>;
+	/// The iterator type for iterating radii in the data. The lifetime parameter `'data` ensures that implementations
+	/// can use borrowing iterators.
+	type RadiusIterator<'data>: Iterator<Item=&'data f32> where Self: 'data;
 
 	/// Indicate whether radii are available in the data.
 	fn hasRadii (&self) -> bool;
@@ -170,7 +174,7 @@ pub trait CanHaveRadii: Data
 	///
 	/// If this method is called even though no radii are available (to be checked up-front via
 	/// [`hasRadii`](Self::hasRadii).
-	fn radii (&self) -> Self::RadiusIterator;
+	fn radii (&self) -> Self::RadiusIterator<'_>;
 
 	/// Return the radius at the given index.
 	///
@@ -208,7 +212,7 @@ pub trait CanHaveRadiusDerivs: CanHaveRadii
 	///
 	/// If this method is called even though no radius derivatives are available (to be checked up-front via
 	/// [`hasRadiusDerivs`](Self::hasRadiusDerivs).
-	fn radiusDerivs (&self) -> Self::RadiusIterator;
+	fn radiusDerivs (&self) -> Self::RadiusIterator<'_>;
 
 	/// Return the radius derivative at the given index.
 	///
@@ -233,8 +237,9 @@ pub trait HasRadiusDerivs: CanHaveRadiusDerivs+HasRadii {}
 ///
 pub trait CanHaveOrientations: Data
 {
-	/// The iterator type for iterating orientations in the data.
-	type OrientationIterator: Iterator<Item=glm::Quat>;
+	/// The iterator type for iterating orientations in the data. The lifetime parameter `'data` ensures that
+	/// implementations can use borrowing iterators.
+	type OrientationIterator<'data>: Iterator<Item=&'data glm::Quat> where Self: 'data;
 
 	/// Indicate whether orientations are available in the data.
 	fn hasOrientations (&self) -> bool;
@@ -249,7 +254,7 @@ pub trait CanHaveOrientations: Data
 	///
 	/// If this method is called even though no orientations are available (to be checked up-front via
 	/// [`hasOrientations`](Self::hasOrientations).
-	fn orientations (&self) -> Self::OrientationIterator;
+	fn orientations (&self) -> Self::OrientationIterator<'_>;
 
 	/// Reference a single orientation at the given index.
 	///
@@ -274,9 +279,9 @@ pub trait HasOrientations: CanHaveOrientations {}
 ///
 pub trait CanHaveScalings: Data
 {
-	/// The iterator type for iterating scaling vectors in the data.
-	type ScaleIterator: Iterator<Item=glm::Vec3>;
-
+	/// The iterator type for iterating scaling vectors in the data. The lifetime parameter `'data` ensures that
+	/// implementations can use borrowing iterators.
+	type ScaleIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
 
 	/// Indicate whether scaling vectors are available in the data.
 	fn hasScalings (&self) -> bool;
@@ -291,7 +296,7 @@ pub trait CanHaveScalings: Data
 	///
 	/// If this method is called even though no scaling vectors are available (to be checked up-front via
 	/// [`hasTangents`](Self::hasTangents).
-	fn scalings (&self) -> Self::ScaleIterator;
+	fn scalings (&self) -> Self::ScaleIterator<'_>;
 
 	/// Reference a single scaling vector at the given index.
 	///
@@ -316,8 +321,9 @@ pub trait HasScalings: CanHaveScalings {}
 ///
 pub trait CanHaveColors: Data
 {
-	/// The iterator type for iterating colors in the data.
-	type ColorIterator: Iterator<Item=cgv::RGBA>;
+	/// The iterator type for iterating colors in the data. The lifetime parameter `'data` ensures that implementations
+	/// can use borrowing iterators.
+	type ColorIterator<'data>: Iterator<Item=&'data cgv::RGBA> where Self: 'data;
 
 	/// Indicate whether colors are available in the data.
 	fn hasColors (&self) -> bool;
@@ -332,7 +338,7 @@ pub trait CanHaveColors: Data
 	///
 	/// If this method is called even though no colors are available (to be checked up-front via
 	/// [`hasColors`](Self::hasColors).
-	fn colors (&self) -> Self::ColorIterator;
+	fn colors (&self) -> Self::ColorIterator<'_>;
 
 	/// Reference a single color at the given index.
 	///

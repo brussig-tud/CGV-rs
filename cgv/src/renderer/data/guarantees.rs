@@ -207,12 +207,12 @@ impl<
 > Data for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type PosIterator = Wrappee::PosIterator;
+	type PosIterator<'data> = Wrappee::PosIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn num (&self) -> u32 { self.0.num() }
 	#[inline(always)]
-	fn positions (&self) -> Self::PosIterator { self.0.positions() }
+	fn positions (&self) -> Self::PosIterator<'_> { self.0.positions() }
 	#[inline(always)]
 	fn pos (&self, index: u32) -> &glm::Vec3 { self.0.pos(index) }
 }
@@ -222,12 +222,12 @@ impl<
 > Indexed for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type IndexIterator = Wrappee::IndexIterator;
+	type IndexIterator<'data> = Wrappee::IndexIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn numIndices (&self) -> u32 { self.0.numIndices() }
 	#[inline(always)]
-	fn indices (&self) -> Self::IndexIterator { self.0.indices() }
+	fn indices (&self) -> Self::IndexIterator<'_> { self.0.indices() }
 	#[inline(always)]
 	fn index (&self, index: u32) -> u32 { self.0.index(index) }
 }
@@ -251,12 +251,12 @@ impl<
 > CanHaveNormals for GuaranteeAttributes<
 	Wrappee, true, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type NormalIterator = Wrappee::NormalIterator;
+	type NormalIterator<'data> = Wrappee::NormalIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasNormals (&self) -> bool { true }
 	#[inline(always)]
-	fn normals (&self) -> Self::NormalIterator { self.0.normals() }
+	fn normals (&self) -> Self::NormalIterator<'_> { self.0.normals() }
 	#[inline(always)]
 	fn normal (&self, index: u32) -> &glm::Vec3 { self.0.normal(index) }
 }
@@ -272,12 +272,12 @@ impl<
 > CanHaveNormals for GuaranteeAttributes<
 	Wrappee, false, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type NormalIterator = Wrappee::NormalIterator;
+	type NormalIterator<'data> = Wrappee::NormalIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasNormals (&self) -> bool { self.0.hasNormals() }
 	#[inline(always)]
-	fn normals (&self) -> Self::NormalIterator { self.0.normals() }
+	fn normals (&self) -> Self::NormalIterator<'_> { self.0.normals() }
 	#[inline(always)]
 	fn normal (&self, index: u32) -> &glm::Vec3 { self.0.normal(index) }
 }
@@ -294,12 +294,12 @@ impl<
 > CanHaveTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, true, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type TangentIterator = Wrappee::TangentIterator;
+	type TangentIterator<'data> = Wrappee::TangentIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasTangents (&self) -> bool { true }
 	#[inline(always)]
-	fn tangents (&self) -> Self::TangentIterator { self.0.tangents() }
+	fn tangents (&self) -> Self::TangentIterator<'_> { self.0.tangents() }
 	#[inline(always)]
 	fn tangent (&self, index: u32) -> &glm::Vec3 { self.0.tangent(index) }
 }
@@ -315,12 +315,12 @@ impl<
 > CanHaveTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, false, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type TangentIterator = Wrappee::TangentIterator;
+	type TangentIterator<'data> = Wrappee::TangentIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasTangents (&self) -> bool { self.0.hasTangents() }
 	#[inline(always)]
-	fn tangents (&self) -> Self::TangentIterator { self.0.tangents() }
+	fn tangents (&self) -> Self::TangentIterator<'_> { self.0.tangents() }
 	#[inline(always)]
 	fn tangent (&self, index: u32) -> &glm::Vec3 { self.0.tangent(index) }
 }
@@ -338,12 +338,12 @@ impl<
 > CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type RadiusIterator = Wrappee::RadiusIterator;
+	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasRadii (&self) -> bool { true }
 	#[inline(always)]
-	fn radii (&self) -> Self::RadiusIterator { self.0.radii() }
+	fn radii (&self) -> Self::RadiusIterator<'_> { self.0.radii() }
 	#[inline(always)]
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
@@ -359,12 +359,12 @@ impl<
 > CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, true, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type RadiusIterator = Wrappee::RadiusIterator;
+	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasRadii (&self) -> bool { true }
 	#[inline(always)]
-	fn radii (&self) -> Self::RadiusIterator { self.0.radii() }
+	fn radii (&self) -> Self::RadiusIterator<'_> { self.0.radii() }
 	#[inline(always)]
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
@@ -380,12 +380,12 @@ impl<
 > CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
 >{
-	type RadiusIterator = Wrappee::RadiusIterator;
+	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasRadii (&self) -> bool { self.0.hasRadii() }
 	#[inline(always)]
-	fn radii (&self) -> Self::RadiusIterator { self.0.radii() }
+	fn radii (&self) -> Self::RadiusIterator<'_> { self.0.radii() }
 	#[inline(always)]
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
@@ -404,7 +404,7 @@ impl<
 	#[inline(always)]
 	fn hasRadiusDerivs (&self) -> bool { true }
 	#[inline(always)]
-	fn radiusDerivs (&self) -> Self::RadiusIterator { self.0.radiusDerivs() }
+	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { self.0.radiusDerivs() }
 	#[inline(always)]
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
@@ -423,7 +423,7 @@ impl<
 	#[inline(always)]
 	fn hasRadiusDerivs (&self) -> bool { self.0.hasRadiusDerivs() }
 	#[inline(always)]
-	fn radiusDerivs (&self) -> Self::RadiusIterator { self.0.radiusDerivs() }
+	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { self.0.radiusDerivs() }
 	#[inline(always)]
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
@@ -442,7 +442,7 @@ impl<
 	#[inline(always)]
 	fn hasRadiusDerivs (&self) -> bool { self.0.hasRadiusDerivs() }
 	#[inline(always)]
-	fn radiusDerivs (&self) -> Self::RadiusIterator { self.0.radiusDerivs() }
+	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { self.0.radiusDerivs() }
 	#[inline(always)]
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
@@ -460,12 +460,12 @@ impl<
 > CanHaveOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, true, SCALINGS, COLORS
 >{
-	type OrientationIterator = Wrappee::OrientationIterator;
+	type OrientationIterator<'data> = Wrappee::OrientationIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasOrientations (&self) -> bool { true }
 	#[inline(always)]
-	fn orientations (&self) -> Self::OrientationIterator { self.0.orientations() }
+	fn orientations (&self) -> Self::OrientationIterator<'_> { self.0.orientations() }
 	#[inline(always)]
 	fn orientation (&self, index: u32) -> &glm::Quat { self.0.orientation(index) }
 }
@@ -486,12 +486,12 @@ impl<
 > CanHaveOrientations for
 	GuaranteeAttributes<Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS>
 {
-	type OrientationIterator = Wrappee::OrientationIterator;
+	type OrientationIterator<'data> = Wrappee::OrientationIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasOrientations (&self) -> bool { self.0.hasOrientations() }
 	#[inline(always)]
-	fn orientations (&self) -> Self::OrientationIterator { self.0.orientations() }
+	fn orientations (&self) -> Self::OrientationIterator<'_> { self.0.orientations() }
 	#[inline(always)]
 	fn orientation (&self, index: u32) -> &glm::Quat { self.0.orientation(index) }
 }
@@ -514,12 +514,12 @@ impl<
 > CanHaveScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, true, COLORS
 >{
-	type ScaleIterator = Wrappee::ScaleIterator;
+	type ScaleIterator<'data> = Wrappee::ScaleIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasScalings (&self) -> bool { true }
 	#[inline(always)]
-	fn scalings (&self) -> Self::ScaleIterator { self.0.scalings() }
+	fn scalings (&self) -> Self::ScaleIterator<'_> { self.0.scalings() }
 	#[inline(always)]
 	fn scaling (&self, index: u32) -> &glm::Vec3 { self.0.scaling(index) }
 }
@@ -535,12 +535,12 @@ impl<
 > CanHaveScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, false, COLORS
 >{
-	type ScaleIterator = Wrappee::ScaleIterator;
+	type ScaleIterator<'data> = Wrappee::ScaleIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasScalings (&self) -> bool { self.0.hasScalings() }
 	#[inline(always)]
-	fn scalings (&self) -> Self::ScaleIterator { self.0.scalings() }
+	fn scalings (&self) -> Self::ScaleIterator<'_> { self.0.scalings() }
 	#[inline(always)]
 	fn scaling (&self, index: u32) -> &glm::Vec3 { self.0.scaling(index) }
 }
@@ -558,12 +558,12 @@ impl<
 > CanHaveColors for	GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, true
 >{
-	type ColorIterator = Wrappee::ColorIterator;
+	type ColorIterator<'data> = Wrappee::ColorIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasColors (&self) -> bool { true }
 	#[inline(always)]
-	fn colors (&self) -> Self::ColorIterator { self.0.colors() }
+	fn colors (&self) -> Self::ColorIterator<'_> { self.0.colors() }
 	#[inline(always)]
 	fn color (&self, index: u32) -> &cgv::RGBA { self.0.color(index) }
 }
@@ -579,12 +579,12 @@ impl<
 > CanHaveColors for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, false
 >{
-	type ColorIterator = Wrappee::ColorIterator;
+	type ColorIterator<'data> = Wrappee::ColorIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
 	fn hasColors (&self) -> bool { self.0.hasColors() }
 	#[inline(always)]
-	fn colors (&self) -> Self::ColorIterator { self.0.colors() }
+	fn colors (&self) -> Self::ColorIterator<'_> { self.0.colors() }
 	#[inline(always)]
 	fn color (&self, index: u32) -> &cgv::RGBA { self.0.color(index) }
 }

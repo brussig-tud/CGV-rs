@@ -71,29 +71,29 @@ impl MockData
 
 impl Data for MockData
 {
-	type PosIterator = std::vec::IntoIter<glm::Vec3>;
+	type PosIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
 	fn num (&self) -> u32 { self.positions.len() as u32 }
-	fn positions (&self) -> Self::PosIterator { self.positions.clone().into_iter() }
+	fn positions (&self) -> Self::PosIterator<'_> { self.positions.iter() }
 	fn pos (&self, index: u32) -> &glm::Vec3 { &self.positions[index as usize] }
 }
 impl Indexed for MockData
 {
-	type IndexIterator = std::vec::IntoIter<u32>;
+	type IndexIterator<'data> = std::slice::Iter<'data, u32>;
 
 	fn numIndices (&self) -> u32 { self.indices.len() as u32 }
-	fn indices (&self) -> Self::IndexIterator { self.indices.clone().into_iter() }
+	fn indices (&self) -> Self::IndexIterator<'_> { self.indices.iter() }
 	fn index (&self, index: u32) -> u32 { self.indices[index as usize] }
 }
 impl Interleaved for MockData {}
 
 impl CanHaveNormals for MockData
 {
-	type NormalIterator = std::vec::IntoIter<glm::Vec3>;
+	type NormalIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
 	fn hasNormals (&self) -> bool { self.normals.is_some() }
-	fn normals (&self) -> Self::NormalIterator {
-		self.normals.as_ref().expect("should have normals").clone().into_iter()
+	fn normals (&self) -> Self::NormalIterator<'_> {
+		self.normals.as_ref().expect("should have normals").iter()
 	}
 	fn normal (&self, index: u32) -> &glm::Vec3 {
 		&self.normals.as_ref().expect("should have normals")[index as usize]
@@ -101,11 +101,11 @@ impl CanHaveNormals for MockData
 }
 impl CanHaveTangents for MockData
 {
-	type TangentIterator = std::vec::IntoIter<glm::Vec3>;
+	type TangentIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
 	fn hasTangents (&self) -> bool { self.tangents.is_some() }
-	fn tangents (&self) -> Self::TangentIterator {
-		self.tangents.as_ref().expect("should have tangents").clone().into_iter()
+	fn tangents (&self) -> Self::TangentIterator<'_> {
+		self.tangents.as_ref().expect("should have tangents").iter()
 	}
 	fn tangent (&self, index: u32) -> &glm::Vec3 {
 		&self.tangents.as_ref().expect("should have tangents")[index as usize]
@@ -113,11 +113,11 @@ impl CanHaveTangents for MockData
 }
 impl CanHaveRadii for MockData
 {
-	type RadiusIterator = std::vec::IntoIter<f32>;
+	type RadiusIterator<'data> = std::slice::Iter<'data, f32>;
 
 	fn hasRadii (&self) -> bool { self.radii.is_some() }
-	fn radii (&self) -> Self::RadiusIterator {
-		self.radii.as_ref().expect("should have radii").clone().into_iter()
+	fn radii (&self) -> Self::RadiusIterator<'_> {
+		self.radii.as_ref().expect("should have radii").iter()
 	}
 	fn radius (&self, index: u32) -> f32 {
 		self.radii.as_ref().expect("should have radii")[index as usize]
@@ -126,8 +126,8 @@ impl CanHaveRadii for MockData
 impl CanHaveRadiusDerivs for MockData
 {
 	fn hasRadiusDerivs (&self) -> bool { self.radiusDerivs.is_some() }
-	fn radiusDerivs (&self) -> Self::RadiusIterator {
-		self.radiusDerivs.as_ref().expect("should have radius derivatives").clone().into_iter()
+	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> {
+		self.radiusDerivs.as_ref().expect("should have radius derivatives").iter()
 	}
 	fn radiusDeriv (&self, index: u32) -> f32 {
 		self.radiusDerivs.as_ref().expect("should have radius derivatives")[index as usize]
@@ -135,11 +135,11 @@ impl CanHaveRadiusDerivs for MockData
 }
 impl CanHaveOrientations for MockData
 {
-	type OrientationIterator = std::vec::IntoIter<glm::Quat>;
+	type OrientationIterator<'data> = std::slice::Iter<'data, glm::Quat>;
 
 	fn hasOrientations (&self) -> bool { self.orientations.is_some() }
-	fn orientations (&self) -> Self::OrientationIterator {
-		self.orientations.as_ref().expect("should have orientations").clone().into_iter()
+	fn orientations (&self) -> Self::OrientationIterator<'_> {
+		self.orientations.as_ref().expect("should have orientations").iter()
 	}
 	fn orientation (&self, index: u32) -> &glm::Quat {
 		&self.orientations.as_ref().expect("should have orientations")[index as usize]
@@ -147,11 +147,11 @@ impl CanHaveOrientations for MockData
 }
 impl CanHaveScalings for MockData
 {
-	type ScaleIterator = std::vec::IntoIter<glm::Vec3>;
+	type ScaleIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
 	fn hasScalings (&self) -> bool { self.scalings.is_some() }
-	fn scalings (&self) -> Self::ScaleIterator {
-		self.scalings.as_ref().expect("should have scaling vectors").clone().into_iter()
+	fn scalings (&self) -> Self::ScaleIterator<'_> {
+		self.scalings.as_ref().expect("should have scaling vectors").iter()
 	}
 	fn scaling (&self, index: u32) -> &glm::Vec3 {
 		&self.scalings.as_ref().expect("should have scaling vectors")[index as usize]
@@ -159,11 +159,11 @@ impl CanHaveScalings for MockData
 }
 impl CanHaveColors for MockData
 {
-	type ColorIterator = std::vec::IntoIter<cgv::RGBA>;
+	type ColorIterator<'data> = std::slice::Iter<'data, cgv::RGBA>;
 
 	fn hasColors (&self) -> bool { self.colors.is_some() }
-	fn colors (&self) -> Self::ColorIterator {
-		self.colors.as_ref().expect("should have colors").clone().into_iter()
+	fn colors (&self) -> Self::ColorIterator<'_> {
+		self.colors.as_ref().expect("should have colors").iter()
 	}
 	fn color (&self, index: u32) -> &cgv::RGBA {
 		&self.colors.as_ref().expect("should have colors")[index as usize]
@@ -232,17 +232,17 @@ fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
 
 	// Check iterators
 	let mut positions = guaranteed.positions();
-	assert_eq!(positions.next(), Some(glm::vec3(0., 0., 0.)));
-	assert_eq!(positions.next(), Some(glm::vec3(1., 2., 3.)));
+	assert_eq!(positions.next(), Some(&glm::vec3(0., 0., 0.)));
+	assert_eq!(positions.next(), Some(&glm::vec3(1., 2., 3.)));
 	assert_eq!(positions.next(), None);
 	let mut indices = guaranteed.indices();
-	assert_eq!(indices.next(), Some(0));
-	assert_eq!(indices.next(), Some(1));
-	assert_eq!(indices.next(), Some(0));
+	assert_eq!(*indices.next().unwrap(), 0);
+	assert_eq!(*indices.next().unwrap(), 1);
+	assert_eq!(*indices.next().unwrap(), 0);
 	assert_eq!(indices.next(), None);
 	let mut normals = guaranteed.normals();
-	assert_eq!(normals.next(), Some(glm::vec3(0., 0., 1.)));
-	assert_eq!(normals.next(), Some(glm::vec3(0., 1., 0.)));
+	assert_eq!(normals.next(), Some(&glm::vec3(0., 0., 1.)));
+	assert_eq!(normals.next(), Some(&glm::vec3(0., 1., 0.)));
 	assert_eq!(normals.next(), None);
 }
 
