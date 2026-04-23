@@ -124,13 +124,6 @@ pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
 
 /// An efficient iterator that reads values of type `T: Copy` at a fixed byte stride from a contiguous buffer. This
 /// enables easy iteration over individual attributes in interleaved ("array of structs") data layouts.
-///
-/// # Safety
-///
-/// Users must ensure that:
-/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
-/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
-///   allocation.
 pub struct StridedCopyIter<'data, T: Copy> {
 	ptr: *const u8,
 	stride: usize,
@@ -149,7 +142,10 @@ impl<T: Copy> StridedCopyIter<'_, T>
 	///
 	/// # Safety
 	///
-	/// See [struct-level](StridedCopyIter) safety documentation.
+	/// Users must ensure that:
+	/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
+	/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
+	///   allocation.
 	#[inline(always)]
 	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
 		ptr: ptr as *const u8, stride, remaining: len, _phantom: PhantomData
@@ -165,7 +161,7 @@ impl<T: Copy> Iterator for StridedCopyIter<'_, T>
 			return None;
 		}
 		let value = unsafe {
-			// SAFETY: guaranteed by caller (see struct-level docs)
+			// SAFETY: guaranteed by caller (see constructor docs)
 			*(self.ptr as *const T)
 		};
 		self.ptr = unsafe { self.ptr.add(self.stride) };
@@ -185,7 +181,7 @@ impl<T: Copy> ExactSizeIterator for StridedCopyIter<'_, T> {}
 /// # Safety
 ///
 /// This macro internally uses raw pointer manipulation, so it can only be used inside `unsafe` blocks. The required
-/// invariants are documented in the struct-level documentation of [StridedCopyIter].
+/// invariants are documented in the constructor documentation of [StridedCopyIter].
 ///
 /// # Arguments
 ///
@@ -210,13 +206,6 @@ pub use crate::stridedCopyIter;
 
 /// An efficient iterator that references values of type `T` at a fixed byte stride from a contiguous buffer. This
 /// enables easy by-reference iteration over individual attributes in interleaved ("array of structs") data layouts.
-///
-/// # Safety
-///
-/// Users must ensure that:
-/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
-/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
-///   allocation.
 pub struct StridedRefIter<'data, T: Sized+'data> {
 	ptr: *const u8,
 	stride: usize,
@@ -235,22 +224,25 @@ impl<T: Sized> StridedRefIter<'_, T>
 	///
 	/// # Safety
 	///
-	/// See [struct-level](StridedRefIter) safety documentation.
+	/// Users must ensure that:
+	/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
+	/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
+	///   allocation.
 	#[inline(always)]
 	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
 		ptr: ptr as *const u8, stride, remaining: len, _phantom: PhantomData
 	}}
 }
-impl<'outer, T: Sized+'outer> Iterator for StridedRefIter<'outer, T> {
-	type Item = &'outer T;
+impl<'data, T: Sized+'data> Iterator for StridedRefIter<'data, T> {
+	type Item = &'data T;
 
-	fn next (&mut self) -> Option<&'outer T>
+	fn next (&mut self) -> Option<&'data T>
 	{
 		if self.remaining == 0 {
 			return None;
 		}
 		let value = unsafe {
-			// SAFETY: guaranteed by caller (see struct-level docs), plus the reference we take here will be returned to
+			// SAFETY: guaranteed by caller (see constructor docs), plus the reference we take here will be returned to
 			// the caller with a lifetime equal to the lifetime of the iterator, which is correct.
 			&*(self.ptr as *const T)
 		};

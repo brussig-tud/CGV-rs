@@ -67,7 +67,9 @@ struct SingleComplexField {
 }
 impl SingleComplexField
 {
-	fn empty () -> Self { Self { data: vec![] } }
+	fn empty () -> Self { Self {
+		data: vec![]
+	}}
 
 	fn createTestData () -> Self { Self {
 		data: vec![
