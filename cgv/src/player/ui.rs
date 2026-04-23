@@ -90,8 +90,9 @@ pub(crate) fn menuBar (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 						player.activeSidePanel = 0;
 					}
 				}*/
-				if ui.selectable_label(
-					player.activeSidePanel==2, player.activeApplication.as_ref().unwrap().title()
+				if let Some(app) = player.applications.active() && ui.selectable_label(
+					player.activeSidePanel == 2,
+					app.title(),
 				).clicked() {
 					player.activeSidePanel = 2;
 				}
@@ -113,14 +114,11 @@ pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Respon
 			{
 				0 => self::player(player, ui),
 				1 => self::view(player, ui),
-				2 => {
+				2 => if let Some(app) = player.applications.active_mut() {
 					// Application UI
-					ui.centered_and_justified(|ui| ui.heading(
-						player.activeApplication.as_ref().unwrap().title()
-					));
+					ui.centered_and_justified(|ui| ui.heading(app.title()));
 					ui.separator();
-					let this = util::statify(player);
-					player.activeApplication.as_mut().unwrap().ui(ui, this);
+					app.ui(ui, &mut player.state);
 				},
 
 				_ => {
@@ -151,7 +149,7 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 			ui, "CGV__player_loop_layout", |controlTable|
 			{
 				controlTable.add("Instant redraw", |ui, _idealSize|
-					ui.label(format!("{} requests", player.continousRedrawRequests))
+					ui.label(format!("{} requests", player.continuousRedrawRequests))
 				);
 				controlTable.add("force:", |ui, _|
 					if ui.add(gui::widget::toggle(&mut player.userInstantRedraw)).clicked() {
@@ -180,7 +178,7 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 						player.renderSetup.defaultClearColor.g = rgba.g() as f64;
 						player.renderSetup.defaultClearColor.b = rgba.b() as f64;
 						player.renderSetup.defaultClearColor.a = rgba.a() as f64;
-						player.camera.onRenderSetupChange(&player.renderSetup);
+						player.camera.onRenderSetupChange(&player.state.renderSetup);
 						player.requireSceneRedraw();
 					}
 					ui.add_space(-5.); ui.label("Color");
@@ -188,7 +186,7 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 					if ui.add(egui::DragValue::new(
 						&mut player.renderSetup.defaultDepthClearValue
 					).range(0f32..=1.).speed(0.0009765625).max_decimals(3)).changed() {
-						player.camera.onRenderSetupChange(&player.renderSetup);
+						player.camera.onRenderSetupChange(&player.state.renderSetup);
 						player.requireSceneRedraw();
 					}
 					ui.add_space(-4.); ui.label("Depth");
@@ -233,7 +231,7 @@ pub(crate) fn player (player: &mut Player, ui: &mut egui::Ui)
 				if gammaChanged {
 					*player.viewportCompositor.gammaUniform.borrowData_mut() =
 						player.viewportCompositor.invGamma.map(|c| 1./c);
-					player.viewportCompositor.gammaUniform.upload(player.context())
+					player.viewportCompositor.gammaUniform.upload(&player.context)
 					// We actually don't need a `player.requireRedraw()` as viewport compositing will happen regardless;
 					// final gamma is not a property of the 3D scene.
 				}
@@ -257,12 +255,13 @@ pub(crate) fn view (player: &mut Player, ui: &mut egui::Ui)
 		cameraUi.add("Interactor", |ui, idealSize|
 			egui::ComboBox::from_id_salt("CGV_view_inter")
 				.selected_text(
-					player.cameraInteractors[player.activeCameraInteractor].title()
+					player.cameraInteractors.active().map(|ci| ci.title()).unwrap_or("None")
 				)
 				.width(idealSize)
 				.show_ui(ui, |ui|
-					for (i, ci) in player.cameraInteractors.iter().enumerate() {
-						ui.selectable_value(&mut player.activeCameraInteractor, i, ci.title());
+					for (i, ci) in player.cameraInteractors.list.iter().enumerate() {
+						let Some(ci) = ci else {continue};
+						ui.selectable_value(&mut player.cameraInteractors.active, i, ci.title());
 					}
 				)
 		);
@@ -281,10 +280,10 @@ pub(crate) fn view (player: &mut Player, ui: &mut egui::Ui)
 
 	// Settings from active camera and interactor
 	ui.add_space(6.);
-	egui::CollapsingHeader::new("Interactor settings").id_salt("CGV_view_inter_s")
-		.show(ui, |ui| player.cameraInteractors[player.activeCameraInteractor].ui(
-			player.camera.as_mut(), ui
-		));
+	if let Some(ci) = player.cameraInteractors.active_mut() {
+		egui::CollapsingHeader::new("Interactor settings").id_salt("CGV_view_inter_s")
+			.show(ui, |ui| ci.ui(&mut*player.camera, ui));
+	}
 	egui::CollapsingHeader::new("Active camera settings").id_salt("CGV_view_act_s")
-		.show(ui, |ui| CameraParameters::ui(player.camera.as_mut(), ui));
+		.show(ui, |ui| CameraParameters::ui(&mut*player.camera, ui));
 }

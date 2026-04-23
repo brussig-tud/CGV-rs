@@ -22,28 +22,24 @@ use view::*;
 // MonoCamera
 
 /// A camera producing a single, monoscopic image of the scene.
-pub struct MonoCamera<'this> {
+pub struct MonoCamera {
 	name: String,
-	framebuffer: &'this hal::Framebuffer,
-	renderState: Box<RenderState>,
+	renderState: RenderState,
 	defaultClearColor: wgpu::Color, // <- cached default clear color (we need it to be able to undo overrides)
-	globalPasses: Vec<GlobalPassDeclaration<'this>>,
+	globalPasses: Vec<GlobalPassInfo>,
 	parameters: CameraParameters,
 	dirty: bool
 }
-impl MonoCamera<'_>
+impl MonoCamera
 {
-	fn declareRenderPasses<'rs> (renderSetup: &RenderSetup, renderState: &'static RenderState)
-		-> Vec<GlobalPassDeclaration<'rs>>
+	fn declareRenderPasses (renderSetup: &RenderSetup) -> Vec<GlobalPassInfo>
 	{
-		vec![GlobalPassDeclaration {
-			info: GlobalPassInfo {
-				pass: GlobalPass::Simple,
-				renderState: &renderState,
-				clearColor: *renderSetup.defaultClearColor(),
-				depthClearValue: renderSetup.defaultDepthClearValue(),
-			},
-			completionCallback: None,
+		vec![GlobalPassInfo {
+			pass: GlobalPass::Simple,
+			renderState: 0,
+			clearColor: *renderSetup.defaultClearColor(),
+			depthClearValue: renderSetup.defaultDepthClearValue(),
+			completionCallback: None.into(),
 		}]
 	}
 
@@ -63,24 +59,12 @@ impl MonoCamera<'_>
 			.build(context);
 
 		// Initialize the main (and only) render state
-		let renderState = Box::new(RenderState::new(
-			context, framebuffer, Some(format!("{name}_renderState").as_str())
-		));
+		let renderState = RenderState::new(context, framebuffer, Some(format!("{name}_renderState").as_str()));
 
 		// Construct
 		Self {
 			name, defaultClearColor: *renderSetup.defaultClearColor(),
-			framebuffer: unsafe {
-				// SAFETY: `renderState` is a `Box` moved into `Self.renderState` here. The heap allocation backing
-				// `renderState.framebuffer` and `renderState` itself remains valid and stable for the lifetime of
-				// `Self`. These references are stored alongside the owning `Box` in the same struct, so they cannot
-				// outlive it.
-				util::notsafe::extendLifetime(&renderState.framebuffer)
-			},
-			globalPasses: Self::declareRenderPasses(renderSetup, unsafe {
-				// SAFETY: see above.
-				util::notsafe::extendLifetime(&renderState)
-			}),
+			globalPasses: Self::declareRenderPasses(renderSetup),
 			renderState,
 			parameters: CameraParameters::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
 			dirty: true
@@ -88,16 +72,16 @@ impl MonoCamera<'_>
 	}
 }
 
-impl Camera for MonoCamera<'_>
+impl Camera for MonoCamera
 {
-	fn projection (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
+	fn projection (&self, _: &GlobalPass) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().projection
 	}
 	fn projectionAt (&self, _: glm::UVec2) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().projection
 	}
 
-	fn view (&self, _: &GlobalPassDeclaration) -> &glm::Mat4 {
+	fn view (&self, _: &GlobalPass) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().view
 	}
 	fn viewAt (&self, _: glm::UVec2) -> &glm::Mat4 {
@@ -115,13 +99,8 @@ impl Camera for MonoCamera<'_>
 
 	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup)
 	{
-		self.globalPasses[0].info.clearColor = *renderSetup.defaultClearColor();
-		self.globalPasses = Self::declareRenderPasses(renderSetup, unsafe {
-			// SAFETY: `self.renderState` is a `Box` owned by `Self`. The heap allocation remains valid and stable for
-			// the lifetime of `Self`. The resulting reference is stored in `Self.globalPasses` which, being stored
-			// alongside the owning `Box` in `Self`, cannot outlive it.
-			util::notsafe::extendLifetime(&self.renderState)
-		});
+		self.globalPasses[0].clearColor = *renderSetup.defaultClearColor();
+		self.globalPasses = Self::declareRenderPasses(renderSetup);
 	}
 
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
@@ -130,21 +109,22 @@ impl Camera for MonoCamera<'_>
 		self.dirty = true;
 	}
 
-	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassDeclaration]>, clearColor: Option<wgpu::Color>)
+	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassInfo]>, clearColor: Option<wgpu::Color>)
 	{
-		// Sanity-check that the indicated provided global pass declaration actually belongs to us
+		// Sanity-check that the provided global pass declaration actually belongs to us
 		if let Some(passes) = passes {
-			let reqPtr = passes[0] as *const GlobalPassDeclaration;
-			let ourPtr = &self.globalPasses[0] as *const GlobalPassDeclaration;
-			if passes.len() > 1 || reqPtr != ourPtr {
+			if passes.len() == 0 {return};
+			let reqPtr = passes[0] as *const GlobalPassInfo;
+			let ourPtr = &self.globalPasses[0] as *const GlobalPassInfo;
+			if reqPtr != ourPtr {
 				panic!("FATAL: overrideClearColor received a reference to a pass we don't own!");
 			}
 		}
 		if let Some(clearColor) = clearColor {
-			self.globalPasses[0].info.clearColor = clearColor;
+			self.globalPasses[0].clearColor = clearColor;
 		}
 		else {
-			self.globalPasses[0].info.clearColor = self.defaultClearColor;
+			self.globalPasses[0].clearColor = self.defaultClearColor;
 		}
 	}
 
@@ -183,11 +163,12 @@ impl Camera for MonoCamera<'_>
 		}
 	}
 
-	fn globalPasses (&self) -> &[GlobalPassDeclaration<'_>] {
-		self.globalPasses.as_slice()
+	fn globalPasses (&self) -> GlobalPasses<'_>
+	{
+		GlobalPasses{info: &self.globalPasses, renderStates: std::slice::from_ref(&self.renderState)}
 	}
 	fn framebuffer (&self) -> &hal::Framebuffer {
-		&self.framebuffer
+		&self.renderState.framebuffer
 	}
 
 	fn name (&self) -> &str {
@@ -196,7 +177,7 @@ impl Camera for MonoCamera<'_>
 
 	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>
 	{
-		self.framebuffer.depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
+		self.renderState.framebuffer.depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
 			&pixelCoords, &Viewport {
 				min: glm::vec2(0u32, 0u32), extend: depthStencil.dimsWH()
 			},

@@ -27,7 +27,7 @@ use viewportcompositor::*;
 //
 
 // Standard library
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 #[cfg(not(target_arch="wasm32"))]
 use std::fs;
 
@@ -60,7 +60,7 @@ use crate::view::{Camera, CameraInteractor};
 
 /// Struct containing information about a key event. Essentially replicates [`egui::Event::Key`].
 #[derive(Debug)]
-pub struct KeyInfo<'mods>
+pub struct KeyInfo
 {
 	/// The key code of the key the event relates to. See [`egui::Event::Key`] for details.
 	pub key: egui::Key,
@@ -68,22 +68,22 @@ pub struct KeyInfo<'mods>
 	/// Whether this is a *press* event (`true`) or *release* (`false`). See [`egui::Event::Key`] for details.
 	pub pressed: bool,
 
-	/// When [`pressed`] is `true`, indicates whether this is a generated *repeat* event due to the user holding the key
+	/// When [`Self::pressed`] is `true`, indicates whether this is a generated *repeat* event due to the user holding the key
 	/// down. See [`egui::Event::Key`] for details.
 	pub repeat: bool,
 
 	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
-	pub modifiers: &'mods egui::Modifiers
+	pub modifiers: egui::Modifiers
 }
 
 /// Struct containing information about a click.
 #[derive(Debug)]
-pub struct ClickInfo<'mods> {
+pub struct ClickInfo {
 	/// The pointer button the click originated from.
 	pub button: egui::PointerButton,
 
 	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
-	pub modifiers: &'mods egui::Modifiers,
+	pub modifiers: egui::Modifiers,
 
 	/// The pointer coordinates within the main viewport at the time of the click, in pixels.
 	pub position: glm::UVec2
@@ -91,27 +91,27 @@ pub struct ClickInfo<'mods> {
 
 /// Struct containing information about a mouse wheel event
 #[derive(Debug)]
-pub struct MouseWheelInfo<'mods> {
+pub struct MouseWheelInfo {
 	/// The amount of scrolling in logical screen points along each axis that the wheel movement(s) are equivalent to.
 	pub amount: glm::Vec2,
 
 	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
-	pub modifiers: &'mods egui::Modifiers
+	pub modifiers: egui::Modifiers
 }
 
 /// Struct containing information about a drag event.
 #[derive(Debug)]
-pub struct DragInfo<'mods> {
+pub struct DragInfo {
 	/// Which pointer buttons are down. Should be queried using the [`egui::PointerButton`] enum.
 	pub buttons: [bool; 5],
 
 	/// The key modifiers that are currently also pressed. See [`egui::Event::Key`] for details.
-	pub modifiers: &'mods egui::Modifiers,
+	pub modifiers: egui::Modifiers,
 
 	/// The direction of the drag, using logical screen points as unit.
 	pub direction: glm::Vec2
 }
-impl DragInfo<'_> {
+impl DragInfo {
 	/// Convenience method for querying the [`buttons`](DragInfo::buttons) field.
 	#[inline(always)]
 	pub fn button (&self, button: egui::PointerButton) -> bool {
@@ -121,25 +121,25 @@ impl DragInfo<'_> {
 
 /// Enumeration of input events.
 #[derive(Debug)]
-pub enum InputEvent<'mods>
+pub enum InputEvent
 {
 	/// An event related to keyboard state.
-	Key(KeyInfo<'mods>),
+	Key(KeyInfo),
 
 	/// A simple click or tap.
-	Click(ClickInfo<'mods>),
+	Click(ClickInfo),
 
 	/// A double click or tap.
-	DoubleClick(ClickInfo<'mods>),
+	DoubleClick(ClickInfo),
 
 	/// A triple click or tap.
-	TripleClick(ClickInfo<'mods>),
+	TripleClick(ClickInfo),
 
 	/// A mouse wheel / scroll event.
-	MouseWheel(MouseWheelInfo<'mods>),
+	MouseWheel(MouseWheelInfo),
 
 	/// A pre-processed drag motion (including touch screen swipes).
-	Dragged(DragInfo<'mods>)
+	Dragged(DragInfo)
 }
 
 /// Enumeration of possible event handling outcomes.
@@ -162,10 +162,216 @@ pub enum EventOutcome
 /// Collects all bind group layouts available for interfacing with the managed [render passes](GlobalPassInfo) over the
 /// scene as set up by the *CGV-rs* [`Player`].
 pub struct ManagedBindGroupLayouts {
-	/// The layout of the bind group for the [viewing](ViewingStruct) uniforms.
+	/// The layout of the bind group for the [viewing](renderstate::ViewingStruct) uniforms.
 	pub viewing: wgpu::BindGroupLayout
 }
 
+
+
+/// Provides safe access to a global [`Player`] object.
+mod instance {
+
+use std::{cell::UnsafeCell, mem::MaybeUninit, sync::atomic::{AtomicUsize, Ordering}};
+use super::Player;
+
+/// Stores the global [`Player`] instance and tracks its state in a threadsafe manner, accounting for both
+/// initialization and synchronization.
+/// Similar to a `Mutex<Option<Player>>` without poisoning or waiting.
+struct Lock
+{
+	data: UnsafeCell<MaybeUninit<Player>>,
+	state: AtomicUsize,
+}
+// SAFETY: `Lock` acts as a mutex, see https://doc.rust-lang.org/std/sync/struct.Mutex.html#impl-Sync-for-Mutex%3CT%3E.
+unsafe impl Sync for Lock where Player: Send {}
+mod state
+{
+	pub const UNINIT:    usize = 0;
+	pub const AVAILABLE: usize = 1;
+	pub const LOCKED:    usize = 2;
+}
+macro_rules! msg
+{
+	(ACQ_LOCKED) => {"Attempted to acquire multiple simultaneous references to the CGV player"};
+	(BAD_STATE)  => {"The CGV player lock is in an invalid state"};
+}
+
+static INSTANCE: Lock = Lock{
+	data: UnsafeCell::new(MaybeUninit::uninit()),
+	state: AtomicUsize::new(state::UNINIT),
+};
+
+/// Store a new [`Player`] in the global instance, dropping any previous value.
+/// Panics if the player is currently locked.
+#[inline]
+pub fn set (player: Player) -> LockGuard
+{
+	match INSTANCE.state.swap(state::LOCKED, Ordering::Acquire) {
+		state::UNINIT => {},
+		state::AVAILABLE => unsafe{(*INSTANCE.data.get()).assume_init_drop()},
+		state::LOCKED => panic!(msg!(ACQ_LOCKED)),
+		_ => panic!(msg!(BAD_STATE))
+	}
+	unsafe{&mut*INSTANCE.data.get()}.write(player);
+	return LockGuard(std::marker::PhantomData);
+}
+
+/// Acquire the global [`Player`] instance for exclusive access.
+/// Panics if the player is uninitialized or locked already.
+#[inline]
+pub fn lock () -> LockGuard
+{
+	match INSTANCE.state.compare_exchange(
+		state::AVAILABLE,
+		state::LOCKED,
+		Ordering::Acquire,
+		Ordering::Relaxed,
+	) {
+		Ok(_) => LockGuard(std::marker::PhantomData),
+		Err(state::LOCKED) => panic!(msg!(ACQ_LOCKED)),
+		Err(state::UNINIT) => panic!("Attempted to acquire the CGV player while it is not running"),
+		_ => panic!(msg!(BAD_STATE))
+	}
+}
+
+/// Mark the global [`Player`] instance as available for referencing.
+/// Implies that the player is initialized.
+fn unlock ()
+{
+	INSTANCE.state.store(state::AVAILABLE, Ordering::Release);
+}
+
+/// Drop the global [`Player`] instance if it exists.
+/// Panics if the players is currently locked.
+pub fn reset ()
+{
+	match INSTANCE.state.swap(state::LOCKED, Ordering::Acquire) {
+		state::UNINIT => return,
+		state::AVAILABLE => {
+			unsafe{(&mut*INSTANCE.data.get()).assume_init_drop()};
+			INSTANCE.state.store(state::UNINIT, Ordering::Release);
+		}
+		state::LOCKED => panic!(msg!(ACQ_LOCKED)),
+		_ => panic!(msg!(BAD_STATE))
+	}
+}
+
+
+/// Threadsafe exclusive access to the global [`Player`] instance.
+/// Obtained by [locking](lock) the player, unlocks it when dropped.
+pub struct LockGuard (std::marker::PhantomData<Player>);
+impl std::ops::Drop for LockGuard
+{
+	fn drop(&mut self) {unlock()}
+}
+impl std::ops::Deref for LockGuard
+{
+	type Target = Player;
+
+	fn deref(&self) -> &Player
+	{
+		unsafe{(&mut *INSTANCE.data.get()).assume_init_ref()}
+	}
+}
+impl std::ops::DerefMut for LockGuard
+{
+	fn deref_mut(&mut self) -> &mut Player
+	{
+		unsafe{(&mut *INSTANCE.data.get()).assume_init_mut()}
+	}
+}
+
+} // mod instance
+
+pub use instance::{lock, LockGuard};
+
+
+/// Identifies a [`Component`] stored by the [`Player`], providing access to that component outside of callbacks.
+/// Handles remain valid for the entire lifetime of the component they refer to.
+#[derive(Clone, Copy)]
+pub struct Handle (usize);
+
+
+/// Defines containers storing a specific kind of [`Component`] as trait objects, with one component per container
+/// marked as active.
+/// Implemented as a macro because traits cannot be used as generic parameters.
+macro_rules! Components {( $($Container:ident<$Trait:ident>),+ $(,)? ) =>
+{$(
+
+/// Stores multiple [`
+#[doc = stringify!($Trait)]
+/// `] trait objects and tracks which one is currently active.
+pub struct $Container
+{
+	list: Vec<Option<Box<dyn $Trait>>>,
+	pub(self) active: usize,
+}
+
+impl $Container
+{
+	#[allow(unused)]
+	const NONE: Self = Self{list: Vec::new(), active: 0};
+
+	const MSG_BAD_HANDLE: &'static str = "Invalid handle: The requested object no longer exists.";
+	const MSG_MISSING_OBJ: &'static str
+		= "Invalid handle: The requested object no longer exists or is already borrowed.";
+	const MSG_WRONG_TYPE: &'static str = "Invalid handle: The requested object is not of the expected type.";
+
+	/// Borrow the [`
+	#[doc = stringify!($Trait)]
+	/// `] identified by the given handle and downcast to `T`.
+	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
+	pub fn get<T: $Trait> (&self, handle: Handle) -> &T
+	{
+		<dyn Any>::downcast_ref::<T>(
+			self.list.get(handle.0).expect(Self::MSG_BAD_HANDLE)
+			.as_deref().expect(Self::MSG_MISSING_OBJ)
+		).expect(Self::MSG_WRONG_TYPE)
+	}
+
+	/// Mutably borrow the [`
+	#[doc = stringify!($Trait)]
+	/// `] identified by the given handle and downcast to `T`.
+	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
+	pub fn get_mut<T: $Trait> (&mut self, handle: Handle) -> &mut T
+	{
+		<dyn Any>::downcast_mut::<T>(
+			self.list.get_mut(handle.0).expect(Self::MSG_BAD_HANDLE)
+			.as_deref_mut().expect(Self::MSG_MISSING_OBJ)
+		).expect(Self::MSG_WRONG_TYPE)
+	}
+
+	/// Borrow the currently active component if there is one.
+	fn active (&self) -> Option<&dyn $Trait>
+	{
+		self.list.get(self.active)?.as_deref()
+	}
+
+	/// Mutably borrow the currently active component if there is one.
+	fn active_mut (&mut self) -> Option<&mut dyn $Trait>
+	{
+		self.list.get_mut(self.active)?.as_deref_mut()
+	}
+
+	/// If there is an active component, move it out of the container.
+	/// This allows calling a method of the component with a reference to the player, since they no longer alias.
+	/// Make sure to reinsert the component afterwards using [`Self::putActive`].
+	pub(self) fn takeActive (&mut self) -> Option<Box<dyn $Trait>>
+	{
+		self.list.get_mut(self.active)?.take()
+	}
+
+	/// Store the given component in the active slot, dropping any previous value.
+	/// Should generally be used only after [`Self::takeActive`], not to change which component is active.
+	pub(self) fn putActive (&mut self, new_actor: Box<dyn $Trait>)
+	{
+		self.list[self.active] = Some(new_actor);
+	}
+}
+
+)+}} // macro_rules! Components
+
+Components!{Applications<Application>, CameraInteractors<CameraInteractor>}
 
 
 //////
@@ -179,41 +385,56 @@ pub struct ManagedBindGroupLayouts {
 /// The central application host class.
 pub struct Player
 {
-	quitShortcut: egui::KeyboardShortcut,
-	activeSidePanel: usize,
+	pub camera: Box<dyn Camera>,
+	pub applications: Applications,
+	pub cameraInteractors: CameraInteractors,
+	pub state: State,
+}
 
-	egui: egui::Context,
-	context: Context,
+/// Global event loop and rendering resources.
+pub struct State
+{
+	pub egui: egui::Context,
+	pub context: Context,
+
 	pub(crate) renderSetup: RenderSetup,
 	pub(crate) defaultClearColor: egui::Color32,
 	prevFramebufferResolution: glm::UVec2,
 
+	quitShortcut: egui::KeyboardShortcut,
+	activeSidePanel: usize,
+
 	viewportCompositor: ViewportCompositor,
 
-	camera: Box<dyn Camera>,
-
-	cameraInteractors: Vec<Box<dyn CameraInteractor>>,
-	activeCameraInteractor: usize,
-
-	applicationFactory: Option<Box<dyn ApplicationFactory>>,
-	activeApplication: Option<Box<dyn Application>>,
-	applications: Vec<Box<dyn Application>>,
-
 	pendingRedraw: bool,
-	continousRedrawRequests: u32,
+	continuousRedrawRequests: u32,
 	userInstantRedraw: bool,
 
 	startInstant: time::Instant,
 	prevFrameElapsed: time::Duration,
 	prevFrameDuration: time::Duration
 }
-unsafe impl Send for Player {}
-unsafe impl Sync for Player {}
+
+/// Implicitly access the [`state`](Self::state) subobject for convenience.
+/// Note that this borrows the entire player, in case of aliasing issues you must instead use the field explicitly.
+impl std::ops::Deref for Player
+{
+	type Target = State;
+	fn deref (&self) -> &State {&self.state}
+}
+/// Implicitly access the [`state`](Self::state) subobject for convenience.
+/// Note that this borrows the entire player, in case of aliasing issues you must instead use the field explicitly.
+impl std::ops::DerefMut for Player
+{
+	fn deref_mut (&mut self) -> &mut State {&mut self.state}
+}
 
 impl Player
 {
 	pub fn new (
-		applicationFactory: Box<dyn ApplicationFactory>, cc: &eframe::CreationContext, environment: run::Environment
+		applicationFactory: Box<dyn ApplicationFactory>,
+		cc: &eframe::CreationContext,
+		environment: run::Environment
 	) -> Result<Self>
 	{
 		// Log player initialization start
@@ -269,47 +490,46 @@ impl Player
 
 		// Now construct
 		let mut player = Self {
-			quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
-			egui: cc.egui_ctx.clone(),
-			activeSidePanel: 0,
-
-			context,
-			renderSetup,
-			defaultClearColor,
-
-			prevFramebufferResolution: glm::vec2(0u32, 0u32),
-
 			camera,
-			cameraInteractors: vec![Box::new(view::OrbitInteractor::new()), Box::new(view::WASDInteractor::new())],
-			activeCameraInteractor: 0,
+			cameraInteractors: CameraInteractors {
+				list: vec![
+					Some(Box::new(view::OrbitInteractor::new())),
+					Some(Box::new(view::WASDInteractor::new()))
+				],
+				active: 0,
+			},
+			applications: Applications::NONE,
+			state: State {
+				quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
+				egui: cc.egui_ctx.clone(),
+				activeSidePanel: 0,
 
-			viewportCompositor,
+				context,
+				renderSetup,
+				defaultClearColor,
 
-			applicationFactory: Some(applicationFactory),
-			activeApplication: None,
-			applications: Vec::new(),
+				prevFramebufferResolution: glm::vec2(0u32, 0u32),
 
-			pendingRedraw: false,
-			continousRedrawRequests: 0,
-			userInstantRedraw: false,
+				viewportCompositor,
 
-			startInstant: time::Instant::now(),
-			prevFrameElapsed: time::Duration::from_secs(0),
-			prevFrameDuration: time::Duration::from_secs(0),
+				pendingRedraw: false,
+				continuousRedrawRequests: 0,
+				userInstantRedraw: false,
+
+				startInstant: time::Instant::now(),
+				prevFrameElapsed: time::Duration::from_secs(0),
+				prevFrameDuration: time::Duration::from_secs(0),
+			}
 		};
-		let player_ref = util::statify(&player);
 
 		// Init application(s)
-		let mut activeApplication = player.applicationFactory.take().unwrap().create(
-			&player.context, &player.renderSetup, environment
+		let mut activeApplication = applicationFactory.create(
+			&player.state.context, &player.state.renderSetup, environment
 		)?;
-		activeApplication.preInit(player.context(), player_ref)?;
-		activeApplication.recreatePipelines(
-			&player.context, &player.renderSetup,
-			Self::extractInfoFromGlobalPassDeclarations(player.camera.globalPasses()).as_slice(), player_ref
-		);
-		activeApplication.postInit(player.context(), player_ref)?;
-		player.activeApplication = Some(activeApplication);
+		activeApplication.preInit(&mut player)?;
+		activeApplication.recreatePipelines(&player.context, &player.renderSetup, &player.camera.globalPasses());
+		activeApplication.postInit(&mut player)?;
+		player.applications.list.push(Some(activeApplication));
 		player.activeSidePanel = 2;
 
 		// Done!
@@ -317,16 +537,8 @@ impl Player
 		Ok(player)
 	}
 
-	fn extractInfoFromGlobalPassDeclarations<'gpd> (globalPassDeclarations: &'gpd [GlobalPassDeclaration])
-		-> Vec<&'gpd GlobalPassInfo<'gpd>>
-	{
-		let mut passInfos = Vec::with_capacity(globalPassDeclarations.len());
-		passInfos.extend(globalPassDeclarations.iter().map(|gpd| &gpd.info));
-		passInfos
-	}
-
 	#[cfg(not(target_arch="wasm32"))]
-	pub fn run<F: ApplicationFactory + 'static> (applicationFactory: F) -> Result<()>
+	pub fn run (applicationFactory: Box<dyn ApplicationFactory>) -> Result<()>
 	{
 		// Log that we have begun the startup process
 		tracing::info!("Starting up...");
@@ -429,9 +641,10 @@ impl Player
 
 		// Run and report result
 		match eframe::run_native(
-			"CGV-rs Player", options, Box::new(
-				move |cc| Ok(Box::new(Player::new(Box::new(applicationFactory), cc, environment)?))
-			)
+			"CGV-rs Player", options, Box::new(move |cc| {
+				instance::set(Player::new(applicationFactory, cc, environment)?);
+				Ok(Box::new(StaticImpls))
+			})
 		){
 			Ok(_) => {
 				tracing::info!("Shutdown complete.");
@@ -442,7 +655,7 @@ impl Player
 	}
 
 	#[cfg(target_arch="wasm32")]
-	pub fn run<F: ApplicationFactory + 'static> (applicationFactory: F) -> Result<()>
+	pub fn run (applicationFactory: Box<dyn ApplicationFactory>) -> Result<()>
 	{
 		// In case of WASM, make sure the JavaScript console is set up for receiving log messages first thing (for non-
 		// WASM targets, tracing/logging is already being set up at module loading time)
@@ -505,9 +718,10 @@ impl Player
 				.start(
 					canvas,
 					webOptions,
-					Box::new(|cc| Ok(
-						Box::new(Player::new(Box::new(applicationFactory), cc, run::Environment::default())?)
-					))
+					Box::new(|cc| {
+						instance::set(Player::new(applicationFactory, cc, run::Environment::default())?);
+						Ok(Box::new(StaticImpls))
+					})
 				)
 				.await;
 
@@ -532,14 +746,14 @@ impl Player
 			};
 		});
 
-		// Done (although we won't actually ever reach this code)
+		// Done
 		Ok(())
 	}
 
-	fn prepareEvents<'is> (
-		&self, inputState: &'is egui::InputState, viewportResponse: &egui::Response, menubarResponse: &egui::Response,
+	fn prepareEvents (
+		&self, inputState: &egui::InputState, viewportResponse: &egui::Response, menubarResponse: &egui::Response,
 		sidepanelResponse: &egui::Response, highDpiScaleFactor: f32
-	) -> Vec<InputEvent<'is>>
+	) -> Vec<InputEvent>
 	{
 		// Pre-allocate event list
 		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
@@ -570,7 +784,7 @@ impl Player
 			}
 		};
 		if zoom {
-			preparedEvents.push(InputEvent::MouseWheel(MouseWheelInfo { amount, modifiers: &inputState.modifiers }));
+			preparedEvents.push(InputEvent::MouseWheel(MouseWheelInfo { amount, modifiers: inputState.modifiers }));
 		}
 
 		// Dragging action
@@ -586,7 +800,7 @@ impl Player
 							p.button_down(egui::PointerButton::Extra1), p.button_down(egui::PointerButton::Extra2)
 						]
 					},
-					modifiers: &inputState.modifiers,
+					modifiers: inputState.modifiers,
 					direction: glm::vec2(dm.x, dm.y)
 				}));
 			}
@@ -604,7 +818,7 @@ impl Player
 				egui::PointerButton::Extra1, egui::PointerButton::Extra2
 			]{
 				let clickInfo = ClickInfo {
-					button, modifiers: util::statify(&inputState.modifiers), position: pointerPos
+					button, modifiers: inputState.modifiers, position: pointerPos
 				};
 				if viewportResponse.triple_clicked_by(button) {
 					preparedEvents.push(InputEvent::TripleClick(clickInfo));
@@ -624,31 +838,35 @@ impl Player
 
 	fn dispatchTranslatedEvent (&mut self, event: &InputEvent) -> bool
 	{
-		// Create the 'static reference to self that we will pass to the various callback functions
-		let this = util::statify(self);
-
 		// Keep track of whether a full scene redraw is needed
 		let mut redraw = false;
 
 		// Applications get first dibs
 		// - the active (foreground) application
-		match self.activeApplication.as_deref_mut()
-			.map(|app| app.input(&event, this)).unwrap_or(EventOutcome::NotHandled)
-		{
-			// Event was closed by the receiver
-			EventOutcome::HandledExclusively(redrawRequested) => return redrawRequested,
+		if let Some(mut app) = self.applications.takeActive() {
+			let outcome = app.input(&event, self, Handle(self.applications.active));
+			self.applications.putActive(app);
 
-			// Event was acted upon but others may react to it too
-			EventOutcome::HandledDontClose(redrawRequested) => redraw |= redrawRequested,
+			match outcome {
+				// Event was closed by the receiver
+				EventOutcome::HandledExclusively(redrawRequested) => return redrawRequested,
 
-			// Event was ignored
-			EventOutcome::NotHandled => {}
+				// Event was acted upon but others may react to it too
+				EventOutcome::HandledDontClose(redrawRequested) => redraw |= redrawRequested,
+
+				// Event was ignored
+				EventOutcome::NotHandled => {}
+			}
 		}
+
 		// - now any background applications in some undefined order.
-		for app in self.applications.as_mut_slice()
-		{
-			match app.input(&event, this)
-			{
+		for idx in 0..self.applications.list.len() {
+			if idx == self.applications.active {continue};
+			let Some(mut app) = self.applications.list[idx].take() else {continue};
+			let outcome = app.input(&event, self, Handle(idx));
+			self.applications.list[idx] = Some(app);
+
+			match outcome {
 				// Event was closed by the receiver
 				EventOutcome::HandledExclusively(redrawRequested) => return redrawRequested,
 
@@ -661,16 +879,21 @@ impl Player
 		}
 
 		// Finally, the active camera interactor
-		match self.cameraInteractors[self.activeCameraInteractor].input(
-			&event, self.camera.as_mut(), this
-		){
-			// Event was handled
-			  EventOutcome::HandledExclusively(redrawRequested)
-			| EventOutcome::HandledDontClose(redrawRequested) => redraw | redrawRequested,
+		if let Some(mut ci) = self.cameraInteractors.takeActive() {
+			let outcome = ci.input(&event, self, Handle(self.cameraInteractors.active));
+			self.cameraInteractors.putActive(ci);
 
-			// Event was ignored
-			EventOutcome::NotHandled => false
+			match outcome {
+				// Event was handled
+				  EventOutcome::HandledExclusively(redrawRequested)
+				| EventOutcome::HandledDontClose(redrawRequested) => redraw |= redrawRequested,
+
+				// Event was ignored
+				EventOutcome::NotHandled => {}
+			}
 		}
+
+		redraw
 	}
 
 	fn dispatchEvents (&mut self, events: &[egui::Event], complexEvents: &[InputEvent]) -> bool
@@ -679,10 +902,8 @@ impl Player
 		let translatedEvents =  events.iter().filter_map(|event| {
 			match event
 			{
-				egui::Event::Key {
-					key, /*physical_key, */pressed, repeat, modifiers, ..
-				}
-				=> Some(InputEvent::Key(KeyInfo { key: *key, pressed: *pressed, repeat: *repeat, modifiers })),
+				&egui::Event::Key { key, /*physical_key, */pressed, repeat, modifiers, .. }
+				=> Some(InputEvent::Key(KeyInfo { key, pressed, repeat, modifiers })),
 
 				_ => None
 			}
@@ -700,43 +921,40 @@ impl Player
 
 	/// Performs the logic for preparing applications for rendering the scene.
 	fn prepare (
-		&self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
+		&mut self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Make all global passes needed by the active camera
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let cameraName = self.camera.name();
 		let globalPasses = self.camera.globalPasses();
-		for passNr in 0..globalPasses.len()
+		for passNr in 0..globalPasses.info.len()
 		{
 			// Get actual pass information
-			let pass = &globalPasses[passNr];
-			let renderState = util::mutify(pass.info.renderState);
-			tracing::debug!("Camera[{:?}]: Preparing global pass #{passNr} ({:?})", cameraName, pass.info.pass);
+			let passInfo = &globalPasses.info[passNr];
+			let renderState = &globalPasses.renderStates[passInfo.renderState as usize];
+			tracing::debug!("Camera[{cameraName:?}]: Preparing global pass #{passNr} ({:?})", passInfo.pass);
 
-			/* Update managed render state */ {
-				// Uniforms
-				// - viewing
-				let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
-				viewingUniforms.projection = * self.camera.projection(pass);
-				viewingUniforms.view = * self.camera.view(pass);
-				renderState.viewingUniforms.upload(&self.context);
-			};
+			// Update managed render state
+			// Uniforms
+			// - viewing
+			renderState.viewingUniforms.upload(&self.context);
 
 			// Prepare the active application (if any)
-			if let Some(application) = util::mutify(&self.activeApplication) {
+			if let Some(application) = self.applications.active_mut() {
 				if let Some(newCommands) = application.prepareFrame(
-					&self.context, pass.info.renderState, &pass.info.pass
+					&self.state.context, renderState, &passInfo.pass
 				){
 					cmdBuffers.extend(newCommands);
 				}
 			}
 
 			// Prepare the other applications
-			self.applications.iter().fold(
+			self.applications.list.iter_mut().fold(
 				&mut cmdBuffers, |commands, app| {
-					if let Some(newCommands) = util::mutify(app).prepareFrame(
-						&self.context, pass.info.renderState, &pass.info.pass
+					let Some(app) = app.as_deref_mut() else {return commands};
+					if let Some(newCommands) = app.prepareFrame(
+						&self.state.context, renderState, &passInfo.pass
 					){
 						commands.extend(newCommands);
 					}
@@ -751,7 +969,7 @@ impl Player
 
 	/// Performs the logic for letting applications render their contribution to the scene.
 	fn redraw (
-		&self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
+		&mut self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
 		// Make all global passes needed by the active camera
@@ -759,28 +977,24 @@ impl Player
 		let mut cmdEncoder = self.context.device().create_command_encoder(&Default::default());
 		let cameraName = self.camera.name();
 		let globalPasses = self.camera.globalPasses();
-		for passNr in 0..globalPasses.len()
+		for passNr in 0..globalPasses.info.len()
 		{
 			// Get actual pass information
-			let pass = &globalPasses[passNr];
-			let renderState = util::mutify(pass.info.renderState);
+			let passInfo = &globalPasses.info[passNr];
+			let renderState = &globalPasses.renderStates[passInfo.renderState as usize];
 
-			/* Update managed render state */ {
-				// Uniforms
-				// - viewing
-				let viewingUniforms = renderState.viewingUniforms.borrowData_mut();
-				viewingUniforms.projection = *self.camera.projection(pass);
-				viewingUniforms.view = *self.camera.view(pass);
-				renderState.viewingUniforms.upload(&self.context);
-			};
+			// Update managed render state
+			// Uniforms
+			// - viewing
+			renderState.viewingUniforms.upload(&self.context);
 
 			// Create the managed render pass for this global pass
 			let desc = wgpu::RenderPassDescriptor {
 				label: Some("CGV__ManagedSceneRenderPass"),
 				color_attachments: &[
-					renderState.getMainColorAttachment(Some(&pass.info.clearColor))
+					renderState.getMainColorAttachment(Some(&passInfo.clearColor)),
 				],
-				depth_stencil_attachment: renderState.getMainDepthStencilAttachment(Some(pass.info.depthClearValue)),
+				depth_stencil_attachment: renderState.getMainDepthStencilAttachment(Some(passInfo.depthClearValue)),
 				occlusion_query_set: None,
 				timestamp_writes: None,
 				multiview_mask: None
@@ -788,17 +1002,25 @@ impl Player
 			let mut renderPass = cmdEncoder.begin_render_pass(&desc);
 
 			// Render the active application (if any)
-			if let Some(application) = util::mutify(&self.activeApplication) {
-				application.render(&self.context, pass.info.renderState, &mut renderPass, &pass.info.pass);
+			if let Some(application) = self.applications.active_mut() {
+				application.render(&self.state.context, renderState, &mut renderPass, &passInfo.pass);
 			}
 
 			// Render the other applications
-			for app in util::mutify(&self.applications) {
-				app.render(&self.context, pass.info.renderState, &mut renderPass, &pass.info.pass);
+			for idx in 0..self.applications.list.len() {
+				if idx == self.applications.active {continue};
+				let Some(mut app) = self.applications.list[idx].take() else {continue};
+				app.render(&self.context, renderState, &mut renderPass, &passInfo.pass);
+				self.applications.list[idx] = Some(app);
+			}
+
+			if let Some(mut callback) = passInfo.completionCallback.take() {
+				callback(&self.context, passNr as u32);
+				passInfo.completionCallback.set(Some(callback));
 			}
 
 			// Finish the pass
-			tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, pass.info.pass);
+			tracing::debug!("Camera[{:?}]: Global pass #{passNr} ({:?}) done", cameraName, passInfo.pass);
 		}
 
 		// Done!
@@ -806,107 +1028,99 @@ impl Player
 		cmdBuffers
 	}
 
-	#[inline(always)]
-	pub fn context (&self) -> &Context {
-		&self.context
-	}
-
-	#[inline(always)]
-	pub fn renderSetup (&self) -> &RenderSetup {
-		&self.renderSetup
-	}
-
-	#[inline(always)]
-	pub fn egui (&self) -> &egui::Context {
-		&self.egui
-	}
-
-	///
-	pub fn pushContinuousRedrawRequest (&self)
+	pub fn postRecreatePipelines (&mut self)
 	{
-		// We have to use volatile writes throughout this function for some reason to make sure the optimizer doesn't
-		// interfere with our hacky but (presumably) faster-than-RefCell interior mutability scheme
-		// ToDo: remove code smell
-		let this = util::mutify(self);
-		if this.continousRedrawRequests < 1
+		// TODO: What about other applications?
+		let Some(mut app) = self.applications.takeActive() else {return};
+		app.recreatePipelines(&self.context, &self.renderSetup, &self.camera.globalPasses());
+		self.applications.putActive(app);
+	}
+
+	pub fn getDepthAtSurfacePixel_async<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
+		&self, pixelCoords: glm::UVec2, callback: Closure
+	){
+		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.getDepthValue_async(&self.context, |depth| {
+				callback(Some(depth));
+			})
+		}
+		else {
+			callback(None)
+		}
+	}
+
+	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
+		&self, pixelCoords: glm::UVec2, callback: Closure
+	){
+		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.unprojectPointH_async(&self.context, |point| {
+				callback(point);
+			})
+		}
+		else {
+			callback(None)
+		}
+	}
+
+	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
+		&self, pixelCoords: glm::UVec2, callback: Closure
+	){
+		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
+			dispatcher.unprojectPoint_async(&self.context, |point| {
+				callback(point);
+			})
+		}
+		else {
+			callback(None)
+		}
+	}
+}
+
+impl State
+{
+	pub fn pushContinuousRedrawRequest (&mut self)
+	{
+		if self.continuousRedrawRequests < 1
 		{
-			unsafe {
-				// SAFETY: Unknown. See comment above.
-				std::ptr::write_volatile(
-					&mut this.prevFrameElapsed as *mut time::Duration, this.startInstant.elapsed()
-				);
-				std::ptr::write_volatile(
-					&mut this.prevFrameDuration as *mut time::Duration, time::Duration::from_secs(0)
-				);
-			}
+			self.prevFrameElapsed = self.startInstant.elapsed();
+			self.prevFrameDuration = time::Duration::from_secs(0);
+
 			tracing::info!("Starting continuous redrawing");
-			this.egui.request_repaint();
+			self.egui.request_repaint();
 		}
-		unsafe {
-			// SAFETY: Unknown. See comment above.
-			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests+1)
-		}
+		self.continuousRedrawRequests += 1;
 	}
 
-	///
-	pub fn dropContinuousRedrawRequest (&self)
+	pub fn dropContinuousRedrawRequest (&mut self)
 	{
-		// We have to use volatile writes throughout this function for some reason to make sure the optimizer doesn't
-		// interfere with our hacky but (presumably) faster-than-RefCell interior mutability scheme
-		// ToDo: remove code smell
-		let this = util::mutify(self); // we use interior mutability
-		if this.continousRedrawRequests < 1 {
+		if self.continuousRedrawRequests < 1 {
 			panic!("logic error - more continuous redraw requests dropped than were pushed");
 		}
-		unsafe {
-			// SAFETY: Unknown. See comment above.
-			std::ptr::write_volatile(&mut this.continousRedrawRequests as *mut u32, this.continousRedrawRequests-1)
-		}
-		if this.continousRedrawRequests < 1
+		self.continuousRedrawRequests -= 1;
+		if self.continuousRedrawRequests < 1
 		{
-			unsafe {
-				// SAFETY: Unknown. See comment above.
-				std::ptr::write_volatile(
-					&mut this.prevFrameDuration as *mut time::Duration, time::Duration::from_secs(0)
-				);
-			}
+			self.prevFrameDuration = time::Duration::from_secs(0);
 			tracing::info!("Stopping continuous redrawing");
 		}
 	}
 
-	///
-	pub fn postRecreatePipelines (&self)
-	{
-		if let Some(app) =  util::mutify(&self.activeApplication) {
-			app.recreatePipelines(
-				&self.context, &self.renderSetup,
-				Self::extractInfoFromGlobalPassDeclarations(self.camera.globalPasses()).as_slice(),
-				util::statify(self)
-			);
-		}
-	}
-
 	/// **TODO:** Highlight differences between this, [`Self::postFullRedraw`] and [`Self::postGuiRedraw`].
-	pub fn requireSceneRedraw (&self) {
-		unsafe {
-			// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
-			#[allow(invalid_reference_casting)]
-			std::ptr::write_volatile(&self.pendingRedraw as *const bool as *mut bool, true)
-		}
+	pub fn requireSceneRedraw (&mut self) {
+		self.pendingRedraw = true;
 	}
 
 	/// **TODO:** Highlight differences between this, [`Self::requireSceneRedraw`] and [`Self::postFullRedraw`].
-	pub fn postGuiRedraw (&self) {
-		if self.continousRedrawRequests < 1 {
+	pub fn postGuiRedraw (&mut self) {
+		if self.continuousRedrawRequests < 1 {
 			// Tell Egui to start drawing immediately
 			self.egui.request_repaint();
 		}
 	}
 
 	/// **TODO:** Highlight differences between this, [`Self::requireSceneRedraw`] and [`Self::postGuiRedraw`].
-	pub fn postFullRedraw (&self)
+	pub fn postFullRedraw (&mut self)
 	{
-		if self.continousRedrawRequests < 1 {
+		if self.continuousRedrawRequests < 1 {
 			// Make sure the cameras are redrawn also (otherwise just the GUI might get redrawn)
 			self.requireSceneRedraw();
 
@@ -925,75 +1139,33 @@ impl Player
 		tracing::info!("Exiting...");
 		eguiContext.send_viewport_cmd(egui::ViewportCommand::Close);
 	}
-
-	///
-	pub fn activeCamera (&self) -> &dyn Camera {
-		self.camera.as_ref()
-	}
-
-	///
-	pub fn activeCamera_mut (&self) -> &mut dyn Camera {
-		util::mutify(self.camera.as_ref()) // we use interior mutability
-	}
-
-	///
-	pub fn getDepthAtSurfacePixelAsync<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
-		&self, pixelCoords: glm::UVec2, callback: Closure
-	){
-		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.getDepthValue_async(&self.context, |depth| {
-				callback(Some(depth));
-			})
-		}
-		else {
-			callback(None)
-		}
-	}
-
-	///
-	pub fn unprojectPointAtSurfacePixelH_async<Closure: FnOnce(Option<&glm::Vec4>) + wgpu::WasmNotSend + 'static> (
-		&self, pixelCoords: glm::UVec2, callback: Closure
-	){
-		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.unprojectPointH_async(&self.context, |point| {
-				callback(point);
-			})
-		}
-		else {
-			callback(None)
-		}
-	}
-
-	///
-	pub fn unprojectPointAtSurfacePixel_async<Closure: FnOnce(Option<&glm::Vec3>) + wgpu::WasmNotSend + 'static> (
-		&self, pixelCoords: glm::UVec2, callback: Closure
-	){
-		if let Some(dispatcher) = self.camera.getDepthReadbackDispatcher(pixelCoords) {
-			dispatcher.unprojectPoint_async(&self.context, |point| {
-				callback(point);
-			})
-		}
-		else {
-			callback(None)
-		}
-	}
 }
-impl eframe::App for Player
+
+
+/// Implements traits for the global player instance using `'static` functions.
+struct StaticImpls;
+
+impl eframe::App for StaticImpls
 {
+	fn on_exit(&mut self) {instance::reset()}
+
 	fn ui (&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame)
 	{
+		let mut lock = lock();
+		let player = &mut*lock;
+
 		////
 		// Main GUI
 
 		// Draw the main menu bar
-		let menubarResponse = ui::menuBar(self, ui);
+		let menubarResponse = ui::menuBar(player, ui);
 
 		// Draw the side panel
-		let sidepanelResponse = ui::sidepanel(self, ui);
+		let sidepanelResponse = ui::sidepanel(player, ui);
 
-		/* Draw any free-floating UIs */ {
-			let this = util::statify(self);
-			self.activeApplication.as_mut().unwrap().freeUi(ui, this);
+		// Draw any free-floating UIs
+		if let Some(app) = player.applications.active_mut() {
+			app.freeUi(ui, &mut player.state);
 		}
 
 
@@ -1008,7 +1180,7 @@ impl eframe::App for Player
 		egui::CentralPanel::default().frame(frame).show_inside(ui, |ui|
 		{
 			// Keep track of reasons to do a scene redraw
-			let mut redrawScene = self.continousRedrawRequests > 0;
+			let mut redrawScene = player.continuousRedrawRequests > 0;
 
 			// Update framebuffer size
 			let availableSpace_egui = ui.available_size();
@@ -1017,10 +1189,14 @@ impl eframe::App for Player
 				let pixelsEgui = (availableSpace_egui*pxlsPerPoint).ceil();
 				glm::vec2(pixelsEgui.x as u32, pixelsEgui.y as u32)
 			};
-			if fbResolution != self.prevFramebufferResolution && fbResolution.x > 0 && fbResolution.y > 0 {
-				self.camera.resize(&self.context, fbResolution);
-				self.viewportCompositor.updateSource(&self.context, self.camera.framebuffer().color0());
-				self.prevFramebufferResolution = fbResolution;
+			if fbResolution != player.prevFramebufferResolution
+				&& fbResolution.x > 0
+				&& fbResolution.y > 0
+			{
+				player.camera.resize(&player.state.context, fbResolution);
+				player.state.viewportCompositor.updateSource(
+					&player.state.context, player.camera.framebuffer().color0());
+				player.prevFramebufferResolution = fbResolution;
 				tracing::info!("Main framebuffer resized to {:?}", fbResolution);
 				redrawScene = true; // we'll need to redraw the scene in addition to the UI
 			}
@@ -1028,68 +1204,56 @@ impl eframe::App for Player
 				ui.allocate_exact_size(availableSpace_egui, egui::Sense::click_and_drag());
 
 			/* Route input events */ {
-				let inputState = ui.input(|state| util::statify(state));
-				let complexEvents = self.prepareEvents(
-					inputState, &response, &menubarResponse, &sidepanelResponse, pxlsPerPoint
+				// TODO: Clone may be expensive, but we have use the state outside the callback to avoid deadlocking on
+				// the egui state.
+				// Egui's documentation recommends calling `input` for every event you want to query, locking and
+				// unlocking the context every time, which is probably faster?
+				// The third alternative would be to copy only some parts of the input state into a custom type.
+				let inputState = ui.input(|state| state.clone());
+				let complexEvents = player.prepareEvents(
+					&inputState, &response, &menubarResponse, &sidepanelResponse, pxlsPerPoint
 				);
-				redrawScene |= self.dispatchEvents(&inputState.events, &complexEvents);
+				redrawScene |= player.dispatchEvents(&inputState.events, &complexEvents);
 			}
 
 			// If nobody else did, consume the global [ESC] quit shortcut
 			if   (   response.contains_pointer() || menubarResponse.contains_pointer()
 			      || sidepanelResponse.contains_pointer())
-			   && ui.input_mut(|i| i.consume_shortcut(&self.quitShortcut))
+			   && ui.input_mut(|i| i.consume_shortcut(&player.quitShortcut))
 			{
-				self.exit(ui.ctx());
+				player.exit(ui.ctx());
 			}
 
 			// Update camera interactor
-			let this = unsafe {
-				// SAFETY: We will pass this reference to an egui paint callback. The player is being kept alive by
-				// eframe, certainly long enough for any egui painter callback to finish, so we can safely assume that
-				// the player will outlive the callback.
-				util::notsafe::extendLifetime(self)
-			};
-			self.cameraInteractors[self.activeCameraInteractor].update(
-				// TODO: Dirty, dirty hack. We sidestep Rust's aliasing rules by passing in `this` instead of `self`.
-				/* camera: */self.camera.as_mut(), /* player: */this
-			);
-			if self.camera.update() {
+			if let Some(mut ci) = player.cameraInteractors.takeActive() {
+				ci.update(player, Handle(player.cameraInteractors.active));
+				player.cameraInteractors.putActive(ci);
+			}
+			if player.camera.update() {
 				redrawScene = true;
 			}
 
-			// Schedule compositing of the scene view onto the eframe center panel, handled by the `RenderManager`
-			self.pendingRedraw |= redrawScene;
-			ui.painter().add(egui_wgpu::Callback::new_paint_callback(
-				rect, RenderManager {
-					player: &this, viewportCompositor: &this.viewportCompositor
-				}
-			));
+			// Schedule compositing of the scene view onto the eframe center panel.
+			player.pendingRedraw |= redrawScene;
+			ui.painter().add(egui_wgpu::Callback::new_paint_callback(rect, StaticImpls));
 		});
 	}
 }
 
-/// Helper object for interfacing the [`Player`] with egui_wgpu's draw callbacks.
-struct RenderManager<'player> {
-	player: &'player Player,
-	viewportCompositor: &'player ViewportCompositor
-}
-impl egui_wgpu::CallbackTrait for RenderManager<'static>
+impl egui_wgpu::CallbackTrait for StaticImpls
 {
 	fn prepare (
 		&self, device: &wgpu::Device, queue: &wgpu::Queue, _: &egui_wgpu::ScreenDescriptor,
 		eguiEncoder: &mut wgpu::CommandEncoder, _: &mut egui_wgpu::CallbackResources
 	) -> Vec<wgpu::CommandBuffer>
 	{
+		let mut player = lock();
+
 		// Only prepare the scene if requested
-		if self.player.pendingRedraw /* || self.redrawScene*/ { // ToDo: investigate, see above
-			tracing::debug!("Redrawing");
-			self.player.prepare(device, queue, eguiEncoder)
-		}
-		else {
-			// No command buffers to submit
-			Vec::new()
-		}
+		if !player.pendingRedraw {return Vec::new()}
+
+		tracing::debug!("Redrawing");
+		player.prepare(device, queue, eguiEncoder)
 	}
 
 	fn finish_prepare (
@@ -1097,42 +1261,31 @@ impl egui_wgpu::CallbackTrait for RenderManager<'static>
 		_: &mut egui_wgpu::CallbackResources
 	) -> Vec<wgpu::CommandBuffer>
 	{
+		let mut player = lock();
+
 		// Only redraw the scene if requested
-		if self.player.pendingRedraw
-		{
-			// Actually redraw the scene
-			let cmdBuffers = self.player.redraw(device, queue, eguiEncoder);
+		if !player.pendingRedraw {return Vec::new()}
 
-			// Clear pending redraw flag
-			unsafe {
-				// SAFETY: Safety implications unknown at this point. Probably need to redesign our interior mutability.
-				#[allow(invalid_reference_casting)]
-				std::ptr::write_volatile(&self.player.pendingRedraw as *const bool as *mut bool, false)
-			}
-
-			// Let Egui submit our scene redraw command buffers.
-			cmdBuffers
-		}
-		else {
-			// No command buffers to submit
-			Vec::new()
-		}
+		// Actually redraw the scene
+		player.pendingRedraw = false;
+		player.redraw(device, queue, eguiEncoder)
 	}
 
 	fn paint (
 		&self, _: epaint::PaintCallbackInfo, eguiRenderPass: &mut wgpu::RenderPass<'static>,
 		_: &egui_wgpu::CallbackResources
-	){
-		// Composit current view of the scene onto egui viewport
-		self.viewportCompositor.composit(eguiRenderPass);
+	) {
+		let mut player = lock();
+
+		// Composite current view of the scene onto egui viewport
+		player.viewportCompositor.composit(eguiRenderPass);
 
 		// Update frame stats
-		if self.player.continousRedrawRequests > 0 {
-			let player = util::mutify(self.player); // we use interior mutability
-			let elapsed = player.startInstant.elapsed();
-			player.prevFrameDuration = elapsed - player.prevFrameElapsed;
-			player.prevFrameElapsed = elapsed;
-			player.egui.request_repaint();
-		}
+		if player.continuousRedrawRequests == 0 {return}
+
+		let elapsed = player.startInstant.elapsed();
+		player.prevFrameDuration = elapsed - player.prevFrameElapsed;
+		player.prevFrameElapsed = elapsed;
+		player.egui.request_repaint();
 	}
 }

@@ -115,7 +115,7 @@ impl FocusChange
 		oldF: cameraParameters.intrinsics.f, newF: f32::default(), t: 0., speed: 1./timespan
 	}}
 
-	/// Set the desired focus point to animate onto. Must be called before the first call to [`update`].
+	/// Set the desired focus point to animate onto. Must be called before the first call to [`Self::update`].
 	///
 	/// # Arguments
 	///
@@ -256,22 +256,21 @@ impl<'a> DepthReadbackDispatcher<'a>
 }
 
 
-
 //////
 //
 // Traits
 //
 
 /// A camera that can produce images of the scene.
-pub trait Camera
+pub trait Camera: Send
 {
 	/// Borrow the projection matrix for the given global pass.
 	///
 	/// # Arguments
 	///
-	/// * `pass` – The declaration of the global pass the [`Player`] requires the projection matrix for. The [`Player`]
-	///            will only ever query matrices for passes the camera [declared itself](Camera::globalPasses).
-	fn projection (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
+	/// * `pass` – The global pass the [`Player`] requires the projection matrix for. The player will only ever query
+	///            matrices for passes the camera [declared itself](Self::globalPasses).
+	fn projection (&self, pass: &GlobalPass) -> &glm::Mat4;
 
 	/// Get the projection matrix that is effective at the given pixel coordinates.
 	fn projectionAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
@@ -280,9 +279,9 @@ pub trait Camera
 	///
 	/// # Arguments
 	///
-	/// * `pass` – The declaration of the global pass the [`Player`] requires the view matrix for. The [`Player`] will
-	///            only ever query matrices for passes the camera [declared itself](Camera::globalPasses).
-	fn view (&self, pass: &GlobalPassDeclaration) -> &glm::Mat4;
+	/// * `pass` – The global pass the [`Player`] requires the view matrix for. The player will only ever query matrices
+	///            for passes the camera [declared itself](Self::globalPasses).
+	fn view (&self, pass: &GlobalPass) -> &glm::Mat4;
 
 	/// Get the view matrix that is effective at the given pixel coordinates.
 	fn viewAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
@@ -310,11 +309,11 @@ pub trait Camera
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2);
 
 	/// Indicate that the camera should use a specific clear color overriding the current
-	/// [render setup](onRenderSetupChange) until further notice.
+	/// [render setup](Self::onRenderSetupChange) until further notice.
 	///
 	/// # Arguments
 	///
-	/// * `passes` – The declaration of the global pass to override the clear color for. The caller should only ever
+	/// * `passes` – The declaration of the global passes to override the clear color for. The caller should only ever
 	///              reference passes here that the camera [declared itself](Camera::globalPasses).
 	///              ←**TODO: come up with a better solution.**<br/>
 	///              Passing `None` will install the clear color override on all passes.
@@ -324,7 +323,7 @@ pub trait Camera
 	/// # Panics
 	///
 	/// Implementations may panic if `passes` references a pass the camera does not know about.
-	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassDeclaration]>, clearColor: Option<wgpu::Color>);
+	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassInfo]>, clearColor: Option<wgpu::Color>);
 
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
 	/// transformation matrices or anything else it might need to provide [render state](RenderState) to the
@@ -334,7 +333,7 @@ pub trait Camera
 	fn update (&mut self) -> bool;
 
 	/// Reference the global passes that the camera needs to perform to produce its output image(s).
-	fn globalPasses(&self) -> &[GlobalPassDeclaration<'_>];
+	fn globalPasses(&self) -> GlobalPasses<'_>;
 
 	/// Reference the framebuffer containing the rendering of the scene acquired by the camera.
 	fn framebuffer (&self) -> &hal::Framebuffer;
@@ -364,7 +363,7 @@ pub trait Camera
 }
 
 /// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly. 
-pub trait CameraInteractor
+pub trait CameraInteractor: Component
 {
 	/// Report a short title for the interactor that it will be selectable by.
 	///
@@ -373,33 +372,31 @@ pub trait CameraInteractor
 	/// A string slice containing a short descriptive title for the interactor.
 	fn title (&self) -> &str;
 
-	/// Indicates that the camera interactor should perform any calculations needed to prepare the passed-in camera for
-	/// rendering the next frame.
+	/// Indicates that the camera interactor should perform any calculations needed to prepare the player's active
+	/// camera for rendering the next frame.
 	///
 	/// # Arguments
 	///
-	/// * `camera` – the camera to interact with.
-	/// * `player` – Access to the CGV-rs player instance, useful e.g. to request or stop continuous redraws when
-	///              animating the camera.
-	fn update (&mut self, camera: &mut dyn Camera, player: &Player);
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
+	///              Contains the camera being updated and mangages redraw requests.
+	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
+	fn update (&mut self, player: &mut Player, this: player::Handle);
 
-	/// Report a window event to the camera.
+	/// Report a window event to the player's active camera.
 	///
 	/// # Arguments
 	///
 	/// * `event` – The event that the camera should inspect and potentially act upon.
-	/// * `camera` – the camera which to interact with.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to input.
+	/// * `player` – The global *CGV-rs* [`Player`] instance containing the active camera.
+	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::Handle) -> EventOutcome;
 
-	///
 	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
 }
-
 
 
 //////

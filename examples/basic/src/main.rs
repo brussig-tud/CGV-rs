@@ -372,7 +372,7 @@ impl cgv::Application for ExampleApplication
 		"Basic Example App"
 	}
 
-	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()>
+	fn preInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>
 	{
 		// Upload initial uniform values
 		let appearance = self.appearanceUniforms.borrowData_mut();
@@ -381,48 +381,51 @@ impl cgv::Application for ExampleApplication
 		appearance.evenCheckersColor = self.guiState.oddCheckersColor.into();
 		appearance.oddCheckersColor = self.guiState.evenCheckersColor.into();
 		appearance.checkerCounts = egui::Vec2::new(16., 16.);
-		self.appearanceUniforms.upload(context);
+		self.appearanceUniforms.upload(&player.context);
 
 		// Done!
 		Ok(())
 	}
 
 	fn recreatePipelines (
-		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
-		_: &cgv::Player
+		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses
 	){
 		// Make space
 		self.pipelines.clear();
-		self.pipelines.reserve(globalPasses.len());
+		self.pipelines.reserve(globalPasses.info.len());
 
 		// Recreate pipelines
-		for pass in globalPasses {
-			self.pipelines.push(self.createPipeline(context, pass.renderState, renderSetup));
+		for pass in globalPasses.info {
+			self.pipelines.push(self.createPipeline(
+				context,
+				&globalPasses.renderStates[pass.renderState as usize],
+				renderSetup
+			));
 		}
 	}
 
-	fn postInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()>
+	fn postInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>
 	{
 		// Tracing
 		tracing::info!("Positioning initial camera");
 
 		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
-		let cam = player.activeCamera_mut().parameters_mut();
+		let cam = player.camera.parameters_mut();
 		cam.intrinsics.f = 2.;
 		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
 		Ok(())
 	}
 
-	fn input (&mut self, _: &cgv::InputEvent, _: &cgv::Player) -> cgv::EventOutcome {
+	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::Handle) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2, _: &cgv::Player) {
+	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2) {
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (&mut self, _: &cgv::Context, _: &cgv::Player) -> bool {
+	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::Handle) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}
@@ -450,7 +453,7 @@ impl cgv::Application for ExampleApplication
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
+	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::player::State)
 	{
 		// Keep track of whether we need to redraw our scene contents
 		let mut redraw = false;
@@ -512,7 +515,7 @@ impl cgv::Application for ExampleApplication
 
 					// Upload new color values if something changed
 					if uploadFlag {
-						self.appearanceUniforms.upload(player.context());
+						self.appearanceUniforms.upload(&player.context);
 						redraw = true;
 					}
 				}
@@ -560,5 +563,5 @@ impl cgv::Application for ExampleApplication
 /// The application entry point.
 pub fn main () -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our ExampleApplication
-	cgv::Player::run(createBasicExampleApp)
+	cgv::Player::run(Box::new(createBasicExampleApp))
 }

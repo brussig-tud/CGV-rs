@@ -19,19 +19,6 @@ use util::math;
 
 //////
 //
-// Structs
-//
-
-/// Small helper struct for storing stuff we need when animation focus changes
-struct FocusChangeContext<'player> {
-	pub fc: view::FocusChange,
-	pub player: &'player Player
-}
-
-
-
-//////
-//
 // Classes
 //
 
@@ -42,7 +29,7 @@ struct FocusChangeContext<'player> {
 pub struct OrbitInteractor {
 	dragSensitivity: f32,
 	fixUp: Option<glm::Vec3>,
-	focusChange: Option<FocusChangeContext<'static>>
+	focusChange: Option<FocusChange>,
 }
 
 impl OrbitInteractor {
@@ -59,17 +46,17 @@ impl CameraInteractor for OrbitInteractor
 		"Orbit"
 	}
 
-	fn update (&mut self, camera: &mut dyn Camera, player: &Player)
+	fn update (&mut self, player: &mut Player, _: player::Handle)
 	{
-		if let Some(focusChange) = &mut self.focusChange {
-			if focusChange.fc.update(player.lastFrameTime(), camera.parameters_mut()) {
-				self.focusChange = None;
-				player.dropContinuousRedrawRequest();
-			}
+		if let Some(focusChange) = &mut self.focusChange
+			&& focusChange.update(player.lastFrameTime(), player.camera.parameters_mut())
+		{
+			self.focusChange = None;
+			player.dropContinuousRedrawRequest();
 		}
 	}
 
-	fn input (&mut self, event: &InputEvent, camera: &mut dyn Camera, player: &'static Player) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::Handle) -> EventOutcome
 	{
 		// Match on relevant events
 		match event
@@ -84,7 +71,7 @@ impl CameraInteractor for OrbitInteractor
 				// as the camera usually recalculates internal state after a mutable borrow
 				if info.button(egui::PointerButton::Primary)
 				{
-					let p = camera.parameters_mut();
+					let p = player.camera.parameters_mut();
 					if info.modifiers.shift && self.fixUp.is_none() {
 						p.extrinsics.up = glm::rotate_vec3(
 							&p.extrinsics.up, math::deg2rad!(delta.y*-0.75*self.dragSensitivity),
@@ -121,7 +108,7 @@ impl CameraInteractor for OrbitInteractor
 				}
 				if info.button(egui::PointerButton::Secondary)
 				{
-					let p = camera.parameters_mut();
+					let p = player.camera.parameters_mut();
 					let speed = p.intrinsics.f * delta*1./192.*self.dragSensitivity;
 					let right = &glm::cross(&p.extrinsics.dir, &p.extrinsics.up);
 					let diff = speed.x*right + speed.y*p.extrinsics.up;
@@ -134,7 +121,7 @@ impl CameraInteractor for OrbitInteractor
 				}
 				if info.button(egui::PointerButton::Middle)
 				{
-					let p = camera.parameters_mut();
+					let p = player.camera.parameters_mut();
 					let movement = p.intrinsics.f*delta.y*1./96.*self.dragSensitivity * p.extrinsics.dir;
 					p.extrinsics.eye += movement;
 					if self.focusChange.is_some() {
@@ -154,10 +141,10 @@ impl CameraInteractor for OrbitInteractor
 			=> {
 				if info.amount.y != 0. {
 					if info.modifiers.alt {
-						let params = camera.parameters_mut();
+						let params = player.camera.parameters_mut();
 						params.adjustFovBy(info.amount.y, math::deg2rad!(5.));
 					} else {
-						let params = camera.parameters_mut();
+						let params = player.camera.parameters_mut();
 						params.adjustZoom(info.amount.y);
 					}
 					EventOutcome::HandledExclusively(/* redraw */true)
@@ -169,20 +156,15 @@ impl CameraInteractor for OrbitInteractor
 
 			InputEvent::DoubleClick(info)
 			=> {
-				let this = unsafe {
-					// SAFETY: `self` is the interactor, which is owned by the player and persists across frames. The
-					// `focusChange` closure captures `this` and stores into `self.focusChange`, which is valid because
-					// `self` outlives the async callback (the player keeps the interactor alive).
-					util::notsafe::extendLifetime_mut(self)
-				};
-				let mut focusChange = FocusChange::new(camera.parameters(), 0.5);
+				let mut focusChange = FocusChange::new(player.camera.parameters(), 0.5);
 				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
-					if let Some(point) = point {
-						tracing::debug!("Double-click to new focus: {:?}", point);
-						player.pushContinuousRedrawRequest();
-						focusChange.setNewFocus(point);
-						this.focusChange = Some(FocusChangeContext{fc: focusChange, player});
-					}
+					let Some(point) = point else {return};
+
+					tracing::debug!("Double-click to new focus: {:?}", point);
+					focusChange.setNewFocus(point);
+					let mut player = player::lock();
+					player.cameraInteractors.get_mut::<Self>(handle).focusChange = Some(focusChange);
+					player.pushContinuousRedrawRequest();
 				});
 				EventOutcome::HandledExclusively(/* redraw */true)
 			},
@@ -229,8 +211,8 @@ impl CameraInteractor for OrbitInteractor
 impl Drop for OrbitInteractor {
 	fn drop (&mut self) {
 		// Make sure we let go of our continuous redraw request
-		if let Some(focusChange) = &self.focusChange {
-			focusChange.player.dropContinuousRedrawRequest();
+		if let Some(_) = &self.focusChange {
+			player::lock().dropContinuousRedrawRequest();
 		}
 	}
 }

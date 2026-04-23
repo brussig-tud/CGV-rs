@@ -18,7 +18,7 @@
 //
 
 // The module implementing the Player
-mod player;
+pub mod player;
 pub use player::{Player, InputEvent, EventOutcome, RenderSetup, ManagedBindGroupLayouts}; // re-export
 
 // The module encapsulating all low-level graphics objects.
@@ -72,7 +72,7 @@ pub use egui_extras as egui_extras;
 // Imports
 //
 
-// Standart library
+// Standard library
 use std::any::Any;
 
 // Ctor library
@@ -167,7 +167,7 @@ pub enum GlobalPass
 	Stereo(StereoEye),
 
 	/// A custom pass, with a custom value.
-	Custom(Box<dyn Any>)
+	Custom(Box<dyn Any + Send>)
 }
 impl GlobalPass {
 	/// Construct a `GlobalPass::Stereo` value for the given eye index, with the [`StereoEye::max`] field set to a
@@ -190,20 +190,22 @@ impl GlobalPass {
 	}
 }
 
-/// T.b.d.
-pub struct GlobalPassDeclaration<'info> {
-	pub info: GlobalPassInfo<'info>,
-	pub completionCallback: Option<Box<dyn FnMut(&Context, u32)>>
-}
-
-/// T.b.d.
-pub struct GlobalPassInfo<'rs> {
+/// Configuration for a global render pass.
+pub struct GlobalPassInfo {
 	pub pass: GlobalPass,
-	pub renderState: &'rs RenderState,
+	/// Index of the associated [`RenderState`] within [`GlobalPasses::renderStates`].
+	pub renderState: u32,
 	pub clearColor: wgpu::Color,
-	pub depthClearValue: f32
+	pub depthClearValue: f32,
+	completionCallback: std::cell::Cell<Option<Box<dyn FnMut(&Context, u32) + Send>>>,
 }
 
+/// Global passes and their associated render state, defined by a camera.
+pub struct GlobalPasses<'cam>
+{
+	pub info: &'cam [GlobalPassInfo],
+	pub renderStates: &'cam [RenderState],
+}
 
 
 ///////
@@ -211,23 +213,17 @@ pub struct GlobalPassInfo<'rs> {
 // Traits
 //
 
+/// Base trait for different kinds of objects stored in the [`Player`], such as [applications](Application) and
+/// [camera interactors](view::CameraInteractor).
+/// To allow runtime downcasts, implementors must be `'static`, i.e. not have any lifetime parameters.
+pub trait Component: Any + Send {}
+impl<T> Component for T where T: Any + Send + ?Sized {}
+
 ////
 // Application
 
 /// An application that can be [run](Player::run) by a [`Player`].
-///
-/// ## A note on lifetime parameters
-///
-/// If your concrete application needs to introduce a lifetime parameter (e.g. because it defines a field that needs
-/// one), then the `&mut self` references provided by the `Application` trait methods ([`update`](Application::update),
-/// [`ui`](Application::ui) etc.) might end up with a lifetime that is too short to interact with your fields.
-/// `cgv_util`'s [`notsafe`](cgv_util::notsafe) module contains the unsafe functions
-/// [`extendLifetime`](util::notsafe::extendLifetime) and [`extendLifetime_mut`](util::notsafe::extendLifetime_mut) to
-/// deal with this problem. They allow you to extend the lifetime of `&mut self` to whatever lifetime your application
-/// instance is tagged with. These functions are unsafe because they only work correctly for this purpose if your
-/// `Application` even defines lifetime parameters. It is your responsibility to use them correctly such that no
-/// dangling references are created.
-pub trait Application
+pub trait Application: Component
 {
 	/// Report a short title for the application that can be displayed in the application tab bar of the [`Player`].
 	///
@@ -240,13 +236,12 @@ pub trait Application
 	///
 	/// # Arguments
 	///
-	/// * `context` – The graphics context.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
 	///
 	/// # Returns
 	///
 	/// `Ok` if successful, or some descriptive error detailing the failure if not.
-	fn preInit (&mut self, context: &Context, player: &'static Player) -> Result<()>;
+	fn preInit (&mut self, player: &mut Player) -> Result<()>;
 
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
@@ -260,34 +255,31 @@ pub trait Application
 	/// * `context` – The graphics context.
 	/// * `renderSetup` – The global render setup of the *CGV-rs* [`Player`].
 	/// * `globalPasses` – The list of global passes the application will need to render to.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
-	fn recreatePipelines (
-		&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &[&GlobalPassInfo], _: &'static Player
-	);
+	fn recreatePipelines (&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &GlobalPasses);
 
 	/// Called once on creation of the application, after it was asked to create its pipelines.
 	///
 	/// # Arguments
 	///
-	/// * `context` – The graphics context.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved actions.
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
 	///
 	/// # Returns
 	///
 	/// `Ok` if successful, or some descriptive error detailing the failure if not.
-	fn postInit (&mut self, context: &Context, player: &'static Player) -> Result<()>;
+	fn postInit (&mut self, player: &mut Player) -> Result<()>;
 
 	/// Called when there is user input that can be processed.
 	///
 	/// # Arguments
 	///
 	/// * `event` – The input event that the application should inspect and possibly act upon.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to input.
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
+	/// * `this` - Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &'static Player) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::Handle) -> EventOutcome;
 
 	/// Called when the main framebuffer was resized.
 	///
@@ -295,20 +287,20 @@ pub trait Application
 	///
 	/// * `context` – The graphics context, useful e.g. to re-create resources when they're affected by the resize.
 	/// * `newSize` – The new main framebuffer size, in pixels.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved reactions to resizing.
-	fn resize (&mut self, context: &Context, newSize: glm::UVec2, player: &'static Player);
+	fn resize (&mut self, context: &Context, newSize: glm::UVec2);
 
 	/// Called when the [player](Player) wants to prepare a new frame for rendering.
 	///
 	/// # Arguments
 	///
 	/// * `context` – The graphics context for rendering.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved updates.
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
+	/// * `this` - Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns
 	///
 	/// `true` when the application deems a scene redraw is required, `false` otherwise.
-	fn update (&mut self, context: &Context, player: &'static Player) -> bool;
+	fn update (&mut self, player: &mut Player, this: player::Handle) -> bool;
 
 	/// Called when the [player](Player) is about to ask the application to render its contribution to the scene within
 	/// a [global render pass](GlobalPassInfo).
@@ -346,8 +338,8 @@ pub trait Application
 	/// # Arguments
 	///
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved operations.
-	fn ui (&mut self, ui: &mut egui::Ui, player: &'static Player);
+	/// * `ps` – Part of the global *CGV-rs* [`Player`] instance.
+	fn ui (&mut self, ui: &mut egui::Ui, ps: &mut player::State);
 
 	/// Called when the [player](Player) asks the application to define its free/independent UI (e.g. floating windows
 	/// that should stay open even if the app loses player focus). Can be left unimplemented when not needed.
@@ -355,9 +347,9 @@ pub trait Application
 	/// # Arguments
 	///
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
-	/// * `player` – Access to the *CGV-rs* [`Player`] instance, useful for more involved operations.
+	/// * `ps` – Part of the global *CGV-rs* [`Player`] instance.
 	#[expect(unused_variables)]
-	fn freeUi (&mut self, ui: &mut egui::Ui, player: &'static Player) {}
+	fn freeUi (&mut self, ui: &mut egui::Ui, ps: &mut player::State) {}
 }
 
 
