@@ -338,8 +338,8 @@ pub trait Application: Component
 	/// # Arguments
 	///
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
-	/// * `ps` – Part of the global *CGV-rs* [`Player`] instance.
-	fn ui (&mut self, ui: &mut egui::Ui, ps: &mut player::State);
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
+	fn ui (&mut self, ui: &mut egui::Ui, ps: &mut Player);
 
 	/// Called when the [player](Player) asks the application to define its free/independent UI (e.g. floating windows
 	/// that should stay open even if the app loses player focus). Can be left unimplemented when not needed.
@@ -347,9 +347,9 @@ pub trait Application: Component
 	/// # Arguments
 	///
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
-	/// * `ps` – Part of the global *CGV-rs* [`Player`] instance.
+	/// * `player` – The global *CGV-rs* [`Player`] instance.
 	#[expect(unused_variables)]
-	fn freeUi (&mut self, ui: &mut egui::Ui, ps: &mut player::State) {}
+	fn freeUi (&mut self, ui: &mut egui::Ui, ps: &mut Player) {}
 }
 
 

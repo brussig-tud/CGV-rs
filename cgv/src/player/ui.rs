@@ -114,11 +114,12 @@ pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Respon
 			{
 				0 => self::player(player, ui),
 				1 => self::view(player, ui),
-				2 => if let Some(app) = player.applications.active_mut() {
+				2 => if let Some(mut app) = player.applications.takeActive() {
 					// Application UI
 					ui.centered_and_justified(|ui| ui.heading(app.title()));
 					ui.separator();
-					app.ui(ui, &mut player.state);
+					app.ui(ui, player);
+					player.applications.putActive(app);
 				},
 
 				_ => {

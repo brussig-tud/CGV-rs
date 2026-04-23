@@ -453,7 +453,7 @@ impl cgv::Application for ExampleApplication
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::player::State)
+	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Keep track of whether we need to redraw our scene contents
 		let mut redraw = false;

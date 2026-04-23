@@ -1164,8 +1164,9 @@ impl eframe::App for StaticImpls
 		let sidepanelResponse = ui::sidepanel(player, ui);
 
 		// Draw any free-floating UIs
-		if let Some(app) = player.applications.active_mut() {
-			app.freeUi(ui, &mut player.state);
+		if let Some(mut app) = player.applications.takeActive() {
+			app.freeUi(ui, player);
+			player.applications.putActive(app);
 		}
 
 
