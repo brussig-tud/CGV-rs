@@ -52,11 +52,11 @@ impl SinglePrimitiveField
 		self.data.len()
 	}
 
-	fn iter (&self) -> StridedIter<u32> {
+	fn iter (&self) -> StridedCopyIter<'_, u32> {
 		unsafe {
 			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
 			// and validity of the fields the iterator accesses is guaranteed.
-			stridedIter!(self.data, 0, u32)
+			stridedCopyIter!(self.data, 0, u32)
 		}
 	}
 }
@@ -119,11 +119,11 @@ impl ThreeFields<'_>
 		}
 	}
 
-	fn numbers (&self) -> StridedIter<u32> {
+	fn numbers (&self) -> StridedCopyIter<'_, u32> {
 		unsafe {
 			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
 			// and validity of the fields the iterator accesses is guaranteed.
-			stridedIter!(self.data, 0, u32)
+			stridedCopyIter!(self.data, 0, u32)
 		}
 	}
 
@@ -135,11 +135,11 @@ impl ThreeFields<'_>
 		}
 	}
 
-	fn references (&self) -> StridedIter<&str> {
+	fn references (&self) -> StridedCopyIter<'_, &str> {
 		unsafe {
 			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
 			// and validity of the fields the iterator accesses is guaranteed.
-			stridedIter!(self.data, 2, &str)
+			stridedCopyIter!(self.data, 2, &str)
 		}
 	}
 }
@@ -176,11 +176,11 @@ impl ThreeFieldsStructured<'_>
 		}
 	}
 
-	fn numbers (&self) -> StridedIter<u32> {
+	fn numbers (&self) -> StridedCopyIter<'_, u32> {
 		unsafe {
 			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
 			// and validity of the fields the iterator accesses is guaranteed.
-			stridedIter!(self.data, number, u32)
+			stridedCopyIter!(self.data, number, u32)
 		}
 	}
 
@@ -192,11 +192,11 @@ impl ThreeFieldsStructured<'_>
 		}
 	}
 
-	fn references (&self) -> StridedIter<&str> {
+	fn references (&self) -> StridedCopyIter<'_, &str> {
 		unsafe {
 			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
 			// and validity of the fields the iterator accesses is guaranteed.
-			stridedIter!(self.data, reference, &str)
+			stridedCopyIter!(self.data, reference, &str)
 		}
 	}
 }

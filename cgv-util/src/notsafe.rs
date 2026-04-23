@@ -39,9 +39,7 @@ use std::marker::PhantomData;
 pub unsafe fn extendLifetime<'out, Object> (object: &Object) -> &'out Object
 	where Object: 'out + ?Sized
 {
-	unsafe {
-		&*(object as *const Object)
-	}
+	unsafe { &*(object as *const Object) }
 }
 
 /// Extend the lifetime of a mutable reference as required by the caller.
@@ -69,9 +67,7 @@ pub unsafe fn extendLifetime<'out, Object> (object: &Object) -> &'out Object
 pub unsafe fn extendLifetime_mut<'out, Object> (object: &mut Object) -> &'out mut Object
 	where Object: 'out + ?Sized
 {
-	unsafe {
-		&mut *(object as *mut Object)
-	}
+	unsafe { &mut *(object as *mut Object) }
 }
 
 /// Creates an (invalid if derefenced) reference to an object of the specified type.
@@ -126,8 +122,8 @@ pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
 ////
 // StridedIter
 
-/// An efficient iterator that reads values of type `T` at a fixed byte stride from a contiguous buffer. This enables
-/// easy iteration over individual attributes in interleaved ("array of structs") data layouts without copying.
+/// An efficient iterator that reads values of type `T: Copy` at a fixed byte stride from a contiguous buffer. This
+/// enables easy iteration over individual attributes in interleaved ("array of structs") data layouts.
 ///
 /// # Safety
 ///
@@ -135,13 +131,13 @@ pub unsafe fn offsetStr (source: &str, offset: isize) -> &str {
 /// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
 /// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
 ///   allocation.
-pub struct StridedIter<T: Copy> {
+pub struct StridedCopyIter<'data, T: Copy> {
 	ptr: *const u8,
 	stride: usize,
 	remaining: usize,
-	_phantom: PhantomData<T>,
+	_phantom: PhantomData<&'data T>,
 }
-impl<T: Copy> StridedIter<T>
+impl<T: Copy> StridedCopyIter<'_, T>
 {
 	/// Create a new strided iterator.
 	///
@@ -153,13 +149,14 @@ impl<T: Copy> StridedIter<T>
 	///
 	/// # Safety
 	///
-	/// See [struct-level](StridedIter) safety documentation.
+	/// See [struct-level](StridedCopyIter) safety documentation.
 	#[inline(always)]
 	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
 		ptr: ptr as *const u8, stride, remaining: len, _phantom: PhantomData
 	}}
 }
-impl<T: Copy> Iterator for StridedIter<T> {
+impl<T: Copy> Iterator for StridedCopyIter<'_, T>
+{
 	type Item = T;
 
 	fn next (&mut self) -> Option<T>
@@ -167,8 +164,10 @@ impl<T: Copy> Iterator for StridedIter<T> {
 		if self.remaining == 0 {
 			return None;
 		}
-		// SAFETY: guaranteed by caller (see struct-level docs)
-		let value = unsafe { *(self.ptr as *const T) };
+		let value = unsafe {
+			// SAFETY: guaranteed by caller (see struct-level docs)
+			*(self.ptr as *const T)
+		};
 		self.ptr = unsafe { self.ptr.add(self.stride) };
 		self.remaining -= 1;
 		Some(value)
@@ -178,15 +177,15 @@ impl<T: Copy> Iterator for StridedIter<T> {
 		(self.remaining, Some(self.remaining))
 	}
 }
-impl<T: Copy> ExactSizeIterator for StridedIter<T> {}
+impl<T: Copy> ExactSizeIterator for StridedCopyIter<'_, T> {}
 
-/// Helper to construct a [`StridedIter`] over the same field in a series of structured data records (aka. interleaved
-/// data).
+/// Helper to construct a [`StridedCopyIter`] over the same field in a series of structured data records (aka.
+/// interleaved data).
 ///
 /// # Safety
 ///
 /// This macro internally uses raw pointer manipulation, so it can only be used inside `unsafe` blocks. The required
-/// invariants are documented in the struct-level documentation of [StridedIter].
+/// invariants are documented in the struct-level documentation of [StridedCopyIter].
 ///
 /// # Arguments
 ///
@@ -194,24 +193,23 @@ impl<T: Copy> ExactSizeIterator for StridedIter<T> {}
 /// * `field` – field of a data record (e.g. tuple index `0`, `1`, or a named struct field)
 /// * `T` – the type of the field
 #[macro_export]
-macro_rules! stridedIter
+macro_rules! stridedCopyIter
 {
 	($data:expr, $field:tt, $T:ty) => {{
 		let base = std::ptr::addr_of!((*$data.as_ptr()).$field);
-		cgv_util::notsafe::StridedIter::<$T>::new(
+		cgv_util::notsafe::StridedCopyIter::<$T>::new(
 			base, size_of_val(&*$data.as_ptr()), $data.len(),
 		)
 	}};
 }
-pub use crate::stridedIter;
+pub use crate::stridedCopyIter;
 
 
 ////
 // StridedRefIter
 
 /// An efficient iterator that references values of type `T` at a fixed byte stride from a contiguous buffer. This
-/// enables easy by-reference iteration over individual attributes in interleaved ("array of structs") data layouts
-/// without copying.
+/// enables easy by-reference iteration over individual attributes in interleaved ("array of structs") data layouts.
 ///
 /// # Safety
 ///
@@ -219,11 +217,11 @@ pub use crate::stridedIter;
 /// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
 /// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
 ///   allocation.
-pub struct StridedRefIter<'outer, T: Sized+'outer> {
+pub struct StridedRefIter<'data, T: Sized+'data> {
 	ptr: *const u8,
 	stride: usize,
 	remaining: usize,
-	_phantom: PhantomData<&'outer T>,
+	_phantom: PhantomData<&'data T>,
 }
 impl<T: Sized> StridedRefIter<'_, T>
 {
