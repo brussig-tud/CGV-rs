@@ -5,7 +5,7 @@
 //
 
 // Local imports
-use crate::{self as cgv, renderer::spheres::*};
+use crate::{self as cgv, renderer::data::host, renderer::spheres::*};
 
 
 
@@ -29,7 +29,7 @@ pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
 /// A [`renderer::Data`]-compliant GPU-side storage of varying sphere attributes.
 pub struct Data {}
 impl Data {
-	pub fn new<D: renderer::Data> (data: D) -> Self {
+	pub fn new<D: HostData> (data: D) -> Self {
 		todo!()
 	}
 
@@ -37,7 +37,7 @@ impl Data {
 		Self {}
 	}
 }
-impl renderer::Data for Data
+impl HostData for Data
 {
 	type PosIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3>;
 
@@ -53,8 +53,8 @@ impl renderer::Data for Data
 		todo!()
 	}
 }
-impl renderer::data::Interleaved for Data {}
-impl renderer::data::CanHaveRadii for Data
+impl host::Interleaved for Data {}
+impl host::CanHaveRadii for Data
 {
 	type RadiusIterator<'data> = util::notsafe::StridedRefIter<'data, f32>;
 
@@ -70,7 +70,7 @@ impl renderer::data::CanHaveRadii for Data
 		todo!()
 	}
 }
-impl renderer::data::CanHaveColors for Data
+impl host::CanHaveColors for Data
 {
 	type ColorIterator<'data> = util::notsafe::StridedRefIter<'data, cgv::RGBA>;
 
@@ -86,7 +86,7 @@ impl renderer::data::CanHaveColors for Data
 		todo!()
 	}
 }
-impl<D: renderer::Data> From<&D> for Data {
+impl<D: HostData> From<&D> for Data {
 	fn from (other: &D) -> Self {
 		todo!()
 	}

@@ -78,7 +78,7 @@ impl Renderer for Spheres
 {
 	type GpuState = wgpu::RenderPipeline;
 
-	fn setData<Data: renderer::Data> (&mut self, data: &Data) {
+	fn setData<Data: HostData> (&mut self, data: &Data) {
         self.data.replace(data.into());
     }
 

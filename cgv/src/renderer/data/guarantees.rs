@@ -11,7 +11,7 @@ use std::ops::{Deref, DerefMut};
 use glm;
 
 // Local imports
-use crate::{self as cgv, *, renderer::data::*};
+use crate::{self as cgv, *, renderer::{*, data::*}};
 
 
 
@@ -46,7 +46,7 @@ impl<T> RequireNormals<false> for T {
 	#[inline(always)]
 	fn assertNormals (&self) {}
 }
-impl<T: CanHaveNormals> RequireNormals<true> for T {
+impl<T: host::CanHaveNormals> RequireNormals<true> for T {
 	#[inline(always)]
 	fn assertNormals (&self) {
 		assert!(self.hasNormals(), "to-be-wrapped data must contain normals!");
@@ -61,7 +61,7 @@ impl<T> RequireTangents<false> for T {
 	#[inline(always)]
 	fn assertTangents (&self) {}
 }
-impl<T: CanHaveTangents> RequireTangents<true> for T {
+impl<T: host::CanHaveTangents> RequireTangents<true> for T {
 	#[inline(always)]
 	fn assertTangents (&self) {
 		assert!(self.hasTangents(), "to-be-wrapped data must contain tangents!");
@@ -76,7 +76,7 @@ impl<T> RequireRadii<false> for T {
 	#[inline(always)]
 	fn assertRadii (&self) {}
 }
-impl<T: CanHaveRadii> RequireRadii<true> for T {
+impl<T: host::CanHaveRadii> RequireRadii<true> for T {
 	#[inline(always)]
 	fn assertRadii (&self) {
 		assert!(self.hasRadii(), "to-be-wrapped data must contain radii!");
@@ -92,7 +92,7 @@ impl<T> RequireRadiusDerivs<false> for T {
 	#[inline(always)]
 	fn assertRadiusDerivs (&self) {}
 }
-impl<T: CanHaveRadiusDerivs> RequireRadiusDerivs<true> for T {
+impl<T: host::CanHaveRadiusDerivs> RequireRadiusDerivs<true> for T {
 	#[inline(always)]
 	fn assertRadiusDerivs (&self) {
 		assert!(self.hasRadii(), "to-be-wrapped data with radius derivatives must also contain radii!");
@@ -109,7 +109,7 @@ impl<T> RequireOrientations<false> for T {
 	#[inline(always)]
 	fn assertOrientations (&self) {}
 }
-impl<T: CanHaveOrientations> RequireOrientations<true> for T {
+impl<T: host::CanHaveOrientations> RequireOrientations<true> for T {
 	#[inline(always)]
 	fn assertOrientations (&self) {
 		assert!(self.hasOrientations(), "to-be-wrapped data must contain orientations!");
@@ -125,7 +125,7 @@ impl<T> RequireScalings<false> for T {
 	#[inline(always)]
 	fn assertScalings (&self) {}
 }
-impl<T: CanHaveScalings> RequireScalings<true> for T {
+impl<T: host::CanHaveScalings> RequireScalings<true> for T {
 	#[inline(always)]
 	fn assertScalings (&self) {
 		assert!(self.hasScalings(), "to-be-wrapped data must contain scaling vectors!");
@@ -140,7 +140,7 @@ impl<T> RequireColors<false> for T {
 	#[inline(always)]
 	fn assertColors (&self) {}
 }
-impl<T: CanHaveColors> RequireColors<true> for T {
+impl<T: host::CanHaveColors> RequireColors<true> for T {
 	#[inline(always)]
 	fn assertColors (&self) {
 		assert!(self.hasColors(), "to-be-wrapped data must contain colors!");
@@ -160,19 +160,19 @@ impl<T: CanHaveColors> RequireColors<true> for T {
 /// Wrapper to turn runtime presence of the specified attributes in some [`renderer::Data`] into a compile-time
 /// guarantee. Panics during construction if the wrappee does not actually have the asked-for attributes.
 pub struct GuaranteeAttributes<
-	Wrappee: Data, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 >(Wrappee);
 
 impl<
-	Wrappee: Data, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >
-	where Wrappee: Data + RequireNormals<NORMALS>+RequireTangents<TANGENTS>+RequireRadii<RADII>
-	                    + RequireRadiusDerivs<RADIUS_DERIVS>+RequireOrientations<ORIENTATIONS>
-	                    + RequireScalings<SCALINGS>+RequireColors<COLORS>
+	where Wrappee: HostData + RequireNormals<NORMALS>+RequireTangents<TANGENTS>+RequireRadii<RADII>
+	                        + RequireRadiusDerivs<RADIUS_DERIVS>+RequireOrientations<ORIENTATIONS>
+	                        + RequireScalings<SCALINGS>+RequireColors<COLORS>
 {
 	/// Wraps a given instance of render data that with a compile-time guarantee that the attributes the wrapper is
 	/// instantiated with are present.
@@ -202,9 +202,9 @@ impl<
 	}
 }
 impl<
-	Wrappee: Data, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> Data for GuaranteeAttributes<
+> HostData for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type PosIterator<'data> = Wrappee::PosIterator<'data> where Wrappee: 'data;
@@ -217,9 +217,9 @@ impl<
 	fn pos (&self, index: u32) -> &glm::Vec3 { self.0.pos(index) }
 }
 impl<
-	Wrappee: Indexed, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::Indexed, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> Indexed for GuaranteeAttributes<
+> host::Indexed for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type IndexIterator<'data> = Wrappee::IndexIterator<'data> where Wrappee: 'data;
@@ -232,23 +232,23 @@ impl<
 	fn index (&self, index: u32) -> u32 { self.0.index(index) }
 }
 impl<
-	Wrappee: Interleaved, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::Interleaved, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> Interleaved for GuaranteeAttributes<
+> host::Interleaved for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: NonInterleaved, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> NonInterleaved for GuaranteeAttributes<
+	Wrappee: host::NonInterleaved, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+> host::NonInterleaved for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 
 // Guarantee normals
 impl<
-	Wrappee: CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> CanHaveNormals for GuaranteeAttributes<
+> host::CanHaveNormals for GuaranteeAttributes<
 	Wrappee, true, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type NormalIterator<'data> = Wrappee::NormalIterator<'data> where Wrappee: 'data;
@@ -261,15 +261,15 @@ impl<
 	fn normal (&self, index: u32) -> &glm::Vec3 { self.0.normal(index) }
 }
 impl<
-	Wrappee: CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> HasNormals for GuaranteeAttributes<
+> host::HasNormals for GuaranteeAttributes<
 	Wrappee, true, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> CanHaveNormals for GuaranteeAttributes<
+> host::CanHaveNormals for GuaranteeAttributes<
 	Wrappee, false, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type NormalIterator<'data> = Wrappee::NormalIterator<'data> where Wrappee: 'data;
@@ -282,16 +282,17 @@ impl<
 	fn normal (&self, index: u32) -> &glm::Vec3 { self.0.normal(index) }
 }
 impl<
-	Wrappee: HasNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> HasNormals for GuaranteeAttributes<
+	Wrappee: host::HasNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+> host::HasNormals for GuaranteeAttributes<
 	Wrappee, false, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 
 // Guarantee tangents
 impl<
-	Wrappee: CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> CanHaveTangents for GuaranteeAttributes<
+> host::CanHaveTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, true, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type TangentIterator<'data> = Wrappee::TangentIterator<'data> where Wrappee: 'data;
@@ -304,15 +305,15 @@ impl<
 	fn tangent (&self, index: u32) -> &glm::Vec3 { self.0.tangent(index) }
 }
 impl<
-	Wrappee: CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> HasTangents for GuaranteeAttributes<
+> host::HasTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, true, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> CanHaveTangents for GuaranteeAttributes<
+> host::CanHaveTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, false, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type TangentIterator<'data> = Wrappee::TangentIterator<'data> where Wrappee: 'data;
@@ -325,17 +326,17 @@ impl<
 	fn tangent (&self, index: u32) -> &glm::Vec3 { self.0.tangent(index) }
 }
 impl<
-	Wrappee: HasTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::HasTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> HasTangents for GuaranteeAttributes<
+> host::HasTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, false, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 
 // Guarantee radii/radius derivatives (needs to be treated together to handle Derivs => Radii requirement)
 impl<
-	Wrappee: CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> CanHaveRadii for GuaranteeAttributes<
+> host::CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
@@ -348,15 +349,15 @@ impl<
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
 impl<
-	Wrappee: CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
-> HasRadii for GuaranteeAttributes<
+> host::HasRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
 	const SCALINGS: bool, const COLORS: bool
-> CanHaveRadii for GuaranteeAttributes<
+> host::CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, true, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
@@ -369,15 +370,15 @@ impl<
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
 impl<
-	Wrappee: CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
 	const SCALINGS: bool, const COLORS: bool
-> HasRadii for GuaranteeAttributes<
+> host::HasRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, true, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool, const SCALINGS: bool,
-	const COLORS: bool
-> CanHaveRadii for GuaranteeAttributes<
+	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
+> host::CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
@@ -390,15 +391,15 @@ impl<
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
 impl<
-	Wrappee: HasRadii, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool, const SCALINGS: bool,
+	Wrappee: host::HasRadii, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool, const SCALINGS: bool,
 	const COLORS: bool
-> HasRadii for GuaranteeAttributes<
+> host::HasRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
 	const SCALINGS: bool, const COLORS: bool
-> CanHaveRadiusDerivs for GuaranteeAttributes<
+> host::CanHaveRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, true, ORIENTATIONS, SCALINGS, COLORS
 >{
 	#[inline(always)]
@@ -409,15 +410,15 @@ impl<
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
 	const SCALINGS: bool, const COLORS: bool
-> HasRadiusDerivs for GuaranteeAttributes<
+> host::HasRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, true, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
 	const SCALINGS: bool, const COLORS: bool
-> CanHaveRadiusDerivs for GuaranteeAttributes<
+> host::CanHaveRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, false, ORIENTATIONS, SCALINGS, COLORS
 >{
 	#[inline(always)]
@@ -428,15 +429,15 @@ impl<
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool, const SCALINGS: bool,
-	const COLORS: bool
-> HasRadiusDerivs for GuaranteeAttributes<
+	Wrappee: host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
+> host::HasRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, false, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
 	const SCALINGS: bool, const COLORS: bool
-> CanHaveRadiusDerivs for GuaranteeAttributes<
+> host::CanHaveRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
 >{
 	#[inline(always)]
@@ -447,17 +448,17 @@ impl<
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool, const SCALINGS: bool,
-	const COLORS: bool
-> HasRadiusDerivs for GuaranteeAttributes<
+	Wrappee: host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
+> host::HasRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
 >{}
 
 // Guarantee orientations
 impl<
-	Wrappee: CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	Wrappee: host::CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
 	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
-> CanHaveOrientations for GuaranteeAttributes<
+> host::CanHaveOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, true, SCALINGS, COLORS
 >{
 	type OrientationIterator<'data> = Wrappee::OrientationIterator<'data> where Wrappee: 'data;
@@ -470,22 +471,17 @@ impl<
 	fn orientation (&self, index: u32) -> &glm::Quat { self.0.orientation(index) }
 }
 impl<
-	Wrappee: CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	Wrappee: host::CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
 	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
-> HasOrientations for GuaranteeAttributes<
+> host::HasOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, true, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: CanHaveOrientations,
-	const NORMALS: bool,
-	const TANGENTS: bool,
-	const RADII: bool,
-	const RADIUS_DERIVS: bool,
-	const SCALINGS: bool,
-	const COLORS: bool
-> CanHaveOrientations for
-	GuaranteeAttributes<Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS>
-{
+	Wrappee: host::CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
+> host::CanHaveOrientations for GuaranteeAttributes<
+	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS
+>{
 	type OrientationIterator<'data> = Wrappee::OrientationIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
@@ -496,22 +492,17 @@ impl<
 	fn orientation (&self, index: u32) -> &glm::Quat { self.0.orientation(index) }
 }
 impl<
-	Wrappee: HasOrientations,
-	const NORMALS: bool,
-	const TANGENTS: bool,
-	const RADII: bool,
-	const RADIUS_DERIVS: bool,
-	const SCALINGS: bool,
-	const COLORS: bool
-> HasOrientations for
-	GuaranteeAttributes<Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS>
-{}
+	Wrappee: host::HasOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
+> host::HasOrientations for GuaranteeAttributes<
+	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS
+>{}
 
 // Guarantee scaling vectors
 impl<
-	Wrappee: CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const COLORS: bool
-> CanHaveScalings for GuaranteeAttributes<
+	Wrappee: host::CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
+> host::CanHaveScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, true, COLORS
 >{
 	type ScaleIterator<'data> = Wrappee::ScaleIterator<'data> where Wrappee: 'data;
@@ -524,15 +515,15 @@ impl<
 	fn scaling (&self, index: u32) -> &glm::Vec3 { self.0.scaling(index) }
 }
 impl<
-	Wrappee: CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const COLORS: bool
-> HasScalings for GuaranteeAttributes<
+	Wrappee: host::CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
+> host::HasScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, true, COLORS
 >{}
 impl<
-	Wrappee: CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const COLORS: bool
-> CanHaveScalings for GuaranteeAttributes<
+	Wrappee: host::CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
+> host::CanHaveScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, false, COLORS
 >{
 	type ScaleIterator<'data> = Wrappee::ScaleIterator<'data> where Wrappee: 'data;
@@ -545,17 +536,17 @@ impl<
 	fn scaling (&self, index: u32) -> &glm::Vec3 { self.0.scaling(index) }
 }
 impl<
-	Wrappee: HasScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::HasScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const COLORS: bool
-> HasScalings for GuaranteeAttributes<
+> host::HasScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, false, COLORS
 >{}
 
 // Guarantee colors
 impl<
-	Wrappee: CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool
-> CanHaveColors for	GuaranteeAttributes<
+	Wrappee: host::CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
+> host::CanHaveColors for	GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, true
 >{
 	type ColorIterator<'data> = Wrappee::ColorIterator<'data> where Wrappee: 'data;
@@ -568,15 +559,15 @@ impl<
 	fn color (&self, index: u32) -> &cgv::RGBA { self.0.color(index) }
 }
 impl<
-	Wrappee: CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool
-> HasColors for GuaranteeAttributes<
+	Wrappee: host::CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
+> host::HasColors for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, true
 >{}
 impl<
-	Wrappee: CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool
-> CanHaveColors for GuaranteeAttributes<
+	Wrappee: host::CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
+> host::CanHaveColors for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, false
 >{
 	type ColorIterator<'data> = Wrappee::ColorIterator<'data> where Wrappee: 'data;
@@ -589,15 +580,15 @@ impl<
 	fn color (&self, index: u32) -> &cgv::RGBA { self.0.color(index) }
 }
 impl<
-	Wrappee: HasColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: host::HasColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool
-> HasColors for	GuaranteeAttributes<
+> host::HasColors for	GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, false
 >{}
 
 // Add ability to Deref (and DerefMut) to wrapped type
 impl<
-	Wrappee: Data, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > Deref for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
@@ -608,7 +599,7 @@ impl<
 	fn deref (&self) -> &Self::Target { &self.0 }
 }
 impl<
-	Wrappee: Data, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > DerefMut for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS

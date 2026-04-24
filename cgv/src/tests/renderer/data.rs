@@ -7,7 +7,7 @@
 use std::{marker::PhantomData, panic::catch_unwind};
 
 // Local imports
-use crate::{self as cgv, *, renderer::data::*};
+use crate::{self as cgv, *, renderer::{*, data::{*, host::*}}};
 
 
 
@@ -69,7 +69,7 @@ impl MockData
 	}
 }
 
-impl Data for MockData
+impl HostData for MockData
 {
 	type PosIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
@@ -77,7 +77,7 @@ impl Data for MockData
 	fn positions (&self) -> Self::PosIterator<'_> { self.positions.iter() }
 	fn pos (&self, index: u32) -> &glm::Vec3 { &self.positions[index as usize] }
 }
-impl Indexed for MockData
+impl host::Indexed for MockData
 {
 	type IndexIterator<'data> = std::slice::Iter<'data, u32>;
 
@@ -85,9 +85,9 @@ impl Indexed for MockData
 	fn indices (&self) -> Self::IndexIterator<'_> { self.indices.iter() }
 	fn index (&self, index: u32) -> u32 { self.indices[index as usize] }
 }
-impl Interleaved for MockData {}
+impl host::Interleaved for MockData {}
 
-impl CanHaveNormals for MockData
+impl host::CanHaveNormals for MockData
 {
 	type NormalIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
@@ -99,7 +99,7 @@ impl CanHaveNormals for MockData
 		&self.normals.as_ref().expect("should have normals")[index as usize]
 	}
 }
-impl CanHaveTangents for MockData
+impl host::CanHaveTangents for MockData
 {
 	type TangentIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
@@ -111,7 +111,7 @@ impl CanHaveTangents for MockData
 		&self.tangents.as_ref().expect("should have tangents")[index as usize]
 	}
 }
-impl CanHaveRadii for MockData
+impl host::CanHaveRadii for MockData
 {
 	type RadiusIterator<'data> = std::slice::Iter<'data, f32>;
 
@@ -123,7 +123,7 @@ impl CanHaveRadii for MockData
 		self.radii.as_ref().expect("should have radii")[index as usize]
 	}
 }
-impl CanHaveRadiusDerivs for MockData
+impl host::CanHaveRadiusDerivs for MockData
 {
 	fn hasRadiusDerivs (&self) -> bool { self.radiusDerivs.is_some() }
 	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> {
@@ -133,7 +133,7 @@ impl CanHaveRadiusDerivs for MockData
 		self.radiusDerivs.as_ref().expect("should have radius derivatives")[index as usize]
 	}
 }
-impl CanHaveOrientations for MockData
+impl host::CanHaveOrientations for MockData
 {
 	type OrientationIterator<'data> = std::slice::Iter<'data, glm::Quat>;
 
@@ -145,7 +145,7 @@ impl CanHaveOrientations for MockData
 		&self.orientations.as_ref().expect("should have orientations")[index as usize]
 	}
 }
-impl CanHaveScalings for MockData
+impl host::CanHaveScalings for MockData
 {
 	type ScaleIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
 
@@ -157,7 +157,7 @@ impl CanHaveScalings for MockData
 		&self.scalings.as_ref().expect("should have scaling vectors")[index as usize]
 	}
 }
-impl CanHaveColors for MockData
+impl host::CanHaveColors for MockData
 {
 	type ColorIterator<'data> = std::slice::Iter<'data, cgv::RGBA>;
 
@@ -178,28 +178,28 @@ impl CanHaveColors for MockData
 //
 
 /// For testing at compile time that the generic argument is a type that represents indexed render data.
-fn staticAssertIndexed<T: Indexed> () {}
+fn staticAssertIndexed<T: host::Indexed> () {}
 
 /// For testing at compile time that the generic argument is a type that represents interleaved render data.
-fn staticAssertInterleaved<T: Interleaved> () {}
+fn staticAssertInterleaved<T: host::Interleaved> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees normals.
-fn staticAssertHasNormals<T: HasNormals> () {}
+fn staticAssertHasNormals<T: host::HasNormals> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees tangents.
-fn staticAssertHasTangents<T: HasTangents> () {}
+fn staticAssertHasTangents<T: host::HasTangents> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees radii.
-fn staticAssertHasRadii<T: HasRadii> () {}
+fn staticAssertHasRadii<T: host::HasRadii> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees radius derivatives.
-fn staticAssertHasRadiusDerivs<T: HasRadiusDerivs> () {}
+fn staticAssertHasRadiusDerivs<T: host::HasRadiusDerivs> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees orientations.
-fn staticAssertHasOrientations<T: HasOrientations> () {}
+fn staticAssertHasOrientations<T: host::HasOrientations> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees colors.
-fn staticAssertHasColors<T: HasColors> () {}
+fn staticAssertHasColors<T: host::HasColors> () {}
 
 
 

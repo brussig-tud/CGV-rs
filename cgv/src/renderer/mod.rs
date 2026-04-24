@@ -10,17 +10,18 @@ pub use spheres::Spheres; // re-export
 
 /// Module defining the render data model.
 pub mod data;
-pub use data::Data; // re-export
+pub use data::{host::Data as HostData, gpu::Data as GpuData}; // re-export
 
 /// The module prelude.
 pub mod prelude {
 	pub use super::{
-		Data, renderer::data::Interleaved, renderer::data::NonInterleaved, renderer::data::Indexed,
-		renderer::data::CanHaveNormals, renderer::data::HasNormals, renderer::data::CanHaveTangents,
-		renderer::data::HasTangents, renderer::data::CanHaveRadii, renderer::data::HasRadii,
-		renderer::data::CanHaveRadiusDerivs, renderer::data::HasRadiusDerivs, renderer::data::CanHaveOrientations,
-		renderer::data::HasOrientations, renderer::data::CanHaveScalings, renderer::data::HasScalings,
-		renderer::data::CanHaveColors, renderer::data::HasColors
+		HostData, renderer::data::host::Interleaved, renderer::data::host::NonInterleaved,
+		renderer::data::host::Indexed, renderer::data::host::CanHaveNormals, renderer::data::host::HasNormals,
+		renderer::data::host::CanHaveTangents, renderer::data::host::HasTangents, renderer::data::host::CanHaveRadii,
+		renderer::data::host::HasRadii, renderer::data::host::CanHaveRadiusDerivs,
+		renderer::data::host::HasRadiusDerivs, renderer::data::host::CanHaveOrientations,
+		renderer::data::host::HasOrientations, renderer::data::host::CanHaveScalings, renderer::data::host::HasScalings,
+		renderer::data::host::CanHaveColors, renderer::data::host::HasColors
 	};
 }
 
@@ -55,7 +56,7 @@ pub trait Renderer
 	type GpuState: GpuState;
 
 	///
-	fn setData<Data: renderer::Data> (&mut self, data: &Data);
+	fn setData<Data: HostData> (&mut self, data: &Data);
 
 	///
 	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState;
