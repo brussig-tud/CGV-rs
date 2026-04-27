@@ -245,7 +245,7 @@ pub trait Application: Component
 
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
-	/// their pipelines accordingly. The `Player`] guarantees that this will be called at least once before the
+	/// their pipelines accordingly. The [`Player`] guarantees that this will be called at least once before the
 	/// application is asked to render its contribution to the scene.
 	///
 	/// **ToDo:** Make the framework detect compatible changes and only notify for incompatible global pass changes

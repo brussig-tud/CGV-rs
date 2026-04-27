@@ -190,40 +190,39 @@ impl cgv::Application for RenderersDemo
 		"Renderers Demo"
 	}
 
-	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
+	fn preInit (&mut self, _: &mut cgv::Player) -> cgv::Result<()> {
 		// We don't need to perform any pre-initialization
 		Ok(())
 	}
 
 	fn recreatePipelines (
-		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
-		_: &cgv::Player
+		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
 	){
 		/* Nothing to do here (yet) */
 	}
 
-	fn postInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()>
+	fn postInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>
 	{
 		// Tracing
 		tracing::info!("Positioning initial camera");
 
 		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
-		let cam = player.activeCamera_mut().parameters_mut();
+		let cam = player.camera.parameters_mut();
 		cam.intrinsics.f = 2.;
 		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
 		Ok(())
 	}
 
-	fn input (&mut self, _: &cgv::InputEvent, _: &cgv::Player) -> cgv::EventOutcome {
+	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::Handle) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2, _: &cgv::Player) {
+	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2) {
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (&mut self, _: &cgv::Context, _: &cgv::Player) -> bool {
+	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::Handle) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}
@@ -242,7 +241,7 @@ impl cgv::Application for RenderersDemo
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
+	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Keep track of whether we need to redraw our scene contents
 		let mut redraw = false;
@@ -282,5 +281,5 @@ impl cgv::Application for RenderersDemo
 /// The application entry point.
 pub fn main () -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our ExampleApplication
-	cgv::Player::run(createRenderersDemo)
+	cgv::Player::run(Box::new(createRenderersDemo))
 }

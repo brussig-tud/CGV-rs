@@ -397,7 +397,7 @@ pub struct State
 	pub egui: egui::Context,
 	pub context: Context,
 
-	pub(crate) renderSetup: RenderSetup,
+	pub renderSetup: RenderSetup,
 	pub(crate) defaultClearColor: egui::Color32,
 	prevFramebufferResolution: glm::UVec2,
 
