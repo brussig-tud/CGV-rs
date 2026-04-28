@@ -142,9 +142,9 @@ impl<T: Copy> StridedCopyIter<'_, T>
 	///
 	/// # Safety
 	///
-	/// Users must ensure that:
-	/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
-	/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
+	/// Clients must ensure that:
+	/// * The initial `ptr` points to a valid, aligned `T` within an allocation alive for the lifetime of the iterator.
+	/// * Every address `ptr + i*stride` for `i` in `0..len` also points to a valid, aligned `T` within the same
 	///   allocation.
 	#[inline(always)]
 	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
@@ -181,7 +181,7 @@ impl<T: Copy> ExactSizeIterator for StridedCopyIter<'_, T> {}
 /// # Safety
 ///
 /// This macro internally uses raw pointer manipulation, so it can only be used inside `unsafe` blocks. The required
-/// invariants are documented in the constructor documentation of [StridedCopyIter].
+/// invariants are documented in the constructor documentation [StridedCopyIter::new].
 ///
 /// # Arguments
 ///
@@ -224,9 +224,9 @@ impl<T: Sized> StridedRefIter<'_, T>
 	///
 	/// # Safety
 	///
-	/// Users must ensure that:
-	/// * The initial `ptr` points to a valid, aligned `T` within a live allocation.
-	/// * Every address `ptr + i*stride` for `i` in `0..remaining` also points to a valid, aligned `T` within the same
+	/// Clients must ensure that:
+	/// * The initial `ptr` points to a valid, aligned `T` within an allocation alive for the lifetime of the iterator.
+	/// * Every address `ptr + i*stride` for `i` in `0..len` also points to a valid, aligned `T` within the same
 	///   allocation.
 	#[inline(always)]
 	pub unsafe fn new (ptr: *const T, stride: usize, len: usize) -> Self { Self {
@@ -257,7 +257,19 @@ impl<'data, T: Sized+'data> Iterator for StridedRefIter<'data, T> {
 }
 impl<T: Sized> ExactSizeIterator for StridedRefIter<'_, T> {}
 
+/// Helper to construct a [`StridedRefIter`] over the same field in a series of structured data records (aka.
+/// interleaved data).
 ///
+/// # Safety
+///
+/// This macro internally uses raw pointer manipulation, so it can only be used inside `unsafe` blocks. The required
+/// invariants are documented in the constructor documentation [StridedRefIter::new].
+///
+/// # Arguments
+///
+/// * `data` – reference to the raw data container (or slice) holding the interleaved data
+/// * `field` – field of a data record (e.g. tuple index `0`, `1`, or a named struct field)
+/// * `T` – the type of the field
 #[macro_export]
 macro_rules! stridedRefIter
 {
