@@ -27,7 +27,7 @@ pub trait Data: Send
 	fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>];
 
 	/// Reference the underlying GPU buffer(s) region(s) containing the renderable data.
-	fn geometry (&self) -> &[wgpu::BufferSlice<'_>];
+	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>>;
 
 	/// Return the preferred [topology](wgpu::PrimitiveTopology) of the data. Some renderers, like
 	/// [`renderer::Spheres`], will completely ignore this, while others like [`renderer::Mesh`] will require specific
