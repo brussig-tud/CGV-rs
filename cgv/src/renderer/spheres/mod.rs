@@ -68,19 +68,19 @@ impl Spheres
 			});
 		let shader = Self::shaderPackage().createShaderModuleFromBestInstance(
 			context.device(), None, Some("CGV__renderer_Spheres_shaderModule")
-		).expect("`renderer::Spheres` shader module could not be compiled by WGPU");
+		).expect("shader module could not be compiled by WGPU");
 
 		// Done!
 		Self { shader, pipelineLayout, constantAttribUniforms, data: None }
+	}
+
+	pub fn setData (&mut self, data: impl GpuData+'static) {
+		self.data.replace(Box::new(data));
 	}
 }
 impl Renderer for Spheres
 {
 	type GpuState = wgpu::RenderPipeline;
-
-	fn setData (&mut self, data: impl GpuData+'static) {
-        self.data.replace(Box::new(data));
-    }
 
 	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState
 	{

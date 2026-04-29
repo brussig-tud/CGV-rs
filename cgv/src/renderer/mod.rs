@@ -56,7 +56,10 @@ pub trait Renderer
 	type GpuState: GpuState;
 
 	///
-	fn setData (&mut self, data: impl GpuData+'static);
+	#[expect(unused_variables)] // <- we want `data` it to show up in the signature for documentation purposes
+	fn setData (&mut self, data: impl GpuData+'static) {
+		unimplemented!("renderer implementations must specifically opt-in to polymorphic render data assignment")
+	}
 
 	///
 	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState;
