@@ -48,3 +48,4 @@ egui-wgpu = {version="*", default-features=false}
 wgpu = {version="*", default-features=false}
 egui = "*"
 egui_extras = "*"
+arrayvec = "*"

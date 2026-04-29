@@ -16,7 +16,7 @@ tracing = {workspace=true}
 tracing-subscriber = {workspace=true, features=["env-filter"]}
 cfg-if = "*"
 ctor = "*"
-arrayvec = "*"
+arrayvec = {workspace=true}
 dashmap = "*"
 web-time = "*"
 eframe = {workspace=true, features=["default_fonts", "wgpu"]}
