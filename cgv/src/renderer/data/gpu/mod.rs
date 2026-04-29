@@ -23,8 +23,8 @@ pub trait Data: Send
 	/// Return the number of elements in the underlying data series.
 	fn num (&self) -> u32;
 
-	/// Return the [layout](wgpu::VertexBufferLayout) of the data inside the GPU.
-	fn layout (&self) -> wgpu::VertexBufferLayout<'static>;
+	/// Return the [buffer layout](wgpu::api::render_pipeline::VertexState.buffer) of the data inside the GPU.
+	fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>];
 
 	/// Reference the underlying GPU buffer containing the renderable data.
 	fn geometryBuffer (&self) -> &wgpu::Buffer;
