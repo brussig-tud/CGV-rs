@@ -143,12 +143,12 @@ struct GuiState {
 	showEditor: bool
 }
 
-struct OnlineShadersDemo<'this>
+struct OnlineShadersDemo
 {
 	// Online shader compilation
 	statusText: String,
-	slangCtx: cgv::shader::slang::Context<'this>,
-	mainModule: cgv::shader::slang::Module<'this>,
+	slangCtx: cgv::shader::slang::Context<'static>,
+	mainModule: cgv::shader::slang::Module<'static>,
 	userShaderCode: String,
 
 	// Rendering related
@@ -160,7 +160,7 @@ struct OnlineShadersDemo<'this>
 	syntaxCompleter: egui_code_editor::Completer,
 	guiState: GuiState
 }
-impl OnlineShadersDemo<'_>
+impl OnlineShadersDemo
 {
 	/// Helper function: create the interfacing pipeline for the given render state.
 	fn createPipeline (
@@ -206,8 +206,8 @@ impl OnlineShadersDemo<'_>
 		})
 	}
 
-	fn rebuildShader (&mut self, context: &cgv::Context) -> Result<&str, cgv::shader::compile::CompileOrBuildError>
-	{
+	fn rebuildShader (&mut self, context: &cgv::Context)
+	-> Result<&'static str, cgv::shader::compile::CompileOrBuildError> {
 		// Load our concrete `IGlyph`-implementing type that our "sdf_demo.slang" module expects into the context
 		tracing::info!("(Re-)building shader: specializing for custom glyph");
 		let glyphModule = self.slangCtx.compileFromSource(&self.userShaderCode)?;
@@ -238,53 +238,54 @@ impl OnlineShadersDemo<'_>
 		Ok("Code OK.")
 	}
 }
-impl<'this> cgv::Application for OnlineShadersDemo<'this>
+impl cgv::Application for OnlineShadersDemo
 {
 	fn title (&self) -> &str {
 		"Online Shader Compilation"
 	}
 
-	fn preInit (&mut self, context: &cgv::Context, _: &cgv::Player) -> cgv::Result<()> {
-		self.statusText = self.rebuildShader(context).map_err(|err| cgv::Error::from(err))?.into();
+	fn preInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()> {
+		self.statusText = self.rebuildShader(&player.context).map_err(|err| cgv::Error::from(err))?.into();
 		Ok(())
 	}
 
 	fn recreatePipelines (
-		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &[&cgv::GlobalPassInfo],
-		_: &cgv::Player
+		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
 	){
 		// Make space
 		self.pipelines.clear();
-		self.pipelines.reserve(globalPasses.len());
+		self.pipelines.reserve(globalPasses.info.len());
 
 		// Recreate pipelines
-		for pass in globalPasses {
-			self.pipelines.push(self.createPipeline(context, pass.renderState, renderSetup));
+		for pass in globalPasses.info {
+			self.pipelines.push(self.createPipeline(
+				context, &globalPasses.renderStates[pass.renderState as usize], renderSetup
+			));
 		}
 	}
 
-	fn postInit (&mut self, _: &cgv::Context, player: &cgv::Player) -> cgv::Result<()>
+	fn postInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>
 	{
 		// Tracing
 		tracing::info!("Positioning initial camera");
 
 		// Make sure the camera is where we want it to be (assuming we're the only application that cares about that)
-		let cam = player.activeCamera_mut().parameters_mut();
+		let cam = player.camera.parameters_mut();
 		cam.intrinsics.f = 2.;
 		cam.extrinsics.eye = glm::vec3(0., 0., 2.);
 		Ok(())
 	}
 
-	fn input (&mut self, _: &cgv::InputEvent, _: &cgv::Player) -> cgv::EventOutcome {
+	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::Handle) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2, _: &cgv::Player) {
+	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2) {
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (&mut self, _: &cgv::Context, _: &cgv::Player) -> bool {
+	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::Handle) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}
@@ -306,7 +307,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, _: &'static cgv::Player)
+	fn ui (&mut self, ui: &mut egui::Ui, _: &mut cgv::Player)
 	{
 		// Editor toggle
 		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
@@ -331,7 +332,7 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		);
 	}
 
-	fn freeUi (&mut self, ui: &mut egui::Ui, player: &'static cgv::Player)
+	fn freeUi (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Code editor
 		let mut showEditor = self.guiState.showEditor;
@@ -406,10 +407,14 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 							if editorOutput.response.changed()
 							{
 								use cgv::shader::compile::CompileOrBuildError;
-								self.statusText = match self.rebuildShader(player.context())
+								self.statusText = match self.rebuildShader(&player.context)
 								{
 									Ok(statusText) => {
-										player.postRecreatePipelines();
+										self.recreatePipelines(
+											&player.context,
+											&player.state.renderSetup,
+											&player.camera.globalPasses(),
+										);
 										player.requireSceneRedraw();
 										statusText.into()
 									},
@@ -447,7 +452,11 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 		self.guiState.showEditor &= showEditor;
 	}
 }
-
+// SAFETY: Slang objects are potentially non-atomic reference counted pointers, which must not be Send.
+// However, since the app is behind the Player mutex, there _should_ be no UB so long as Slang objects cannot be
+// accessed from outside the app.
+// TODO: Investigate more thoroughly.
+unsafe impl Send for OnlineShadersDemo {}
 
 
 //////
@@ -458,5 +467,5 @@ impl<'this> cgv::Application for OnlineShadersDemo<'this>
 /// The application entry point.
 pub fn main () -> cgv::Result<()> {
 	// Immediately hand off control flow, passing in a factory for our online shader compilation demo app
-	cgv::Player::run(createOnlineShadersDemo)
+	cgv::Player::run(Box::new(createOnlineShadersDemo))
 }
