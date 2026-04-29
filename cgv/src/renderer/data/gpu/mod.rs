@@ -26,8 +26,8 @@ pub trait Data: Send
 	/// Return the [buffer layout](wgpu::api::render_pipeline::VertexState.buffer) of the data inside the GPU.
 	fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>];
 
-	/// Reference the underlying GPU buffer containing the renderable data.
-	fn geometryBuffer (&self) -> &wgpu::Buffer;
+	/// Reference the underlying GPU buffer(s) region(s) containing the renderable data.
+	fn geometry (&self) -> &[wgpu::BufferSlice<'_>];
 
 	/// Return the preferred [topology](wgpu::PrimitiveTopology) of the data. Some renderers, like
 	/// [`renderer::Spheres`], will completely ignore this, while others like [`renderer::Mesh`] will require specific
@@ -42,8 +42,8 @@ pub trait Indexed: Data
 	/// Return the number of indices over the underlying data series.
 	fn numIndices (&self) -> u32;
 
-	/// Reference the underlying GPU buffer containing the indices.
-	fn indexBuffer (&self) -> &wgpu::Buffer;
+	/// Reference the underlying GPU buffer region containing the indices.
+	fn indices (&self) -> wgpu::BufferSlice<'_>;
 
 	/// Return the [index format](wgpu::IndexFormat) the indices are stored in.
 	fn indexFormat (&self) -> wgpu::IndexFormat;

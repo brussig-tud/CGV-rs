@@ -6,7 +6,7 @@
 
 /// Private submodule defining our various GPU-side data representations.
 mod data;
-use data::Data;
+use data::GpuData;
 
 
 
@@ -37,7 +37,7 @@ pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
 	constantAttribUniforms: ConstantAttribsUniformGroup,
-	data: Option<Box<dyn GpuData>>
+	data: Option<Box<dyn renderer::GpuData>>
 }
 impl Spheres
 {
@@ -74,7 +74,7 @@ impl Spheres
 		Self { shader, pipelineLayout, constantAttribUniforms, data: None }
 	}
 
-	pub fn setData (&mut self, data: impl GpuData+'static) {
+	pub fn setData (&mut self, data: impl renderer::GpuData+'static) {
 		self.data.replace(Box::new(data));
 	}
 }
