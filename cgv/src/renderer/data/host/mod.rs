@@ -51,11 +51,11 @@ pub trait Data
 	fn topology (&self) -> wgpu::PrimitiveTopology;
 }
 
-/// Marker trait for [`renderer::Data`] indicating that the data attributes are stored in an interleaved fashion (aka.
+/// Marker trait for [`renderer::HostData`] indicating that the data attributes are stored in an interleaved fashion (aka.
 /// "array of structs").
 pub trait Interleaved: Data {}
 
-/// Marker trait for [`renderer::Data`] indicating that the data attributes are stored in a non-interleaved fashion
+/// Marker trait for [`renderer::HostData`] indicating that the data attributes are stored in a non-interleaved fashion
 /// (aka. "struct of arrays").
 pub trait NonInterleaved: Data {}
 
