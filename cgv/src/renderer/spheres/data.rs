@@ -34,7 +34,7 @@ impl LayoutVariant {
 	const POS_RADIUS_COLOR: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4];
 	const POS_RADIUS_COLOR_STRIDE: wgpu::BufferAddress = (size_of::<glm::Vec4>()*2) as wgpu::BufferAddress;
 
-	/// Construct the variant that defines only positions.
+	/// Construct a vertex buffer layout that fits the variant represented by `self`.
 	pub fn layout (&self) -> wgpu::VertexBufferLayout<'static>
 	{
 		match self
@@ -61,7 +61,28 @@ impl LayoutVariant {
 			}
 		}
 	}
+
+	/// Construct an attribute buffer according to the needs of the variant represented by `self`. The buffer will be
+	/// [mapped at creation](wgpu::BufferDescriptor.mapped_at_creation).
+	pub fn createBuffer (&self, context: &Context, numInstances: u32, label: Option<&str>) -> wgpu::Buffer
+	{
+		fn createBuffer<A: Sized> (dev: &wgpu::Device, numInstances: u32, label: Option<&str>) -> wgpu::Buffer {
+			dev.create_buffer(&wgpu::BufferDescriptor {
+				label, size: (numInstances as usize * size_of::<A>()) as wgpu::BufferAddress,
+				usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
+				mapped_at_creation: true,
+			})
+		}
+		match self {
+			Self::PosOnly => createBuffer::<glm::Vec4>(context.device(), numInstances, label),
+			Self::PosRadius => createBuffer::<glm::Vec4>(context.device(), numInstances, label),
+			Self::PosColor => createBuffer::<(glm::Vec4, cgv::RGBA)>(context.device(), numInstances, label),
+			Self::PosRadiusColor => createBuffer::<(glm::Vec4, cgv::RGBA)>(context.device(), numInstances, label),
+		}
+	}
 }
+
+
 
 //////
 //
@@ -90,31 +111,101 @@ pub struct GpuData {
 impl GpuData
 {
 	///
-	pub fn new<D: HostData> (data: D) -> Self {
+	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Self
+	{
+		// Prepare the buffer
 		let variant = LayoutVariant::PosOnly;
-		let _layout = variant.layout();
-		todo!("fill buffer")
+		let attributes = variant.createBuffer(context, data.num(), label);
+
+		// Upload the data
+		let mut mapped = attributes.get_mapped_range_mut(..);
+		for (i, pos) in data.positions().enumerate()
+		{
+			// TODO: There has to be a better way...
+			let  posStart = i*size_of::<glm::Vec4>();
+			let  radStart = posStart + size_of::<glm::Vec3>();
+			let nextStart = posStart + size_of::<glm::Vec4>();
+			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
+			mapped.slice(radStart..nextStart).copy_from_slice(&0f32.to_ne_bytes());
+		}
+
+		// Done!
+		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
 	}
 
 	///
-	pub fn withRadii<D: HostData+host::HasRadii> (data: D) -> Self {
+	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Self
+	{
+		// Prepare the buffer
 		let variant = LayoutVariant::PosRadius;
-		let _layout = variant.layout();
-		todo!("fill buffer")
+		let attributes = variant.createBuffer(context, data.num(), label);
+
+		// Upload the data
+		let mut mapped = attributes.get_mapped_range_mut(..);
+		for (i, (pos, radius)) in data.positions().zip(data.radii()).enumerate()
+		{
+			// TODO: There has to be a better way...
+			let  posStart = i*size_of::<glm::Vec4>();
+			let  radStart = posStart + size_of::<glm::Vec3>();
+			let nextStart = posStart + size_of::<glm::Vec4>();
+			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
+			mapped.slice(radStart..nextStart).copy_from_slice(util::slicify(radius));
+		}
+
+		// Done!
+		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
 	}
 
 	///
-	pub fn withColors<D: HostData+host::HasColors> (data: D) -> Self {
+	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Self
+	{
+		// Prepare the buffer
 		let variant = LayoutVariant::PosColor;
-		let _layout = variant.layout();
-		todo!("fill buffer")
+		let attributes = variant.createBuffer(context, data.num(), label);
+
+		// Upload the data
+		let mut mapped = attributes.get_mapped_range_mut(..);
+		for (i, (pos, color)) in data.positions().zip(data.colors()).enumerate()
+		{
+			// TODO: There has to be a better way...
+			let posStart = i*size_of::<glm::Vec4>();
+			let radStart = posStart + size_of::<glm::Vec3>();
+			let colorStart = posStart + size_of::<glm::Vec4>();
+			let nextStart = colorStart + size_of::<cgv::RGBA>();
+			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
+			mapped.slice(radStart..nextStart).copy_from_slice(&0f32.to_ne_bytes());
+			mapped.slice(colorStart..nextStart).copy_from_slice(util::slicify(color));
+		}
+
+		// Done!
+		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
 	}
 
 	///
-	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors> (data: D) -> Self {
+	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors> (
+		context: &Context, data: D, label: Option<&str>
+	) -> Self {
+		// Prepare the buffer
 		let variant = LayoutVariant::PosRadiusColor;
-		let _layout = variant.layout();
-		todo!("fill buffer")
+		let attributes = variant.createBuffer(context, data.num(), label);
+
+		// Upload the data
+		let mut mapped = attributes.get_mapped_range_mut(..);
+		for (i, ((pos, radius), color)) in data.positions()
+			.zip(data.radii()).zip(data.colors()).enumerate()
+		{
+			// TODO: There has to be a better way...
+			let posStart = i*size_of::<glm::Vec4>();
+			let radStart = posStart + size_of::<glm::Vec3>();
+			let colorStart = posStart + size_of::<glm::Vec4>();
+			let nextStart = colorStart + size_of::<cgv::RGBA>();
+			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
+			mapped.slice(radStart..nextStart).copy_from_slice(util::slicify(radius));
+			mapped.slice(colorStart..nextStart).copy_from_slice(util::slicify(color));
+		}
+
+		// Done!
+		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
 	}
 }
 impl renderer::GpuData for GpuData
@@ -127,8 +218,8 @@ impl renderer::GpuData for GpuData
 		&self.layout
 	}
 
-	fn geometry (&self) -> &[wgpu::BufferSlice<'_>] {
-		todo!("return slice of filled buffer")
+	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>> {
+		vec![self.attributes.slice(..)]
 	}
 
 	fn topology (&self) -> wgpu::PrimitiveTopology {
@@ -146,18 +237,5 @@ impl gpu::CanHaveColors for GpuData
 {
 	fn hasColors (&self) -> bool {
 		matches!(self.variant, LayoutVariant::PosColor | LayoutVariant::PosRadiusColor)
-	}
-}
-impl<D: HostData+host::CanHaveRadii+host::CanHaveColors> From<&D> for GpuData {
-	fn from (other: &D) -> Self
-	{
-		let variant = match (other.hasRadii(), other.hasColors()) {
-			(false, false) => LayoutVariant::PosOnly,
-			(true, false) => LayoutVariant::PosRadius,
-			(false, true) => LayoutVariant::PosColor,
-			(true, true) => LayoutVariant::PosRadiusColor
-		};
-		let _layout = variant.layout();
-		todo!("fill buffer")
 	}
 }

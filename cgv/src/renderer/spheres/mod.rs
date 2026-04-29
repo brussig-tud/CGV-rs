@@ -6,7 +6,7 @@
 
 /// Private submodule defining our various GPU-side data representations.
 mod data;
-use data::GpuData;
+pub use data::GpuData; // re-export
 
 
 
