@@ -4,8 +4,8 @@
 // Module definitions
 //
 
-/// Tests for the `data` module.
-mod data;
+/// Tests for the `data::host` module.
+mod host_data;
 
 
 

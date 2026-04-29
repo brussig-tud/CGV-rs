@@ -37,7 +37,7 @@ pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
 	constantAttribUniforms: ConstantAttribsUniformGroup,
-	data: Option<spheres::Data>
+	data: Option<Box<dyn GpuData>>
 }
 impl Spheres
 {
@@ -78,8 +78,8 @@ impl Renderer for Spheres
 {
 	type GpuState = wgpu::RenderPipeline;
 
-	fn setData<Data: HostData> (&mut self, data: &Data) {
-        self.data.replace(data.into());
+	fn setData (&mut self, data: impl GpuData+'static) {
+        self.data.replace(Box::new(data));
     }
 
 	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState

@@ -76,6 +76,7 @@ impl HostData for MockData
 	fn num (&self) -> u32 { self.positions.len() as u32 }
 	fn positions (&self) -> Self::PosIterator<'_> { self.positions.iter() }
 	fn pos (&self, index: u32) -> &glm::Vec3 { &self.positions[index as usize] }
+	fn topology(&self) -> wgpu::PrimitiveTopology { wgpu::PrimitiveTopology::PointList }
 }
 impl host::Indexed for MockData
 {

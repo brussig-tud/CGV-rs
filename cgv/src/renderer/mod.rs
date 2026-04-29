@@ -56,7 +56,7 @@ pub trait Renderer
 	type GpuState: GpuState;
 
 	///
-	fn setData<Data: HostData> (&mut self, data: &Data);
+	fn setData (&mut self, data: impl GpuData+'static);
 
 	///
 	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState;
@@ -92,11 +92,11 @@ impl<R: Renderer> Managed<R>
 
 	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuState) for the
 	/// list of [managed global render passes](GlobalPassInfo).
-	pub fn rebuildForGlobalPasses (&mut self, context: &Context, globalPasses: &[&GlobalPassInfo]) {
+	pub fn rebuildForGlobalPasses (&mut self, context: &Context, globalPasses: &GlobalPasses) {
 		self.gpuStates.clear();
-		self.gpuStates.reserve(globalPasses.len());
-		for globalPass in globalPasses {
-			self.gpuStates.push(self.renderer.createGpuState(context, globalPass.renderState));
+		self.gpuStates.reserve(globalPasses.renderStates.len());
+		for renderState in globalPasses.renderStates {
+			self.gpuStates.push(self.renderer.createGpuState(context, renderState));
 		}
 	}
 

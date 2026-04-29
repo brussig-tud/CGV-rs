@@ -26,7 +26,7 @@ pub struct ConstantAttributes {
 }
 pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
 
-/// A [`renderer::Data`]-compliant GPU-side storage of varying sphere attributes.
+/// A [`renderer::host::Data`]-compliant GPU-side storage of varying sphere attributes.
 pub struct Data {}
 impl Data {
 	pub fn new<D: HostData> (data: D) -> Self {
@@ -52,6 +52,10 @@ impl HostData for Data
 	fn pos (&self, _index: u32) -> &glm::Vec3 {
 		todo!()
 	}
+
+	fn topology(&self) -> wgpu::PrimitiveTopology {
+        todo!()
+    }
 }
 impl host::Interleaved for Data {}
 impl host::CanHaveRadii for Data

@@ -164,6 +164,7 @@ pub struct GuaranteeAttributes<
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 >(Wrappee);
 
+#[expect(private_bounds)] // TODO: Check if this works as intended when `GuaranteeAttributes` is used from the outside
 impl<
 	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
@@ -215,6 +216,8 @@ impl<
 	fn positions (&self) -> Self::PosIterator<'_> { self.0.positions() }
 	#[inline(always)]
 	fn pos (&self, index: u32) -> &glm::Vec3 { self.0.pos(index) }
+	#[inline(always)]
+	fn topology(&self) -> wgpu::PrimitiveTopology { self.0.topology() }
 }
 impl<
 	Wrappee: host::Indexed, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,

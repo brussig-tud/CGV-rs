@@ -1,4 +1,16 @@
 
+
+//////
+//
+// Module definitions
+//
+
+/// Module implementing runtime-wrappers for compile-time guarantees about presence of data attributes.
+mod guarantees;
+pub use guarantees::*; // re-export all public facilities (mainly the guarantee wrapper and combination aliases).
+
+
+
 //////
 //
 // Imports
@@ -17,7 +29,8 @@ use crate::{self as cgv, *};
 // Traits
 //
 
-/// Trait of a collection of renderable data, ready for consumption by a [`Renderer`].
+/// Trait of a collection of renderable data, ready for being turned into
+/// [GPU-side render data](renderer::data::gpu::Data) for consumption by a [`Renderer`].
 pub trait Data
 {
 	/// The iterator type for iterating positions in the data.
@@ -31,6 +44,11 @@ pub trait Data
 
 	/// Reference a single position at the given index.
 	fn pos (&self, index: u32) -> &glm::Vec3;
+
+	/// Return the preferred [topology](wgpu::PrimitiveTopology) of the data. Some renderers, like
+	/// [`renderer::Spheres`], will completely ignore this, while others like [`renderer::Mesh`] will require specific
+	/// topologies.
+	fn topology (&self) -> wgpu::PrimitiveTopology;
 }
 
 /// Marker trait for [`renderer::Data`] indicating that the data attributes are stored in an interleaved fashion (aka.
@@ -43,6 +61,8 @@ pub trait NonInterleaved: Data {}
 
 /// Trait indicating that the render data contains index information; that is, indices into the data that connect
 /// individual data points to form complex primitives, like lines/line strips, triangles/triangle strips, etc.
+///
+/// **TODO: Add associated type of the actual index (typically u32 as hardcoded right now)**
 pub trait Indexed: Data
 {
 	/// The iterator type for iterating indices in the data. The lifetime parameter `'data` ensures that implementations
@@ -348,81 +368,3 @@ pub trait CanHaveColors: Data
 
 ///
 pub trait HasColors: CanHaveColors {}
-
-
-
-//////
-//
-// Structs
-//
-
-/*/// Non-indexed, interleaved test [render data](renderer::data::Data) with positions and normals.
-struct GpuDataTanCol {
-	data: Vec<(/* positions: */glm::Vec4, /* normals: */glm::Vec4, /* radius */f32, /* color */cgv::RGBA)>
-}
-impl renderer::Data for NonIndexedInterleavedPosNormalRadiusColor {
-	fn num (&self) -> u32 {
-		self.data.len() as u32
-	}
-}
-impl Interleaved for NonIndexedInterleavedPosNormalRadiusColor {}
-impl HasPositions for NonIndexedInterleavedPosNormalRadiusColor {
-	type PosIterator = util::notsafe::StridedIter<glm::Vec4>;
-
-	fn positions (&self) -> Self::PosIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 0, glm::Vec4)
-		}
-	}
-
-	fn pos (&self, index: u32) -> &glm::Vec4 {
-		&self.data[index as usize].0
-	}
-}
-impl HasNormals for NonIndexedInterleavedPosNormalRadiusColor {
-	type NormalIterator = util::notsafe::StridedIter<glm::Vec4>;
-
-	fn normals (&self) -> Self::NormalIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 1, glm::Vec4)
-		}
-	}
-
-	fn normal (&self, index: u32) -> &glm::Vec4 {
-		&self.data[index as usize].1
-	}
-}
-impl HasRadii for NonIndexedInterleavedPosNormalRadiusColor {
-	type RadiusIterator = util::notsafe::StridedIter<f32>;
-
-	fn radii (&self) -> Self::RadiusIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 2, f32)
-		}
-	}
-
-	fn radius (&self, index: u32) -> f32 {
-		self.data[index as usize].2
-	}
-}
-impl HasColors for NonIndexedInterleavedPosNormalRadiusColor {
-	type ColorIterator = util::notsafe::StridedIter<cgv::RGBA>;
-
-	fn colors (&self) -> Self::ColorIterator {
-		unsafe {
-			// SAFETY: We store a `Vec` of structs, and `Vec` can be trusted to return the correct length, so alignment
-			// and validity of the fields the iterator accesses is guaranteed.
-			util::notsafe::stridedIter!(self.data, 3, cgv::RGBA)
-		}
-	}
-
-	fn color (&self, index: u32) -> &cgv::RGBA {
-		&self.data[index as usize].3
-	}
-}*/
