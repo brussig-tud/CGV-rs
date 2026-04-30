@@ -84,7 +84,7 @@ const DATA_POINTS: &[DataPoint; 8] = &[
 	}
 ];
 
-const TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
+const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
 
 
 
@@ -131,7 +131,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::new(context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData"));
+	let spheresData = cgv::renderer::spheres::GpuData::withRadii(context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData"));
 
 
 	////
@@ -151,7 +151,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { sphereRenderer: cgv::renderer::Managed::new(sphereRenderer), guiState }))
+	Ok(Box::new(RenderersDemo { sphereRenderer: cgv::renderer::Managed::new(sphereRenderer), _guiState: guiState }))
 }
 
 #[derive(Default,Debug)]
@@ -166,7 +166,7 @@ struct RenderersDemo
 	sphereRenderer: cgv::renderer::Managed<cgv::renderer::Spheres>,
 
 	// GUI-controllable state
-	guiState: GuiState
+	_guiState: GuiState
 }
 impl cgv::Application for RenderersDemo
 {
@@ -180,9 +180,9 @@ impl cgv::Application for RenderersDemo
 	}
 
 	fn recreatePipelines (
-		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
+		&mut self, context: &cgv::Context, _: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
 	){
-		// Let our renderers now of the new render states
+		// Let our renderers know of the new render states
 		self.sphereRenderer.rebuildForGlobalPasses(context, globalPasses);
 	}
 
@@ -219,7 +219,7 @@ impl cgv::Application for RenderersDemo
 	}
 
 	fn render (
-		&mut self, _: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &mut wgpu::RenderPass,
 		_: &cgv::GlobalPass
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
@@ -229,7 +229,7 @@ impl cgv::Application for RenderersDemo
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Keep track of whether we need to redraw our scene contents
-		let mut redraw = false;
+		#[expect(unused_mut)] let mut redraw = false;
 
 		// Renderer configuration
 		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui|

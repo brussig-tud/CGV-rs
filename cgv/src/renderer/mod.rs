@@ -50,50 +50,172 @@ use crate::{self as cgv, *};
 // Traits
 //
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::HostData`] trait for any slice
-/// over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the [`renderer::HostData`]
+/// trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHostData<D: cgv::renderer::HostData>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3
+///     // ...
+/// }
+/// assertHostData::<&[MyVertex]>();
+/// ```
 pub trait InterleavedElem {
 	fn pos (&self) -> &glm::Vec3;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasNormals`] trait
-/// for any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasNormals`] trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasNormals<D: cgv::renderer::data::host::HasNormals>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem,cgv::renderer::ElemWithNormal)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(normal)]
+///     normal: glm::Vec3
+///     // ...
+/// }
+/// assertHasNormals::<&[MyVertex]>();
+/// ```
 pub trait ElemWithNormal: InterleavedElem {
 	fn normal (&self) -> &glm::Vec3;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasTangents`] trait
-/// for any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasTangents`] trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasTangents<D: cgv::renderer::data::host::HasTangents>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem,cgv::renderer::ElemWithTangent)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(tangent)]
+///     tangent: glm::Vec3
+///     // ...
+/// }
+/// assertHasTangents::<&[MyVertex]>();
+/// ```
 pub trait ElemWithTangent: InterleavedElem {
 	fn tangent (&self) -> &glm::Vec3;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasRadii`] trait for
-/// any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasRadii`] trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasRadii<D: cgv::renderer::data::host::HasRadii>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem,cgv::renderer::ElemWithRadius)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(radius)]
+///     radius: f32
+///     // ...
+/// }
+/// assertHasRadii::<&[MyVertex]>();
+/// ```
 pub trait ElemWithRadius: InterleavedElem {
-	fn radius (&self) -> f32;
+	fn radius (&self) -> &f32;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasRadiusDerivs`]
-/// trait for any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasRadiusDerivs`] trait on its slices.
+///
+/// This trait can be derived (note `ElemWithRadiusDeriv`'s requirement to also provide a radius):
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasRadiusDerivs<D: cgv::renderer::data::host::HasRadiusDerivs>() -> bool { true }
+/// #[derive(
+///     cgv::renderer::InterleavedElem,cgv::renderer::ElemWithRadius,cgv::renderer::ElemWithRadiusDeriv
+/// )]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(radius)]
+///     radius: f32,
+///     #[cgv_renderAttr(radiusDeriv)]
+///     radiusDeriv: f32
+///     // ...
+/// }
+/// assertHasRadiusDerivs::<&[MyVertex]>();
+/// ```
 pub trait ElemWithRadiusDeriv: InterleavedElem {
-	fn radiusDeriv (&self) -> f32;
+	fn radiusDeriv (&self) -> &f32;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasOrientations`]
-/// trait for any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasOrientations`] trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasOrientations<D: cgv::renderer::data::host::HasOrientations>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem,cgv::renderer::ElemWithOrientation)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(orientation)]
+///     orientation: glm::Quat
+///     // ...
+/// }
+/// assertHasOrientations::<&[MyVertex]>();
+/// ```
 pub trait ElemWithOrientation: InterleavedElem {
 	fn orientation (&self) -> &glm::Quat;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasScalings`] trait
-/// for any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasScalings`] trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasScalings<D: cgv::renderer::data::host::HasScalings>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem,cgv::renderer::ElemWithScaling)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(scaling)]
+///     scaling: glm::Vec3
+///     // ...
+/// }
+/// assertHasScalings::<&[MyVertex]>();
+/// ```
 pub trait ElemWithScaling: InterleavedElem {
 	fn scaling (&self) -> &glm::Vec3;
 }
 
-/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasColors`] trait
-/// for any slice over instances of it.
+/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
+/// [`data::host::HasColors`] trait on its slices.
+///
+/// This trait can be derived:
+/// ```rust
+/// # use cgv::glm as glm;
+/// # fn assertHasColors<D: cgv::renderer::data::host::HasColors>() -> bool { true }
+/// #[derive(cgv::renderer::InterleavedElem,cgv::renderer::ElemWithColor)]
+/// struct MyVertex {
+///     #[cgv_renderAttr(pos)]
+///     position: glm::Vec3,
+///     #[cgv_renderAttr(color)]
+///     color: cgv::RGBA
+///     // ...
+/// }
+/// assertHasColors::<&[MyVertex]>();
+/// ```
 pub trait ElemWithColor: InterleavedElem {
 	fn color (&self) -> &cgv::RGBA;
 }
@@ -109,8 +231,8 @@ pub trait Renderer
 	type GpuState: GpuState;
 
 	///
-	#[expect(unused_variables)] // <- we want `data` it to show up in the signature for documentation purposes
-	fn setData (&mut self, data: impl GpuData+'static) {
+	#[expect(unused_variables)] // <- we want `data` to show up in the documented signature
+	fn setData (&mut self, data: impl GpuData) {
 		unimplemented!("renderer implementations must specifically opt-in to polymorphic render data assignment")
 	}
 
@@ -167,18 +289,13 @@ impl<R: Renderer> Managed<R>
 		self.renderer.render(context, &self.gpuStates[globalPassIdx]);
 	}
 }
-impl<R: Renderer> Deref for Managed<R>
-{
+impl<R: Renderer> Deref for Managed<R> {
 	type Target = R;
-
-	/// Deref to the underlying renderer.
 	fn deref (&self) -> &Self::Target {
 		&self.renderer
 	}
 }
-impl<R: Renderer> DerefMut for Managed<R>
-{
-	/// Deref to the underlying renderer.
+impl<R: Renderer> DerefMut for Managed<R>{
 	fn deref_mut (&mut self) -> &mut Self::Target {
 		&mut self.renderer
 	}

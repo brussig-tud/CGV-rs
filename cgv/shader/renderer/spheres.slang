@@ -55,10 +55,10 @@ ParameterBlock<ConstantAttribs> constAttribs;
 ////
 // Entry points
 
-/// Vertex shader entry point for spheres with default color and radius.
+/// Common vertex shader entry point for all sphere renderer code paths.
 [shader("vertex")]
-float4 vertexMain_posOnly (in const float4 pos) : SV_Position {
-	return viewing.projection*viewing.modelview * pos;
+float4 vertexMain (uint vertexID: SV_VertexID) : SV_Position {
+	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
 }
 
 

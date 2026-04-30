@@ -24,18 +24,34 @@ use syn::{parse_macro_input, Data, DeriveInput, Field, Fields};
 
 //////
 //
-// Helpers
+// Macros
+//
+
+/// Given a field ident, generate `&self.<field>`.
+macro_rules! ref_body {
+	($field:ident) => { quote! { &self.#$field } };
+}
+
+/// Given a field ident, generate `self.<field>` (value copy, for `f32` etc.).
+macro_rules! copy_body {
+	($field:ident) => { quote! { self.#$field } };
+}
+
+
+
+//////
+//
+// Functions
 //
 
 /// Find the first named field annotated with `#[cgv_renderAttr(<attr_name>)]` and return a reference to both the field
 /// and its identifier.
-fn findField_renderAttr<'a>(
-	fields: &'a syn::FieldsNamed,
-	attrName: &str,
-) -> Option<(&'a Field, &'a syn::Ident)>
+fn findField_renderAttr<'a> (fields: &'a syn::FieldsNamed, attrName: &str) -> Option<(&'a Field, &'a syn::Ident)>
 {
-	for field in &fields.named {
-		for attr in &field.attrs {
+	for field in &fields.named
+	{
+		for attr in &field.attrs
+		{
 			if !attr.path().is_ident("cgv_renderAttr") {
 				continue;
 			}
@@ -51,9 +67,10 @@ fn findField_renderAttr<'a>(
 }
 
 /// Extract the named fields from a struct `DeriveInput`, or return a compile-error token stream.
-fn getNamedFields(input: &DeriveInput) -> Result<&syn::FieldsNamed, TokenStream2>
+fn getNamedFields (input: &DeriveInput) -> Result<&syn::FieldsNamed, TokenStream2>
 {
-	match &input.data {
+	match &input.data
+	{
 		Data::Struct(s) => match &s.fields {
 			Fields::Named(fields) => Ok(fields),
 			_ => Err(quote! {
@@ -66,45 +83,19 @@ fn getNamedFields(input: &DeriveInput) -> Result<&syn::FieldsNamed, TokenStream2
 	}
 }
 
-/// Core helper: given a field ident, generate `&self.<field>`.
-macro_rules! ref_body {
-	($field:ident) => {
-		quote! { &self.#$field }
-	};
-}
-
-/// Core helper: given a field ident, generate `self.<field>` (value copy, for `f32` etc.).
-macro_rules! copy_body {
-	($field:ident) => {
-		quote! { self.#$field }
-	};
-}
-
 
 
 //////
 //
-// Derive macros
+// Procedural macros
 //
 
 /// Derive [`cgv::renderer::InterleavedElem`] for a struct.
 ///
 /// Mark exactly one field with `#[cgv_renderAttr(pos)]`; that field will be returned by the generated `pos()` method
 /// (as a `&glm::Vec3`).
-///
-/// # Example
-///
-/// ```no_run
-/// # use cgv::glm;
-/// #[derive(cgv::renderer::InterleavedElem)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
-///     // …
-/// }
-/// ```
 #[proc_macro_derive(InterleavedElem, attributes(cgv_renderAttr))]
-pub fn deriveInterleavedElem(input: TokenStream) -> TokenStream
+pub fn deriveInterleavedElem (input: TokenStream) -> TokenStream
 {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = &input.ident;
@@ -250,7 +241,7 @@ pub fn deriveElemWithRadius(input: TokenStream) -> TokenStream
 		impl #implGenerics ::cgv::renderer::ElemWithRadius
 			for #name #tyGenerics #whereClause
 		{
-			fn radius(&self) -> f32 { #body }
+			fn radius(&self) -> &f32 { &#body }
 		}
 	}
 	.into()
@@ -288,7 +279,7 @@ pub fn deriveElemWithRadiusDeriv(input: TokenStream) -> TokenStream
 		impl #implGenerics ::cgv::renderer::ElemWithRadiusDeriv
 			for #name #tyGenerics #whereClause
 		{
-			fn radiusDeriv(&self) -> f32 { #body }
+			fn radiusDeriv(&self) -> &f32 { &#body }
 		}
 	}
 	.into()

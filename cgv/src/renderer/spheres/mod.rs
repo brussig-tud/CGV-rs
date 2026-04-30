@@ -90,7 +90,7 @@ impl Renderer for Spheres
 			layout: Some(&self.pipelineLayout),
 			vertex: wgpu::VertexState {
 				module: &self.shader,
-				entry_point: Some("vertexMain_posOnly"),
+				entry_point: Some("vertexMain"),
 				buffers: &[/* no vertex buffers, we use a shader-internal constant billboard */],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
