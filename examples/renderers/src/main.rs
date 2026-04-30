@@ -20,9 +20,6 @@ use std::default::Default;
 // CGV re-imports
 use cgv::{wgpu, glm, egui, tracing};
 
-// WGPU API
-use wgpu::util::DeviceExt;
-
 // CGV-rs Framework
 use cgv::{self, util};
 
@@ -33,57 +30,57 @@ use cgv::{self, util};
 // Statics
 //
 
-const DATA_POINTS: &[DataPoint; 8] = &[
+const DATA_POINTS: &[PointRTNC; 8] = &[
 	// Front side:
-	DataPoint {
-		pos: glm::Vec4::new(-1., -1., -1., 1.),
-		normal: glm::Vec4::new(0., 0., -1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(-1., -1., -1., 1.),
 		tangent: glm::Vec4::new(1., 0., 0., 0.),
-		color: glm::Vec4::new(1., 1., 1., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
+		normal: glm::Vec3::new(0., 0., -1.),
 	},
-	DataPoint {
-		pos: glm::Vec4::new(1., -1., -1., 1.),
-		normal: glm::Vec4::new(0., 0., -1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(1., -1., -1., 1.),
 		tangent: glm::Vec4::new(-1., 1., 0., 0.),
-		color: glm::Vec4::new(1., 0., 0., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
+		normal: glm::Vec3::new(0., 0., -1.,)
 	},
-	DataPoint {
-		pos: glm::Vec4::new(-1., 1., -1., 1.),
-		normal: glm::Vec4::new(0., 0., -1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(-1., 1., -1., 1.),
 		tangent: glm::Vec4::new(1., 0., 0., 0.),
-		color: glm::Vec4::new(0., 1., 0., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
+		normal: glm::Vec3::new(0., 0., -1.,)
 	},
-	DataPoint {
-		pos: glm::Vec4::new(1., 1., -1., 1.),
-		normal: glm::Vec4::new(1., 0., 0., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(1., 1., -1., 1.),
 		tangent: glm::Vec4::new(0., 0., 1., 0.),
-		color: glm::Vec4::new(0., 0., 1., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
+		normal: glm::Vec3::new(1., 0., 0.,)
 	},
 
 	// Back side:
-	DataPoint {
-		pos: glm::Vec4::new(1., 1., 1., 1.),
-		normal: glm::Vec4::new(0., 0., 1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(1., 1., 1., 1.),
 		tangent: glm::Vec4::new(-1., 0., 0., 0.),
-		color: glm::Vec4::new(1., 1., 1., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
+		normal: glm::Vec3::new(0., 0., 1.,)
 	},
-	DataPoint {
-		pos: glm::Vec4::new(-1., 1., 1., 1.),
-		normal: glm::Vec4::new(0., 0., 1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(-1., 1., 1., 1.),
 		tangent: glm::Vec4::new(1., -1., 0., 0.),
-		color: glm::Vec4::new(1., 0., 0., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
+		normal: glm::Vec3::new(0., 0., 1.,)
 	},
-	DataPoint {
-		pos: glm::Vec4::new(1., -1., 1., 1.),
-		normal: glm::Vec4::new(0., 0., 1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(1., -1., 1., 1.),
 		tangent: glm::Vec4::new(-1., 0., 0., 0.),
-		color: glm::Vec4::new(0., 1., 0., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
+		normal: glm::Vec3::new(0., 0., 1.,)
 	},
-	DataPoint {
-		pos: glm::Vec4::new(-1., -1., 1., 1.),
-		normal: glm::Vec4::new(0., 0., 1., 0.),
+	PointRTNC {
+		pos_rad: glm::Vec4::new(-1., -1., 1., 1.),
 		tangent: glm::Vec4::new(-1., 0., 0., 0.),
-		color: glm::Vec4::new(0., 0., 1., 1.)
+		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
+		normal: glm::Vec3::new(0., 0., 1.,)
 	}
 ];
 
@@ -97,29 +94,18 @@ const TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 
 //
 
 ////
-// QuadVertex
+// Point
 
+/// **TODO: move into to-be-created `media` module.**
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-struct DataPoint {
-	pos: glm::Vec4,
-	normal: glm::Vec4,
-	tangent: glm::Vec4,
-	color: glm::Vec4
+pub struct PointRTNC {
+	pub pos_rad: glm::Vec4,
+	pub tangent: glm::Vec4, // contains radius derivative also
+	pub color: cgv::RGBA,
+	pub normal: glm::Vec3,
 }
-impl DataPoint
-{
-	const GPU_ATTRIBS: [wgpu::VertexAttribute; 4] =
-		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x4, 3=>Float32x4];
-
-	fn layoutDesc () -> wgpu::VertexBufferLayout<'static> {
-		wgpu::VertexBufferLayout {
-			array_stride: size_of::<Self>() as wgpu::BufferAddress,
-			step_mode: wgpu::VertexStepMode::Vertex,
-			attributes: &Self::GPU_ATTRIBS,
-		}
-	}
-}
+// TODO: implement related traits
 
 
 ////
@@ -137,25 +123,9 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 
 	////
-	// Prepare buffers
+	// Prepare data
 
-	// Vertex buffer
-	let vertexBuffer = context.device().create_buffer_init(
-		&wgpu::util::BufferInitDescriptor {
-			label: Some("ExRenderers__DataPoints"),
-			contents: util::slicify(DATA_POINTS),
-			usage: wgpu::BufferUsages::VERTEX
-		}
-	);
-
-	// Index buffer
-	let indexBuffer = context.device().create_buffer_init(
-		&wgpu::util::BufferInitDescriptor {
-			label: Some("ExRenderers__Topology"),
-			contents: util::slicify(TOPOLOGY),
-			usage: wgpu::BufferUsages::INDEX
-		}
-	);
+	/* generate test data */
 
 
 	////
@@ -182,6 +152,9 @@ struct GuiState {}
 
 struct RenderersDemo
 {
+	// The renderable test data
+	//spheresData: cgv::renderer::spheres::GpuData,
+
 	// Test sphere renderer
 	sphereRenderer: cgv::renderer::Managed<cgv::renderer::Spheres>,
 
