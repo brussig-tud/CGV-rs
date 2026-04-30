@@ -30,9 +30,9 @@ egui_extras = {workspace=true, default-features=true, features=[
 ]}
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
-nalgebra = "*"
-nalgebra-glm = "*"
-alum = "*"
+nalgebra = {workspace=true}
+nalgebra-glm = {workspace=true}
+alum = {workspace=true}
 cgv-util = {path="../cgv-util"}
 cgv-runenv = {path="../cgv-runenv"}
 cgv-derive = {path= "../cgv-derive" }

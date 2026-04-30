@@ -49,3 +49,6 @@ wgpu = {version="*", default-features=false}
 egui = "*"
 egui_extras = "*"
 arrayvec = "*"
+nalgebra = "*"
+nalgebra-glm = "*"
+alum = "*"
