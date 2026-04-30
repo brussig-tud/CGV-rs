@@ -94,10 +94,10 @@ impl LayoutVariant {
 #[derive(Default)]
 pub struct ConstantAttributes {
 	///
-	pub radius: f32,
+	pub _radius: f32,
 
 	///
-	pub color: Rgba,
+	pub _color: Rgba,
 }
 pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
 

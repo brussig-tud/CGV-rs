@@ -35,6 +35,7 @@ nalgebra-glm = "*"
 alum = "*"
 cgv-util = {path="../cgv-util"}
 cgv-runenv = {path="../cgv-runenv"}
+cgv-derive = {path= "../cgv-derive" }
 cgv-shader = {path="../cgv-shader", features=["wgpu_runtime"]}
 
 [target.'cfg(target_os="windows")'.dependencies]

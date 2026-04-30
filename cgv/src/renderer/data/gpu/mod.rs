@@ -8,6 +8,7 @@
 /* nothing here yet */
 
 // Local imports
+#[expect(unused_imports)] // we only use these for documentation links
 use crate::{self as cgv, *};
 
 

@@ -36,7 +36,12 @@ pub mod prelude {
 use std::ops::{Deref, DerefMut};
 
 // Local imports
-use crate::*;
+pub use cgv_derive::{
+	// Re-export the relevant procedural derive macros from cgv-derive
+	InterleavedElem, ElemWithNormal, ElemWithTangent, ElemWithRadius, ElemWithRadiusDeriv, ElemWithOrientation,
+	ElemWithScaling, ElemWithColor
+};
+use crate::{self as cgv, *};
 
 
 
@@ -44,6 +49,54 @@ use crate::*;
 //
 // Traits
 //
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::HostData`] trait for any slice
+/// over instances of it.
+pub trait InterleavedElem {
+	fn pos (&self) -> &glm::Vec3;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasNormals`] trait
+/// for any slice over instances of it.
+pub trait ElemWithNormal: InterleavedElem {
+	fn normal (&self) -> &glm::Vec3;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasTangents`] trait
+/// for any slice over instances of it.
+pub trait ElemWithTangent: InterleavedElem {
+	fn tangent (&self) -> &glm::Vec3;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasRadii`] trait for
+/// any slice over instances of it.
+pub trait ElemWithRadius: InterleavedElem {
+	fn radius (&self) -> f32;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasRadiusDerivs`]
+/// trait for any slice over instances of it.
+pub trait ElemWithRadiusDeriv: InterleavedElem {
+	fn radiusDeriv (&self) -> f32;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasOrientations`]
+/// trait for any slice over instances of it.
+pub trait ElemWithOrientation: InterleavedElem {
+	fn orientation (&self) -> &glm::Quat;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasScalings`] trait
+/// for any slice over instances of it.
+pub trait ElemWithScaling: InterleavedElem {
+	fn scaling (&self) -> &glm::Vec3;
+}
+
+/// Helper trait marking a type for getting a blanket-implementation of the [`renderer::data::host::HasColors`] trait
+/// for any slice over instances of it.
+pub trait ElemWithColor: InterleavedElem {
+	fn color (&self) -> &cgv::RGBA;
+}
 
 ///
 pub trait GpuState {}

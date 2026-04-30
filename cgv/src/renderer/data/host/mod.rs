@@ -1,5 +1,4 @@
 
-
 //////
 //
 // Module definitions
@@ -50,10 +49,24 @@ pub trait Data
 	/// topologies.
 	fn topology (&self) -> wgpu::PrimitiveTopology;
 }
+/// Blanket implementation for arrays of [`renderer::InterleavedElem`]s.
+impl<T: renderer::InterleavedElem> Data for &[T] {
+	type PosIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
+	fn num (&self) -> u32 { self.len() as u32 }
+	fn positions (&self) -> Self::PosIterator<'_> { unsafe {
+		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
+		// at the appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
+		util::notsafe::StridedRefIter::new(self[0].pos(), size_of::<T>(), self.len())
+	}}
+	fn pos (&self, index: u32) -> &glm::Vec3 { self[index as usize].pos() }
+	fn topology (&self) -> wgpu::PrimitiveTopology { wgpu::PrimitiveTopology::PointList }
+}
 
 /// Marker trait for [`renderer::HostData`] indicating that the data attributes are stored in an interleaved fashion (aka.
 /// "array of structs").
 pub trait Interleaved: Data {}
+/// Blanket implementation for arrays of [`renderer::InterleavedElem`]s.
+impl<T: renderer::InterleavedElem> Interleaved for &[T] {}
 
 /// Marker trait for [`renderer::HostData`] indicating that the data attributes are stored in a non-interleaved fashion
 /// (aka. "struct of arrays").
@@ -117,9 +130,22 @@ pub trait CanHaveNormals: Data
 	/// [`hasNormals`](Self::hasNormals), or if `index` was out-of-bounds.
 	fn normal (&self, index: u32) -> &glm::Vec3;
 }
+/// Blanket implementation for arrays of [`renderer::ElemWithNormal`]s.
+impl<T: renderer::ElemWithNormal> CanHaveNormals for &[T] {
+	type NormalIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
+	fn hasNormals (&self) -> bool { true }
+	fn normals (&self) -> Self::NormalIterator<'_> { unsafe {
+		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
+		// at the appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
+		util::notsafe::StridedRefIter::new(self[0].normal(), size_of::<T>(), self.len())
+	}}
+	fn normal (&self, index: u32) -> &glm::Vec3 { self[index as usize].normal() }	
+}
 
 ///
 pub trait HasNormals: CanHaveNormals {}
+/// Blanket implementation for arrays of [`renderer::ElemWithNormal`]s.
+impl<T: renderer::ElemWithNormal> HasNormals for &[T] {}
 
 ///
 pub trait CanHaveTangents: Data

@@ -21,7 +21,7 @@ use std::default::Default;
 use cgv::{wgpu, glm, egui, tracing};
 
 // CGV-rs Framework
-use cgv::{self, util};
+use cgv;
 
 
 
@@ -30,55 +30,55 @@ use cgv::{self, util};
 // Statics
 //
 
-const DATA_POINTS: &[PointRTNC; 8] = &[
+const DATA_POINTS: &[DataPoint; 8] = &[
 	// Front side:
-	PointRTNC {
-		pos_rad: glm::Vec4::new(-1., -1., -1., 1.),
-		tangent: glm::Vec4::new(1., 0., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(-1., -1., -1.), radius: 1.,
+		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
 		normal: glm::Vec3::new(0., 0., -1.),
 	},
-	PointRTNC {
-		pos_rad: glm::Vec4::new(1., -1., -1., 1.),
-		tangent: glm::Vec4::new(-1., 1., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(1., -1., -1.), radius: 1.,
+		tangent: glm::Vec3::new(-1., 1., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
 		normal: glm::Vec3::new(0., 0., -1.,)
 	},
-	PointRTNC {
-		pos_rad: glm::Vec4::new(-1., 1., -1., 1.),
-		tangent: glm::Vec4::new(1., 0., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(-1., 1., -1.), radius: 1.,
+		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
 		normal: glm::Vec3::new(0., 0., -1.,)
 	},
-	PointRTNC {
-		pos_rad: glm::Vec4::new(1., 1., -1., 1.),
-		tangent: glm::Vec4::new(0., 0., 1., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(1., 1., -1.), radius: 1.,
+		tangent: glm::Vec3::new(0., 0., 1.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
 		normal: glm::Vec3::new(1., 0., 0.,)
 	},
 
 	// Back side:
-	PointRTNC {
-		pos_rad: glm::Vec4::new(1., 1., 1., 1.),
-		tangent: glm::Vec4::new(-1., 0., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(1., 1., 1.), radius: 1.,
+		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
-	PointRTNC {
-		pos_rad: glm::Vec4::new(-1., 1., 1., 1.),
-		tangent: glm::Vec4::new(1., -1., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(-1., 1., 1.), radius: 1.,
+		tangent: glm::Vec3::new(1., -1., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
-	PointRTNC {
-		pos_rad: glm::Vec4::new(1., -1., 1., 1.),
-		tangent: glm::Vec4::new(-1., 0., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(1., -1., 1.), radius: 1.,
+		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
-	PointRTNC {
-		pos_rad: glm::Vec4::new(-1., -1., 1., 1.),
-		tangent: glm::Vec4::new(-1., 0., 0., 0.),
+	DataPoint {
+		pos: glm::Vec3::new(-1., -1., 1.), radius: 1.,
+		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	}
@@ -98,14 +98,19 @@ const TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 
 
 /// **TODO: move into to-be-created `media` module.**
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct PointRTNC {
-	pub pos_rad: glm::Vec4,
-	pub tangent: glm::Vec4, // contains radius derivative also
-	pub color: cgv::RGBA,
-	pub normal: glm::Vec3,
+#[derive(
+	Copy,Clone,Debug,cgv::renderer::InterleavedElem,cgv::renderer::ElemWithTangent,cgv::renderer::ElemWithRadius,
+	cgv::renderer::ElemWithRadiusDeriv,cgv::renderer::ElemWithColor
+)]
+pub struct DataPoint
+{
+	#[cgv_renderAttr(pos)]         pub pos: glm::Vec3,
+	#[cgv_renderAttr(radius)]      pub radius: f32,
+	#[cgv_renderAttr(tangent)]     pub tangent: glm::Vec3,
+	#[cgv_renderAttr(radiusDeriv)] pub radDeriv: f32,
+	#[cgv_renderAttr(color)]       pub color: cgv::RGBA,
+	#[cgv_renderAttr(normal)]      pub normal: glm::Vec3,
 }
-// TODO: implement related traits
 
 
 ////
@@ -126,14 +131,14 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	//spheresData = cgv::renderer::spheres::GpuData::withRadiiAndColors(context, DATA_POINTS, Some("RenderersDemo_spheresData"));
+	let spheresData = cgv::renderer::spheres::GpuData::new(context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData"));
 
 
 	////
 	// Initialize renderers
 
 	let mut sphereRenderer = cgv::renderer::Spheres::new(context, renderSetup);
-	//sphereRenderer.setData(spheresData);
+	sphereRenderer.setData(spheresData);
 
 
 	////

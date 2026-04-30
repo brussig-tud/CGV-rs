@@ -36,7 +36,7 @@ use data::*;
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	constantAttribUniforms: ConstantAttribsUniformGroup,
+	_constantAttribUniforms: ConstantAttribsUniformGroup,
 	data: Option<Box<dyn renderer::GpuData>>
 }
 impl Spheres
@@ -71,7 +71,7 @@ impl Spheres
 		).expect("shader module could not be compiled by WGPU");
 
 		// Done!
-		Self { shader, pipelineLayout, constantAttribUniforms, data: None }
+		Self { shader, pipelineLayout, _constantAttribUniforms: constantAttribUniforms, data: None }
 	}
 
 	pub fn setData (&mut self, data: impl renderer::GpuData+'static) {
