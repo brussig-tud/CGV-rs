@@ -53,10 +53,18 @@ public struct Billboards<PosScalar: __BuiltinFloatingPointType>
 
 	/// A unit quad with normal facing in the negative z direction.
 	public constexpr static media::VertexN<PosScalar> quadN[] = {
-		media::VertexN<PosScalar>(PosVec(-_1,-_1, _0, _1), float4(0,0,0,-1)),
-		media::VertexN<PosScalar>(PosVec( _1,-_1, _0, _1), float4(0,0,0,-1)),
-		media::VertexN<PosScalar>(PosVec(-_1, _1, _0, _1), float4(0,0,0,-1)),
-		media::VertexN<PosScalar>(PosVec( _1, _1, _0, _1), float4(0,0,0,-1))
+		media::VertexN<PosScalar>(PosVec(-_1,-_1, _0, _1), float4(0,0,-1,0)),
+		media::VertexN<PosScalar>(PosVec( _1,-_1, _0, _1), float4(0,0,-1,0)),
+		media::VertexN<PosScalar>(PosVec(-_1, _1, _0, _1), float4(0,0,-1,0)),
+		media::VertexN<PosScalar>(PosVec( _1, _1, _0, _1), float4(0,0,-1,0))
+	};
+
+	/// A unit quad with unit texture coordinates
+	public constexpr static media::VertexTC<PosScalar> quadTC[] = {
+		media::VertexTC<PosScalar>(PosVec(-_1,-_1, _0, _1), float2(0,1)),
+		media::VertexTC<PosScalar>(PosVec( _1,-_1, _0, _1), float2(1,1)),
+		media::VertexTC<PosScalar>(PosVec(-_1, _1, _0, _1), float2(0,0)),
+		media::VertexTC<PosScalar>(PosVec( _1, _1, _0, _1), float2(1,0))
 	};
 }
 
