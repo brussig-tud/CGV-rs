@@ -118,15 +118,15 @@ impl GpuData
 		let attributes = variant.createBuffer(context, data.num(), label);
 
 		// Upload the data
-		let mut mapped = attributes.get_mapped_range_mut(..);
-		for (i, pos) in data.positions().enumerate()
+		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
+			.cast::<glm::Vec4>();
+		for pos in data.positions()
 		{
-			// TODO: There has to be a better way...
-			let  posStart = i*size_of::<glm::Vec4>();
-			let  radStart = posStart + size_of::<glm::Vec3>();
-			let nextStart = posStart + size_of::<glm::Vec4>();
-			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
-			mapped.slice(radStart..nextStart).copy_from_slice(&0f32.to_ne_bytes());
+			unsafe {
+				// SAFETY: What could possibly go wrong? It'll be fine.
+				ptr.write(/* pos_rad: */glm::vec3_to_vec4(pos));
+				ptr = ptr.add(1);
+			}
 		}
 
 		// Done!
@@ -141,15 +141,15 @@ impl GpuData
 		let attributes = variant.createBuffer(context, data.num(), label);
 
 		// Upload the data
-		let mut mapped = attributes.get_mapped_range_mut(..);
-		for (i, (pos, radius)) in data.positions().zip(data.radii()).enumerate()
+		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
+			.cast::<glm::Vec4>();
+		for (pos, radius) in data.positions().zip(data.radii())
 		{
-			// TODO: There has to be a better way...
-			let  posStart = i*size_of::<glm::Vec4>();
-			let  radStart = posStart + size_of::<glm::Vec3>();
-			let nextStart = posStart + size_of::<glm::Vec4>();
-			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
-			mapped.slice(radStart..nextStart).copy_from_slice(util::slicify(radius));
+			unsafe {
+				// SAFETY: What could possibly go wrong? It'll be fine.
+				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius));
+				ptr = ptr.add(1);
+			}
 		}
 
 		// Done!
@@ -164,17 +164,15 @@ impl GpuData
 		let attributes = variant.createBuffer(context, data.num(), label);
 
 		// Upload the data
-		let mut mapped = attributes.get_mapped_range_mut(..);
-		for (i, (pos, color)) in data.positions().zip(data.colors()).enumerate()
+		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
+			.cast::<(glm::Vec4, cgv::RGBA)>();
+		for (pos, color) in data.positions().zip(data.colors())
 		{
-			// TODO: There has to be a better way...
-			let posStart = i*size_of::<glm::Vec4>();
-			let radStart = posStart + size_of::<glm::Vec3>();
-			let colorStart = posStart + size_of::<glm::Vec4>();
-			let nextStart = colorStart + size_of::<cgv::RGBA>();
-			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
-			mapped.slice(radStart..nextStart).copy_from_slice(&0f32.to_ne_bytes());
-			mapped.slice(colorStart..nextStart).copy_from_slice(util::slicify(color));
+			unsafe {
+				// SAFETY: What could possibly go wrong? It'll be fine.
+				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */*color));
+				ptr = ptr.add(1);
+			}
 		}
 
 		// Done!
@@ -190,18 +188,15 @@ impl GpuData
 		let attributes = variant.createBuffer(context, data.num(), label);
 
 		// Upload the data
-		let mut mapped = attributes.get_mapped_range_mut(..);
-		for (i, ((pos, radius), color)) in data.positions()
-			.zip(data.radii()).zip(data.colors()).enumerate()
+		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
+			.cast::<(glm::Vec4, cgv::RGBA)>();
+		for ((pos, radius), color) in data.positions().zip(data.radii()).zip(data.colors())
 		{
-			// TODO: There has to be a better way...
-			let posStart = i*size_of::<glm::Vec4>();
-			let radStart = posStart + size_of::<glm::Vec3>();
-			let colorStart = posStart + size_of::<glm::Vec4>();
-			let nextStart = colorStart + size_of::<cgv::RGBA>();
-			mapped.slice(posStart..radStart).copy_from_slice(util::slicify(pos));
-			mapped.slice(radStart..nextStart).copy_from_slice(util::slicify(radius));
-			mapped.slice(colorStart..nextStart).copy_from_slice(util::slicify(color));
+			unsafe {
+				// SAFETY: What could possibly go wrong? It'll be fine.
+				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius), /* color: */*color));
+				ptr = ptr.add(1);
+			}
 		}
 
 		// Done!
