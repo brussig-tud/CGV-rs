@@ -59,12 +59,12 @@ public struct Billboards<PosScalar: __BuiltinFloatingPointType>
 		media::VertexN<PosScalar>(PosVec( _1, _1, _0, _1), float4(0,0,-1,0))
 	};
 
-	/// A unit quad with unit texture coordinates
-	public constexpr static media::VertexTC<PosScalar> quadTC[] = {
-		media::VertexTC<PosScalar>(PosVec(-_1,-_1, _0, _1), float2(0,1)),
-		media::VertexTC<PosScalar>(PosVec( _1,-_1, _0, _1), float2(1,1)),
-		media::VertexTC<PosScalar>(PosVec(-_1, _1, _0, _1), float2(0,0)),
-		media::VertexTC<PosScalar>(PosVec( _1, _1, _0, _1), float2(1,0))
+	/// A unit quad with 2D unit texture coordinates (the *U* refers to the coordinate tuple *uv*)
+	public constexpr static media::VertexU<PosScalar> quadU[] = {
+		media::VertexU<PosScalar>(PosVec(-_1,-_1, _0, _1), float2(0,1)),
+		media::VertexU<PosScalar>(PosVec( _1,-_1, _0, _1), float2(1,1)),
+		media::VertexU<PosScalar>(PosVec(-_1, _1, _0, _1), float2(0,0)),
+		media::VertexU<PosScalar>(PosVec( _1, _1, _0, _1), float2(1,0))
 	};
 }
 

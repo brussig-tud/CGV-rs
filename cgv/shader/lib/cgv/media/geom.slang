@@ -75,10 +75,10 @@ public extension<T: __BuiltinFloatingPointType> vector<T, 4>: ITangent<T> {
 /// **NOTE**: the *CGV-rs* core shader library intentionally does not provide standardized interfaces for sets of multiple texture coordinates. Rather, algorithms/datastructures or other facilities that need them should define their own interfaces for this, with clearly defined semantics for each set.
 public interface ITexCoords<Scalar: __BuiltinFloatingPointType, int N> {
 	/// The set of texture coordinates.
-	property texcoord: vector<Scalar, N>;
+	property uv: vector<Scalar, N>;
 }
 public extension<T: __BuiltinFloatingPointType, int N> vector<T, N>: ITexCoords<T, N> {
-	property texcoord: vector<T, N> {
+	property uv: vector<T, N> {
 		[ForceInline] get { return this; }
 		[ForceInline] set { this = newValue; }
 	}
@@ -107,7 +107,7 @@ public extension float4: IColor {
 public struct VertexN<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, INormal<float>
 {
 	/// The vertex position.
-	public Vec4<PosScalar> pos;
+	public Vec4<PosScalar> pos : SV_Position;
 
 	/// The vertex normal.
 	public float4 normal;
@@ -119,19 +119,19 @@ public struct VertexN<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScala
 	}
 }
 
-/// A simple vertex with 2D texture coordinates.
-public struct VertexTC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, ITexCoords<float, 2>
+/// A simple vertex with 2D texture coordinates (the *U* refers to the coordinate tuple *uv*).
+public struct VertexU<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, ITexCoords<float, 2>
 {
 	/// The vertex position.
-	public Vec4<PosScalar> pos;
+	public Vec4<PosScalar> pos : SV_Position;
 
 	/// The vertex color.
-	public float2 texcoord;
+	public float2 uv;
 
 	/// Construct with the given position and normal.
 	[ForceInline]
-	public __init (Vec4<PosScalar> pos, float2 texcoord) {
-		this.pos = pos; this.texcoord = texcoord;
+	public __init (Vec4<PosScalar> pos, float2 uv) {
+		this.pos = pos; this.uv = uv;
 	}
 }
 
@@ -139,7 +139,7 @@ public struct VertexTC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScal
 public struct VertexC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, IColor
 {
 	/// The vertex position.
-	public Vec4<PosScalar> pos;
+	public Vec4<PosScalar> pos : SV_Position;
 
 	/// The vertex color.
 	public float4 color;
@@ -155,7 +155,7 @@ public struct VertexC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScala
 public struct VertexNC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, INormal<float>, IColor
 {
 	/// The vertex position.
-	public Vec4<PosScalar> pos;
+	public Vec4<PosScalar> pos : SV_Position;
 
 	/// The vertex normal.
 	public float4 normal;
