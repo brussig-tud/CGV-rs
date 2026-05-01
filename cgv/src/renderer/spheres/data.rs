@@ -110,24 +110,38 @@ pub struct GpuData {
 }
 impl GpuData
 {
+	/// Helper function for common initialization.
+	fn commonInit<D: HostData, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
+		-> (LayoutVariant, wgpu::Buffer, std::ptr::NonNull<T>)
+	{
+		// Prepare the buffer
+		let attributes = variant.createBuffer(context, data.num(), label);
+
+		// Gain mapped pointer for uploading
+		let ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
+			.cast::<T>();
+
+		// Done!
+		(variant, attributes, ptr)
+	}
+
+
 	///
 	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Self
 	{
-		// Prepare the buffer
-		let variant = LayoutVariant::PosOnly;
-		let attributes = variant.createBuffer(context, data.num(), label);
+		// Common initialization
+		let (variant, attributes, mut ptr)
+			= Self::commonInit(context, LayoutVariant::PosOnly, &data, label);
 
 		// Upload the data
-		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
-			.cast::<glm::Vec4>();
-		for pos in data.positions()
-		{
+		for pos in data.positions() {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
 				ptr.write(/* pos_rad: */glm::vec3_to_vec4(pos));
 				ptr = ptr.add(1);
 			}
 		}
+		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
 		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
@@ -136,21 +150,19 @@ impl GpuData
 	///
 	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Self
 	{
-		// Prepare the buffer
-		let variant = LayoutVariant::PosRadius;
-		let attributes = variant.createBuffer(context, data.num(), label);
+		// Common initialization
+		let (variant, attributes, mut ptr)
+			= Self::commonInit(context, LayoutVariant::PosRadius, &data, label);
 
 		// Upload the data
-		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
-			.cast::<glm::Vec4>();
-		for (pos, radius) in data.positions().zip(data.radii())
-		{
+		for (pos, radius) in data.positions().zip(data.radii()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
 				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius));
 				ptr = ptr.add(1);
 			}
 		}
+		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
 		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
@@ -159,21 +171,19 @@ impl GpuData
 	///
 	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Self
 	{
-		// Prepare the buffer
-		let variant = LayoutVariant::PosColor;
-		let attributes = variant.createBuffer(context, data.num(), label);
+		// Common initialization
+		let (variant, attributes, mut ptr)
+			= Self::commonInit(context, LayoutVariant::PosColor, &data, label);
 
 		// Upload the data
-		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
-			.cast::<(glm::Vec4, cgv::RGBA)>();
-		for (pos, color) in data.positions().zip(data.colors())
-		{
+		for (pos, color) in data.positions().zip(data.colors()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
 				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */*color));
 				ptr = ptr.add(1);
 			}
 		}
+		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
 		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
@@ -183,21 +193,19 @@ impl GpuData
 	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors> (
 		context: &Context, data: D, label: Option<&str>
 	) -> Self {
-		// Prepare the buffer
-		let variant = LayoutVariant::PosRadiusColor;
-		let attributes = variant.createBuffer(context, data.num(), label);
+		// Common initialization
+		let (variant, attributes, mut ptr)
+			= Self::commonInit(context, LayoutVariant::PosRadiusColor, &data, label);
 
 		// Upload the data
-		let mut ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
-			.cast::<(glm::Vec4, cgv::RGBA)>();
-		for ((pos, radius), color) in data.positions().zip(data.radii()).zip(data.colors())
-		{
+		for ((pos, radius), color) in data.positions().zip(data.radii()).zip(data.colors()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
 				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius), /* color: */*color));
 				ptr = ptr.add(1);
 			}
 		}
+		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
 		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
