@@ -1,31 +1,14 @@
 
 //////
 //
-// Streams
+// Imports
 //
 
-/// Vertex data of the viewport quad.
-struct ViewportGeometry {
-	/// The clip-space position.
-	float4 pos_clip : SV_Position;
+// CGV-rs core shader library
+import "cgv/geom/billboard.slang";        // access the pre-defined billboards
 
-	/// The texture coordinates.
-	float2 uv;
-}
-
-
-
-//////
-//
-// Constants
-//
-
-/// Viewport-covering clip-space vertices.
-constexpr static let vpVertices: ViewportGeometry[] = {
-	{float4(-1,-1, 0, 1), float2(0, 1)}, {float4(1,-1, 0, 1), float2(1, 1)},
-	{float4(-1, 1, 0, 1), float2(0, 0)}, {float4(1, 1, 0, 1), float2(1, 0)}
-};
-
+// Use CGV namespace by default
+using namespace cgv;
 
 
 
@@ -39,8 +22,8 @@ constexpr static let vpVertices: ViewportGeometry[] = {
 
 /// Our sole vertex shader entry point.
 [shader("vertex")]
-func vertexMain (uint vertexID: SV_VertexID) -> ViewportGeometry {
-	return vpVertices[vertexID];
+func vertexMain (uint vertexID: SV_VertexID) -> media::VertexU<float> {
+	return geom::Billboards<float>::quadU[vertexID];
 }
 
 
@@ -75,10 +58,7 @@ ParameterBlock<float3> gamma;
 
 /// Our sole fragment shader entry point.
 [shader("fragment")]
-func fragmentMain (vpIn: ViewportGeometry) -> float4 {
+func fragmentMain (vpIn: media::VertexU<float>) -> float4 {
 	let unpremultiplied: float4 = vpTex.color.Sample(vpTex.sampler, vpIn.uv);
-	return float4(
-		pow(unpremultiplied.rgb * unpremultiplied.a, gamma), // pre-multiply and transform to sRGB
-		unpremultiplied.a
-	);
+	return float4(pow(unpremultiplied.rgb * unpremultiplied.a, gamma), unpremultiplied.a);
 }
