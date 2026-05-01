@@ -34,25 +34,25 @@ const DATA_POINTS: &[DataPoint; 8] = &[
 	// Front side:
 	DataPoint {
 		pos: glm::Vec3::new(-1., -1., -1.), radius: 1.,
-		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 0.,
+		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: -0.125,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
 		normal: glm::Vec3::new(0., 0., -1.),
 	},
 	DataPoint {
-		pos: glm::Vec3::new(1., -1., -1.), radius: 1.,
-		tangent: glm::Vec3::new(-1., 1., 0.), radDeriv: 0.,
+		pos: glm::Vec3::new(1., -1., -1.), radius: 0.75,
+		tangent: glm::Vec3::new(-1., 1., 0.), radDeriv: -0.0416666666667,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
 		normal: glm::Vec3::new(0., 0., -1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(-1., 1., -1.), radius: 1.,
-		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 0.,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
+		pos: glm::Vec3::new(-1., 1., -1.), radius: 2./3.,
+		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 0.0416666666667,
+		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 0.),
 		normal: glm::Vec3::new(0., 0., -1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(1., 1., -1.), radius: 1.,
-		tangent: glm::Vec3::new(0., 0., 1.), radDeriv: 0.,
+		pos: glm::Vec3::new(1., 1., -1.), radius: 0.75,
+		tangent: glm::Vec3::new(0., 0., 1.), radDeriv: 0.125,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
 		normal: glm::Vec3::new(1., 0., 0.,)
 	},
@@ -60,19 +60,19 @@ const DATA_POINTS: &[DataPoint; 8] = &[
 	// Back side:
 	DataPoint {
 		pos: glm::Vec3::new(1., 1., 1.), radius: 1.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
+		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.125,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(-1., 1., 1.), radius: 1.,
-		tangent: glm::Vec3::new(1., -1., 0.), radDeriv: 0.,
+		pos: glm::Vec3::new(-1., 1., 1.), radius: 1.25,
+		tangent: glm::Vec3::new(1., -1., 0.), radDeriv: -0.0625,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(1., -1., 1.), radius: 1.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
+		pos: glm::Vec3::new(1., -1., 1.), radius: 1.125,
+		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: -0.0625,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
@@ -131,7 +131,9 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::withRadii(context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData"));
+	let spheresData = cgv::renderer::spheres::GpuData::withRadiiAndColors(
+		context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData")
+	);
 
 
 	////
