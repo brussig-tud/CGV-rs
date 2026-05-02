@@ -95,7 +95,7 @@ pub use cgv_runenv as run; // re-export
 
 // Populate the vault
 #[cfg(not(target_arch="wasm32"))]
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn initTracingProxy ()
 {
 	#[cfg(target_os="windows")]
