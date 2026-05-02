@@ -131,6 +131,14 @@ pub trait CanHaveNormals: Data
 	/// [`hasNormals`](Self::hasNormals), or if `index` was out-of-bounds.
 	fn normal (&self, index: u32) -> &glm::Vec3;
 }
+/*///
+impl<D: Data> CanHaveNormals for D
+{
+	type NormalIterator<'data> = std::iter::Empty<glm::Vec3> where Self: 'data;
+	fn hasNormals (&self) -> bool { false }
+	fn normals (&self) -> Self::NormalIterator<'_> { core::iter::empty() }
+	fn normal (&self, index: u32) -> &glm::Vec3 { panic!("no normals available") }
+}*/
 /// Blanket implementation for slices of [`renderer::ElemWithNormal`]s.
 impl<T: renderer::ElemWithNormal> CanHaveNormals for &[T]
 {
