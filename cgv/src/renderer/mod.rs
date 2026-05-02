@@ -33,7 +33,7 @@ pub mod prelude {
 //
 
 // Standard library
-use std::ops::{Deref, DerefMut};
+use std::{ops::{Deref, DerefMut}, sync::Arc};
 
 // Local imports
 pub use cgv_derive::{
@@ -232,7 +232,7 @@ pub trait Renderer
 
 	///
 	#[expect(unused_variables)] // <- we want `data` to show up in the documented signature
-	fn setData (&mut self, data: impl GpuData) {
+	fn setData (&mut self, data: Arc<impl GpuData>) {
 		unimplemented!("renderer implementations must specifically opt-in to polymorphic render data assignment")
 	}
 

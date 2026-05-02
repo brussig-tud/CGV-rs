@@ -16,7 +16,7 @@ pub use data::GpuData; // re-export
 //
 
 // Standard library
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Arc};
 
 // Egui library
 use egui::ecolor::Rgba;
@@ -37,7 +37,7 @@ pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
 	_constantAttribUniforms: ConstantAttribsUniformGroup,
-	data: Option<Box<dyn renderer::GpuData>>
+	data: Option<Arc<dyn renderer::GpuData>>
 }
 impl Spheres
 {
@@ -74,8 +74,8 @@ impl Spheres
 		Self { shader, pipelineLayout, _constantAttribUniforms: constantAttribUniforms, data: None }
 	}
 
-	pub fn setData (&mut self, data: impl renderer::GpuData+'static) {
-		self.data.replace(Box::new(data));
+	pub fn setData (&mut self, data: Arc<impl renderer::GpuData+'static>) {
+		self.data.replace(data);
 	}
 }
 impl Renderer for Spheres

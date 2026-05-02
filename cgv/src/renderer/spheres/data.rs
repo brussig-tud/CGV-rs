@@ -127,7 +127,7 @@ impl GpuData
 
 
 	///
-	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Self
+	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
 		let (variant, attributes, mut ptr)
@@ -144,11 +144,11 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
+		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
 	}
 
 	///
-	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Self
+	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
 		let (variant, attributes, mut ptr)
@@ -165,11 +165,11 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
+		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
 	}
 
 	///
-	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Self
+	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
 		let (variant, attributes, mut ptr)
@@ -186,13 +186,13 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
+		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
 	}
 
 	///
 	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors> (
 		context: &Context, data: D, label: Option<&str>
-	) -> Self {
+	) -> Arc<Self> {
 		// Common initialization
 		let (variant, attributes, mut ptr)
 			= Self::commonInit(context, LayoutVariant::PosRadiusColor, &data, label);
@@ -208,7 +208,7 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Self { num: data.num(), layout: [variant.layout()], variant, attributes }
+		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
 	}
 }
 impl renderer::GpuData for GpuData

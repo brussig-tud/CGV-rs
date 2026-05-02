@@ -19,7 +19,7 @@ use crate::{self as cgv, *};
 //
 
 /// Trait of GPU-side renderable data, ready for drawing by a [`Renderer`].
-pub trait Data: Send
+pub trait Data: Sync+Send
 {
 	/// Return the number of elements in the underlying data series.
 	fn num (&self) -> u32;
