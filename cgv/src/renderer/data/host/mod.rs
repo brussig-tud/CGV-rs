@@ -20,6 +20,10 @@ pub use guarantees::*; // re-export all public facilities (mainly the guarantee 
 
 // Local imports
 use crate::{self as cgv, *};
+pub use cgv_derive::{
+	// Re-export derive macros for generating empty CanHave* implementations
+	NoNormals, NoTangents, NoRadii, NoRadiusDerivs, NoOrientations, NoScalings, NoColors
+};
 
 
 
@@ -270,8 +274,12 @@ pub trait HasRadii: CanHaveRadii {}
 impl<T: renderer::ElemWithRadius> HasRadii for &[T] {}
 
 ///
-pub trait CanHaveRadiusDerivs: CanHaveRadii
+pub trait CanHaveRadiusDerivs: Data
 {
+	/// The iterator type for iterating radius derivatives in the data. The lifetime parameter `'data` ensures that
+	/// implementations can use borrowing iterators.
+	type RadiusDerivIterator<'data>: Iterator<Item=&'data f32> where Self: 'data;
+
 	/// Indicate whether radius derivatives are available in the data.
 	fn hasRadiusDerivs (&self) -> bool;
 
@@ -285,7 +293,7 @@ pub trait CanHaveRadiusDerivs: CanHaveRadii
 	///
 	/// If this method is called even though no radius derivatives are available (to be checked up-front via
 	/// [`hasRadiusDerivs`](Self::hasRadiusDerivs).
-	fn radiusDerivs (&self) -> Self::RadiusIterator<'_>;
+	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_>;
 
 	/// Return the radius derivative at the given index.
 	///
@@ -304,10 +312,11 @@ pub trait CanHaveRadiusDerivs: CanHaveRadii
 	fn radiusDeriv (&self, index: u32) -> f32;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithRadiusDeriv`]s.
-impl<T: renderer::ElemWithRadiusDeriv+renderer::ElemWithRadius> CanHaveRadiusDerivs for &[T]
+impl<T: renderer::ElemWithRadiusDeriv> CanHaveRadiusDerivs for &[T]
 {
+	type RadiusDerivIterator<'data> = util::notsafe::StridedRefIter<'data, f32> where Self: 'data;
 	fn hasRadiusDerivs (&self) -> bool { true }
-	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { unsafe {
+	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
 		util::notsafe::StridedRefIter::new(self[0].radiusDeriv(), size_of::<T>(), self.len())
@@ -316,7 +325,7 @@ impl<T: renderer::ElemWithRadiusDeriv+renderer::ElemWithRadius> CanHaveRadiusDer
 }
 
 ///
-pub trait HasRadiusDerivs: CanHaveRadiusDerivs+HasRadii {}
+pub trait HasRadiusDerivs: CanHaveRadiusDerivs {}
 /// Blanket implementation for slices of [`renderer::ElemWithRadiusDeriv`]s.
 impl<T: renderer::ElemWithRadiusDeriv+renderer::ElemWithRadius> HasRadiusDerivs for &[T] {}
 

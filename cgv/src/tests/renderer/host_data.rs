@@ -126,8 +126,10 @@ impl host::CanHaveRadii for MockData
 }
 impl host::CanHaveRadiusDerivs for MockData
 {
+	type RadiusDerivIterator<'data> = std::slice::Iter<'data, f32>;
+
 	fn hasRadiusDerivs (&self) -> bool { self.radiusDerivs.is_some() }
-	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> {
+	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> {
 		self.radiusDerivs.as_ref().expect("should have radius derivatives").iter()
 	}
 	fn radiusDeriv (&self, index: u32) -> f32 {
@@ -199,6 +201,9 @@ fn staticAssertHasRadiusDerivs<T: host::HasRadiusDerivs> () {}
 /// For testing at compile time that the generic argument is a type that guarantees orientations.
 fn staticAssertHasOrientations<T: host::HasOrientations> () {}
 
+/// For testing at compile time that the generic argument is a type that guarantees scalings.
+fn staticAssertHasScalings<T: host::HasScalings> () {}
+
 /// For testing at compile time that the generic argument is a type that guarantees colors.
 fn staticAssertHasColors<T: host::HasColors> () {}
 
@@ -208,6 +213,101 @@ fn staticAssertHasColors<T: host::HasColors> () {}
 //
 // Tests
 //
+
+#[test]
+fn test_guaranteeWrappers_allTypeAliasesResolve ()
+{
+	// Assert helper
+	macro_rules! assertAliasesExist {
+		($($alias:ident),+ $(,)?) => {{
+			$(let _: PhantomData<$alias<MockData>> = PhantomData;)+
+		}};
+	}
+
+	// Single-attribute combinations
+	assertAliasesExist!(
+		GuaranteeNormals, GuaranteeTangents, GuaranteeRadii, GuaranteeRadiusDerivs, GuaranteeOrientations,
+		GuaranteeScalings, GuaranteeColors
+	);
+
+	// 2-attribute combinations
+	assertAliasesExist!(
+		GuaranteeNormalsTangents, GuaranteeNormalsRadii, GuaranteeNormalsRadiusDerivs, GuaranteeNormalsOrientations,
+		GuaranteeNormalsScalings, GuaranteeNormalsColors, GuaranteeTangentsRadii, GuaranteeTangentsRadiusDerivs,
+		GuaranteeTangentsOrientations, GuaranteeTangentsScalings, GuaranteeTangentsColors, GuaranteeRadiiRadiusDerivs,
+		GuaranteeRadiiOrientations, GuaranteeRadiiScalings, GuaranteeRadiiColors, GuaranteeRadiusDerivsOrientations,
+		GuaranteeRadiusDerivsScalings, GuaranteeRadiusDerivsColors, GuaranteeOrientationsScalings,
+		GuaranteeOrientationsColors, GuaranteeScalingsColors
+	);
+
+	// 3-attribute combinations
+	assertAliasesExist!(
+		GuaranteeNormalsTangentsRadii, GuaranteeNormalsTangentsRadiusDerivs, GuaranteeNormalsTangentsOrientations,
+		GuaranteeNormalsTangentsScalings, GuaranteeNormalsTangentsColors, GuaranteeNormalsRadiiRadiusDerivs,
+		GuaranteeNormalsRadiiOrientations, GuaranteeNormalsRadiiScalings, GuaranteeNormalsRadiiColors,
+		GuaranteeNormalsRadiusDerivsOrientations, GuaranteeNormalsRadiusDerivsScalings,
+		GuaranteeNormalsRadiusDerivsColors, GuaranteeNormalsOrientationsScalings, GuaranteeNormalsOrientationsColors,
+		GuaranteeNormalsScalingsColors, GuaranteeTangentsRadiiRadiusDerivs, GuaranteeTangentsRadiiOrientations,
+		GuaranteeTangentsRadiiScalings, GuaranteeTangentsRadiiColors, GuaranteeTangentsRadiusDerivsOrientations,
+		GuaranteeTangentsRadiusDerivsScalings, GuaranteeTangentsRadiusDerivsColors,
+		GuaranteeTangentsOrientationsScalings, GuaranteeTangentsOrientationsColors, GuaranteeTangentsScalingsColors,
+		GuaranteeRadiiRadiusDerivsOrientations, GuaranteeRadiiRadiusDerivsScalings, GuaranteeRadiiRadiusDerivsColors,
+		GuaranteeRadiiOrientationsScalings, GuaranteeRadiiOrientationsColors, GuaranteeRadiiScalingsColors,
+		GuaranteeRadiusDerivsOrientationsScalings, GuaranteeRadiusDerivsOrientationsColors,
+		GuaranteeRadiusDerivsScalingsColors, GuaranteeOrientationsScalingsColors
+	);
+
+	// 4-attribute combinations
+	assertAliasesExist!(
+		GuaranteeNormalsTangentsRadiiRadiusDerivs, GuaranteeNormalsTangentsRadiiOrientations,
+		GuaranteeNormalsTangentsRadiiScalings, GuaranteeNormalsTangentsRadiiColors,
+		GuaranteeNormalsTangentsRadiusDerivsOrientations, GuaranteeNormalsTangentsRadiusDerivsScalings,
+		GuaranteeNormalsTangentsRadiusDerivsColors, GuaranteeNormalsTangentsOrientationsScalings,
+		GuaranteeNormalsTangentsOrientationsColors, GuaranteeNormalsTangentsScalingsColors,
+		GuaranteeNormalsRadiiRadiusDerivsOrientations, GuaranteeNormalsRadiiRadiusDerivsScalings,
+		GuaranteeNormalsRadiiRadiusDerivsColors, GuaranteeNormalsRadiiOrientationsScalings,
+		GuaranteeNormalsRadiiOrientationsColors, GuaranteeNormalsRadiiScalingsColors,
+		GuaranteeNormalsRadiusDerivsOrientationsScalings, GuaranteeNormalsRadiusDerivsOrientationsColors,
+		GuaranteeNormalsRadiusDerivsScalingsColors, GuaranteeNormalsOrientationsScalingsColors,
+		GuaranteeTangentsRadiiRadiusDerivsOrientations, GuaranteeTangentsRadiiRadiusDerivsScalings,
+		GuaranteeTangentsRadiiRadiusDerivsColors, GuaranteeTangentsRadiiOrientationsScalings,
+		GuaranteeTangentsRadiiOrientationsColors, GuaranteeTangentsRadiiScalingsColors,
+		GuaranteeTangentsRadiusDerivsOrientationsScalings, GuaranteeTangentsRadiusDerivsOrientationsColors,
+		GuaranteeTangentsRadiusDerivsScalingsColors, GuaranteeTangentsOrientationsScalingsColors,
+		GuaranteeRadiiRadiusDerivsOrientationsScalings, GuaranteeRadiiRadiusDerivsOrientationsColors,
+		GuaranteeRadiiRadiusDerivsScalingsColors, GuaranteeRadiiOrientationsScalingsColors,
+		GuaranteeRadiusDerivsOrientationsScalingsColors
+	);
+
+	// 5-attribute combinations
+	assertAliasesExist!(
+		GuaranteeRadiiRadiusDerivsOrientationsScalingsColors, GuaranteeTangentsRadiusDerivsOrientationsScalingsColors,
+		GuaranteeTangentsRadiiOrientationsScalingsColors, GuaranteeTangentsRadiiRadiusDerivsScalingsColors,
+		GuaranteeTangentsRadiiRadiusDerivsOrientationsColors, GuaranteeTangentsRadiiRadiusDerivsOrientationsScalings,
+		GuaranteeNormalsRadiusDerivsOrientationsScalingsColors, GuaranteeNormalsRadiiOrientationsScalingsColors,
+		GuaranteeNormalsRadiiRadiusDerivsScalingsColors, GuaranteeNormalsRadiiRadiusDerivsOrientationsColors,
+		GuaranteeNormalsRadiiRadiusDerivsOrientationsScalings, GuaranteeNormalsTangentsOrientationsScalingsColors,
+		GuaranteeNormalsTangentsRadiusDerivsScalingsColors, GuaranteeNormalsTangentsRadiusDerivsOrientationsColors,
+		GuaranteeNormalsTangentsRadiusDerivsOrientationsScalings, GuaranteeNormalsTangentsRadiiScalingsColors,
+		GuaranteeNormalsTangentsRadiiOrientationsColors, GuaranteeNormalsTangentsRadiiOrientationsScalings,
+		GuaranteeNormalsTangentsRadiiRadiusDerivsColors, GuaranteeNormalsTangentsRadiiRadiusDerivsScalings,
+		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientations
+	);
+
+	// 6-attribute combinations
+	assertAliasesExist!(
+		GuaranteeTangentsRadiiRadiusDerivsOrientationsScalingsColors,
+		GuaranteeNormalsRadiiRadiusDerivsOrientationsScalingsColors,
+		GuaranteeNormalsTangentsRadiusDerivsOrientationsScalingsColors,
+		GuaranteeNormalsTangentsRadiiOrientationsScalingsColors,
+		GuaranteeNormalsTangentsRadiiRadiusDerivsScalingsColors,
+		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsColors,
+		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalings
+	);
+
+	// All-attribute combination
+	assertAliasesExist!(GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalingsColors);
+}
 
 #[test]
 fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
@@ -248,111 +348,12 @@ fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
 }
 
 #[test]
-fn test_guaranteeWrappers_radiusDerivsGuaranteeRadii ()
-{
-	// Compile-time check that both derivatives and radii become guaranteed
-	staticAssertHasRadii::<GuaranteeRadiusDerivs<MockData>>();
-	staticAssertHasRadiusDerivs::<GuaranteeRadiusDerivs<MockData>>();
-
-	// Check at runtime too
-	let guaranteed = GuaranteeRadiusDerivs::new(MockData::fullyPopulated());
-	assert!(guaranteed.hasRadii());
-	assert!(guaranteed.hasRadiusDerivs());
-	assert_eq!(guaranteed.radius(1), 1.5);
-	assert_eq!(guaranteed.radiusDeriv(0), 0.25);
-}
-
-#[test]
-fn test_guaranteeWrappers_allTypeAliasesResolve ()
-{
-	macro_rules! assertAliasesExist {
-		($($alias:ident),+ $(,)?) => {{
-			$(let _: PhantomData<$alias<MockData>> = PhantomData;)+
-		}};
-	}
-	assertAliasesExist!(
-		GuaranteeNormals, GuaranteeTangents, GuaranteeRadii, GuaranteeRadiusDerivs, GuaranteeOrientations,
-		GuaranteeScalings, GuaranteeColors, GuaranteeNormalsTangents, GuaranteeNormalsRadii,
-		GuaranteeNormalsRadiusDerivs, GuaranteeNormalsOrientations, GuaranteeNormalsScalings,
-		GuaranteeNormalsColors, GuaranteeTangentsRadii, GuaranteeTangentsRadiusDerivs,
-		GuaranteeTangentsOrientations, GuaranteeTangentsScalings, GuaranteeTangentsColors,
-		GuaranteeRadiiRadiusDerivs, GuaranteeRadiiOrientations, GuaranteeRadiiScalings,
-		GuaranteeRadiiColors, GuaranteeRadiusDerivsOrientations, GuaranteeRadiusDerivsScalings,
-		GuaranteeRadiusDerivsColors, GuaranteeOrientationsScalings, GuaranteeOrientationsColors,
-		GuaranteeScalingsColors, GuaranteeNormalsTangentsRadii, GuaranteeNormalsTangentsRadiusDerivs,
-		GuaranteeNormalsTangentsOrientations, GuaranteeNormalsTangentsScalings, GuaranteeNormalsTangentsColors,
-		GuaranteeNormalsRadiiRadiusDerivs, GuaranteeNormalsRadiiOrientations, GuaranteeNormalsRadiiScalings,
-		GuaranteeNormalsRadiiColors, GuaranteeNormalsRadiusDerivsOrientations,
-		GuaranteeNormalsRadiusDerivsScalings, GuaranteeNormalsRadiusDerivsColors,
-		GuaranteeNormalsOrientationsScalings, GuaranteeNormalsOrientationsColors,
-		GuaranteeNormalsScalingsColors, GuaranteeTangentsRadiiRadiusDerivs,
-		GuaranteeTangentsRadiiOrientations, GuaranteeTangentsRadiiScalings, GuaranteeTangentsRadiiColors,
-		GuaranteeTangentsRadiusDerivsOrientations, GuaranteeTangentsRadiusDerivsScalings,
-		GuaranteeTangentsRadiusDerivsColors, GuaranteeTangentsOrientationsScalings,
-		GuaranteeTangentsOrientationsColors, GuaranteeTangentsScalingsColors,
-		GuaranteeRadiiRadiusDerivsOrientations, GuaranteeRadiiRadiusDerivsScalings,
-		GuaranteeRadiiRadiusDerivsColors, GuaranteeRadiiOrientationsScalings,
-		GuaranteeRadiiOrientationsColors, GuaranteeRadiiScalingsColors,
-		GuaranteeRadiusDerivsOrientationsScalings, GuaranteeRadiusDerivsOrientationsColors,
-		GuaranteeRadiusDerivsScalingsColors, GuaranteeOrientationsScalingsColors,
-		GuaranteeNormalsTangentsRadiiRadiusDerivs, GuaranteeNormalsTangentsRadiiOrientations,
-		GuaranteeNormalsTangentsRadiiScalings, GuaranteeNormalsTangentsRadiiColors,
-		GuaranteeNormalsTangentsRadiusDerivsOrientations,
-		GuaranteeNormalsTangentsRadiusDerivsScalings, GuaranteeNormalsTangentsRadiusDerivsColors,
-		GuaranteeNormalsTangentsOrientationsScalings, GuaranteeNormalsTangentsOrientationsColors,
-		GuaranteeNormalsTangentsScalingsColors, GuaranteeNormalsRadiiRadiusDerivsOrientations,
-		GuaranteeNormalsRadiiRadiusDerivsScalings, GuaranteeNormalsRadiiRadiusDerivsColors,
-		GuaranteeNormalsRadiiOrientationsScalings, GuaranteeNormalsRadiiOrientationsColors,
-		GuaranteeNormalsRadiiScalingsColors, GuaranteeNormalsRadiusDerivsOrientationsScalings,
-		GuaranteeNormalsRadiusDerivsOrientationsColors, GuaranteeNormalsRadiusDerivsScalingsColors,
-		GuaranteeNormalsOrientationsScalingsColors, GuaranteeTangentsRadiiRadiusDerivsOrientations,
-		GuaranteeTangentsRadiiRadiusDerivsScalings, GuaranteeTangentsRadiiRadiusDerivsColors,
-		GuaranteeTangentsRadiiOrientationsScalings, GuaranteeTangentsRadiiOrientationsColors,
-		GuaranteeTangentsRadiiScalingsColors, GuaranteeTangentsRadiusDerivsOrientationsScalings,
-		GuaranteeTangentsRadiusDerivsOrientationsColors, GuaranteeTangentsRadiusDerivsScalingsColors,
-		GuaranteeTangentsOrientationsScalingsColors, GuaranteeRadiiRadiusDerivsOrientationsScalings,
-		GuaranteeRadiiRadiusDerivsOrientationsColors, GuaranteeRadiiRadiusDerivsScalingsColors,
-		GuaranteeRadiiOrientationsScalingsColors, GuaranteeRadiusDerivsOrientationsScalingsColors,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientations,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsScalings,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsColors,
-		GuaranteeNormalsTangentsRadiiOrientationsScalings,
-		GuaranteeNormalsTangentsRadiiOrientationsColors,
-		GuaranteeNormalsTangentsRadiiScalingsColors,
-		GuaranteeNormalsTangentsRadiusDerivsOrientationsScalings,
-		GuaranteeNormalsTangentsRadiusDerivsOrientationsColors,
-		GuaranteeNormalsTangentsRadiusDerivsScalingsColors,
-		GuaranteeNormalsTangentsOrientationsScalingsColors,
-		GuaranteeNormalsRadiiRadiusDerivsOrientationsScalings,
-		GuaranteeNormalsRadiiRadiusDerivsOrientationsColors,
-		GuaranteeNormalsRadiiRadiusDerivsScalingsColors,
-		GuaranteeNormalsRadiiOrientationsScalingsColors,
-		GuaranteeNormalsRadiusDerivsOrientationsScalingsColors,
-		GuaranteeTangentsRadiiRadiusDerivsOrientationsScalings,
-		GuaranteeTangentsRadiiRadiusDerivsOrientationsColors,
-		GuaranteeTangentsRadiiRadiusDerivsScalingsColors,
-		GuaranteeTangentsRadiiOrientationsScalingsColors,
-		GuaranteeTangentsRadiusDerivsOrientationsScalingsColors,
-		GuaranteeRadiiRadiusDerivsOrientationsScalingsColors,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalings,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsColors,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsScalingsColors,
-		GuaranteeNormalsTangentsRadiiOrientationsScalingsColors,
-		GuaranteeNormalsTangentsRadiusDerivsOrientationsScalingsColors,
-		GuaranteeNormalsRadiiRadiusDerivsOrientationsScalingsColors,
-		GuaranteeTangentsRadiiRadiusDerivsOrientationsScalingsColors,
-		GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalingsColors
-	);
-}
-
-#[test]
-fn test_guaranteeWrappers_selectCombinationsPreserveGuaranteedTraits ()
+fn test_guaranteeWrappers_selectCombosGuaranteeAttributes ()
 {
 	// Compile-time check guarantees on test combo 1
 	type GuaranteedCombo1 = GuaranteeNormalsTangentsRadiusDerivsColors<MockData>;
 	staticAssertHasNormals::<GuaranteedCombo1>();
 	staticAssertHasTangents::<GuaranteedCombo1>();
-	staticAssertHasRadii::<GuaranteedCombo1>();
 	staticAssertHasRadiusDerivs::<GuaranteedCombo1>();
 	staticAssertHasColors::<GuaranteedCombo1>();
 
@@ -381,13 +382,68 @@ fn test_guaranteeWrappers_selectCombinationsPreserveGuaranteedTraits ()
 }
 
 #[test]
+fn test_guaranteeWrappers_selectCombosPreserveExistingGuarantees ()
+{
+	// Compile-time check existing guarantees get propagated on test combo 1
+	type GuaranteedBaseCombo1 = GuaranteeOrientationsScalings<MockData>;
+	type GuaranteedWrappedCombo1 = GuaranteeNormalsTangentsRadiusDerivsColors<GuaranteedBaseCombo1>;
+	staticAssertHasNormals::<GuaranteedWrappedCombo1>();
+	staticAssertHasTangents::<GuaranteedWrappedCombo1>();
+	staticAssertHasRadiusDerivs::<GuaranteedWrappedCombo1>();
+	staticAssertHasOrientations::<GuaranteedWrappedCombo1>(); // <- should have been propagated
+	staticAssertHasScalings::<GuaranteedWrappedCombo1>();     // <- should have been propagated
+	staticAssertHasColors::<GuaranteedWrappedCombo1>();
+
+	// Compile-time check existing guarantees get propagated on test combo 2
+	type GuaranteedBaseCombo2 = GuaranteeTangentsRadiiColors<MockData>;
+	type GuaranteedWrappedCombo2 = GuaranteeNormalsRadiusDerivsScalings<GuaranteedBaseCombo2>;
+	staticAssertHasNormals::<GuaranteedWrappedCombo2>();
+	staticAssertHasTangents::<GuaranteedWrappedCombo2>();     // <- should have been propagated
+	staticAssertHasRadii::<GuaranteedWrappedCombo2>();        // <- should have been propagated
+	staticAssertHasRadiusDerivs::<GuaranteedWrappedCombo2>();
+	staticAssertHasScalings::<GuaranteedWrappedCombo2>();
+	staticAssertHasColors::<GuaranteedWrappedCombo2>();       // <- should have been propagated
+
+	// Runtime-test combo 1
+	let guaranteedWrappedCombo1 = GuaranteedWrappedCombo1::new(
+		GuaranteedBaseCombo1::new(MockData::withFlags(
+			true, true, false, true, true, true,
+			true
+		))
+	);
+	assert!(guaranteedWrappedCombo1.hasNormals());
+	assert!(guaranteedWrappedCombo1.hasTangents());
+	assert!(guaranteedWrappedCombo1.hasRadiusDerivs());
+	assert!(guaranteedWrappedCombo1.hasOrientations()); // <- should have been propagated
+	assert!(guaranteedWrappedCombo1.hasScalings());     // <- should have been propagated
+	assert!(guaranteedWrappedCombo1.hasColors());
+
+	// Runtime-test combo 2
+	let guaranteedWrappedCombo2 = GuaranteedWrappedCombo2::new(
+		GuaranteedBaseCombo2::new(MockData::withFlags(
+			true, true, true, true, false, true,
+			true
+		))
+	);
+	assert!(guaranteedWrappedCombo2.hasNormals());
+	assert!(guaranteedWrappedCombo2.hasTangents());     // <- should have been propagated
+	assert!(guaranteedWrappedCombo2.hasRadii());        // <- should have been propagated
+	assert!(guaranteedWrappedCombo2.hasRadiusDerivs());
+	assert!(guaranteedWrappedCombo2.hasScalings());
+	assert!(guaranteedWrappedCombo2.hasColors());       // <- should have been propagated
+}
+
+#[test]
 fn test_guaranteeWrappers_constructorsRejectMissingAttributes ()
 {
+	// Assert helper
 	macro_rules! assertPanics {
 		($expression:expr) => {
 			assert!(catch_unwind(|| $expression).is_err());
 		};
 	}
+
+	// Check that constructors correctly reject
 	assertPanics!(GuaranteeNormals::new(
 		MockData::withFlags(/* missing normals: */false, true, true, true, true, true, true)
 	));
@@ -396,9 +452,6 @@ fn test_guaranteeWrappers_constructorsRejectMissingAttributes ()
 	));
 	assertPanics!(GuaranteeRadii::new(
 		MockData::withFlags(true, true, /* missing radii: */false, false, true, true, true)
-	));
-	assertPanics!(GuaranteeRadiusDerivs::new(
-		MockData::withFlags(true, true, /* missing radii (for derivatives): */false, true, true, true, true)
 	));
 	assertPanics!(GuaranteeRadiusDerivs::new(
 		MockData::withFlags(true, true, true, /* missing radius derivatives: */false, true, true, true)

@@ -83,8 +83,8 @@ impl<T: host::CanHaveRadii> RequireRadii<true> for T {
 	}
 }
 
-/// Helper trait for asserting the presence of radius derivatives (and by extension radii) only when required by an
-/// instance of [`GuaranteeAttributes`].
+/// Helper trait for asserting the presence of radius derivatives only when required by an instance of
+/// [`GuaranteeAttributes`].
 trait RequireRadiusDerivs<const REQUIRED: bool> {
 	fn assertRadiusDerivs (&self);
 }
@@ -95,7 +95,6 @@ impl<T> RequireRadiusDerivs<false> for T {
 impl<T: host::CanHaveRadiusDerivs> RequireRadiusDerivs<true> for T {
 	#[inline(always)]
 	fn assertRadiusDerivs (&self) {
-		assert!(self.hasRadii(), "to-be-wrapped data with radius derivatives must also contain radii!");
 		assert!(self.hasRadiusDerivs(), "to-be-wrapped data must contain radius derivatives!");
 	}
 }
@@ -157,7 +156,7 @@ impl<T: host::CanHaveColors> RequireColors<true> for T {
 ////
 // GuaranteeAttributes
 
-/// Wrapper to turn runtime presence of the specified attributes in some [`renderer::Data`] into a compile-time
+/// Wrapper to turn runtime presence of the specified attributes in some [`renderer::HostData`] into a compile-time
 /// guarantee. Panics during construction if the wrappee does not actually have the asked-for attributes.
 pub struct GuaranteeAttributes<
 	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
@@ -180,7 +179,7 @@ impl<
 	///
 	/// # Arguments
 	///
-	/// * `data` – The [`renderer::Data`] to guarantee attributes for.
+	/// * `data` – The [`renderer::HostData`] to guarantee attributes for.
 	///
 	/// # Returns
 	///
@@ -335,7 +334,7 @@ impl<
 	Wrappee, NORMALS, false, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 
-// Guarantee radii/radius derivatives (needs to be treated together to handle Derivs => Radii requirement)
+// Guarantee radii
 impl<
 	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
@@ -358,31 +357,10 @@ impl<
 	Wrappee, NORMALS, TANGENTS, true, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
+	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadii for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, false, true, ORIENTATIONS, SCALINGS, COLORS
->{
-	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
-
-	#[inline(always)]
-	fn hasRadii (&self) -> bool { true }
-	#[inline(always)]
-	fn radii (&self) -> Self::RadiusIterator<'_> { self.0.radii() }
-	#[inline(always)]
-	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
-}
-impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
-> host::HasRadii for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, false, true, ORIENTATIONS, SCALINGS, COLORS
->{}
-impl<
-	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
-> host::CanHaveRadii for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
+	Wrappee, NORMALS, TANGENTS, false, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
 	type RadiusIterator<'data> = Wrappee::RadiusIterator<'data> where Wrappee: 'data;
 
@@ -394,67 +372,54 @@ impl<
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
 impl<
-	Wrappee: host::HasRadii, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool, const SCALINGS: bool,
-	const COLORS: bool
+	Wrappee: host::HasRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasRadii for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
+	Wrappee, NORMALS, TANGENTS, false, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
+
+// Guarantee radius derivatives
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadiusDerivs for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, true, true, ORIENTATIONS, SCALINGS, COLORS
+	Wrappee, NORMALS, TANGENTS, RADII, true, ORIENTATIONS, SCALINGS, COLORS
 >{
+	type RadiusDerivIterator<'data> = Wrappee::RadiusDerivIterator<'data> where Wrappee: 'data;
+
 	#[inline(always)]
 	fn hasRadiusDerivs (&self) -> bool { true }
 	#[inline(always)]
-	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { self.0.radiusDerivs() }
+	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> { self.0.radiusDerivs() }
 	#[inline(always)]
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasRadiusDerivs for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, true, true, ORIENTATIONS, SCALINGS, COLORS
+	Wrappee, NORMALS, TANGENTS, RADII, true, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
+	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadiusDerivs for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, true, false, ORIENTATIONS, SCALINGS, COLORS
+	Wrappee, NORMALS, TANGENTS, RADII, false, ORIENTATIONS, SCALINGS, COLORS
 >{
+	type RadiusDerivIterator<'data> = Wrappee::RadiusDerivIterator<'data> where Wrappee: 'data;
+
 	#[inline(always)]
 	fn hasRadiusDerivs (&self) -> bool { self.0.hasRadiusDerivs() }
 	#[inline(always)]
-	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { self.0.radiusDerivs() }
+	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> { self.0.radiusDerivs() }
 	#[inline(always)]
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
+	Wrappee: host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasRadiusDerivs for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, true, false, ORIENTATIONS, SCALINGS, COLORS
->{}
-impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
-> host::CanHaveRadiusDerivs for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
->{
-	#[inline(always)]
-	fn hasRadiusDerivs (&self) -> bool { self.0.hasRadiusDerivs() }
-	#[inline(always)]
-	fn radiusDerivs (&self) -> Self::RadiusIterator<'_> { self.0.radiusDerivs() }
-	#[inline(always)]
-	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
-}
-impl<
-	Wrappee: host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const ORIENTATIONS: bool,
-	const SCALINGS: bool, const COLORS: bool
-> host::HasRadiusDerivs for GuaranteeAttributes<
-	Wrappee, NORMALS, TANGENTS, false, false, ORIENTATIONS, SCALINGS, COLORS
+	Wrappee, NORMALS, TANGENTS, RADII, false, ORIENTATIONS, SCALINGS, COLORS
 >{}
 
 // Guarantee orientations
@@ -618,680 +583,639 @@ impl<
 // Combination aliases
 //
 
-// Canonical flat aliases for all attribute-name combinations. Aliases mentioning `RadiusDerivs` imply radii as well,
-// so those combinations set both radius-related guarantees on the shared combination wrapper.
+// Canonical flat aliases for all single-attribute guarantees.
 defineGuaranteeAliases!(
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals are present.
 	GuaranteeNormals = GuaranteeAttributes<Wrappee, true, false, false, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents are present.
 	GuaranteeTangents = GuaranteeAttributes<Wrappee, false, true, false, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] a compile-time guarantee that radii are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] a compile-time guarantee that radii are present.
 	GuaranteeRadii = GuaranteeAttributes<Wrappee, false, false, true, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiusDerivs = GuaranteeAttributes<Wrappee, false, false, true, true, false, false, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives are present.
+	GuaranteeRadiusDerivs = GuaranteeAttributes<Wrappee, false, false, false, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that orientations are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that orientations are present.
 	GuaranteeOrientations = GuaranteeAttributes<Wrappee, false, false, false, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that scaling vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that scaling vectors are present.
 	GuaranteeScalings = GuaranteeAttributes<Wrappee, false, false, false, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that colors are present.
 	GuaranteeColors = GuaranteeAttributes<Wrappee, false, false, false, false, false, false, true>;
+);
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals and tangents are present.
+// Canonical flat aliases for all 2-attribute guarantee combinations
+defineGuaranteeAliases!(
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals and tangents are
+	/// present.
 	GuaranteeNormalsTangents = GuaranteeAttributes<Wrappee, true, true, false, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals and radii are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals and radii are present.
 	GuaranteeNormalsRadii = GuaranteeAttributes<Wrappee, true, false, true, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals and radius derivatives are
-	/// present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiusDerivs = GuaranteeAttributes<Wrappee, true, false, true, true, false, false, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals and radius derivatives
+	/// are present.
+	GuaranteeNormalsRadiusDerivs = GuaranteeAttributes<Wrappee, true, false, false, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals and orientations are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals and orientations are
 	/// present.
 	GuaranteeNormalsOrientations = GuaranteeAttributes<Wrappee, true, false, false, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals and scaling vectors are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals and scalings are
 	/// present.
 	GuaranteeNormalsScalings = GuaranteeAttributes<Wrappee, true, false, false, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals and colors are present.
 	GuaranteeNormalsColors = GuaranteeAttributes<Wrappee, true, false, false, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents and radii are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents and radii are present.
 	GuaranteeTangentsRadii = GuaranteeAttributes<Wrappee, false, true, true, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents and radius derivatives are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiusDerivs = GuaranteeAttributes<Wrappee, false, true, true, true, false, false, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents and radius derivatives
+	/// are present.
+	GuaranteeTangentsRadiusDerivs = GuaranteeAttributes<Wrappee, false, true, false, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents and orientations are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents and orientations are
 	/// present.
 	GuaranteeTangentsOrientations = GuaranteeAttributes<Wrappee, false, true, false, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents and scaling vectors are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents and scalings are
 	/// present.
 	GuaranteeTangentsScalings = GuaranteeAttributes<Wrappee, false, true, false, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents and colors are present.
 	GuaranteeTangentsColors = GuaranteeAttributes<Wrappee, false, true, false, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii and radius derivatives are
-	/// present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii and radius derivatives are
+	/// present.
 	GuaranteeRadiiRadiusDerivs = GuaranteeAttributes<Wrappee, false, false, true, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii and orientations are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii and orientations are
+	/// present.
 	GuaranteeRadiiOrientations = GuaranteeAttributes<Wrappee, false, false, true, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii and scaling vectors are
-	/// present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii and scalings are present.
 	GuaranteeRadiiScalings = GuaranteeAttributes<Wrappee, false, false, true, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii and colors are present.
 	GuaranteeRadiiColors = GuaranteeAttributes<Wrappee, false, false, true, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives and orientations
-	/// are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiusDerivsOrientations = GuaranteeAttributes<Wrappee, false, false, true, true, true, false, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives and
+	/// orientations are present.
+	GuaranteeRadiusDerivsOrientations = GuaranteeAttributes<Wrappee, false, false, false, true, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives and scaling
-	/// vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiusDerivsScalings = GuaranteeAttributes<Wrappee, false, false, true, true, false, true, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives and scalings
+	/// are present.
+	GuaranteeRadiusDerivsScalings = GuaranteeAttributes<Wrappee, false, false, false, true, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives and colors are
-	/// present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiusDerivsColors = GuaranteeAttributes<Wrappee, false, false, true, true, false, false, true>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives and colors
+	/// are present.
+	GuaranteeRadiusDerivsColors = GuaranteeAttributes<Wrappee, false, false, false, true, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that orientations and scaling vectors are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that orientations and scalings are
 	/// present.
 	GuaranteeOrientationsScalings = GuaranteeAttributes<Wrappee, false, false, false, false, true, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that orientations and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that orientations and colors are
+	/// present.
 	GuaranteeOrientationsColors = GuaranteeAttributes<Wrappee, false, false, false, false, true, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that scaling vectors and colors are
-	/// present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that scalings and colors are present.
 	GuaranteeScalingsColors = GuaranteeAttributes<Wrappee, false, false, false, false, false, true, true>;
+);
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, and radii are
-	/// present.
+// Canonical flat aliases for all 3-attribute guarantee combinations
+defineGuaranteeAliases!(
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, and radii
+	/// are present.
 	GuaranteeNormalsTangentsRadii = GuaranteeAttributes<Wrappee, true, true, true, false, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, and radius
-	/// derivatives are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiusDerivs = GuaranteeAttributes<Wrappee, true, true, true, true, false, false, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, and radius
+	/// derivatives are present.
+	GuaranteeNormalsTangentsRadiusDerivs = GuaranteeAttributes<Wrappee, true, true, false, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, and orientations
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, and
+	/// orientations are present.
 	GuaranteeNormalsTangentsOrientations = GuaranteeAttributes<Wrappee, true, true, false, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, and scaling
-	/// vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, and scalings
+	/// are present.
 	GuaranteeNormalsTangentsScalings = GuaranteeAttributes<Wrappee, true, true, false, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, and colors are
-	/// present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, and colors
+	/// are present.
 	GuaranteeNormalsTangentsColors = GuaranteeAttributes<Wrappee, true, true, false, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, and radius
-	/// derivatives are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, and radius
+	/// derivatives are present.
 	GuaranteeNormalsRadiiRadiusDerivs = GuaranteeAttributes<Wrappee, true, false, true, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, and orientations are
-	/// present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, and orientations
+	/// are present.
 	GuaranteeNormalsRadiiOrientations = GuaranteeAttributes<Wrappee, true, false, true, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, and scaling vectors
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, and scalings are
+	/// present.
 	GuaranteeNormalsRadiiScalings = GuaranteeAttributes<Wrappee, true, false, true, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, and colors are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, and colors are
 	/// present.
 	GuaranteeNormalsRadiiColors = GuaranteeAttributes<Wrappee, true, false, true, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives, and
-	/// orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives, and
+	/// orientations are present.
 	GuaranteeNormalsRadiusDerivsOrientations = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, false, false
+		Wrappee, true, false, false, true, true, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives, and
-	/// scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiusDerivsScalings = GuaranteeAttributes<Wrappee, true, false, true, true, false, true, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives, and
+	/// scalings are present.
+	GuaranteeNormalsRadiusDerivsScalings = GuaranteeAttributes<Wrappee, true, false, false, true, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives, and
-	/// colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiusDerivsColors = GuaranteeAttributes<Wrappee, true, false, true, true, false, false, true>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives, and
+	/// colors are present.
+	GuaranteeNormalsRadiusDerivsColors = GuaranteeAttributes<Wrappee, true, false, false, true, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, orientations, and scaling
-	/// vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, orientations, and
+	/// scalings are present.
 	GuaranteeNormalsOrientationsScalings = GuaranteeAttributes<Wrappee, true, false, false, false, true, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, orientations, and colors
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, orientations, and
+	/// colors are present.
 	GuaranteeNormalsOrientationsColors = GuaranteeAttributes<Wrappee, true, false, false, false, true, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, scaling vectors, and colors
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, scalings, and colors
 	/// are present.
 	GuaranteeNormalsScalingsColors = GuaranteeAttributes<Wrappee, true, false, false, false, false, true, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, and radius
-	/// derivatives are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, and radius
+	/// derivatives are present.
 	GuaranteeTangentsRadiiRadiusDerivs = GuaranteeAttributes<Wrappee, false, true, true, true, false, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, and orientations
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, and
+	/// orientations are present.
 	GuaranteeTangentsRadiiOrientations = GuaranteeAttributes<Wrappee, false, true, true, false, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, and scaling vectors
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, and scalings
 	/// are present.
 	GuaranteeTangentsRadiiScalings = GuaranteeAttributes<Wrappee, false, true, true, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, and colors are
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, and colors are
 	/// present.
 	GuaranteeTangentsRadiiColors = GuaranteeAttributes<Wrappee, false, true, true, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives, and
-	/// orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// and orientations are present.
 	GuaranteeTangentsRadiusDerivsOrientations = GuaranteeAttributes<
-		Wrappee, false, true, true, true, true, false, false
+		Wrappee, false, true, false, true, true, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives, and
-	/// scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiusDerivsScalings = GuaranteeAttributes<Wrappee, false, true, true, true, false, true, false>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// and scalings are present.
+	GuaranteeTangentsRadiusDerivsScalings = GuaranteeAttributes<Wrappee, false, true, false, true, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives, and
-	/// colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiusDerivsColors = GuaranteeAttributes<Wrappee, false, true, true, true, false, false, true>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// and colors are present.
+	GuaranteeTangentsRadiusDerivsColors = GuaranteeAttributes<Wrappee, false, true, false, true, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, orientations, and scaling
-	/// vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, orientations, and
+	/// scalings are present.
 	GuaranteeTangentsOrientationsScalings = GuaranteeAttributes<Wrappee, false, true, false, false, true, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, orientations, and colors
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, orientations, and
+	/// colors are present.
 	GuaranteeTangentsOrientationsColors = GuaranteeAttributes<Wrappee, false, true, false, false, true, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, scaling vectors, and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, scalings, and colors
+	/// are present.
 	GuaranteeTangentsScalingsColors = GuaranteeAttributes<Wrappee, false, true, false, false, false, true, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives, and
-	/// orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives, and
+	/// orientations are present.
 	GuaranteeRadiiRadiusDerivsOrientations = GuaranteeAttributes<Wrappee, false, false, true, true, true, false, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives, and
-	/// scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives, and
+	/// scalings are present.
 	GuaranteeRadiiRadiusDerivsScalings = GuaranteeAttributes<Wrappee, false, false, true, true, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives, and
-	/// colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives, and
+	/// colors are present.
 	GuaranteeRadiiRadiusDerivsColors = GuaranteeAttributes<Wrappee, false, false, true, true, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, orientations, and scaling
-	/// vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, orientations, and
+	/// scalings are present.
 	GuaranteeRadiiOrientationsScalings = GuaranteeAttributes<Wrappee, false, false, true, false, true, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, orientations, and colors are
-	/// present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, orientations, and colors
+	/// are resent.
 	GuaranteeRadiiOrientationsColors = GuaranteeAttributes<Wrappee, false, false, true, false, true, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, scaling vectors, and colors
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, scalings, and colors are
+	/// present.
 	GuaranteeRadiiScalingsColors = GuaranteeAttributes<Wrappee, false, false, true, false, false, true, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives, orientations,
-	/// and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives,
+	/// orientations, and scalings are present.
 	GuaranteeRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, false, false, true, true, true, true, false
+		Wrappee, false, false, false, true, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives, orientations,
-	/// and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiusDerivsOrientationsColors = GuaranteeAttributes<Wrappee, false, false, true, true, true, false, true>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives,
+	/// orientations, and colors are present.
+	GuaranteeRadiusDerivsOrientationsColors = GuaranteeAttributes<
+		Wrappee, false, false, false, true, true, false, true
+	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives, scaling vectors,
-	/// and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiusDerivsScalingsColors = GuaranteeAttributes<Wrappee, false, false, true, true, false, true, true>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives, scalings,
+	/// and colors are present.
+	GuaranteeRadiusDerivsScalingsColors = GuaranteeAttributes<Wrappee, false, false, false, true, false, true, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that orientations, scaling vectors, and
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that orientations, scalings, and
 	/// colors are present.
 	GuaranteeOrientationsScalingsColors = GuaranteeAttributes<Wrappee, false, false, false, false, true, true, true>;
+);
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, and radius
-	/// derivatives are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+// Canonical flat aliases for all 4-attribute guarantee combinations
+defineGuaranteeAliases!(
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii, and
+	/// radius derivatives are present.
 	GuaranteeNormalsTangentsRadiiRadiusDerivs = GuaranteeAttributes<
 		Wrappee, true, true, true, true, false, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, and
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii, and
 	/// orientations are present.
 	GuaranteeNormalsTangentsRadiiOrientations = GuaranteeAttributes<
 		Wrappee, true, true, true, false, true, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, and
-	/// scaling vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii, and
+	/// scalings are present.
 	GuaranteeNormalsTangentsRadiiScalings = GuaranteeAttributes<Wrappee, true, true, true, false, false, true, false>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, and colors
-	/// are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii, and
+	/// colors are present.
 	GuaranteeNormalsTangentsRadiiColors = GuaranteeAttributes<Wrappee, true, true, true, false, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, and orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radius
+	/// derivatives, and orientations are present.
 	GuaranteeNormalsTangentsRadiusDerivsOrientations = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, false, false
+		Wrappee, true, true, false, true, true, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radius
+	/// derivatives, and scalings are present.
 	GuaranteeNormalsTangentsRadiusDerivsScalings = GuaranteeAttributes<
-		Wrappee, true, true, true, true, false, true, false
+		Wrappee, true, true, false, true, false, true, false
 	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radius
+	/// derivatives, and colors are present.
 	GuaranteeNormalsTangentsRadiusDerivsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, false, false, true
+		Wrappee, true, true, false, true, false, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, orientations, and
-	/// scaling vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, orientations,
+	/// and scalings are present.
 	GuaranteeNormalsTangentsOrientationsScalings = GuaranteeAttributes<
 		Wrappee, true, true, false, false, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, orientations, and
-	/// colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, orientations,
+	/// and colors are present.
 	GuaranteeNormalsTangentsOrientationsColors = GuaranteeAttributes<
 		Wrappee, true, true, false, false, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, scaling vectors,
-	/// and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, scalings, and
+	/// colors are present.
 	GuaranteeNormalsTangentsScalingsColors = GuaranteeAttributes<Wrappee, true, true, false, false, false, true, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// and orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, radius
+	/// derivatives, and orientations are present.
 	GuaranteeNormalsRadiiRadiusDerivsOrientations = GuaranteeAttributes<
 		Wrappee, true, false, true, true, true, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, radius
+	/// derivatives, and scalings are present.
 	GuaranteeNormalsRadiiRadiusDerivsScalings = GuaranteeAttributes<
 		Wrappee, true, false, true, true, false, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, radius
+	/// derivatives, and colors are present.
 	GuaranteeNormalsRadiiRadiusDerivsColors = GuaranteeAttributes<Wrappee, true, false, true, true, false, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, orientations, and
-	/// scaling vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, orientations,
+	/// and scalings are present.
 	GuaranteeNormalsRadiiOrientationsScalings = GuaranteeAttributes<
 		Wrappee, true, false, true, false, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, orientations, and
-	/// colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, orientations,
+	/// and colors are present.
 	GuaranteeNormalsRadiiOrientationsColors = GuaranteeAttributes<Wrappee, true, false, true, false, true, false, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, scaling vectors, and
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, scalings, and
 	/// colors are present.
 	GuaranteeNormalsRadiiScalingsColors = GuaranteeAttributes<Wrappee, true, false, true, false, false, true, true>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives,
-	/// orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives,
+	/// orientations, and scalings are present.
 	GuaranteeNormalsRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, true, false
+		Wrappee, true, false, false, true, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives,
-	/// orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives,
+	/// orientations, and colors are present.
 	GuaranteeNormalsRadiusDerivsOrientationsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, false, true
+		Wrappee, true, false, false, true, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives, scaling
-	/// vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives,
+	/// scalings, and colors are present.
 	GuaranteeNormalsRadiusDerivsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, true, false, true, true
+		Wrappee, true, false, false, true, false, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, orientations, scaling
-	/// vectors, and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, orientations, scalings,
+	/// and colors are present.
 	GuaranteeNormalsOrientationsScalingsColors = GuaranteeAttributes<
 		Wrappee, true, false, false, false, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// and orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, radius
+	/// derivatives, and orientations are present.
 	GuaranteeTangentsRadiiRadiusDerivsOrientations = GuaranteeAttributes<
 		Wrappee, false, true, true, true, true, false, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, radius
+	/// derivatives, and scalings are present.
 	GuaranteeTangentsRadiiRadiusDerivsScalings = GuaranteeAttributes<
 		Wrappee, false, true, true, true, false, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, radius
+	/// derivatives, and colors are present.
 	GuaranteeTangentsRadiiRadiusDerivsColors = GuaranteeAttributes<
 		Wrappee, false, true, true, true, false, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, orientations, and
-	/// scaling vectors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, orientations,
+	/// and scalings are present.
 	GuaranteeTangentsRadiiOrientationsScalings = GuaranteeAttributes<
 		Wrappee, false, true, true, false, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, orientations, and
-	/// colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, orientations,
+	/// and colors are present.
 	GuaranteeTangentsRadiiOrientationsColors = GuaranteeAttributes<
 		Wrappee, false, true, true, false, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, scaling vectors,
-	/// and colors are present.
-	GuaranteeTangentsRadiiScalingsColors = GuaranteeAttributes<Wrappee, false, true, true, false, false, true, true>;
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, scalings, and
+	/// colors are present.
+	GuaranteeTangentsRadiiScalingsColors = GuaranteeAttributes<
+		Wrappee, false, true, true, false, false, true, true
+	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives,
-	/// orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// orientations, and scalings are present.
 	GuaranteeTangentsRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, false, true, true, true, true, true, false
+		Wrappee, false, true, false, true, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives,
-	/// orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// orientations, and colors are present.
 	GuaranteeTangentsRadiusDerivsOrientationsColors = GuaranteeAttributes<
-		Wrappee, false, true, true, true, true, false, true
+		Wrappee, false, true, false, true, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives,
-	/// scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// scalings, and colors are present.
 	GuaranteeTangentsRadiusDerivsScalingsColors = GuaranteeAttributes<
-		Wrappee, false, true, true, true, false, true, true
+		Wrappee, false, true, false, true, false, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, orientations, scaling
-	/// vectors, and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, orientations,
+	/// scalings, and colors are present.
 	GuaranteeTangentsOrientationsScalingsColors = GuaranteeAttributes<
 		Wrappee, false, true, false, false, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives,
-	/// orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives,
+	/// orientations, and scalings are present.
 	GuaranteeRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
 		Wrappee, false, false, true, true, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives,
-	/// orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives,
+	/// orientations, and colors are present.
 	GuaranteeRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
 		Wrappee, false, false, true, true, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives, scaling
-	/// vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives,
+	/// scalings, and colors are present.
 	GuaranteeRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
 		Wrappee, false, false, true, true, false, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, orientations, scaling
-	/// vectors, and colors are present.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, orientations, scalings,
+	/// and colors are present.
 	GuaranteeRadiiOrientationsScalingsColors = GuaranteeAttributes<
 		Wrappee, false, false, true, false, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radius derivatives, orientations,
-	/// scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radius derivatives,
+	/// orientations, scalings, and colors are present.
 	GuaranteeRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, false, false, false, true, true, true, true
+	>;
+);
+
+// Canonical flat aliases for all 5-attribute guarantee combinations
+defineGuaranteeAliases!(
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that radii, radius derivatives,
+	/// orientations, scalings, and colors are present.
+	GuaranteeRadiiRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
 		Wrappee, false, false, true, true, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, and orientations are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientations = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, false, false
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radius derivatives,
+	/// orientations, scalings, and colors are present.
+	GuaranteeTangentsRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, false, true, false, true, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiiRadiusDerivsScalings = GuaranteeAttributes<
-		Wrappee, true, true, true, true, false, true, false
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii, orientations,
+	/// scalings, and colors are present.
+	GuaranteeTangentsRadiiOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, false, true, true, false, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiiRadiusDerivsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, false, false, true
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii,
+	/// radius derivatives, scalings, and colors are present.
+	GuaranteeTangentsRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
+		Wrappee, false, true, true, true, false, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii,
-	/// orientations, and scaling vectors are present.
-	GuaranteeNormalsTangentsRadiiOrientationsScalings = GuaranteeAttributes<
-		Wrappee, true, true, true, false, true, true, false
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii,
+	/// radius derivatives, orientations, and colors are present.
+	GuaranteeTangentsRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
+		Wrappee, false, true, true, true, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii,
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii,
+	/// radius derivatives, orientations, and scalings are present.
+	GuaranteeTangentsRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
+		Wrappee, false, true, true, true, true, true, false
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radius derivatives,
+	/// orientations, scalings, and colors are present.
+	GuaranteeNormalsRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, false, false, true, true, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii, orientations,
+	/// scalings, and colors are present.
+	GuaranteeNormalsRadiiOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, false, true, false, true, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii,
+	/// radius derivatives, scalings, and colors are present.
+	GuaranteeNormalsRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, false, true, true, false, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii,
+	/// radius derivatives, orientations, and colors are present.
+	GuaranteeNormalsRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
+		Wrappee, true, false, true, true, true, false, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii,
+	/// radius derivatives, orientations, and scalings are present.
+	GuaranteeNormalsRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
+		Wrappee, true, false, true, true, true, true, false
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, orientations,
+	/// scalings, and colors are present.
+	GuaranteeNormalsTangentsOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, true, false, false, true, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents,
+	/// radius derivatives, scalings, and colors are present.
+	GuaranteeNormalsTangentsRadiusDerivsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, true, false, true, false, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents,
+	/// radius derivatives, orientations, and colors are present.
+	GuaranteeNormalsTangentsRadiusDerivsOrientationsColors = GuaranteeAttributes<
+		Wrappee, true, true, false, true, true, false, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents,
+	/// radius derivatives, orientations, and scalings are present.
+	GuaranteeNormalsTangentsRadiusDerivsOrientationsScalings = GuaranteeAttributes<
+		Wrappee, true, true, false, true, true, true, false
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// scalings, and colors are present.
+	GuaranteeNormalsTangentsRadiiScalingsColors = GuaranteeAttributes<
+		Wrappee, true, true, true, false, false, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
 	/// orientations, and colors are present.
 	GuaranteeNormalsTangentsRadiiOrientationsColors = GuaranteeAttributes<
 		Wrappee, true, true, true, false, true, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii,
-	/// scaling vectors, and colors are present.
-	GuaranteeNormalsTangentsRadiiScalingsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, false, false, true, true
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// orientations, and scalings are present.
+	GuaranteeNormalsTangentsRadiiOrientationsScalings = GuaranteeAttributes<
+		Wrappee, true, true, true, false, true, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, true, false
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, and colors are present.
+	GuaranteeNormalsTangentsRadiiRadiusDerivsColors = GuaranteeAttributes<
+		Wrappee, true, true, true, true, false, false, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiusDerivsOrientationsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, false, true
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, and scalings are present.
+	GuaranteeNormalsTangentsRadiiRadiusDerivsScalings = GuaranteeAttributes<
+		Wrappee, true, true, true, true, false, true, false
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiusDerivsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, false, true, true
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, and orientations are present.
+	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientations = GuaranteeAttributes<
+		Wrappee, true, true, true, true, true, false, false
 	>;
+);
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, orientations,
-	/// scaling vectors, and colors are present.
-	GuaranteeNormalsTangentsOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, true, false, false, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, true, false
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, false, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, true, false, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, orientations,
-	/// scaling vectors, and colors are present.
-	GuaranteeNormalsRadiiOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, false, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radius derivatives,
-	/// orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, false, true, true, true, true, true, false
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
-		Wrappee, false, true, true, true, true, false, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
-		Wrappee, false, true, true, true, false, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, orientations,
-	/// scaling vectors, and colors are present.
-	GuaranteeTangentsRadiiOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, false, true, true, false, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radius derivatives,
-	/// orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeTangentsRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, false, true, true, true, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that radii, radius derivatives,
-	/// orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeRadiiRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, false, false, true, true, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, orientations, and scaling vectors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, true, false
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, orientations, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, false, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, false, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii,
-	/// orientations, scaling vectors, and colors are present.
-	GuaranteeNormalsTangentsRadiiOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, false, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radius
-	/// derivatives, orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsTangentsRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, true, true, true, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, radii, radius derivatives,
-	/// orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
-	GuaranteeNormalsRadiiRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
-		Wrappee, true, false, true, true, true, true, true
-	>;
-
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that tangents, radii, radius derivatives,
-	/// orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+// Canonical flat aliases for all 6-attribute guarantee combinations
+defineGuaranteeAliases!(
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that tangents, radii,
+	/// radius derivatives, orientations, scalings, and colors are present.
 	GuaranteeTangentsRadiiRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
 		Wrappee, false, true, true, true, true, true, true
 	>;
 
-	/// Wrapper for arbitrary [`renderer::Data`] with a compile-time guarantee that normals, tangents, radii, radius
-	/// derivatives, orientations, scaling vectors, and colors are present.<br/>
-	/// **NOTE**: Guaranteeing radius derivatives implies guaranteeing radii as well.
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, radii,
+	/// radius derivatives, orientations, scalings, and colors are present.
+	GuaranteeNormalsRadiiRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, false, true, true, true, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents,
+	/// radius derivatives, orientations, scalings, and colors are present.
+	GuaranteeNormalsTangentsRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, true, false, true, true, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// orientations, scalings, and colors are present.
+	GuaranteeNormalsTangentsRadiiOrientationsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, true, true, false, true, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, scalings, and colors are present.
+	GuaranteeNormalsTangentsRadiiRadiusDerivsScalingsColors = GuaranteeAttributes<
+		Wrappee, true, true, true, true, false, true, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, orientations, and colors are present.
+	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsColors = GuaranteeAttributes<
+		Wrappee, true, true, true, true, true, false, true
+	>;
+
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, orientations, and scalings are present.
+	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalings = GuaranteeAttributes<
+		Wrappee, true, true, true, true, true, true, false
+	>;
+);
+
+// Canonical flat alias for the all-attribute guarantee
+defineGuaranteeAliases!(
+	/// Wrapper for arbitrary [`renderer::HostData`] with a compile-time guarantee that normals, tangents, radii,
+	/// radius derivatives, orientations, scalings, and colors are present.
 	GuaranteeNormalsTangentsRadiiRadiusDerivsOrientationsScalingsColors = GuaranteeAttributes<
 		Wrappee, true, true, true, true, true, true, true
 	>;

@@ -86,7 +86,7 @@ pub trait CanHaveRadii: Data {
 pub trait HasRadii: CanHaveRadii {}
 
 ///
-pub trait CanHaveRadiusDerivs: CanHaveRadii {
+pub trait CanHaveRadiusDerivs: Data {
 	/// Indicate whether radius derivatives are available in the data.
 	fn hasRadiusDerivs (&self) -> bool;
 }

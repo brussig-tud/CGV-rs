@@ -209,9 +209,8 @@ pub fn deriveElemWithTangent(input: TokenStream) -> TokenStream
 
 /// Derive [`cgv::renderer::ElemWithRadius`] for a struct.
 ///
-/// Mark exactly one field with `#[cgv_renderAttr(radius)]`.  The field must be `f32` (or
-/// any `Copy` type that satisfies the trait's return type – the compiler will
-/// check this).
+/// Mark exactly one field with `#[cgv_renderAttr(radius)]`.  The field must be `f32` (or any `Copy` type that satisfies
+/// the trait's return type – the compiler will check this).
 #[proc_macro_derive(ElemWithRadius, attributes(cgv_renderAttr))]
 pub fn deriveElemWithRadius(input: TokenStream) -> TokenStream
 {
@@ -356,6 +355,160 @@ pub fn deriveElemWithScaling(input: TokenStream) -> TokenStream
 			for #name #tyGenerics #whereClause
 		{
 			fn scaling(&self) -> &::cgv::glm::Vec3 { #body }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no normals" impl of [`cgv::renderer::data::host::CanHaveNormals`].
+///
+/// `hasNormals()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoNormals)]
+pub fn deriveNoNormals(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveNormals
+			for #name #tyGenerics #whereClause
+		{
+			type NormalIterator<'data> = ::std::iter::Empty<&'data ::cgv::glm::Vec3> where Self: 'data;
+			fn hasNormals (&self) -> bool { false }
+			fn normals (&self) -> Self::NormalIterator<'_> { panic!("no normals available") }
+			fn normal (&self, _index: u32) -> &::cgv::glm::Vec3 { panic!("no normals available") }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no tangents" impl of [`cgv::renderer::data::host::CanHaveTangents`].
+///
+/// `hasTangents()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoTangents)]
+pub fn deriveNoTangents(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveTangents
+			for #name #tyGenerics #whereClause
+		{
+			type TangentIterator<'data> = ::std::iter::Empty<&'data ::cgv::glm::Vec3> where Self: 'data;
+			fn hasTangents (&self) -> bool { false }
+			fn tangents (&self) -> Self::TangentIterator<'_> { panic!("no tangents available") }
+			fn tangent (&self, _index: u32) -> &::cgv::glm::Vec3 { panic!("no tangents available") }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no radii" impl of [`cgv::renderer::data::host::CanHaveRadii`].
+///
+/// `hasRadii()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoRadii)]
+pub fn deriveNoRadii(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveRadii
+			for #name #tyGenerics #whereClause
+		{
+			type RadiusIterator<'data> = ::std::iter::Empty<&'data f32> where Self: 'data;
+			fn hasRadii (&self) -> bool { false }
+			fn radii (&self) -> Self::RadiusIterator<'_> { panic!("no radii available") }
+			fn radius (&self, _index: u32) -> f32 { panic!("no radii available") }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no radius derivatives" impl of [`cgv::renderer::data::host::CanHaveRadiusDerivs`].
+///
+/// `hasRadiusDerivs()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoRadiusDerivs)]
+pub fn deriveNoRadiusDerivs(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveRadiusDerivs
+			for #name #tyGenerics #whereClause
+		{
+			type RadiusDerivIterator<'data> = ::std::iter::Empty<&'data f32> where Self: 'data;
+			fn hasRadiusDerivs (&self) -> bool { false }
+			fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> { panic!("no radius derivatives available") }
+			fn radiusDeriv (&self, _index: u32) -> f32 { panic!("no radius derivatives available") }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no orientations" impl of [`cgv::renderer::data::host::CanHaveOrientations`].
+///
+/// `hasOrientations()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoOrientations)]
+pub fn deriveNoOrientations(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveOrientations
+			for #name #tyGenerics #whereClause
+		{
+			type OrientationIterator<'data> = ::std::iter::Empty<&'data ::cgv::glm::Quat> where Self: 'data;
+			fn hasOrientations (&self) -> bool { false }
+			fn orientations (&self) -> Self::OrientationIterator<'_> { panic!("no orientations available") }
+			fn orientation (&self, _index: u32) -> &::cgv::glm::Quat { panic!("no orientations available") }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no scalings" impl of [`cgv::renderer::data::host::CanHaveScalings`].
+///
+/// `hasScalings()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoScalings)]
+pub fn deriveNoScalings(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveScalings
+			for #name #tyGenerics #whereClause
+		{
+			type ScaleIterator<'data> = ::std::iter::Empty<&'data ::cgv::glm::Vec3> where Self: 'data;
+			fn hasScalings (&self) -> bool { false }
+			fn scalings (&self) -> Self::ScaleIterator<'_> { panic!("no scalings available") }
+			fn scaling (&self, _index: u32) -> &::cgv::glm::Vec3 { panic!("no scalings available") }
+		}
+	}
+	.into()
+}
+
+/// Derive a "no colors" impl of [`cgv::renderer::data::host::CanHaveColors`].
+///
+/// `hasColors()` will return `false`; the other methods will panic if invoked.
+#[proc_macro_derive(NoColors)]
+pub fn deriveNoColors(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::host::CanHaveColors
+			for #name #tyGenerics #whereClause
+		{
+			type ColorIterator<'data> = ::std::iter::Empty<&'data ::cgv::RGBA> where Self: 'data;
+			fn hasColors (&self) -> bool { false }
+			fn colors (&self) -> Self::ColorIterator<'_> { panic!("no colors available") }
+			fn color (&self, _index: u32) -> &::cgv::RGBA { panic!("no colors available") }
 		}
 	}
 	.into()
