@@ -15,13 +15,42 @@ pub use data::{host::Data as HostData, gpu::Data as GpuData}; // re-export
 /// The module prelude.
 pub mod prelude {
 	pub use super::{
-		HostData, renderer::data::host::Interleaved, renderer::data::host::NonInterleaved,
-		renderer::data::host::Indexed, renderer::data::host::CanHaveNormals, renderer::data::host::HasNormals,
-		renderer::data::host::CanHaveTangents, renderer::data::host::HasTangents, renderer::data::host::CanHaveRadii,
-		renderer::data::host::HasRadii, renderer::data::host::CanHaveRadiusDerivs,
-		renderer::data::host::HasRadiusDerivs, renderer::data::host::CanHaveOrientations,
-		renderer::data::host::HasOrientations, renderer::data::host::CanHaveScalings, renderer::data::host::HasScalings,
-		renderer::data::host::CanHaveColors, renderer::data::host::HasColors
+		// Host-side data traits
+		HostData, renderer::data::host::Interleaved as HostDataInterleaved,
+		renderer::data::host::NonInterleaved as HostDataNonInterleaved,
+		renderer::data::host::Indexed as HostDataIndexed,
+		renderer::data::host::CanHaveNormals as HostDataCanHaveNormals,
+		renderer::data::host::HasNormals as HostDataHasNormals,
+		renderer::data::host::CanHaveTangents as HostDataCanHaveTangents,
+		renderer::data::host::HasTangents as HostDataHasTangents,
+		renderer::data::host::CanHaveRadii as HostDataCanHaveRadii,
+		renderer::data::host::HasRadii as HostDataHasRadii,
+		renderer::data::host::CanHaveRadiusDerivs as HostDataCanHaveRadiusDerivs,
+		renderer::data::host::HasRadiusDerivs as HostDataHasRadiusDerivs,
+		renderer::data::host::CanHaveOrientations as HostDataCanHaveOrientations,
+		renderer::data::host::HasOrientations as HostDataHasOrientations,
+		renderer::data::host::CanHaveScalings as HostDataCanHaveScalings,
+		renderer::data::host::HasScalings as HostDataHasScalings,
+		renderer::data::host::CanHaveColors as HostDataCanHaveColors,
+		renderer::data::host::HasColors as HostDataHasColors,
+		// GPU-side data traits
+		GpuData, renderer::data::gpu::Interleaved as GpuDataInterleaved,
+		renderer::data::gpu::NonInterleaved as GpuDataNonInterleaved,
+		renderer::data::gpu::Indexed as GpuDataIndexed,
+		renderer::data::gpu::CanHaveNormals as GpuDataCanHaveNormals,
+		renderer::data::gpu::HasNormals as GpuDataHasNormals,
+		renderer::data::gpu::CanHaveTangents as GpuDataCanHaveTangents,
+		renderer::data::gpu::HasTangents as GpuDataHasTangents,
+		renderer::data::gpu::CanHaveRadii as GpuDataCanHaveRadii,
+		renderer::data::gpu::HasRadii as GpuDataHasRadii,
+		renderer::data::gpu::CanHaveRadiusDerivs as GpuDataCanHaveRadiusDerivs,
+		renderer::data::gpu::HasRadiusDerivs as GpuDataHasRadiusDerivs,
+		renderer::data::gpu::CanHaveOrientations as GpuDataCanHaveOrientations,
+		renderer::data::gpu::HasOrientations as GpuDataHasOrientations,
+		renderer::data::gpu::CanHaveScalings as GpuDataCanHaveScalings,
+		renderer::data::gpu::HasScalings as GpuDataHasScalings,
+		renderer::data::gpu::CanHaveColors as GpuDataCanHaveColors,
+		renderer::data::gpu::HasColors as GpuDataHasColors
 	};
 }
 
