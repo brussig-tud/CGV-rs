@@ -37,17 +37,7 @@ impl SamplerDescriptor {
 	pub fn fromWgpuSamplerDescriptor(descriptor: &wgpu::SamplerDescriptor) -> Self {
 		Self { inner: wgpu::SamplerDescriptor {
 			label: Some("CGV__contextManagedSampler"),
-			address_mode_u: descriptor.address_mode_w,
-			address_mode_v: descriptor.address_mode_v,
-			address_mode_w: descriptor.address_mode_w,
-			mag_filter: descriptor.mag_filter,
-			min_filter: descriptor.min_filter,
-			mipmap_filter: descriptor.mipmap_filter,
-			lod_min_clamp: descriptor.lod_min_clamp,
-			lod_max_clamp: descriptor.lod_max_clamp,
-			compare: descriptor.compare,
-			anisotropy_clamp: descriptor.anisotropy_clamp,
-			border_color: descriptor.border_color,
+			..*descriptor
 		}}
 	}
 }
