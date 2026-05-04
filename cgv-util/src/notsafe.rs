@@ -73,7 +73,7 @@ pub unsafe fn extendLifetime_mut<'out, Object> (object: &mut Object) -> &'out mu
 	}
 }
 
-/// Creates an (invalid if derefenced) reference to an object of the specified type.
+/// Creates an (invalid if dereferenced) reference to an object of the specified type.
 ///
 /// # Returns
 ///
