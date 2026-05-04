@@ -8,7 +8,7 @@
 use crate::wgpu;
 
 // Local imports
-use crate::player::*;
+use crate::{hal::DepthStencilFormat, player::*};
 
 
 
@@ -24,7 +24,7 @@ pub struct RenderSetup
 	// Relevant for pipeline construction
 	surfaceFormat: wgpu::TextureFormat,
 	defaultColorFormat: wgpu::TextureFormat,
-	defaultDepthStencilFormat: wgpu::TextureFormat,
+	defaultDepthStencilFormat: DepthStencilFormat,
 	defaultDepthCompare: wgpu::CompareFunction,
 	bindGroupLayouts: ManagedBindGroupLayouts,
 
@@ -64,7 +64,7 @@ impl RenderSetup
 	/// Query the depth/stencil format used by default for the render targets of managed [global passes](GlobalPass) if
 	/// not overridden by a [`Camera`]. The effective value will be contained in the global passes [`RenderState`].
 	#[inline(always)]
-	pub fn defaultDepthStencilFormat (&self) -> wgpu::TextureFormat { self.defaultDepthStencilFormat }
+	pub fn defaultDepthStencilFormat (&self) -> DepthStencilFormat { self.defaultDepthStencilFormat }
 
 	/// Reference the clear color used by default on the main framebuffer of managed [global passes](GlobalPass) if not
 	/// overridden by a [`Camera`]. The effective value will be contained in the global passes [`RenderState`].

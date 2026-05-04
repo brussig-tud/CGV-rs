@@ -5,8 +5,7 @@
 //
 
 // Standard library
-use std::hint::unreachable_unchecked;
-pub use std::borrow::Borrow;
+use std::borrow::Borrow;
 
 // Local imports
 use crate::*;
@@ -100,32 +99,25 @@ impl From<&DepthStencilFormat> for wgpu::TextureFormat {
 	#[inline(always)]
 	fn from (format: &DepthStencilFormat) -> Self { (*format).into() }
 }
-impl From<wgpu::TextureFormat> for DepthStencilFormat
+impl TryFrom<wgpu::TextureFormat> for DepthStencilFormat
 {
+	type Error = String;
+
 	#[inline(always)]
-	fn from (format: wgpu::TextureFormat) -> Self {
-		match format {
+	fn try_from (format: wgpu::TextureFormat) -> Result<Self, Self::Error> {
+		Ok(match format {
 			wgpu::TextureFormat::Depth16Unorm => DepthStencilFormat::D16,
 			wgpu::TextureFormat::Depth24Plus => DepthStencilFormat::D24,
 			wgpu::TextureFormat::Depth32Float => DepthStencilFormat::D32,
 			wgpu::TextureFormat::Depth24PlusStencil8 => DepthStencilFormat::D24S8,
 			wgpu::TextureFormat::Depth32FloatStencil8 => DepthStencilFormat::D32S8,
-			_ => unreachable!("wgpu format {:?} is no depth/stencil format!", format)
-		}
+			_ => return Err(format!("wgpu format {format:?} is no depth/stencil format!"))
+		})
 	}
 }
-impl From<&wgpu::TextureFormat> for DepthStencilFormat {
-	#[inline(always)]
-	fn from (format: &wgpu::TextureFormat) -> Self { (*format).into() }
-}
 
-// Small helper enum to store the different arguments for the hal::Texture::create...() methods
-enum TextureCreationParams {
-	Color{format: wgpu::TextureFormat, usages: wgpu::TextureUsages},
-	DepthStencil{format: DepthStencilFormat, additionalUsages: Option<wgpu::TextureUsages>}
-}
-
-
+struct ColorTextureParams{format: wgpu::TextureFormat, usages: wgpu::TextureUsages}
+struct DepthStencilTextureParams{format: DepthStencilFormat, additionalUsages: Option<wgpu::TextureUsages>}
 
 //////
 //
@@ -197,8 +189,8 @@ impl Framebuffer
 pub struct FramebufferBuilder<'label>
 {
 	label: Option<&'label str>,
-	color: Vec<TextureCreationParams>,
-	depthStencil: Option<TextureCreationParams>,
+	color: Vec<ColorTextureParams>,
+	depthStencil: Option<DepthStencilTextureParams>,
 	dims: glm::UVec2,
 }
 impl<'label> FramebufferBuilder<'label>
@@ -224,7 +216,7 @@ impl<'label> FramebufferBuilder<'label>
 	pub fn attachColor (&mut self, format: wgpu::TextureFormat, additionalUsages: Option<wgpu::TextureUsages>)
 	-> &mut Self
 	{
-		self.color.push(TextureCreationParams::Color {
+		self.color.push(ColorTextureParams {
 			format, usages: if let Some(additionalUsages) = additionalUsages {
 				wgpu::TextureUsages::RENDER_ATTACHMENT | additionalUsages
 			} else {
@@ -239,7 +231,7 @@ impl<'label> FramebufferBuilder<'label>
 	pub fn attachDepthStencil (&mut self, format: DepthStencilFormat, additionalUsages: Option<wgpu::TextureUsages>)
 		-> &mut Self
 	{
-		self.depthStencil = Some(TextureCreationParams::DepthStencil { format, additionalUsages });
+		self.depthStencil = Some(DepthStencilTextureParams { format, additionalUsages });
 		self
 	}
 
@@ -249,12 +241,7 @@ impl<'label> FramebufferBuilder<'label>
 		// Create color attachments, if any
 		let mut color: Vec<hal::Texture> = Vec::with_capacity(self.color.len());
 		for slot in 0..self.color.len() {
-			let (format, usages) =
-				if let TextureCreationParams::Color{format, usages} = self.color[slot] {
-					(format, usages)
-				} else {
-					unsafe { unreachable_unchecked(); }
-				};
+			let ColorTextureParams{format, usages} = self.color[slot];
 			color.push(hal::Texture::createEmpty(
 				context, glm::vec3(self.dims.x, self.dims.y, 1), format, 1, texture::AlphaUsage::DontCare,
 				usages, util::concatIfSome(&self.label, &format!("_colorAttachment{slot}")).as_deref()
@@ -262,17 +249,9 @@ impl<'label> FramebufferBuilder<'label>
 		}
 
 		// Create depth/stencil attachment, if any
-		let depthStencil = self.depthStencil.as_ref().map(|depthStencil| {
-			let (format, additionalUsages) =
-				if let TextureCreationParams::DepthStencil{
-					format, additionalUsages
-				} = depthStencil {
-					(format, additionalUsages)
-				} else {
-					unsafe { unreachable_unchecked(); }
-				};
+		let depthStencil = self.depthStencil.as_ref().map(|&DepthStencilTextureParams{format, additionalUsages}| {
 			hal::Texture::createDepthStencil(
-				context, self.dims, *format, *additionalUsages,
+				context, self.dims, format.into(), additionalUsages,
 				util::concatIfSome(&self.label, "_depthStencilAttachment").as_deref()
 			)
 		});
