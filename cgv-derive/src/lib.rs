@@ -122,7 +122,7 @@ pub fn deriveInterleavedElem (input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::InterleavedElem
+		impl #implGenerics ::cgv::renderer::data::InterleavedElem
 			for #name #tyGenerics #whereClause
 		{
 			fn pos(&self) -> &::cgv::glm::Vec3 { #body }
@@ -160,7 +160,7 @@ pub fn deriveElemWithNormal(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithNormal
+		impl #implGenerics ::cgv::renderer::data::ElemWithNormal
 			for #name #tyGenerics #whereClause
 		{
 			fn normal(&self) -> &::cgv::glm::Vec3 { #body }
@@ -198,7 +198,7 @@ pub fn deriveElemWithTangent(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithTangent
+		impl #implGenerics ::cgv::renderer::data::ElemWithTangent
 			for #name #tyGenerics #whereClause
 		{
 			fn tangent(&self) -> &::cgv::glm::Vec3 { #body }
@@ -237,7 +237,7 @@ pub fn deriveElemWithRadius(input: TokenStream) -> TokenStream
 
 	let body = copy_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithRadius
+		impl #implGenerics ::cgv::renderer::data::ElemWithRadius
 			for #name #tyGenerics #whereClause
 		{
 			fn radius(&self) -> &f32 { &#body }
@@ -275,7 +275,7 @@ pub fn deriveElemWithRadiusDeriv(input: TokenStream) -> TokenStream
 
 	let body = copy_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithRadiusDeriv
+		impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
 			for #name #tyGenerics #whereClause
 		{
 			fn radiusDeriv(&self) -> &f32 { &#body }
@@ -313,7 +313,7 @@ pub fn deriveElemWithOrientation(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithOrientation
+		impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
 			for #name #tyGenerics #whereClause
 		{
 			fn orientation(&self) -> &::cgv::glm::Quat { #body }
@@ -351,13 +351,51 @@ pub fn deriveElemWithScaling(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithScaling
+		impl #implGenerics ::cgv::renderer::data::ElemWithScaling
 			for #name #tyGenerics #whereClause
 		{
 			fn scaling(&self) -> &::cgv::glm::Vec3 { #body }
 		}
 	}
 	.into()
+}
+
+/// Derive [`cgv::renderer::ElemWithColor`] for a struct.
+///
+/// Mark exactly one field with `#[cgv_renderAttr(color)]`.
+#[proc_macro_derive(ElemWithColor, attributes(cgv_renderAttr))]
+pub fn deriveElemWithColor(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+
+	let fields = match getNamedFields(&input) {
+		Ok(f) => f,
+		Err(e) => return e.into(),
+	};
+	let fieldIdent = match findField_renderAttr(fields, "color") {
+		Some((_, ident)) => ident,
+		None => {
+			return quote! {
+				compile_error!(
+					"`#[derive(ElemWithColor)]` requires exactly one field annotated \
+					with `#[cgv_renderAttr(color)]`"
+				);
+			}
+				.into()
+		}
+	};
+
+	let body = ref_body!(fieldIdent);
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithColor
+			for #name #tyGenerics #whereClause
+		{
+			fn color(&self) -> &::cgv::RGBA { #body }
+		}
+	}
+		.into()
 }
 
 /// Derive a "no normals" impl of [`cgv::renderer::data::host::CanHaveNormals`].
@@ -509,44 +547,6 @@ pub fn deriveNoColors(input: TokenStream) -> TokenStream
 			fn hasColors (&self) -> bool { false }
 			fn colors (&self) -> Self::ColorIterator<'_> { panic!("no colors available") }
 			fn color (&self, _index: u32) -> &::cgv::RGBA { panic!("no colors available") }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithColor`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(color)]`.
-#[proc_macro_derive(ElemWithColor, attributes(cgv_renderAttr))]
-pub fn deriveElemWithColor(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "color") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithColor)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(color)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = ref_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::ElemWithColor
-			for #name #tyGenerics #whereClause
-		{
-			fn color(&self) -> &::cgv::RGBA { #body }
 		}
 	}
 	.into()

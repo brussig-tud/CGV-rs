@@ -19,11 +19,11 @@ pub use guarantees::*; // re-export all public facilities (mainly the guarantee 
 /* nothing here yet */
 
 // Local imports
-use crate::{self as cgv, *};
 pub use cgv_derive::{
 	// Re-export derive macros for generating empty CanHave* implementations
 	NoNormals, NoTangents, NoRadii, NoRadiusDerivs, NoOrientations, NoScalings, NoColors
 };
+use crate::{self as cgv, *};
 
 
 
@@ -54,7 +54,7 @@ pub trait Data
 	fn topology (&self) -> wgpu::PrimitiveTopology;
 }
 /// Blanket implementation for slices of [`renderer::InterleavedElem`]s.
-impl<T: renderer::InterleavedElem> Data for &[T]
+impl<T: renderer::data::InterleavedElem> Data for &[T]
 {
 	type PosIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
 	fn num (&self) -> u32 { self.len() as u32 }
@@ -71,7 +71,7 @@ impl<T: renderer::InterleavedElem> Data for &[T]
 /// "array of structs").
 pub trait Interleaved: Data {}
 /// Blanket implementation for slices of [`renderer::InterleavedElem`]s.
-impl<T: renderer::InterleavedElem> Interleaved for &[T] {}
+impl<T: renderer::data::InterleavedElem> Interleaved for &[T] {}
 
 /// Marker trait for [`renderer::HostData`] indicating that the data attributes are stored in a non-interleaved fashion
 /// (aka. "struct of arrays").
@@ -135,16 +135,8 @@ pub trait CanHaveNormals: Data
 	/// [`hasNormals`](Self::hasNormals), or if `index` was out-of-bounds.
 	fn normal (&self, index: u32) -> &glm::Vec3;
 }
-/*///
-impl<D: Data> CanHaveNormals for D
-{
-	type NormalIterator<'data> = std::iter::Empty<glm::Vec3> where Self: 'data;
-	fn hasNormals (&self) -> bool { false }
-	fn normals (&self) -> Self::NormalIterator<'_> { core::iter::empty() }
-	fn normal (&self, index: u32) -> &glm::Vec3 { panic!("no normals available") }
-}*/
 /// Blanket implementation for slices of [`renderer::ElemWithNormal`]s.
-impl<T: renderer::ElemWithNormal> CanHaveNormals for &[T]
+impl<T: renderer::data::ElemWithNormal> CanHaveNormals for &[T]
 {
 	type NormalIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
 	fn hasNormals (&self) -> bool { true }
@@ -159,7 +151,7 @@ impl<T: renderer::ElemWithNormal> CanHaveNormals for &[T]
 ///
 pub trait HasNormals: CanHaveNormals {}
 /// Blanket implementation for slices of [`renderer::ElemWithNormal`]s.
-impl<T: renderer::ElemWithNormal> HasNormals for &[T] {}
+impl<T: renderer::data::ElemWithNormal> HasNormals for &[T] {}
 
 ///
 pub trait CanHaveTangents: Data
@@ -200,7 +192,7 @@ pub trait CanHaveTangents: Data
 	fn tangent (&self, index: u32) -> &glm::Vec3;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithTangent`]s.
-impl<T: renderer::ElemWithTangent> CanHaveTangents for &[T]
+impl<T: renderer::data::ElemWithTangent> CanHaveTangents for &[T]
 {
 	type TangentIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
 	fn hasTangents (&self) -> bool { true }
@@ -215,7 +207,7 @@ impl<T: renderer::ElemWithTangent> CanHaveTangents for &[T]
 ///
 pub trait HasTangents: CanHaveTangents {}
 /// Blanket implementation for slices of [`renderer::ElemWithTangent`]s.
-impl<T: renderer::ElemWithTangent> HasTangents for &[T] {}
+impl<T: renderer::data::ElemWithTangent> HasTangents for &[T] {}
 
 ///
 pub trait CanHaveRadii: Data
@@ -256,7 +248,7 @@ pub trait CanHaveRadii: Data
 	fn radius (&self, index: u32) -> f32;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithRadius`]s.
-impl<T: renderer::ElemWithRadius> CanHaveRadii for &[T]
+impl<T: renderer::data::ElemWithRadius> CanHaveRadii for &[T]
 {
 	type RadiusIterator<'data> = util::notsafe::StridedRefIter<'data, f32> where Self: 'data;
 	fn hasRadii (&self) -> bool { true }
@@ -271,7 +263,7 @@ impl<T: renderer::ElemWithRadius> CanHaveRadii for &[T]
 ///
 pub trait HasRadii: CanHaveRadii {}
 /// Blanket implementation for slices of [`renderer::ElemWithRadius`]s.
-impl<T: renderer::ElemWithRadius> HasRadii for &[T] {}
+impl<T: renderer::data::ElemWithRadius> HasRadii for &[T] {}
 
 ///
 pub trait CanHaveRadiusDerivs: Data
@@ -312,7 +304,7 @@ pub trait CanHaveRadiusDerivs: Data
 	fn radiusDeriv (&self, index: u32) -> f32;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithRadiusDeriv`]s.
-impl<T: renderer::ElemWithRadiusDeriv> CanHaveRadiusDerivs for &[T]
+impl<T: renderer::data::ElemWithRadiusDeriv> CanHaveRadiusDerivs for &[T]
 {
 	type RadiusDerivIterator<'data> = util::notsafe::StridedRefIter<'data, f32> where Self: 'data;
 	fn hasRadiusDerivs (&self) -> bool { true }
@@ -327,7 +319,7 @@ impl<T: renderer::ElemWithRadiusDeriv> CanHaveRadiusDerivs for &[T]
 ///
 pub trait HasRadiusDerivs: CanHaveRadiusDerivs {}
 /// Blanket implementation for slices of [`renderer::ElemWithRadiusDeriv`]s.
-impl<T: renderer::ElemWithRadiusDeriv+renderer::ElemWithRadius> HasRadiusDerivs for &[T] {}
+impl<T: renderer::data::ElemWithRadiusDeriv> HasRadiusDerivs for &[T] {}
 
 ///
 pub trait CanHaveOrientations: Data
@@ -368,7 +360,7 @@ pub trait CanHaveOrientations: Data
 	fn orientation (&self, index: u32) -> &glm::Quat;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithOrientation`]s.
-impl<T: renderer::ElemWithOrientation> CanHaveOrientations for &[T]
+impl<T: renderer::data::ElemWithOrientation> CanHaveOrientations for &[T]
 {
 	type OrientationIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Quat> where Self: 'data;
 	fn hasOrientations (&self) -> bool { true }
@@ -383,7 +375,7 @@ impl<T: renderer::ElemWithOrientation> CanHaveOrientations for &[T]
 ///
 pub trait HasOrientations: CanHaveOrientations {}
 /// Blanket implementation for slices of [`renderer::ElemWithOrientation`]s.
-impl<T: renderer::ElemWithOrientation> HasOrientations for &[T] {}
+impl<T: renderer::data::ElemWithOrientation> HasOrientations for &[T] {}
 
 ///
 pub trait CanHaveScalings: Data
@@ -424,7 +416,7 @@ pub trait CanHaveScalings: Data
 	fn scaling (&self, index: u32) -> &glm::Vec3;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithScaling`]s.
-impl<T: renderer::ElemWithScaling> CanHaveScalings for &[T]
+impl<T: renderer::data::ElemWithScaling> CanHaveScalings for &[T]
 {
 	type ScaleIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
 	fn hasScalings (&self) -> bool { true }
@@ -439,7 +431,7 @@ impl<T: renderer::ElemWithScaling> CanHaveScalings for &[T]
 ///
 pub trait HasScalings: CanHaveScalings {}
 /// Blanket implementation for slices of [`renderer::ElemWithScaling`]s.
-impl<T: renderer::ElemWithScaling> HasScalings for &[T] {}
+impl<T: renderer::data::ElemWithScaling> HasScalings for &[T] {}
 
 ///
 pub trait CanHaveColors: Data
@@ -480,7 +472,7 @@ pub trait CanHaveColors: Data
 	fn color (&self, index: u32) -> &cgv::RGBA;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithColor`]s.
-impl<T: renderer::ElemWithColor> CanHaveColors for &[T]
+impl<T: renderer::data::ElemWithColor> CanHaveColors for &[T]
 {
 	type ColorIterator<'data> = util::notsafe::StridedRefIter<'data, cgv::RGBA> where Self: 'data;
 	fn hasColors (&self) -> bool { true }
@@ -495,4 +487,4 @@ impl<T: renderer::ElemWithColor> CanHaveColors for &[T]
 ///
 pub trait HasColors: CanHaveColors {}
 /// Blanket implementation for slices of [`renderer::ElemWithColor`]s.
-impl<T: renderer::ElemWithColor> HasColors for &[T] {}
+impl<T: renderer::data::ElemWithColor> HasColors for &[T] {}
