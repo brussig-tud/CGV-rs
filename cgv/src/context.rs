@@ -37,17 +37,7 @@ impl SamplerDescriptor {
 	pub fn fromWgpuSamplerDescriptor(descriptor: &wgpu::SamplerDescriptor) -> Self {
 		Self { inner: wgpu::SamplerDescriptor {
 			label: Some("CGV__contextManagedSampler"),
-			address_mode_u: descriptor.address_mode_w,
-			address_mode_v: descriptor.address_mode_v,
-			address_mode_w: descriptor.address_mode_w,
-			mag_filter: descriptor.mag_filter,
-			min_filter: descriptor.min_filter,
-			mipmap_filter: descriptor.mipmap_filter,
-			lod_min_clamp: descriptor.lod_min_clamp,
-			lod_max_clamp: descriptor.lod_max_clamp,
-			compare: descriptor.compare,
-			anisotropy_clamp: descriptor.anisotropy_clamp,
-			border_color: descriptor.border_color,
+			..*descriptor
 		}}
 	}
 }
@@ -72,10 +62,8 @@ pub struct Context {
 	device: wgpu::Device,
 	queue: wgpu::Queue,
 
-	samplerCache: DashMap<
-		SamplerDescriptor,
-		Box<wgpu::Sampler> // TODO: Try without boxing the `Sampler` once we have sufficiently many to test
-	>
+	samplerCache: DashMap<SamplerDescriptor, wgpu::Sampler>,
+	pub(crate) mipmapPipelineCache: gpu::mipmap::PipelineCache,
 }
 impl Context
 {
@@ -95,7 +83,8 @@ impl Context
 		device: eguiRS.device.clone(),   // reference counted, so cloning just
 		queue: eguiRS.queue.clone(),     // creates a new owned reference
 		// Caches
-		samplerCache: DashMap::with_capacity(8)
+		samplerCache: DashMap::with_capacity(8),
+		mipmapPipelineCache: DashMap::with_capacity(8),
 	}}
 
 	/// Reference the *WGPU* instance.
@@ -113,35 +102,19 @@ impl Context
 	/// Obtain a reference to a sampler with the given configuration. Note that the *WGPU* `label` property of the
 	/// provided `config` is ignored, as that would run counter the principle of having at most one sampler per
 	/// functionally distinct configuration.
-	pub fn refSampler<'context> (&self, config: &wgpu::SamplerDescriptor<'_>) -> &'context wgpu::Sampler
+	pub fn refSampler (&self, config: &wgpu::SamplerDescriptor<'_>) -> wgpu::Sampler
 	{
 		// Obtain query descriptor
 		let queryDesc = SamplerDescriptor::fromWgpuSamplerDescriptor(config);
 
 		// Query cache
-		let sampler = self.samplerCache.get(&queryDesc);
-		if let Some(sampler) = sampler {
-			// We already have a sampler with this config
-			let sampler = util::notsafe::UncheckedRef::new(sampler.value().as_ref());
-			unsafe {
-				// SAFETY: - SAMPLER_CACHE lives in the context which is considered static, so it may report 'static
-				//           references
-				//         - the values are boxed, so their addresses never change even when iterators are invalidated
-				sampler.as_ref()
-			}
-		}
-		else
-		{
-			// We need to create (and cache) a new sampler
-			let sampler = Box::new(self.device.create_sampler(&queryDesc.inner));
-			let sampler_unchecked = util::notsafe::UncheckedRef::new(sampler.as_ref());
-			self.samplerCache.insert(queryDesc, sampler);
-			unsafe {
-				// SAFETY: - the values are boxed, so their addresses never change, even when we move the newly
-				//           constructed items into the cache
-				//         - SAMPLER_CACHE, which now ownes the box, lives in the context which is considered static, so
-				//           we may keep 'static references to its content
-				sampler_unchecked.as_ref()
+		use dashmap::Entry;
+		match self.samplerCache.entry(queryDesc) {
+			Entry::Occupied(entry) => entry.get().clone(),
+			Entry::Vacant(entry) => {
+				// We need to create (and cache) a new sampler
+				let sampler = self.device.create_sampler(&entry.key().inner);
+				entry.insert(sampler).clone()
 			}
 		}
 	}

@@ -21,25 +21,12 @@ use wgpu;
 use crate::*;
 
 
-
-//////
-//
-// Globals
-//
-
-/// The database of cached compute pipeline configurations
-static COMPUTE_PIPELINE_CACHE: LazyLock<DashMap<
-	(wgpu::TextureFormat, MipmappableTextureShape, u64), Box<ComputePipelineInfo>
->> = LazyLock::new(
-	|| DashMap::with_capacity(8)
-);
-
-
-
 //////
 //
 // Structs and enums
 //
+
+pub(crate) type PipelineCache = DashMap<(wgpu::TextureFormat, MipmappableTextureShape, u64), Box<ComputePipelineInfo>>;
 
 ///
 #[derive(Copy,Clone,Debug,Hash,Eq,PartialEq)]
@@ -113,88 +100,80 @@ pub trait Generator
 
 	fn createPass<'outer> (&'outer self, encoder: &'outer mut wgpu::CommandEncoder) -> gpu::Pass<'outer>;
 
-	fn ensureComputePipeline (
-		&self, context: &Context, textureFormat: wgpu::TextureFormat, textureShape: MipmappableTextureShape
-	) -> &ComputePipelineInfo
+	fn ensureComputePipeline<'ctx> (
+		&self, context: &'ctx Context, textureFormat: wgpu::TextureFormat, textureShape: MipmappableTextureShape
+	) -> &'ctx ComputePipelineInfo
 	{
+		use dashmap::Entry;
+
 		let generatorId = self.uniqueId();
 		let query = (textureFormat, textureShape, generatorId);
-		let pipelineInfo = COMPUTE_PIPELINE_CACHE.get(&query);
-		if let Some(pipelineInfo) = pipelineInfo {
+		let entry = match context.mipmapPipelineCache.entry(query) {
 			// We already have a suitable pipeline for this combination
-			let pipelineInfo = util::notsafe::UncheckedRef::new(
-				pipelineInfo.value().as_ref()
-			);
-			unsafe {
+			Entry::Occupied(entry) => return unsafe {
 				// SAFETY: - The values are boxed, so their addresses are stable even when iterators are invalidated.
-				//         - The lifetime of the reference we return is the same as &self, shorter than the true
-				//           lifetime of the pipeline record (which is actually 'static like the pipeline cache).
-				pipelineInfo.as_ref()
-			}
-		}
-		else
-		{
+				//         - Entries remain cached until the context is dropped, which must happen after 'ctx.
+				// TODO: Replace with Box::as_ptr once it is stable.
+				&*(entry.get().as_ref() as *const _)
+			},
 			// We need a new pipeline for this combination!
-			// Set up bind group layout
-			let bindGroupLayoutEntries: [wgpu::BindGroupLayoutEntry; 2] = [
-				wgpu::BindGroupLayoutEntry {
-					binding: 0,
-					visibility: wgpu::ShaderStages::COMPUTE,
-					ty: wgpu::BindingType::Texture {
-						multisampled: false,
-						sample_type: wgpu::TextureSampleType::Float { filterable: false },
-						view_dimension: textureShape.into()
-					},
-					count: None
-				},
-				wgpu::BindGroupLayoutEntry {
-					binding: 1,
-					visibility: wgpu::ShaderStages::COMPUTE,
-					ty: wgpu::BindingType::StorageTexture {
-						access: wgpu::StorageTextureAccess::WriteOnly,
-						format: textureFormat,
-						view_dimension: textureShape.into()
-					},
-					count: None
-				}
-			];
-			let bindGroupLayout = context.device().create_bind_group_layout(
-				&wgpu::BindGroupLayoutDescriptor {
-					entries: bindGroupLayoutEntries.as_slice(),
-					label: None
-				}
-			);
+			Entry::Vacant(entry) => entry
+		};
 
-			// Create pipeline
-			// - shader
-			let (shader, specificEntryPoint) = self.ensureShaderModule(
-				context, textureShape
-			).unwrap();
-			// - pipeline
-			let pipeline = context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-				module: &shader,
-				entry_point: specificEntryPoint,
-				layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-					bind_group_layouts: &[Some(&bindGroupLayout)],
-					label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
-					immediate_size: 0
-				})),
-				compilation_options: Default::default(),
-				cache: None,
-				label: Some("CGV__gpu_mipmapGenComputePipeline"),
-			});
-			let pipelineInfo = Box::new(ComputePipelineInfo { bindGroupLayout, pipeline });
-			let pipelineInfo_unchecked = util::notsafe::UncheckedRef::new(
-				pipelineInfo.as_ref()
-			);
-			COMPUTE_PIPELINE_CACHE.insert(query, pipelineInfo);
-			unsafe {
-				// SAFETY: - The values are boxed, so their addresses are stable even when we move the newly constructed
-				//           items into the cache.
-				//         - The lifetime of the reference we return is the same as &self, shorter than the true
-				//           lifetime of the pipeline record (which is actually 'static like the pipeline cache).
-				pipelineInfo_unchecked.as_ref()
+		// Set up bind group layout
+		let bindGroupLayoutEntries: [wgpu::BindGroupLayoutEntry; 2] = [
+			wgpu::BindGroupLayoutEntry {
+				binding: 0,
+				visibility: wgpu::ShaderStages::COMPUTE,
+				ty: wgpu::BindingType::Texture {
+					multisampled: false,
+					sample_type: wgpu::TextureSampleType::Float { filterable: false },
+					view_dimension: textureShape.into()
+				},
+				count: None
+			},
+			wgpu::BindGroupLayoutEntry {
+				binding: 1,
+				visibility: wgpu::ShaderStages::COMPUTE,
+				ty: wgpu::BindingType::StorageTexture {
+					access: wgpu::StorageTextureAccess::WriteOnly,
+					format: textureFormat,
+					view_dimension: textureShape.into()
+				},
+				count: None
 			}
+		];
+		let bindGroupLayout = context.device().create_bind_group_layout(
+			&wgpu::BindGroupLayoutDescriptor {
+				entries: bindGroupLayoutEntries.as_slice(),
+				label: None
+			}
+		);
+
+		// Create pipeline
+		// - shader
+		let (shader, specificEntryPoint) = self.ensureShaderModule(
+			context, textureShape
+		).unwrap();
+		// - pipeline
+		let pipeline = context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+			module: &shader,
+			entry_point: specificEntryPoint,
+			layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+				bind_group_layouts: &[Some(&bindGroupLayout)],
+				label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
+				immediate_size: 0
+			})),
+			compilation_options: Default::default(),
+			cache: None,
+			label: Some("CGV__gpu_mipmapGenComputePipeline"),
+		});
+		let entry =  entry.insert(Box::new(ComputePipelineInfo { bindGroupLayout, pipeline }));
+		unsafe {
+			// SAFETY: - The values are boxed, so their addresses are stable even when iterators are invalidated.
+			//         - Entries remain cached until the context is dropped, which must happen after 'ctx.
+			// TODO: Replace with Box::as_ptr once it is stable.
+			&*(entry.value().as_ref() as *const _)
 		}
 	}
 

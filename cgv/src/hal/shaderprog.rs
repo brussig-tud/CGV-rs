@@ -42,7 +42,7 @@ pub struct ShaderProgram
 	code: String,
 
 	/// The cache of different instances of the shader program (for different sets of constants).
-	_moduleCache: DashMap<Vec<String>, Box<wgpu::ShaderModule>>
+	_moduleCache: DashMap<Vec<String>, wgpu::ShaderModule>
 }
 impl ShaderProgram
 {
@@ -76,17 +76,14 @@ impl ShaderProgram
 	///
 	/// # Returns
 	///
-	/// A reference to a compiled and linked shader module with the constants set to the specified values.
+	/// A handle to a compiled and linked shader module with the constants set to the specified values.
 	pub fn refModule (&mut self, context: &Context, _constants: &BTreeMap<impl AsRef<str>, impl ToString>)
-	-> &wgpu::ShaderModule
+	-> wgpu::ShaderModule
 	{
-		// TODO: This is just here to prevent built errors while the functionality is missing
-		let module = util::notsafe::UncheckedRef::new(
-			&context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
-				label: self.label.as_ref().map(|l| l.as_str()),
-				source: wgpu::ShaderSource::Wgsl(self.code.as_str().into())
-			})
-		);
-		unsafe { module.as_ref() } // Safety: this will crash for sure
+		// TODO: Replace constants.
+		context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: self.label.as_deref(),
+			source: wgpu::ShaderSource::Wgsl(self.code.as_str().into())
+		})
 	}
 }
