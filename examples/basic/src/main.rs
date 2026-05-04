@@ -244,7 +244,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 				},
 				wgpu::BindGroupEntry {
 					binding: 1,
-					resource: wgpu::BindingResource::Sampler(context.refSampler(
+					resource: wgpu::BindingResource::Sampler(&context.refSampler(
 						&wgpu::SamplerDescriptor {
 							mag_filter: wgpu::FilterMode::Linear,
 							min_filter: wgpu::FilterMode::Linear,
