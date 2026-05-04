@@ -73,10 +73,6 @@ impl Spheres
 		// Done!
 		Self { shader, pipelineLayout, _constantAttribUniforms: constantAttribUniforms, data: None }
 	}
-
-	pub fn setData (&mut self, data: Arc<impl renderer::GpuData+'static>) {
-		self.data.replace(data);
-	}
 }
 impl Renderer for Spheres
 {
@@ -114,6 +110,10 @@ impl Renderer for Spheres
 
 		// Done!
 		pipeline
+	}
+
+	fn setData (&mut self, data: Arc<dyn renderer::GpuData>) {
+		self.data.replace(data);
 	}
 
 	fn render (&self, _context: &Context, _gpuObjects: &Self::GpuState) {

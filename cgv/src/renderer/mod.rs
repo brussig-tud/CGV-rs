@@ -15,6 +15,9 @@ pub use data::{host::Data as HostData, gpu::Data as GpuData}; // re-export
 /// The module prelude.
 pub mod prelude {
 	pub use super::{
+		// "The" renderer trait
+		Renderer,
+
 		// Host-side data traits
 		HostData, renderer::data::host::Interleaved as HostDataInterleaved,
 		renderer::data::host::NonInterleaved as HostDataNonInterleaved,
@@ -33,6 +36,7 @@ pub mod prelude {
 		renderer::data::host::HasScalings as HostDataHasScalings,
 		renderer::data::host::CanHaveColors as HostDataCanHaveColors,
 		renderer::data::host::HasColors as HostDataHasColors,
+
 		// GPU-side data traits
 		GpuData, renderer::data::gpu::Interleaved as GpuDataInterleaved,
 		renderer::data::gpu::NonInterleaved as GpuDataNonInterleaved,
@@ -65,11 +69,6 @@ pub mod prelude {
 use std::{ops::{Deref, DerefMut}, sync::Arc};
 
 // Local imports
-pub use cgv_derive::{
-	// Re-export the relevant procedural derive macros from cgv-derive
-	InterleavedElem, ElemWithNormal, ElemWithTangent, ElemWithRadius, ElemWithRadiusDeriv, ElemWithOrientation,
-	ElemWithScaling, ElemWithColor
-};
 use crate::{self as cgv, *};
 
 
@@ -261,7 +260,7 @@ pub trait Renderer
 
 	///
 	#[expect(unused_variables)] // <- we want `data` to show up in the documented signature
-	fn setData (&mut self, data: Arc<impl GpuData>) {
+	fn setData (&mut self, data: Arc<dyn GpuData>) {
 		unimplemented!("renderer implementations must specifically opt-in to polymorphic render data assignment")
 	}
 

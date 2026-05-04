@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* nothing here yet */
+use std::ops::Deref;
 
 // Local imports
 #[expect(unused_imports)] // we only use these for documentation links
@@ -25,7 +25,7 @@ pub trait Data: Sync+Send
 	fn num (&self) -> u32;
 
 	/// Return the [buffer layout](wgpu::api::render_pipeline::VertexState.buffer) of the data inside the GPU.
-	fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>];
+	fn layout (&self) -> BufferLayout<'_>;
 
 	/// Reference the underlying GPU buffer(s) region(s) containing the renderable data.
 	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>>;
@@ -120,3 +120,59 @@ pub trait CanHaveColors: Data {
 
 ///
 pub trait HasColors: CanHaveColors {}
+
+
+
+//////
+//
+// Structs
+//
+
+#[derive(Clone)]
+pub struct BufferLayout<'this> {
+	layout: &'this [wgpu::VertexBufferLayout<'static>]
+}
+impl BufferLayout<'_>
+{
+	#[inline]
+	pub fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>] {
+		&self.layout
+	}
+}
+impl<'this> From<&'this [wgpu::VertexBufferLayout<'static>]> for BufferLayout<'this> {
+	#[inline(always)]
+	fn from (other: &'this [wgpu::VertexBufferLayout<'static>]) -> Self {
+		Self { layout: other }
+	}
+}
+impl PartialEq<Self> for BufferLayout<'_>
+{
+	fn eq (&self, other: &Self) -> bool
+	{
+		if self.layout.len() != other.layout.len() {
+			return false;
+		}
+		for (a,b) in self.layout.iter().zip(other.layout.iter())
+		{
+			if a.array_stride != b.array_stride || a.step_mode != b.step_mode || a.attributes.len() != b.attributes.len() {
+				return false;
+			}
+			for (a,b) in a.attributes.iter().zip(b.attributes.iter()) {
+				if a.format != b.format || a.offset != b.offset || a.shader_location != b.shader_location {
+					return false;
+				}
+			}
+		}
+		true
+	}
+}
+impl Eq for BufferLayout<'_> {}
+impl Deref for BufferLayout<'_>
+{
+	type Target = [wgpu::VertexBufferLayout<'static>];
+
+	#[inline(always)]
+	fn deref (&self) -> &Self::Target {
+		self.layout
+	}
+}

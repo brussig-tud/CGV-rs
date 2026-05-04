@@ -105,7 +105,7 @@ pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
 pub struct GpuData {
 	num: u32,
 	variant: LayoutVariant,
-	layout: [wgpu::VertexBufferLayout<'static>; 1],
+	layout: wgpu::VertexBufferLayout<'static>,
 	attributes: wgpu::Buffer
 }
 impl GpuData
@@ -144,7 +144,7 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
+		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
 	}
 
 	///
@@ -165,7 +165,7 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
+		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
 	}
 
 	///
@@ -186,7 +186,7 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
+		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
 	}
 
 	///
@@ -208,7 +208,7 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: [variant.layout()], variant, attributes })
+		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
 	}
 }
 impl renderer::GpuData for GpuData
@@ -217,8 +217,8 @@ impl renderer::GpuData for GpuData
 		self.num
 	}
 
-	fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>] {
-		&self.layout
+	fn layout (&self) -> gpu::BufferLayout<'_> {
+		std::slice::from_ref(&self.layout).into()
 	}
 
 	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>> {

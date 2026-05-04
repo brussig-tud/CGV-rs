@@ -21,7 +21,7 @@ use std::default::Default;
 use cgv::{wgpu, glm, egui, tracing};
 
 // CGV-rs Framework
-use cgv;
+use cgv::{self, renderer::prelude::*};
 
 
 
@@ -99,8 +99,8 @@ const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5,
 /// **TODO: move into to-be-created `media` module.**
 #[repr(C)]
 #[derive(
-	Copy,Clone,Debug,cgv::renderer::InterleavedElem,cgv::renderer::ElemWithTangent,cgv::renderer::ElemWithRadius,
-	cgv::renderer::ElemWithRadiusDeriv,cgv::renderer::ElemWithColor
+	Clone,cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithTangent,cgv::renderer::data::ElemWithRadius,
+	cgv::renderer::data::ElemWithRadiusDeriv,cgv::renderer::data::ElemWithColor
 )]
 pub struct DataPoint
 {
