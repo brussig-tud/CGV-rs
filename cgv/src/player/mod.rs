@@ -53,6 +53,21 @@ use crate::view::{Camera, CameraInteractor};
 
 
 
+//////
+//
+// Macros
+//
+
+/// Internal helper macro companion to [`Player::activeCameras`] that avoids borrowing the entire player by only
+/// referring to `$player.camera` .
+///
+/// **TODO: What about other active cameras?**
+macro_rules! activeCameras {
+	($player:expr) => { std::slice::from_ref(&$player.camera) };
+}
+
+
+
 ///////
 //
 // Enums and structs
@@ -527,7 +542,9 @@ impl Player
 			&player.state.context, &player.state.renderSetup, environment
 		)?;
 		activeApplication.preInit(&mut player)?;
-		activeApplication.recreatePipelines(&player.context, &player.renderSetup, &player.camera.globalPasses());
+		activeApplication.recreatePipelines(
+			&player.context, &player.renderSetup, &Player::globalPassesFromCameras(player.activeCameras())
+		);
 		activeApplication.postInit(&mut player)?;
 		player.applications.list.push(Some(activeApplication));
 		player.activeSidePanel = 2;
@@ -927,7 +944,7 @@ impl Player
 		// Make all global passes needed by the active camera
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let cameraName = self.camera.name();
-		let globalPasses = self.camera.globalPasses();
+		let globalPasses = Self::globalPassesFromCameras(activeCameras!(self));
 		for passNr in 0..globalPasses.info.len()
 		{
 			// Get actual pass information
@@ -976,7 +993,7 @@ impl Player
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let mut cmdEncoder = self.context.device().create_command_encoder(&Default::default());
 		let cameraName = self.camera.name();
-		let globalPasses = self.camera.globalPasses();
+		let globalPasses = Self::globalPassesFromCameras(activeCameras!(self));
 		for passNr in 0..globalPasses.info.len()
 		{
 			// Get actual pass information
@@ -1028,11 +1045,26 @@ impl Player
 		cmdBuffers
 	}
 
-	pub fn postRecreatePipelines (&mut self)
-	{
+	/// Obtain a list of all currently active cameras (i.e. those that will contribute one or more global passes).
+	pub fn activeCameras (&self) -> &[Box<dyn Camera>] {
+		activeCameras!(self)
+	}
+
+	/// Obtain information about all global render passes that the player will currently dispatch.
+	pub fn activeGlobalPasses (&self) -> GlobalPasses<'_> {
+		Self::globalPassesFromCameras(activeCameras!(self))
+	}
+
+	/// Internal helper to help the borrow checker disentangle disjunct borrows into `self` from borrows of the cameras.
+	fn globalPassesFromCameras (activeCameras: &[Box<dyn Camera>]) -> GlobalPasses<'_> {
+		// TODO: What about other active cameras?
+		activeCameras[0].globalPasses()
+	}
+
+	pub fn postRecreatePipelines (&mut self) {
 		// TODO: What about other applications?
 		let Some(mut app) = self.applications.takeActive() else {return};
-		app.recreatePipelines(&self.context, &self.renderSetup, &self.camera.globalPasses());
+		app.recreatePipelines(&self.context, &self.renderSetup, &self.activeGlobalPasses());
 		self.applications.putActive(app);
 	}
 
