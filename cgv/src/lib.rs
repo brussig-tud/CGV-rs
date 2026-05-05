@@ -204,11 +204,12 @@ pub struct GlobalPassInfo {
 }
 
 /// Global passes and their associated render state, defined by a camera.
-pub struct GlobalPasses<'cam>
-{
+#[derive(Clone,Copy)]
+pub struct GlobalPasses<'cam> {
 	pub info: &'cam [GlobalPassInfo],
 	pub renderStates: &'cam [RenderState],
 }
+
 
 
 ///////

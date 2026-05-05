@@ -134,9 +134,21 @@ pub struct BufferLayout<'this> {
 }
 impl BufferLayout<'_>
 {
-	#[inline]
+	/// Return a slice of [`wgpu::VertexBufferLayout`]s ready for use in the [vertex state](wgpu::VertexState) of a
+	/// [`wgpu::RenderPipelineDescriptor`].
+	#[inline(always)]
 	pub fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>] {
 		&self.layout
+	}
+
+	/// Check if another buffer layout is compatible to be used in the same pipeline as this one.
+	///
+	/// **NOTE: This check does as of yet *not take attribute semantics into account*!**
+	///
+	/// **TODO: Implement layout attribute semantics and base the check on that.**
+	pub fn isCompatible (&self, other: &Self) -> bool {
+		   self.layout.len() == other.layout.len()
+		&& self.layout.iter().zip(other.layout.iter()).all(|(a,b)| a == b)
 	}
 }
 impl<'this> From<&'this [wgpu::VertexBufferLayout<'static>]> for BufferLayout<'this> {

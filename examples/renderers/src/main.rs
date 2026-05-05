@@ -21,7 +21,7 @@ use std::default::Default;
 use cgv::{wgpu, glm, egui, tracing};
 
 // CGV-rs Framework
-use cgv::{self, renderer::prelude::*};
+use cgv::{self, renderer};
 
 
 
@@ -139,8 +139,10 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	////
 	// Initialize renderers
 
-	let mut sphereRenderer = cgv::renderer::Spheres::new(context, renderSetup);
-	sphereRenderer.setData(spheresData);
+	let mut sphereRenderer = renderer::Managed::new(
+		renderer::Spheres::new(context, renderSetup)
+	);
+	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData));
 
 
 	////
@@ -153,7 +155,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { sphereRenderer: cgv::renderer::Managed::new(sphereRenderer), _guiState: guiState }))
+	Ok(Box::new(RenderersDemo { sphereRenderer, _guiState: guiState }))
 }
 
 #[derive(Default,Debug)]
@@ -162,10 +164,10 @@ struct GuiState {}
 struct RenderersDemo
 {
 	// The renderable test data
-	//spheresData: cgv::renderer::spheres::GpuData,
+	//spheresData: Arc<cgv::renderer::spheres::GpuData>,
 
 	// Test sphere renderer
-	sphereRenderer: cgv::renderer::Managed<cgv::renderer::Spheres>,
+	sphereRenderer: renderer::Managed<cgv::renderer::Spheres>,
 
 	// GUI-controllable state
 	_guiState: GuiState
@@ -185,7 +187,7 @@ impl cgv::Application for RenderersDemo
 		&mut self, context: &cgv::Context, _: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
 	){
 		// Let our renderers know of the new render states
-		self.sphereRenderer.rebuildForGlobalPasses(context, globalPasses);
+		self.sphereRenderer.rebuildForGlobalPasses(context, *globalPasses);
 	}
 
 	fn postInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>

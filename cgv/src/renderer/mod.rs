@@ -66,7 +66,7 @@ pub mod prelude {
 //
 
 // Standard library
-use std::{ops::{Deref, DerefMut}, sync::Arc};
+use std::ops::{Deref, DerefMut};
 
 // Local imports
 use crate::*;
@@ -79,6 +79,18 @@ use crate::*;
 //
 
 ///
+pub trait GpuDataReceiver {
+	///
+	fn gpuData (&self) -> &dyn GpuData;
+
+	/// Check if the wrapped GPU data is [compatible](data::gpu::BufferLayout::isCompatible) with another.
+	#[inline]
+	fn isCompatible (&self, otherData: &dyn GpuData) -> bool {
+		self.gpuData().layout().isCompatible(&otherData.layout())
+	}
+}
+
+///
 pub trait GpuState {}
 impl GpuState for wgpu::RenderPipeline {}
 
@@ -89,17 +101,25 @@ pub trait Renderer
 	type GpuState: GpuState;
 
 	///
-	#[expect(unused_variables)] // <- we want `data` to show up in the documented signature
-	fn setData (&mut self, data: Arc<dyn GpuData>) {
-		unimplemented!("renderer implementations must specifically opt-in to polymorphic render data assignment")
-	}
+	type GpuDataReceiver: GpuDataReceiver;
 
+	/// Returns `true` if this renderer's [`GpuState`] does not depend on the data being rendered. Most implementations
+	/// will not require `&self` to answer this query, but we want this to be dynamically dispatchable.
 	///
-	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState;
+	/// **NOTE:** Implementations that can statically answer this query with `true` are encouraged to implement the
+	/// [`renderer::DataIndependent`] trait.
+	fn gpuStateIsIndependentFromData(&self) -> bool;
 
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
-	fn render (&self, context: &Context, gpuObjects: &Self::GpuState);
+	fn createGpuState (&self, context: &Context, renderState: &RenderState, data: &Self::GpuDataReceiver)
+		-> Self::GpuState;
+
+	/// **TODO: this is a placeholder, subject to extensive change as things develop**
+	fn render (&self, context: &Context, gpuState: &Self::GpuState, data: &Self::GpuDataReceiver);
 }
+
+/// Marker trait to enable the [`Managed::setData`] method that statically omits re-creating [`GpuState`].
+pub trait DataIndependent {}
 
 
 
@@ -111,40 +131,132 @@ pub trait Renderer
 ///
 pub struct Managed<R: Renderer> {
 	renderer: R,
-	gpuStates: Vec<R::GpuState>
+	gpuStates: Vec<R::GpuState>,
+	data: Option<R::GpuDataReceiver>
 }
 impl<R: Renderer> Managed<R>
 {
 	/// Create a new renderer with the given renderer implementation and render state.
 	pub fn new (renderer: R) -> Self { Self {
-		renderer, gpuStates: Default::default()
+		renderer, gpuStates: Default::default(), data: None
 	}}
 
-	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuState) for the
-	/// given single renderState.
+	/// Helper function to decide whether the `setData...` family of functions need to rebuild [`GpuState`].
+	#[inline]
+	fn needsRebuild (&self, newData: &R::GpuDataReceiver) -> bool
+	{!(
+		self.renderer.gpuStateIsIndependentFromData() ||
+		if let Some(data) = &self.data {
+			data.isCompatible(newData.gpuData())
+		} else {
+			false
+		}
+	)}
+
+	/// Rebuild the wrapped renderer's [render state](crate::RenderState)-dependent [`GpuState`] for the given single
+	/// render state.
 	pub fn rebuildForSingleRenderState (&mut self, context: &Context, renderState: &RenderState) {
-		self.gpuStates = vec![self.renderer.createGpuState(context, renderState)];
+		if let Some(data) = &self.data {
+			self.gpuStates = vec![self.renderer.createGpuState(context, renderState, data)]
+		}
 	}
 
-	/// Rebuild the wrapped renderer's [`RenderState`](crate::RenderState)-dependent [`GpuObjects`](GpuState) for the
-	/// list of [managed global render passes](GlobalPassInfo).
-	pub fn rebuildForGlobalPasses (&mut self, context: &Context, globalPasses: &GlobalPasses) {
-		self.gpuStates.clear();
-		self.gpuStates.reserve(globalPasses.renderStates.len());
-		for renderState in globalPasses.renderStates {
-			self.gpuStates.push(self.renderer.createGpuState(context, renderState));
+	/// Rebuild the wrapped renderer's [render state](crate::RenderState)-dependent [`GpuState`] as required for the
+	/// [`Player`] to perform a full scene pass.
+	#[inline(always)]
+	pub fn rebuildForPlayer (&mut self, context: &Context, player: &Player) {
+		self.rebuildForGlobalPasses(context, player.activeGlobalPasses())
+	}
+
+	/// Rebuild the wrapped renderer's [render state](crate::RenderState)-dependent [`GpuState`] for the given list of
+	/// [global render passes](GlobalPassInfo).
+	pub fn rebuildForGlobalPasses (&mut self, context: &Context, globalPasses: GlobalPasses)
+	{
+		if let Some(data) = &self.data {
+			self.gpuStates.clear();
+			self.gpuStates.reserve(globalPasses.renderStates.len());
+			for renderState in globalPasses.renderStates {
+				self.gpuStates.push(self.renderer.createGpuState(context, renderState, data));
+			}
+		}
+	}
+
+	/// Set new data to render. This requires the wrapped renderer to implement [`renderer::DataIndependent`].
+	pub fn setData (&mut self, newData: R::GpuDataReceiver) where R: DataIndependent {
+		debug_assert!(self.renderer.gpuStateIsIndependentFromData());
+		self.data = Some(newData);
+	}
+
+	/// Set new data to render. This potentially triggers a rebuild of the wrapped renderer's [`GpuState`] targeting the
+	/// given single [render state](RenderState) if the new data is
+	/// [incompatible](data::gpu::BufferLayout::isCompatible).
+	///
+	/// **NOTE**: The provided render state is assumed to be the same as was provided to the most recent call to
+	/// [`Self::rebuildForSingleRenderState`] to allow skipping GPU state recreation for compatible data. Providing a
+	/// different render state will not be detected and constitutes a logic bug.
+	#[inline]
+	pub fn setDataWithSingleRenderState (
+		&mut self, context: &Context, renderState: &RenderState, newData: R::GpuDataReceiver
+	){
+		let rebuild = self.needsRebuild(&newData);
+		self.data = Some(newData);
+		if rebuild {
+			self.rebuildForSingleRenderState(context, renderState);
+		}
+	}
+
+	/// Set new data to render. This potentially triggers a rebuild of the wrapped renderer's [`GpuState`] as required
+	/// for the [`Player`] to perform a full scene pass if the new data is
+	/// [incompatible](data::gpu::BufferLayout::isCompatible).
+	///
+	/// **NOTE**: The provided `Player` reference is assumed to be the same as was provided to the most recent call to
+	/// [`Self::rebuildForPlayer`] to allow skipping GPU state recreation for compatible data. Providing a different
+	/// `Player` reference will not be detected and constitutes a logic bug. Since there is just one (global) `Player`
+	/// instance that applications will typically use, this contract will virtually always be fulfilled in practice.
+	#[inline]
+	pub fn setDataWithPlayer (&mut self, context: &Context, player: &Player, newData: R::GpuDataReceiver)
+	{
+		let rebuild = self.needsRebuild(&newData);
+		self.data = Some(newData);
+		if rebuild {
+			self.rebuildForPlayer(context, player);
+		}
+	}
+
+	/// Set new data to render. This potentially triggers a rebuild of the wrapped renderer's [`GpuState`] for the given
+	/// list of [global render passes](GlobalPassInfo) if the new data is
+	/// [incompatible](data::gpu::BufferLayout::isCompatible).
+	///
+	/// **NOTE**: The provided list of global passes is assumed to be the same as was provided to the most recent call
+	/// to [`Self::rebuildForGlobalPasses`] to allow skipping GPU state recreation for compatible data. Providing a
+	/// different global pass list will not be detected and constitutes a logic bug.
+	#[inline]
+	pub fn setDataWithGlobalPasses (
+		&mut self, context: &Context, globalPasses: GlobalPasses, newData: R::GpuDataReceiver
+	){
+		let rebuild = self.needsRebuild(&newData);
+		self.data = Some(newData);
+		if rebuild {
+			self.rebuildForGlobalPasses(context, globalPasses);
 		}
 	}
 
 	/// Dispatch rendering for the very first set of [`GpuState`], typically for use when the managed renderer was
 	/// [built for a single render state](Self::rebuildForSingleRenderState).
+	#[inline(always)]
 	pub fn render (&self, context: &Context) {
-		self.renderer.render(context, &self.gpuStates[0]);
+		self.renderForGlobalPass(context, 0);
 	}
 
 	/// Dispatch rendering for the set of [`GpuState`] associated with the specified [`GlobalPass`].
-	pub fn renderForGlobalPass (&self, context: &Context, globalPassIdx: usize) {
-		self.renderer.render(context, &self.gpuStates[globalPassIdx]);
+	pub fn renderForGlobalPass (&self, context: &Context, globalPassIdx: usize)
+	{
+		assert!(
+			globalPassIdx < self.gpuStates.len(), "invalid GPU state index - was the renderer properly initialized?"
+		);
+		self.renderer.render(context, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
+			"render data should be set before rendering"
+		));
 	}
 }
 impl<R: Renderer> Deref for Managed<R> {

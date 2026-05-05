@@ -33,11 +33,25 @@ use data::*;
 //
 
 ///
+pub struct DataReceiver {
+	data: Arc<dyn renderer::GpuData>
+}
+impl DataReceiver {
+	pub fn new (data: Arc<dyn renderer::GpuData>) -> Self {
+		Self { data }
+	}
+}
+impl GpuDataReceiver for DataReceiver {
+	fn gpuData(&self) -> &dyn renderer::GpuData {
+		self.data.as_ref()
+	}
+}
+
+///
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	_constantAttribUniforms: ConstantAttribsUniformGroup,
-	data: Option<Arc<dyn renderer::GpuData>>
+	_constantAttribUniforms: ConstantAttribsUniformGroup
 }
 impl Spheres
 {
@@ -71,14 +85,21 @@ impl Spheres
 		).expect("shader module could not be compiled by WGPU");
 
 		// Done!
-		Self { shader, pipelineLayout, _constantAttribUniforms: constantAttribUniforms, data: None }
+		Self { shader, pipelineLayout, _constantAttribUniforms: constantAttribUniforms }
 	}
 }
 impl Renderer for Spheres
 {
 	type GpuState = wgpu::RenderPipeline;
 
-	fn createGpuState (&self, context: &Context, renderState: &RenderState) -> Self::GpuState
+	type GpuDataReceiver = spheres::DataReceiver;
+
+	#[inline(always)]
+	fn gpuStateIsIndependentFromData (&self) -> bool {
+		true
+	}
+
+	fn createGpuState (&self, context: &Context, renderState: &RenderState, _: &Self::GpuDataReceiver) -> Self::GpuState
 	{
 		// Create pipeline
 		let pipeline = context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -112,11 +133,8 @@ impl Renderer for Spheres
 		pipeline
 	}
 
-	fn setData (&mut self, data: Arc<dyn renderer::GpuData>) {
-		self.data.replace(data);
-	}
-
-	fn render (&self, _context: &Context, _gpuObjects: &Self::GpuState) {
+	fn render (&self, _context: &Context, _gpuState: &Self::GpuState, _data: &Self::GpuDataReceiver) {
 		todo!()
 	}
 }
+impl DataIndependent for Spheres {}
