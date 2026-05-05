@@ -180,12 +180,6 @@ pub struct Texture {
 
 	/// The buffer object for readback operations in case the texture usage allows for that
 	pub readbackBuffer: Option<Box<wgpu::Buffer>>,
-
-	/// The TexelCopyTextureInfo-compatible view on the texture in case readback is enabled
-	pub readbackView_tex: Option<wgpu::TexelCopyTextureInfo<'static>>,
-
-	/// The TexelCopyBufferInfo-compatible view on the texture in case readback is enabled
-	pub readbackView_buf: Option<wgpu::TexelCopyBufferInfo<'static>>,
 }
 
 impl Texture
@@ -230,7 +224,7 @@ impl Texture
 
 		// Create texture object
 		let descriptor = wgpu::TextureDescriptor {
-			format,	label, size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: dims.z},
+			format, label, size: wgpu::Extent3d {width: dims.x, height: dims.y, depth_or_array_layers: dims.z},
 			mip_level_count: numMipLevels,
 			sample_count: 1,
 			dimension: textureDimensionsFromVec(&dims),
@@ -284,46 +278,9 @@ impl Texture
 				mapped_at_creation: false
 			}))
 		);
-		let readbackView_tex = match &readbackBuffer {
-			Some(_) => Some(wgpu::TexelCopyTextureInfo {
-				texture: unsafe {
-					// SAFETY: `texture` is a `Box` that is moved into `Self.texture` at the end of this function, so
-					// the heap allocation it owns remains valid and stable for the lifetime of the struct. This
-					// reference is stored in `Self.readbackView_tex` alongside it, producing a self-referential struct
-					// where the references can by construction not outlive their host.
-					util::notsafe::extendLifetime(texture.as_ref())
-				},
-				mip_level: 0,
-				origin: Default::default(),
-				aspect: wgpu::TextureAspect::DepthOnly,
-			}),
-			_ => None
-		};
-		let readbackView_buf = match &readbackBuffer {
-			Some(buffer) => Some(wgpu::TexelCopyBufferInfo {
-				buffer: unsafe {
-					// SAFETY: `buffer` (via `readbackBuffer`) is a `Box` that is moved into `Self.readbackBuffer` at
-					// the end of this function, so the heap allocation it owns remains valid and stable for the
-					// lifetime of the struct. This reference is stored in `Self.readbackView_buf` alongside the owning
-					// `Box`, producing a self-referential struct where the references can by construction not outlive
-					// their host.
-					util::notsafe::extendLifetime(buffer.as_ref())
-				},
-				layout: wgpu::TexelCopyBufferLayout {
-					bytes_per_row: Some(roundUpToQuantization(
-						descriptor.size.width * numBytesFromFormat(descriptor.format) as u32,
-						wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
-					)),
-					..Default::default()
-				}
-			}),
-			_ => None
-		};
 
 		// Done!
-		Self {
-			name, texture, descriptor, alphaUsage, view, mipLevels, readbackBuffer, readbackView_tex, readbackView_buf
-		}
+		Self { name, texture, descriptor, alphaUsage, view, mipLevels, readbackBuffer }
 	}
 
 	/// Create the texture from the given blob, which should contain the bytes of a valid image format.
@@ -453,7 +410,7 @@ impl Texture
 			wgpu::TextureUsages::RENDER_ATTACHMENT
 		};
 
-		// Create and actual texture
+		// Create the texture
 		Self::createEmpty(
 			context, glm::vec3(dims.x, dims.y, 1), format.into(), 1, AlphaUsage::DontCare, usageFlags,
 			label
@@ -484,6 +441,32 @@ impl Texture
 		glm::vec2(self.descriptor.size.height, self.descriptor.size.depth_or_array_layers)
 	}
 
+	/// Create a TexelCopyTextureInfo-compatible view on the texture in case readback is enabled.
+	pub fn readbackView_tex(&self) -> Option<wgpu::TexelCopyTextureInfo<'_>> {
+		if self.readbackBuffer.is_none() {return None};
+		Some(wgpu::TexelCopyTextureInfo {
+			texture: &self.texture,
+			mip_level: 0,
+			origin: Default::default(),
+			aspect: wgpu::TextureAspect::DepthOnly,
+		})
+	}
+
+	/// Create a TexelCopyBufferInfo-compatible view on the texture in case readback is enabled.
+	pub fn readbackView_buf(&self) -> Option<wgpu::TexelCopyBufferInfo<'_>> {
+		let Some(buffer) = self.readbackBuffer.as_deref() else {return None};
+		Some(wgpu::TexelCopyBufferInfo {
+			buffer,
+			layout: wgpu::TexelCopyBufferLayout {
+				bytes_per_row: Some(roundUpToQuantization(
+					self.descriptor.size.width * numBytesFromFormat(self.descriptor.format) as u32,
+					wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
+				)),
+				..Default::default()
+			}
+		})
+	}
+
 	pub fn readbackAsync<'map, Closure: FnOnce(ReadBackTexels<'map>, usize) + wgpu::WasmNotSend + 'static> (
 		&self, context: &Context, callback: Closure
 	){
@@ -491,51 +474,55 @@ impl Texture
 			&wgpu::CommandEncoderDescriptor {label: Some("ReadbackTestCommandEncoder")}
 		);
 		enc.copy_texture_to_buffer(
-			*self.readbackView_tex.as_ref().unwrap(),
-			*self.readbackView_buf.as_ref().unwrap(), self.descriptor.size
+			self.readbackView_tex().unwrap(),
+			self.readbackView_buf().unwrap(),
+			self.descriptor.size,
 		);
 		context.queue().submit(Some(enc.finish()));
 		let dims = self.dimsWH();
-		let this = unsafe {
-			// SAFETY: `self` is borrowed for the duration of the `map_async` callback. The callback is invoked by the
-			// wgpu runtime while the Texture (and therefore `self`) is still alive – the caller guarantees this by
-			// holding the Texture alive until the readback completes.
-			util::notsafe::extendLifetime(self)
-		};
-		let buf = this.readbackBuffer.as_ref().unwrap().as_ref();
+		let size = self.size().actual;
+		let format = self.descriptor.format;
+		let buf = self.readbackBuffer.as_ref().unwrap();
+		let buf_cb = buf.clone();
 		buf.slice(0..self.size().actual as u64).map_async(
 			wgpu::MapMode::Read, move |result| {
 				if result.is_ok()
 				{
-					let bufView = buf.slice(..).get_mapped_range();
+					let bufView = buf_cb.slice(..).get_mapped_range();
 					let bytes = bufView.iter().as_slice();
 					let rowStride;
-					let readbackInfo = match this.descriptor.format {
+					let readbackInfo = match format {
 						wgpu::TextureFormat::Depth16Unorm => {
-							rowStride = this.size().actual / (dims.y as usize * size_of::<u16>());
+							rowStride = size / (dims.y as usize * size_of::<u16>());
+							let ptr = bytes.as_ptr() as *const u16;
+							// While the buffer will almost certainly have sufficient alignment, wgpu technically does
+							// not make any guarantees, see https://github.com/gfx-rs/wgpu/issues/3508.
+							assert!(ptr.is_aligned());
 							ReadBackTexels::U16(unsafe { std::slice::from_raw_parts(
-								bytes.as_ptr() as *const u16, bytes.len() / size_of::<u16>()
+								ptr, bytes.len() / size_of::<u16>()
 							)})
 						},
 						wgpu::TextureFormat::Depth24PlusStencil8 => {
-							rowStride = this.size().actual / (dims.y as usize * size_of::<u32>());
+							rowStride = size / (dims.y as usize * size_of::<u32>());
+							let ptr = bytes.as_ptr() as *const u32;
+							assert!(ptr.is_aligned());
 							ReadBackTexels::U32(unsafe { std::slice::from_raw_parts(
-								bytes.as_ptr() as *const u32, bytes.len() / size_of::<u32>()
+								ptr, bytes.len() / size_of::<u32>()
 							)})
 						},
 						wgpu::TextureFormat::Depth32Float => {
-							rowStride = this.size().actual / (dims.y as usize * size_of::<f32>());
+							rowStride = size / (dims.y as usize * size_of::<f32>());
+							let ptr = bytes.as_ptr() as *const f32;
+							assert!(ptr.is_aligned());
 							ReadBackTexels::F32(unsafe { std::slice::from_raw_parts(
-								bytes.as_ptr() as *const f32, bytes.len() / size_of::<f32>()
+								ptr, bytes.len() / size_of::<f32>()
 							)})
 						},
-						_ => unimplemented!(
-							"readback for texture format {:?} not yet implemented", this.descriptor.format
-						)
+						_ => unimplemented!("readback for texture format {format:?} not yet implemented")
 					};
 					callback(readbackInfo, rowStride);
 					drop(bufView);
-					buf.unmap();
+					buf_cb.unmap();
 				}
 				else {
 					tracing::error!("readback buffer could not be mapped");
