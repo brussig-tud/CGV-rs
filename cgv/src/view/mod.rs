@@ -344,7 +344,7 @@ pub trait Camera: Send
 	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>;
 }
 
-/// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly. 
+/// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly.
 pub trait CameraInteractor: Component
 {
 	/// Report a short title for the interactor that it will be selectable by.
