@@ -121,10 +121,11 @@ pub struct ModuleEntry<ModuleType: Module> {
 	pub sourceEnv: Option<Uuid>
 }
 impl<ModuleType: Module> util::ds::UniqueVecElement for ModuleEntry<ModuleType> {
-	type Key<'a> = &'a Path where ModuleType: 'a;
+	type Key = &'static Path;
 
-	fn key (&self) -> Self::Key<'_> {
-		&self.path
+	fn key (&self) -> Self::Key {
+		// SAFETY: See impl for PathBuf.
+		unsafe{cgv_util::notsafe::extendLifetime(&self.path)}
 	}
 }
 
@@ -436,5 +437,3 @@ impl<ModuleType> Environment<ModuleType>
 		Ok(())
 	}
 }
-unsafe impl<ModuleType: Module+Send> Send for Environment<ModuleType> {}
-unsafe impl<ModuleType: Module+Sync> Sync for Environment<ModuleType> {}
