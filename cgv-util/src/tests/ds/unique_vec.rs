@@ -21,9 +21,9 @@ struct LargeKeyElement {
 	data: i32,
 }
 impl UniqueVecElement for LargeKeyElement {
-	type Key<'a> = String;
+	type Key = String;
 
-	fn key(&self) -> Self::Key<'_> {
+	fn key(&self) -> Self::Key {
 		self.id.clone()
 	}
 }
@@ -35,10 +35,11 @@ struct RefKeyElement {
 	data: i32,
 }
 impl UniqueVecElement for RefKeyElement {
-	type Key<'a> = &'a str;
+	type Key = &'static str;
 
-	fn key (&self) -> Self::Key<'_> {
-		&self.id
+	fn key (&self) -> Self::Key {
+		// SAFETY: See impl for String.
+		unsafe{crate::notsafe::extendLifetime(&self.id)}
 	}
 }
 
@@ -50,9 +51,9 @@ struct HashElement {
 }
 impl UniqueVecElement for HashElement
 {
-	type Key<'a> = u64;
+	type Key = u64;
 
-	fn key(&self) -> Self::Key<'_> {
+	fn key(&self) -> Self::Key {
 		use std::collections::hash_map::DefaultHasher;
 		use std::hash::{Hash, Hasher};
 		let mut s = DefaultHasher::new();

@@ -47,7 +47,7 @@ fn test_substrByteRange()
 {
 	// Our test string
 	let whole = "The quick brown fox jumps over the lazy dog";
-	
+
 	// Middle subslice
 	let sub = &whole[4..9]; // "quick"
 	assert_eq!(substrByteRange(whole, sub), 4..9);
@@ -73,7 +73,7 @@ fn test_substrByteRange_utf8()
 	// ü: 2 bytes (2,3)
 	// ß: 2 bytes (4,5)
 	// e: 1 byte (6)
-	
+
 	let sub1 = &whole[2..6]; // "üß"
 	assert_eq!(substrByteRange(whole, sub1), 2..6);
 	let sub2 = &whole[11..14]; // "der"

@@ -247,7 +247,7 @@ impl From<&slang::Module> for EnvModule {
 #[derive(Clone)]
 struct SessionConfig {
 	searchPaths: Vec<std::ffi::CString>,
-	targets: util::ds::BTreeUniqueVec<compile::Target>,
+	targets: util::ds::HashUniqueVec<compile::Target>,
 	compilerOptions: slang::CompilerOptions,
 	profile: slang::ProfileID,
 }
@@ -260,7 +260,7 @@ impl SessionConfig {
 
 ///
 pub struct ContextBuilder<'ctx> {
-	targets: util::ds::BTreeUniqueVec<compile::Target>,
+	targets: util::ds::HashUniqueVec<compile::Target>,
 	debug: bool,
 	searchPath: util::ds::HashUniqueVec<PathBuf>,
 	lifetimePhantom: std::marker::PhantomData<&'ctx ()>

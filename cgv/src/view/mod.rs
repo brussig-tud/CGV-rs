@@ -203,23 +203,14 @@ impl<'a> DepthReadbackDispatcher<'a>
 	){
 		let pixelCoords = self.pixelCoords;
 		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
-		let projection = unsafe {
-			// SAFETY: `self.projection` is a reference into camera state that is guaranteed by the caller to outlive
-			// the async readback callback (the camera and its matrices persist across frames).
-			util::notsafe::extendLifetime(self.projection)
-		};
-		let view = unsafe {
-			// SAFETY: `self.view` is a reference into camera state that is guaranteed by the caller to outlive the
-			// async readback callback (the camera and its matrices persist across frames).
-			util::notsafe::extendLifetime(self.view)
-		};
+		let invVPMat = glm::inverse(&(self.projection * self.view));
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			let projected = glm::vec4(
 				pixelCoords_clip.x, pixelCoords_clip.y, hal::decodeDepth(loc, texels), 1.
 			);
 			if projected.z < 1. {
-				let unviewed = glm::inverse(&(projection * view)) * projected;
+				let unviewed = invVPMat * projected;
 				callback(Some(&unviewed));
 			}
 			else { callback(None); }
@@ -231,23 +222,14 @@ impl<'a> DepthReadbackDispatcher<'a>
 	){
 		let pixelCoords = self.pixelCoords;
 		let pixelCoords_clip = self.viewport.transformToClip(&pixelCoords);
-		let projection = unsafe {
-			// SAFETY: `self.projection` is a reference into camera state that is guaranteed by the caller to outlive
-			// the async readback callback (the camera and its matrices persist across frames).
-			util::notsafe::extendLifetime(self.projection)
-		};
-		let view = unsafe {
-			// SAFETY: `self.view` is a reference into camera state that is guaranteed by the caller to outlive the
-			// async readback callback (the camera and its matrices persist across frames).
-			util::notsafe::extendLifetime(self.view)
-		};
+		let invVPMat = glm::inverse(&(self.projection * self.view));
 		self.depthTexture.readbackAsync(context, move |texels, rowStride| {
 			let loc = pixelCoords.y as usize *rowStride + pixelCoords.x as usize;
 			let projected = glm::vec4(
 				pixelCoords_clip.x, pixelCoords_clip.y, hal::decodeDepth(loc, texels), 1.
 			);
 			if projected.z < 1. {
-				let unviewed = glm::inverse(&(projection * view)) * projected;
+				let unviewed = invVPMat * projected;
 				callback(Some(&(glm::vec4_to_vec3(&unviewed) / unviewed.w)));
 			}
 			else { callback(None); }
@@ -362,7 +344,7 @@ pub trait Camera: Send
 	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>;
 }
 
-/// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly. 
+/// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly.
 pub trait CameraInteractor: Component
 {
 	/// Report a short title for the interactor that it will be selectable by.

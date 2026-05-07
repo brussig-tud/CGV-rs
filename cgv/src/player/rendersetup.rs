@@ -28,7 +28,7 @@ pub struct RenderSetup
 	defaultDepthCompare: wgpu::CompareFunction,
 	bindGroupLayouts: ManagedBindGroupLayouts,
 
-	// Relevant for renderpasses 
+	// Relevant for renderpasses
 	pub(crate) defaultClearColor: wgpu::Color,
 	pub(crate) defaultDepthClearValue: f32
 }

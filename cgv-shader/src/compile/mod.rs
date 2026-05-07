@@ -462,15 +462,10 @@ impl Display for Target
 	}
 }
 impl util::ds::UniqueVecElement for Target {
-	type Key<'k> = u8;
+	type Key = std::mem::Discriminant<Self>;
 
-	fn key (&self) -> Self::Key<'_> {
-		util::assert_eq_size!(std::mem::Discriminant<Target>, u8);
-		unsafe {
-			// SAFETY: `Discriminant<Target>` has the same size as `u8` (statically asserted above), and all possible
-			//          bit patterns form a valid `usize` value.
-			std::mem::transmute(std::mem::discriminant(self))
-		}
+	fn key (&self) -> Self::Key {
+		std::mem::discriminant(self)
 	}
 }
 

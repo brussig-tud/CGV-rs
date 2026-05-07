@@ -418,7 +418,7 @@ impl cgv::Application for OnlineShadersDemo
 										player.requireSceneRedraw();
 										statusText.into()
 									},
-	
+
 									Err(  CompileOrBuildError::CompilationError(err)
 									    | CompileOrBuildError::CreateCompositeError(err)
 									    | CompileOrBuildError::LinkError(err))
@@ -426,7 +426,7 @@ impl cgv::Application for OnlineShadersDemo
 										tracing::error!("{err}");
 										format!("{err}")
 									},
-	
+
 									Err(  CompileOrBuildError::DuplicateModulePaths(_)
 									    | CompileOrBuildError::InvalidModulePath(_))
 									=> unreachable!("")

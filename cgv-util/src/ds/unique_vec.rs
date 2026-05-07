@@ -3,9 +3,9 @@
 //!
 //! # Overview
 //!
-//! The core of the module is the [`UniqueVec`] struct, but it also defines several auxiliary traits and structs are
-//! are required for its functionality. In order to use custom data with `UniqueVec`s, clients must implement the
-//! [`UniqueVecElement`] trait which defines what an element's key is and how it is computed.
+//! The core of the module is the [`UniqueVec`] struct, but it also defines several auxiliary traits required for its
+//! functionality. In order to use custom data with `UniqueVec`s, clients must implement the [`UniqueVecElement`] trait
+//! which defines what an element's key is and how it is computed.
 //!
 //! `UniqueVec` is designed to be a drop-in replacement for [`Vec`] in many cases, providing similar runtime
 //! characteristics and a familiar API, while automatically managing uniqueness in a performant way.
@@ -28,10 +28,9 @@
 //! assert_eq!(v[1], 2);
 //! ```
 //!
-//! # Stable References Requirement
+//! # Stable Key Requirement
 //!
-//! A major design contract of this crate is that the keys returned by [`UniqueVecElement::key`] must remain stable even
-//! if the element is moved in memory. See the documentation of [`UniqueVecElement`] for more details.
+//! The keys returned by [`UniqueVecElement::key`] must not change as long as the element remains in the `UniqueVec`.
 
 
 
@@ -42,7 +41,7 @@
 
 // Standard library
 use std::{
-	collections::{BTreeSet, HashSet}, hash::{Hash, Hasher}, ops::{Index, Deref}, slice::SliceIndex
+	collections::{BTreeSet, HashSet}, hash::Hash, ops::{Index, Deref}, slice::SliceIndex
 };
 
 // ordered_float library
@@ -78,9 +77,9 @@ use serde;
 /// }
 ///
 /// impl UniqueVecElement for User {
-///     type Key<'k> = u64;
+///     type Key = u64;
 ///
-///     fn key(&self) -> Self::Key<'_> {
+///     fn key(&self) -> Self::Key {
 ///         self.id
 ///     }
 /// }
@@ -89,151 +88,69 @@ use serde;
 /// # Caveats
 ///
 /// The [`key`](Self::key) method is allowed to return references to data. However, these references **must remain
-/// stable** even when the element itself is moved in memory:
+/// valid** even when the element itself is moved in memory:
 ///
-/// * **Safe**: References to data on the heap (e.g., a `&str` referencing the contents of a `String` field).
-/// * **Logic Error**: References to member fields of the element itself (e.g., an `&[u8]` referencing a `[u8; N]` array
+/// * **Sound**: References to data on the heap (e.g., a `&str` referencing the contents of a `String` field).
+/// * **Undefined Behavior**: References to member fields of the element itself (e.g., an `&[u8]` referencing a `[u8; N]` array
 ///   inlined as a struct field).
 ///
 /// Enforcing this at runtime is not done for performance reasons. It is a design contract that implementors of this
-/// trait must uphold. Failing to do so can and likely will result in dangling pointers that cause segmentation faults
-/// at best or hard-to-track logic errors (e.g. [`UniqueVec`] allowing duplicate elements) at worst.
+/// trait must uphold. Failing to do so can and likely will result in dangling pointers that cause segmentation faults,
+/// hard-to-track logic errors (e.g. [`UniqueVec`] allowing duplicate elements), or any other Undefined Behavior.
 pub trait UniqueVecElement
 {
 	/// The type of the key used to identify uniqueness for this element type.
 	///
 	/// The key must implement [`Ord`] and [`Hash`].
-	type Key<'k>: Ord + Hash where Self: 'k;
+	type Key: Eq;
 
 	/// Returns the key for this element.
 	///
 	/// This key is used by [`UniqueVec`] to determine the uniqueness of elements.
-	fn key (&self) -> Self::Key<'_>;
+	fn key (&self) -> Self::Key;
 }
-impl UniqueVecElement for bool {
-	type Key<'k> = Self;
+macro_rules! uve_self_keys {
+	($($T:ty),+ $(,)?) => {
+		$(
+		impl UniqueVecElement for $T {
+			type Key = Self;
 
-	fn key (&self) -> Self::Key<'_> {
-		*self
+			fn key (&self) -> Self {*self}
+		}
+		)*
 	}
 }
-impl UniqueVecElement for i8 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for u8 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for i16 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for u16 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for i32 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for u32 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for i64 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for u64 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for i128 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for u128 {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
+uve_self_keys!{bool, i8, u8, i16, u16, i32, u32, i64, u64, i128, u128, &str, &std::path::Path, uuid::Uuid}
 impl UniqueVecElement for f32 {
-	type Key<'k> = OrderedFloat<Self>;
+	type Key = OrderedFloat<Self>;
 
-	fn key (&self) -> Self::Key<'_> {
+	fn key (&self) -> Self::Key {
 		(*self).into()
 	}
 }
 impl UniqueVecElement for f64 {
-	type Key<'k> = OrderedFloat<Self>;
+	type Key = OrderedFloat<Self>;
 
-	fn key (&self) -> Self::Key<'_> {
+	fn key (&self) -> Self::Key {
 		(*self).into()
 	}
 }
 impl UniqueVecElement for String {
-	type Key<'k> = &'k str;
+	type Key = &'static str;
 
-	fn key (&self) -> Self::Key<'_> {
-		self
-	}
-}
-impl UniqueVecElement for &str {
-	type Key<'k> = Self where Self: 'k;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
+	fn key (&self) -> Self::Key {
+		// SAFETY: Keys are only stored as long as the corresponding elements remain in the vector and are never exposed.
+		// Since UniqueVec allows only immutable access to its elements, the String's allocation remains fixed and valid.
+		// Therefore, any use of the key falls within its actual (non-static) lifetime.
+		unsafe{crate::notsafe::extendLifetime(self)}
 	}
 }
 impl UniqueVecElement for std::path::PathBuf {
-	type Key<'k> = &'k std::path::Path;
+	type Key = &'static std::path::Path;
 
-	fn key (&self) -> Self::Key<'_> {
-		self
-	}
-}
-impl UniqueVecElement for &std::path::Path {
-	type Key<'k> = Self where Self: 'k;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
-	}
-}
-impl UniqueVecElement for uuid::Uuid {
-	type Key<'k> = Self;
-
-	fn key (&self) -> Self::Key<'_> {
-		*self
+	fn key (&self) -> Self::Key {
+		// SAFETY: See impl for String.
+		unsafe{crate::notsafe::extendLifetime(self)}
 	}
 }
 
@@ -285,98 +202,6 @@ impl<K: Eq + Hash> UniqueSet<K> for HashSet<K> {
 // Structs
 //
 
-/// A wrapper around an element's key used for storage in a [`UniqueSet`].
-///
-/// `KeyWrapper` allows [`UniqueVec`] to store keys with a `'static` lifetime internally,
-/// while still using the original key's [`Ord`], [`PartialEq`], and [`Hash`] implementations.
-///
-/// This is achieved by storing the key on the heap and using function pointers for operations.
-pub struct KeyWrapper<T: UniqueVecElement> {
-	// We use a pointer to the key data to avoid lifetime issues with T::Key<'static>
-	// while still being able to compare keys.
-	// SAFETY: This must be a valid T::Key instance.
-	keyPtr: *const (),
-
-	// Function pointers to handle Ord without knowing the concrete type T::Key<'static>
-	cmpFn: fn (*const (), *const ()) -> std::cmp::Ordering,
-	// Function pointers to handle Hash without knowing the concrete type T::Key<'static>
-	hashFn: fn (*const (), &mut dyn Hasher),
-	// Function pointers to handle Drop without knowing the concrete type T::Key<'static>
-	dropFn: fn (*const ()),
-
-	// Key phantom data
-	keyPhantom: std::marker::PhantomData<T>,
-}
-impl<T: UniqueVecElement> KeyWrapper<T>
-{
-	#[inline]
-	fn new (key: T::Key<'_>) -> Self
-	{
-		// We move the key to the heap and forget about its lifetime.
-		let boxed = Box::new(key);
-		unsafe {
-			Self {
-				keyPtr: Box::into_raw(boxed) as *const (),
-				cmpFn: |a, b| {
-					let a_key = &*(a as *const T::Key<'_>);
-					let b_key = &*(b as *const T::Key<'_>);
-					a_key.cmp(b_key)
-				},
-				hashFn: |ptr, mut state| {
-					let key = &*(ptr as *const T::Key<'_>);
-					key.hash(&mut state);
-				},
-				dropFn: |ptr| {
-					let _ = Box::from_raw(ptr as *mut T::Key<'_>);
-				},
-				keyPhantom: std::marker::PhantomData,
-			}
-		}
-	}
-
-	#[inline(always)]
-	fn shallow (key: &T::Key<'_>) -> std::mem::ManuallyDrop<Self> {
-		std::mem::ManuallyDrop::new(Self::new(unsafe {
-			// SAFETY: The transmute operation itself is sane as we don't change the type. However, shallow-copying the
-			// key instance could result in a double free if the key owns resources. The `ManuallyDrop` wrapper averts
-			// this.
-			std::mem::transmute_copy(key)
-		}))
-	}
-}
-impl<T: UniqueVecElement> Drop for KeyWrapper<T> {
-	#[inline(always)]
-	fn drop (&mut self) {
-		(self.dropFn)(self.keyPtr);
-	}
-}
-impl<T: UniqueVecElement> PartialEq for KeyWrapper<T> {
-	#[inline(always)]
-	fn eq (&self, other: &Self) -> bool {
-		self.cmp(other) == std::cmp::Ordering::Equal
-	}
-}
-impl<T: UniqueVecElement> Eq for KeyWrapper<T> {}
-impl<T: UniqueVecElement> PartialOrd for KeyWrapper<T> {
-	#[inline(always)]
-	fn partial_cmp (&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some(self.cmp(other))
-	}
-}
-impl<T: UniqueVecElement> Ord for KeyWrapper<T> {
-	#[inline(always)]
-	fn cmp (&self, other: &Self) -> std::cmp::Ordering {
-		(self.cmpFn)(self.keyPtr, other.keyPtr)
-	}
-}
-impl<T: UniqueVecElement> Hash for KeyWrapper<T> {
-	#[inline(always)]
-	fn hash<H: Hasher> (&self, state: &mut H) {
-		(self.hashFn)(self.keyPtr, state);
-	}
-}
-
-
 /// A vector that maintains uniqueness of its elements based on a key.
 ///
 /// `UniqueVec` is a collection that behaves similarly to a standard [`Vec`], but it ensures that no two elements in the
@@ -388,19 +213,19 @@ impl<T: UniqueVecElement> Hash for KeyWrapper<T> {
 ///
 /// * `T` – The type of elements stored in the vector.
 /// * `S` – The type of the set data structure used for uniqueness tracking.
-pub struct UniqueVec<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>>
+pub struct UniqueVec<T: UniqueVecElement, S: UniqueSet<T::Key>>
 {
 	// Stores the actual elements of the collection in a `Vec`. This is why `UniqueVec`'s runtime characteristics and
 	// public API are so close to the standard `Vec`.
 	storage: Vec<T>,
 
 	// Keys of the elements in `storage`.
-	// SAFETY: The keys are stored with a 'static lifetime. This is safe as long as:
+	// SAFETY: The keys are stored with a 'static lifetime. For references, this is safe as long as:
 	// 1. The key refers to data owned by the element on the heap (stable address).
 	// 2. The key is removed from this set before the element is removed from `storage`.
 	keys: S,
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> UniqueVec<T, S>
 {
 	/// Creates a new, empty `UniqueVec`.
 	///
@@ -456,7 +281,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	pub unsafe fn fromVec_unchecked(vec: Vec<T>) -> Self {
 		let mut keys = S::default();
 		for element in &vec {
-			keys.insert(KeyWrapper::new(element.key()));
+			keys.insert(element.key());
 		}
 		debug_assert_eq!(vec.len(), keys.len());
 		Self { storage: vec, keys }
@@ -483,10 +308,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert!(!v.push(1));
 	/// ```
 	pub fn push (&mut self, element: T) -> bool {
-		let key = element.key();
-		let key_wrapper = KeyWrapper::new(key);
-
-		if self.keys.insert(key_wrapper) {
+		if self.keys.insert(element.key()) {
 			self.storage.push(element);
 			true
 		} else {
@@ -511,9 +333,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// ```
 	pub fn pop (&mut self) -> Option<T> {
 		let element = self.storage.pop()?;
-		let key = element.key();
-		let key_wrapper = KeyWrapper::new(key);
-		self.keys.remove(&key_wrapper);
+		self.keys.remove(&element.key());
 		Some(element)
 	}
 
@@ -544,9 +364,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// ```
 	pub fn remove (&mut self, index: usize) -> T {
 		let element = self.storage.remove(index);
-		let key = element.key();
-		let key_wrapper = KeyWrapper::new(key);
-		self.keys.remove(&key_wrapper);
+		self.keys.remove(&element.key());
 		element
 	}
 
@@ -634,9 +452,9 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// ```
 	#[inline(always)]
 	pub fn contains (&self, element: &T) -> bool {
-		self.keys.contains(&KeyWrapper::new(element.key()))
+		self.keys.contains(&element.key())
 	}
-	
+
 	/// Check if the collection contains an element with the given [key](UniqueVecElement::key).
 	///
 	/// # Arguments
@@ -655,8 +473,8 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert!(!v.containsKey(&2));
 	/// ```
 	#[inline(always)]
-	pub fn containsKey (&self, key: &T::Key<'_>) -> bool {
-		self.keys.contains(&KeyWrapper::shallow(key))
+	pub fn containsKey (&self, key: &T::Key) -> bool {
+		self.keys.contains(key)
 	}
 
 	/// Reference the element with the given [key](UniqueVecElement::Key).
@@ -681,13 +499,13 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert_eq!(v.fetch(&2), None);
 	/// ```
 	#[inline]
-	pub fn fetch<'key> (&'key self, key: &'key T::Key<'key>) -> Option<&'key T>
+	pub fn fetch (&self, key: &T::Key) -> Option<&T>
 	{
 		if !self.containsKey(key) {
 			None
 		}
 		else {
-			self.storage.iter().find(|elem| elem.key().cmp(key) == std::cmp::Ordering::Equal)
+			self.storage.iter().find(|elem| &elem.key() == key)
 		}
 	}
 
@@ -771,7 +589,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// let joined = UniqueVec::join(&v1, &v2);
 	/// assert_eq!(joined.len(), 3);
 	/// ```
-	pub fn join<S1: UniqueSet<KeyWrapper<T>>> (&self, other: &UniqueVec<T, S1>) -> UniqueVec<T, S> where T: Clone {
+	pub fn join<S1: UniqueSet<T::Key>> (&self, other: &UniqueVec<T, S1>) -> UniqueVec<T, S> where T: Clone {
 		let mut result = self.clone();
 		for other_elem in other.iter() {
 			result.push(other_elem.clone());
@@ -806,7 +624,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert_eq!(v1.len(), 2); // <- COMPILE ERROR:
 	/// assert_eq!(v2[1], 3);    // <- v1 and v2 were moved
 	/// ```
-	pub fn join_move<S1: UniqueSet<KeyWrapper<T>>> (mut self, other: UniqueVec<T, S1>) -> UniqueVec<T, S> {
+	pub fn join_move<S1: UniqueSet<T::Key>> (mut self, other: UniqueVec<T, S1>) -> UniqueVec<T, S> {
 		self.extend(other);
 		self
 	}
@@ -837,7 +655,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	/// assert_eq!(v2.len(), 2); // <- OK, v2 was not moved
 	/// assert_eq!(v1[0], 1);    // <- COMPILE ERROR: v1 was moved!
 	/// ```
-	pub fn join_moveLhs<S1: UniqueSet<KeyWrapper<T>>> (mut self, other: &UniqueVec<T, S1>) -> UniqueVec<T, S>
+	pub fn join_moveLhs<S1: UniqueSet<T::Key>> (mut self, other: &UniqueVec<T, S1>) -> UniqueVec<T, S>
 	where T: Clone {
 		self.extend(other.iter().cloned());
 		self
@@ -885,7 +703,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 	{
 		// 1: Check if every element has its corresponding key stored
 		for element in &self.storage {
-			if !self.keys.contains(&KeyWrapper::new(element.key())) {
+			if !self.keys.contains(&element.key()) {
 				return false;
 			};
 		}
@@ -894,7 +712,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> UniqueVec<T, S>
 		self.checkLenConsistency()
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> From<Vec<T>> for UniqueVec<T, S>
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> From<Vec<T>> for UniqueVec<T, S>
 {
 	/// Creates a `UniqueVec` from a [`Vec`].
 	///
@@ -905,7 +723,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> From<Vec<T>> for UniqueVe
 		result
 	}
 }
-impl<T: UniqueVecElement+Copy, S: UniqueSet<KeyWrapper<T>>> From<&[T]> for UniqueVec<T, S>
+impl<T: UniqueVecElement+Copy, S: UniqueSet<T::Key>> From<&[T]> for UniqueVec<T, S>
 {
 	/// Creates a `UniqueVec` from a slice of `T`.
 	///
@@ -916,7 +734,7 @@ impl<T: UniqueVecElement+Copy, S: UniqueSet<KeyWrapper<T>>> From<&[T]> for Uniqu
 		result
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> FromIterator<T> for UniqueVec<T, S>
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> FromIterator<T> for UniqueVec<T, S>
 {
 	/// Creates a `UniqueVec` from the given iterable.
 	///
@@ -927,7 +745,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> FromIterator<T> for Uniqu
 		result
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>, I: SliceIndex<[T]>> Index<I> for UniqueVec<T, S>
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>, I: SliceIndex<[T]>> Index<I> for UniqueVec<T, S>
 {
 	type Output = I::Output;
 
@@ -941,7 +759,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>, I: SliceIndex<[T]>> Index
 		&self.storage[index]
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Deref for UniqueVec<T, S>
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> Deref for UniqueVec<T, S>
 {
 	type Target = [T];
 
@@ -951,7 +769,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Deref for UniqueVec<T, S>
 		&self.storage
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> IntoIterator for UniqueVec<T, S>
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> IntoIterator for UniqueVec<T, S>
 {
 	type Item = T;
 	type IntoIter = std::vec::IntoIter<T>;
@@ -962,7 +780,7 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> IntoIterator for UniqueVe
 		self.storage.into_iter()
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Extend<T> for UniqueVec<T, S> {
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> Extend<T> for UniqueVec<T, S> {
 	/// Extends the collection with elements from an iterator.
 	///
 	/// Only elements with keys not already present in the collection will be added.
@@ -973,13 +791,13 @@ impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Extend<T> for UniqueVec<T
 		}
 	}
 }
-impl<T: UniqueVecElement, S: UniqueSet<KeyWrapper<T>>> Default for UniqueVec<T, S> {
+impl<T: UniqueVecElement, S: UniqueSet<T::Key>> Default for UniqueVec<T, S> {
 	#[inline(always)]
 	fn default () -> Self {
 		Self::new()
 	}
 }
-impl<T: UniqueVecElement+Clone, S: UniqueSet<KeyWrapper<T>>> Clone for UniqueVec<T, S>
+impl<T: UniqueVecElement+Clone, S: UniqueSet<T::Key>> Clone for UniqueVec<T, S>
 {
 	#[inline(always)]
 	fn clone (&self) -> Self
@@ -987,14 +805,14 @@ impl<T: UniqueVecElement+Clone, S: UniqueSet<KeyWrapper<T>>> Clone for UniqueVec
 		let storage = self.storage.clone();
 		let mut keys = S::default();
 		for element in &storage {
-			keys.insert(KeyWrapper::new(element.key()));
+			keys.insert(element.key());
 		}
 		Self { storage, keys }
 	}
 }
 #[cfg(feature="serde")]
 impl<T, S> serde::Serialize for UniqueVec<T, S>
-	where T: UniqueVecElement+serde::Serialize, S: UniqueSet<KeyWrapper<T>>
+	where T: UniqueVecElement+serde::Serialize, S: UniqueSet<T::Key>
 {
 	fn serialize<Ser: serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
 		use serde::ser::SerializeSeq;
@@ -1007,7 +825,7 @@ impl<T, S> serde::Serialize for UniqueVec<T, S>
 }
 #[cfg(feature="serde")]
 impl<'de, T, S> serde::Deserialize<'de> for UniqueVec<T, S>
-	where T: UniqueVecElement+serde::Deserialize<'de>, S: UniqueSet<KeyWrapper<T>>
+	where T: UniqueVecElement+serde::Deserialize<'de>, S: UniqueSet<T::Key>
 {
 	/// Deserializes from the given `Deserializer`. Receiving duplicate elements will result in a deserialization error.
 	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error>
@@ -1018,7 +836,7 @@ impl<'de, T, S> serde::Deserialize<'de> for UniqueVec<T, S>
 		// Rebuild key set
 		let mut keys = S::default();
 		for element in &storage {
-			if !keys.insert(KeyWrapper::new(element.key())) {
+			if !keys.insert(element.key()) {
 				return Err(serde::de::Error::custom("duplicate element"));
 			}
 		}
@@ -1058,7 +876,7 @@ impl<'de, E: serde::Deserialize<'de>> serde::de::Visitor<'de> for VecVisitor<E>
 
 
 /// A [`UniqueVec`] that uses a [`BTreeSet`] for uniqueness tracking.
-pub type BTreeUniqueVec<T> = UniqueVec<T, BTreeSet<KeyWrapper<T>>>;
+pub type BTreeUniqueVec<T> = UniqueVec<T, BTreeSet<<T as UniqueVecElement>::Key>>;
 
 /// A [`UniqueVec`] that uses a [`HashSet`] for uniqueness tracking.
-pub type HashUniqueVec<T> = UniqueVec<T, HashSet<KeyWrapper<T>>>;
+pub type HashUniqueVec<T> = UniqueVec<T, HashSet<<T as UniqueVecElement>::Key>>;
