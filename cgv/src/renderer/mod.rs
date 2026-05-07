@@ -41,19 +41,12 @@ pub mod prelude {
 		GpuData, renderer::data::gpu::Interleaved as GpuDataInterleaved,
 		renderer::data::gpu::NonInterleaved as GpuDataNonInterleaved,
 		renderer::data::gpu::Indexed as GpuDataIndexed,
-		renderer::data::gpu::CanHaveNormals as GpuDataCanHaveNormals,
 		renderer::data::gpu::HasNormals as GpuDataHasNormals,
-		renderer::data::gpu::CanHaveTangents as GpuDataCanHaveTangents,
 		renderer::data::gpu::HasTangents as GpuDataHasTangents,
-		renderer::data::gpu::CanHaveRadii as GpuDataCanHaveRadii,
 		renderer::data::gpu::HasRadii as GpuDataHasRadii,
-		renderer::data::gpu::CanHaveRadiusDerivs as GpuDataCanHaveRadiusDerivs,
 		renderer::data::gpu::HasRadiusDerivs as GpuDataHasRadiusDerivs,
-		renderer::data::gpu::CanHaveOrientations as GpuDataCanHaveOrientations,
 		renderer::data::gpu::HasOrientations as GpuDataHasOrientations,
-		renderer::data::gpu::CanHaveScalings as GpuDataCanHaveScalings,
 		renderer::data::gpu::HasScalings as GpuDataHasScalings,
-		renderer::data::gpu::CanHaveColors as GpuDataCanHaveColors,
 		renderer::data::gpu::HasColors as GpuDataHasColors
 	};
 }

@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::ops::Deref;
+/* nothing here yet */
 
 // Local imports
 #[expect(unused_imports)] // we only use these for documentation links
@@ -25,7 +25,7 @@ pub trait Data: Sync+Send
 	fn num (&self) -> u32;
 
 	/// Return the [buffer layout](wgpu::api::render_pipeline::VertexState.buffer) of the data inside the GPU.
-	fn layout (&self) -> BufferLayout<'_>;
+	fn layout (&self) -> &BufferLayout;
 
 	/// Reference the underlying GPU buffer(s) region(s) containing the renderable data.
 	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>>;
@@ -59,67 +59,46 @@ pub trait Interleaved: Data {}
 pub trait NonInterleaved: Data {}
 
 ///
-pub trait CanHaveNormals: Data {
-	/// Indicate whether normals are available in the data.
-	fn hasNormals (&self) -> bool;
+pub trait HasNormals: Data {
+	/// Directly reference the exact location of the normals in the overall buffer layout.
+	fn normals (&self) -> &BufferAttributeSlot;
 }
 
 ///
-pub trait HasNormals: CanHaveNormals {}
-
-///
-pub trait CanHaveTangents: Data {
-	/// Indicate whether tangents are available in the data.
-	fn hasTangents (&self) -> bool;
+pub trait HasTangents: Data {
+	/// Directly reference the exact location of the tangents in the overall buffer layout.
+	fn tangents (&self) -> &BufferAttributeSlot;
 }
 
 ///
-pub trait HasTangents: CanHaveTangents {}
-
-///
-pub trait CanHaveRadii: Data {
-	/// Indicate whether radii are available in the data.
-	fn hasRadii (&self) -> bool;
+pub trait HasRadii: Data {
+	/// Directly reference the exact location of the radii in the overall buffer layout.
+	fn radii (&self) -> &BufferAttributeSlot;
 }
 
 ///
-pub trait HasRadii: CanHaveRadii {}
-
-///
-pub trait CanHaveRadiusDerivs: Data {
-	/// Indicate whether radius derivatives are available in the data.
-	fn hasRadiusDerivs (&self) -> bool;
+pub trait HasRadiusDerivs: Data {
+	/// Directly reference the exact location of the radius derivatives in the overall buffer layout.
+	fn radiusDerivs (&self) -> &BufferAttributeSlot;
 }
 
 ///
-pub trait HasRadiusDerivs: CanHaveRadiusDerivs+HasRadii {}
-
-///
-pub trait CanHaveOrientations: Data {
-	/// Indicate whether orientations are available in the data.
-	fn hasOrientations (&self) -> bool;
+pub trait HasOrientations: Data {
+	/// Directly reference the exact location of the orientations in the overall buffer layout.
+	fn orientations (&self) -> &BufferAttributeSlot;
 }
 
 ///
-pub trait HasOrientations: CanHaveOrientations {}
-
-///
-pub trait CanHaveScalings: Data {
-	/// Indicate whether scaling vectors are available in the data.
-	fn hasScalings (&self) -> bool;
+pub trait HasScalings: Data {
+	/// Directly reference the exact location of the scalings in the overall buffer layout.
+	fn scalings (&self) -> &BufferAttributeSlot;
 }
 
 ///
-pub trait HasScalings: CanHaveScalings {}
-
-///
-pub trait CanHaveColors: Data {
-	/// Indicate whether colors are available in the data.
-	fn hasColors (&self) -> bool;
+pub trait HasColors: Data {
+	/// Directly reference the exact location of the colors in the overall buffer layout.
+	fn colors (&self) -> &BufferAttributeSlot;
 }
-
-///
-pub trait HasColors: CanHaveColors {}
 
 
 
@@ -128,45 +107,217 @@ pub trait HasColors: CanHaveColors {}
 // Structs
 //
 
-#[derive(Clone)]
-pub struct BufferLayout<'this> {
-	layout: &'this [wgpu::VertexBufferLayout<'static>]
+/// Intermediate representation of a [`wgpu::VertexBufferLayout`] missing the
+/// [`step_mode`](wgpu::VertexBufferLayout.step_mode) field. The reason for this is that [`Renderer`]s will choose this
+/// to be different depending on how they do their rendering.
+#[derive(Clone,Copy,PartialEq,Eq)]
+pub struct VertexBufferLayoutDesc<'this> {
+	/// Proxy for [`wgpu::VertexBufferLayout.array_stride`](wgpu::VertexBufferLayout).
+	pub array_stride: wgpu::BufferAddress,
+
+	/// Proxy for [`wgpu::VertexBufferLayout.attributes`](wgpu::VertexBufferLayout).
+	pub attributes: &'this [wgpu::VertexAttribute],
 }
-impl BufferLayout<'_>
+
+/// Helper union to maje [`BufferAttributeSlot`] fit into a single `u64`.
+#[repr(C)]
+#[derive(Copy,Eq)]
+union BufferOffsetUnion {
+	storage: u16,
+	buffer_offset: (u8, u8)
+}
+impl BufferOffsetUnion
 {
-	/// Return a slice of [`wgpu::VertexBufferLayout`]s ready for use in the [vertex state](wgpu::VertexState) of a
-	/// [`wgpu::RenderPipelineDescriptor`].
+	/// Create for the given buffer index and offset.
 	#[inline(always)]
-	pub fn layout (&self) -> &[wgpu::VertexBufferLayout<'static>] {
-		&self.layout
+	fn new (buffer: u8, offset: u8) -> Self { Self {
+		buffer_offset: (buffer, offset)
+	}}
+
+	/// Access the buffer index.
+	#[inline(always)]
+	fn buffer (&self) -> u8 {
+		unsafe {
+			// SAFETY: Every contiguous 8-bit sequence in a `u16` always constitutes a valid `u8`.
+			self.buffer_offset.0
+		}
+	}
+
+	/// Access the offset.
+	#[inline(always)]
+	fn offset (&self) -> u8 {
+		unsafe {
+			// SAFETY: Every contiguous 8-bit sequence in a `u16` always constitutes a valid `u8`.
+			self.buffer_offset.1
+		}
+	}
+}
+impl Clone for BufferOffsetUnion
+{
+	#[inline(always)]
+	fn clone (&self) -> Self {
+		unsafe {
+			// SAFETY: There is no valid `u16` that contains an invalid (as `u8`) contiguous 8-bit sequence.
+			Self { storage: self.storage }
+		}
+	}
+}
+impl PartialEq for BufferOffsetUnion
+{
+	#[inline(always)]
+	fn eq (&self, other: &Self) -> bool {
+		unsafe {
+			// SAFETY: All possible bit 16-bit sequences form a valid `u16`.
+			self.storage == other.storage
+		}
+	}
+}
+
+/// Helper struct used to attach semantics to the opaque *WGPU* entries in a [`BufferLayout`].
+#[repr(C)]
+#[derive(Clone,Copy,PartialEq,Eq)]
+pub struct BufferAttributeSlot
+{
+	/// Buffer index and offset as a single `u16`-based union. Access via [`Self::buffer()`] and [`Self::offset()`].
+	buffer_offset: BufferOffsetUnion,
+
+	/// The attribute slot in the buffer (see [`wgpu::VertexBufferLayout.attributes`](wgpu::VertexBufferLayout)) we're
+	/// referring to.
+	slot: u16
+}
+impl BufferAttributeSlot {
+	#[inline(always)]
+	pub fn new (buffer: u8, slot: u16, offset: u8) -> Self { Self {
+		buffer_offset: BufferOffsetUnion::new(buffer, offset), slot
+	}}
+
+	/// Get index of the buffer in the layout description (see [`wgpu::BufferLayout.buffers`](BufferLayout) we're
+	/// referring to.
+	#[inline(always)]
+	pub fn buffer (&self) -> usize {
+		self.buffer_offset.buffer() as usize
+	}
+
+	/// Get the offset within the slot in the buffer (see [`wgpu::VertexAttribute.format`](wgpu::VertexAttribute)), in
+	/// multiples of the format's base primitive – i.e. `3` on a slot of format [`Uint8x4`](wgpu::VertexFormat::Uint8x4)
+	/// will refer to the 3rd `Uint8` component of the slot (3 bytes from the slot beginning), and on a slot of format
+	/// [`Float32x4`](wgpu::VertexFormat::Float32x4) it would refer to the 3rd `Float32` component (12 bytes from the
+	/// slot beginning).
+	#[inline(always)]
+	pub fn offset (&self) -> u8 {
+		self.buffer_offset.offset()
+	}
+
+	///
+	#[inline(always)]
+	pub fn slot (&self) -> usize {
+		self.slot as usize
+	}
+
+	/// Check whether this [`BufferAttributeSlot`] combination refers to the same physical slot as another one.
+	#[inline]
+	pub fn inSameBufferSlot (&self, other: &Self) -> bool {
+		self.buffer_offset.buffer() == other.buffer_offset.buffer() && self.slot == other.slot
+	}
+}
+
+#[derive(Clone)]
+pub struct BufferLayout {
+	/// A slice of [`wgpu::VertexBufferLayout`]s ready for use in the [vertex state](wgpu::VertexState) of a
+	/// [`wgpu::RenderPipelineDescriptor`].
+	pub buffers: Vec<VertexBufferLayoutDesc<'static>>,
+
+	/// The exact place of the *position* attributes in the layout.
+	pub positions: BufferAttributeSlot,
+
+	/// The exact place, if any, of the *normal* attributes in the layout.
+	pub normals: Option<BufferAttributeSlot>,
+
+	/// The exact place, if any, of the *tangent* attributes in the layout.
+	pub tangents: Option<BufferAttributeSlot>,
+
+	/// The exact place, if any, of the *radius* attributes in the layout.
+	pub radii: Option<BufferAttributeSlot>,
+
+	/// The exact place, if any, of the *radius derivative* attributes in the layout.
+	pub radiusDerivs: Option<BufferAttributeSlot>,
+
+	/// The exact place, if any, of the *orientation* attributes in the layout.
+	pub orientations: Option<BufferAttributeSlot>,
+
+	/// The exact place, if any, of the *scaling* attributes in the layout.
+	pub scalings: Option<BufferAttributeSlot>,
+
+	/// The exact place, if any, of the *color* attributes in the layout.
+	pub colors: Option<BufferAttributeSlot>
+}
+impl BufferLayout
+{
+	/// Internal helper function for checking if two [`BufferAttributeSlot`]s are compatible.
+	#[inline]
+	fn checkAttrib (
+		buffers: &[VertexBufferLayoutDesc<'static>], attrib: &Option<BufferAttributeSlot>,
+		otherBuffers: &[VertexBufferLayoutDesc<'static>], otherAttrib: &Option<BufferAttributeSlot>
+	) -> bool {
+		match (attrib, otherAttrib) {
+			(Some(a), Some(b)) => {
+				   buffers[a.buffer()].attributes[a.slot()] == otherBuffers[b.buffer()].attributes[b.slot()]
+				&& a.offset() == b.offset()
+			},
+			(None, None) => true,
+			_ => false
+		}
 	}
 
 	/// Check if another buffer layout is compatible to be used in the same pipeline as this one.
 	///
-	/// **NOTE: This check does as of yet *not take attribute semantics into account*!**
-	///
-	/// **TODO: Implement layout attribute semantics and base the check on that.**
-	pub fn isCompatible (&self, other: &Self) -> bool {
-		   self.layout.len() == other.layout.len()
-		&& self.layout.iter().zip(other.layout.iter()).all(|(a,b)| a == b)
+	/// **NOTE**: This is a thorough check that will also properly handle differences that don't actually break
+	/// compatibility. While this check is not exactly cheap, it will be faster than having to build a new pipeline.
+	pub fn isCompatible (&self, other: &Self) -> bool
+	{
+		   self.buffers.len() == other.buffers.len()
+		&& self.buffers.iter().zip(other.buffers.iter()).all(|(a,b)|
+		   	// As long as the stride is the same, we don't care about the actual attribute slots. Their compatibility is
+		   	// implicitly captured by the semantic attribute checks below.
+		   	a.array_stride == b.array_stride
+		   )
+		&& self.positions == other.positions
+		&& Self::checkAttrib(&self.buffers, &self.normals, &other.buffers, &other.normals)
+		&& Self::checkAttrib(&self.buffers, &self.tangents, &other.buffers, &other.tangents)
+		&& Self::checkAttrib(&self.buffers, &self.radii, &other.buffers, &other.radii)
+		&& Self::checkAttrib(&self.buffers, &self.radiusDerivs, &other.buffers, &other.radiusDerivs)
+		&& Self::checkAttrib(&self.buffers, &self.orientations, &other.buffers, &other.orientations)
+		&& Self::checkAttrib(&self.buffers, &self.scalings, &other.buffers, &other.scalings)
+		&& Self::checkAttrib(&self.buffers, &self.colors, &other.buffers, &other.colors)
+	}
+
+	/// Instantiate the [buffer layouts](Self.buffers) with the given [`wgpu::VertexStepMode`], turning them into the
+	/// corresponding [`wgpu::VertexBufferLayout`]s for consumption by *WGPU*.
+	pub fn withStepMode (&self, step_mode: wgpu::VertexStepMode) -> Vec<wgpu::VertexBufferLayout<'static>> {
+		self.buffers.iter().map(|vbl| wgpu::VertexBufferLayout {
+			array_stride: vbl.array_stride, step_mode, attributes: vbl.attributes
+		}).collect()
+	}
+
+	/// Infer whether this layout is interleaved or not.
+	pub fn isInterleaved (&self) -> bool {
+		self.buffers.len() < 2 && {
+			let stride = self.buffers[0].array_stride;
+			self.buffers[0].attributes.iter().all(|a| a.offset < stride)
+		}
 	}
 }
-impl<'this> From<&'this [wgpu::VertexBufferLayout<'static>]> for BufferLayout<'this> {
-	#[inline(always)]
-	fn from (other: &'this [wgpu::VertexBufferLayout<'static>]) -> Self {
-		Self { layout: other }
-	}
-}
-impl PartialEq<Self> for BufferLayout<'_>
+impl PartialEq<Self> for BufferLayout
 {
 	fn eq (&self, other: &Self) -> bool
 	{
-		if self.layout.len() != other.layout.len() {
+		// Perform comparison logic with several early termination points
+		if self.buffers.len() != other.buffers.len() {
 			return false;
 		}
-		for (a,b) in self.layout.iter().zip(other.layout.iter())
+		for (a,b) in self.buffers.iter().zip(other.buffers.iter())
 		{
-			if a.array_stride != b.array_stride || a.step_mode != b.step_mode || a.attributes.len() != b.attributes.len() {
+			if a.array_stride != b.array_stride || a.attributes.len() != b.attributes.len() {
 				return false;
 			}
 			for (a,b) in a.attributes.iter().zip(b.attributes.iter()) {
@@ -175,16 +326,9 @@ impl PartialEq<Self> for BufferLayout<'_>
 				}
 			}
 		}
+
+		// If we didn't return yet, the layout is identical
 		true
 	}
 }
-impl Eq for BufferLayout<'_> {}
-impl Deref for BufferLayout<'_>
-{
-	type Target = [wgpu::VertexBufferLayout<'static>];
-
-	#[inline(always)]
-	fn deref (&self) -> &Self::Target {
-		self.layout
-	}
-}
+impl Eq for BufferLayout {}

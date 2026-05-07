@@ -131,7 +131,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::withRadiiAndColors(
+	let spheresData = cgv::renderer::spheres::GpuData::new(
 		context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData")
 	);
 

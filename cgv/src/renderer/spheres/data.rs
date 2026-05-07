@@ -22,6 +22,12 @@ enum LayoutVariant {
 	PosOnly, PosRadius, PosColor, PosRadiusColor
 }
 impl LayoutVariant {
+	const RADIUS_SLOT: u16 = 0;  // <- always in the 0-th slot with the position
+	const RADIUS_OFFSET: u8 = 3; // <- radius starts after the 3 position components
+
+	const COLOR_SLOT: u16 = 1;   // <- always in the 1st slot, after position
+	const COLOR_OFFSET: u8 = 0;  // <- no offset, color uses the whole slot exclusively
+
 	const POS_ONLY: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0=>Float32x4]; // 4-th component is unused
 	const POS_ONLY_STRIDE: wgpu::BufferAddress = size_of::<glm::Vec4>() as wgpu::BufferAddress;
 
@@ -34,30 +40,63 @@ impl LayoutVariant {
 	const POS_RADIUS_COLOR: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4];
 	const POS_RADIUS_COLOR_STRIDE: wgpu::BufferAddress = (size_of::<glm::Vec4>()*2) as wgpu::BufferAddress;
 
-	/// Construct a vertex buffer layout that fits the variant represented by `self`.
-	pub fn layout (&self) -> wgpu::VertexBufferLayout<'static>
+	/// Construct a buffer layout that fits the variant represented by `self`.
+	pub fn layout (&self) -> gpu::BufferLayout
 	{
+		let positions = gpu::BufferAttributeSlot::new(0, 0, 0);
 		match self
 		{
-			Self::PosOnly => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_ONLY_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_ONLY,
+			Self::PosOnly => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_ONLY_STRIDE,
+					attributes: &Self::POS_ONLY
+				}], positions,
+				normals: None,
+				tangents: None,
+				radii: None,
+				radiusDerivs: None,
+				orientations: None,
+				scalings: None,
+				colors: None,
 			},
-			Self::PosRadius => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_RADIUS_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_RADIUS,
+			Self::PosRadius => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_RADIUS_STRIDE,
+					attributes: &Self::POS_RADIUS,
+				}], positions,
+				normals: None,
+				tangents: None,
+				radii: Some(gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)),
+				radiusDerivs: None,
+				orientations: None,
+				scalings: None,
+				colors: None,
 			},
-			Self::PosColor => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_COLOR_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_COLOR,
+			Self::PosColor => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_COLOR_STRIDE,
+					attributes: &Self::POS_COLOR,
+				}], positions,
+				normals: None,
+				tangents: None,
+				radii: None,
+				radiusDerivs: None,
+				orientations: None,
+				scalings: None,
+				colors: Some(gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)),
 			},
-			Self::PosRadiusColor => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_RADIUS_COLOR_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_RADIUS_COLOR,
+			Self::PosRadiusColor => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_RADIUS_COLOR_STRIDE,
+					attributes: &Self::POS_RADIUS_COLOR,
+				}], positions,
+				normals: None,
+				tangents: None,
+				radii: Some(gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)),
+				radiusDerivs: None,
+				orientations: None,
+				scalings: None,
+				colors: Some(gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)),
 			}
 		}
 	}
@@ -91,28 +130,31 @@ impl LayoutVariant {
 
 /// Stores the default attributes that the [`Spheres`](renderer::Spheres) will use when rendering spheres when the
 /// corresponding attributes are not sourced from user data.
-#[derive(Default)]
 pub struct ConstantAttributes {
-	///
-	pub _radius: f32,
+	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
+	pub radius: f32,
 
-	///
-	pub _color: Rgba,
+	/// The default color of the rendered spheres, used when the color attribute is not sourced from user data.
+	pub color: Rgba,
+}
+impl Default for ConstantAttributes {
+	fn default () -> Self { Self {
+		radius: 1.0, color: Rgba::from_rgb(0.75, 0.75, 0.75)
+	}}
 }
 pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
 
-/// A [`renderer::GpuData`]-compliant storage for sphere attributes.
+/// A [`renderer::GpuData`]-compliant interleaved storage optimized for use with the [spheres renderer](Spheres).
 pub struct GpuData {
 	num: u32,
-	variant: LayoutVariant,
-	layout: wgpu::VertexBufferLayout<'static>,
+	layout: gpu::BufferLayout,
 	attributes: wgpu::Buffer
 }
 impl GpuData
 {
 	/// Helper function for common initialization.
 	fn commonInit<D: HostData, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
-		-> (LayoutVariant, wgpu::Buffer, std::ptr::NonNull<T>)
+		-> (gpu::BufferLayout, wgpu::Buffer, std::ptr::NonNull<T>)
 	{
 		// Prepare the buffer
 		let attributes = variant.createBuffer(context, data.num(), label);
@@ -122,7 +164,7 @@ impl GpuData
 			.cast::<T>();
 
 		// Done!
-		(variant, attributes, ptr)
+		(variant.layout(), attributes, ptr)
 	}
 
 
@@ -130,11 +172,11 @@ impl GpuData
 	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (variant, attributes, mut ptr)
+		let (layout, attributes, mut ptr)
 			= Self::commonInit(context, LayoutVariant::PosOnly, &data, label);
 
 		// Upload the data
-		for pos in data.positions() {
+		for ref pos in data.positions() {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
 				ptr.write(/* pos_rad: */glm::vec3_to_vec4(pos));
@@ -144,49 +186,49 @@ impl GpuData
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 
 	///
 	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (variant, attributes, mut ptr)
+		let (layout, attributes, mut ptr)
 			= Self::commonInit(context, LayoutVariant::PosRadius, &data, label);
 
 		// Upload the data
 		for (pos, radius) in data.positions().zip(data.radii()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
-				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius));
+				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, radius));
 				ptr = ptr.add(1);
 			}
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 
 	///
 	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (variant, attributes, mut ptr)
+		let (layout, attributes, mut ptr)
 			= Self::commonInit(context, LayoutVariant::PosColor, &data, label);
 
 		// Upload the data
-		for (pos, color) in data.positions().zip(data.colors()) {
+		for (ref pos, color) in data.positions().zip(data.colors()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
-				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */*color));
+				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */color));
 				ptr = ptr.add(1);
 			}
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 
 	///
@@ -194,21 +236,21 @@ impl GpuData
 		context: &Context, data: D, label: Option<&str>
 	) -> Arc<Self> {
 		// Common initialization
-		let (variant, attributes, mut ptr)
+		let (layout, attributes, mut ptr)
 			= Self::commonInit(context, LayoutVariant::PosRadiusColor, &data, label);
 
 		// Upload the data
 		for ((pos, radius), color) in data.positions().zip(data.radii()).zip(data.colors()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
-				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius), /* color: */*color));
+				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, radius), /* color: */color));
 				ptr = ptr.add(1);
 			}
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 }
 impl renderer::GpuData for GpuData
@@ -217,8 +259,8 @@ impl renderer::GpuData for GpuData
 		self.num
 	}
 
-	fn layout (&self) -> gpu::BufferLayout<'_> {
-		std::slice::from_ref(&self.layout).into()
+	fn layout (&self) -> &gpu::BufferLayout {
+		&self.layout
 	}
 
 	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>> {
@@ -230,15 +272,3 @@ impl renderer::GpuData for GpuData
 	}
 }
 impl gpu::Interleaved for GpuData {}
-impl gpu::CanHaveRadii for GpuData
-{
-	fn hasRadii (&self) -> bool {
-		matches!(self.variant, LayoutVariant::PosRadius | LayoutVariant::PosRadiusColor)
-	}
-}
-impl gpu::CanHaveColors for GpuData
-{
-	fn hasColors (&self) -> bool {
-		matches!(self.variant, LayoutVariant::PosColor | LayoutVariant::PosRadiusColor)
-	}
-}

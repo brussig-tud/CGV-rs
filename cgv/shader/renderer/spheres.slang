@@ -57,7 +57,7 @@ ParameterBlock<ConstantAttribs> constAttribs;
 
 /// Common vertex shader entry point for all sphere renderer code paths.
 [shader("vertex")]
-float4 vertexMain (uint vertexID: SV_VertexID) : SV_Position {
+float4 vertexMain_posOnly (uint vertexID: SV_VertexID) : SV_Position {
 	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
 }
 
