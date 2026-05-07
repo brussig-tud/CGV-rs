@@ -37,7 +37,7 @@ use crate::{self as cgv, *};
 pub trait Data
 {
 	/// The iterator type for iterating positions in the data.
-	type PosIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
+	type PosIterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
 
 	/// Return the number of elements in the underlying data series.
 	fn num (&self) -> u32;
@@ -56,12 +56,12 @@ pub trait Data
 /// Blanket implementation for slices of [`renderer::InterleavedElem`]s.
 impl<T: renderer::data::InterleavedElem> Data for &[T]
 {
-	type PosIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
+	type PosIterator<'data> = util::notsafe::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
 	fn num (&self) -> u32 { self.len() as u32 }
 	fn positions (&self) -> Self::PosIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].pos(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].pos(), size_of::<T>(), self.len())
 	}}
 	fn pos (&self, index: u32) -> &glm::Vec3 { self[index as usize].pos() }
 	fn topology (&self) -> wgpu::PrimitiveTopology { wgpu::PrimitiveTopology::PointList }
@@ -85,13 +85,13 @@ pub trait Indexed: Data
 {
 	/// The iterator type for iterating indices in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
-	type IndexIterator<'data>: Iterator<Item=&'data u32> where Self: 'data;
+	type IndexIterator: Iterator<Item=u32>;
 
 	/// Return the number of indices over the underlying data series.
 	fn numIndices (&self) -> u32;
 
 	/// Iterate over the indices.
-	fn indices (&self) -> Self::IndexIterator<'_>;
+	fn indices (&self) -> Self::IndexIterator;
 
 	/// Reference a single data index or a slice of data indices.
 	fn index (&self, index: u32) -> u32;
@@ -102,7 +102,7 @@ pub trait CanHaveNormals: Data
 {
 	/// The iterator type for iterating normals in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
-	type NormalIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
+	type NormalIterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
 
 	/// Indicate whether normals are available in the data.
 	fn hasNormals (&self) -> bool;
@@ -133,19 +133,19 @@ pub trait CanHaveNormals: Data
 	///
 	/// If this method is called even though no normals are available (to be checked up-front via
 	/// [`hasNormals`](Self::hasNormals), or if `index` was out-of-bounds.
-	fn normal (&self, index: u32) -> &glm::Vec3;
+	fn normal (&self, index: u32) -> glm::Vec3;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithNormal`]s.
 impl<T: renderer::data::ElemWithNormal> CanHaveNormals for &[T]
 {
-	type NormalIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
+	type NormalIterator<'data> = util::notsafe::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
 	fn hasNormals (&self) -> bool { true }
 	fn normals (&self) -> Self::NormalIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].normal(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].normal(), size_of::<T>(), self.len())
 	}}
-	fn normal (&self, index: u32) -> &glm::Vec3 { self[index as usize].normal() }
+	fn normal (&self, index: u32) -> glm::Vec3 { *self[index as usize].normal() }
 }
 
 ///
@@ -158,7 +158,7 @@ pub trait CanHaveTangents: Data
 {
 	/// The iterator type for iterating tangents in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
-	type TangentIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
+	type TangentIterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
 
 	/// Indicate whether tangents are available in the data.
 	fn hasTangents (&self) -> bool;
@@ -189,19 +189,19 @@ pub trait CanHaveTangents: Data
 	///
 	/// If this method is called even though no tangents are available (to be checked up-front via
 	/// [`hasTangents`](Self::hasTangents), or if `index` was out-of-bounds.
-	fn tangent (&self, index: u32) -> &glm::Vec3;
+	fn tangent (&self, index: u32) -> glm::Vec3;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithTangent`]s.
 impl<T: renderer::data::ElemWithTangent> CanHaveTangents for &[T]
 {
-	type TangentIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
+	type TangentIterator<'data> = util::notsafe::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
 	fn hasTangents (&self) -> bool { true }
 	fn tangents (&self) -> Self::TangentIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].tangent(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].tangent(), size_of::<T>(), self.len())
 	}}
-	fn tangent (&self, index: u32) -> &glm::Vec3 { self[index as usize].tangent() }
+	fn tangent (&self, index: u32) -> glm::Vec3 { *self[index as usize].tangent() }
 }
 
 ///
@@ -214,7 +214,7 @@ pub trait CanHaveRadii: Data
 {
 	/// The iterator type for iterating radii in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
-	type RadiusIterator<'data>: Iterator<Item=&'data f32> where Self: 'data;
+	type RadiusIterator<'data>: Iterator<Item=f32> where Self: 'data;
 
 	/// Indicate whether radii are available in the data.
 	fn hasRadii (&self) -> bool;
@@ -250,12 +250,12 @@ pub trait CanHaveRadii: Data
 /// Blanket implementation for slices of [`renderer::ElemWithRadius`]s.
 impl<T: renderer::data::ElemWithRadius> CanHaveRadii for &[T]
 {
-	type RadiusIterator<'data> = util::notsafe::StridedRefIter<'data, f32> where Self: 'data;
+	type RadiusIterator<'data> = util::notsafe::StridedCopyIter<'data, f32> where Self: 'data;
 	fn hasRadii (&self) -> bool { true }
 	fn radii (&self) -> Self::RadiusIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].radius(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].radius(), size_of::<T>(), self.len())
 	}}
 	fn radius (&self, index: u32) -> f32 { *self[index as usize].radius() }
 }
@@ -270,7 +270,7 @@ pub trait CanHaveRadiusDerivs: Data
 {
 	/// The iterator type for iterating radius derivatives in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
-	type RadiusDerivIterator<'data>: Iterator<Item=&'data f32> where Self: 'data;
+	type RadiusDerivIterator<'data>: Iterator<Item=f32> where Self: 'data;
 
 	/// Indicate whether radius derivatives are available in the data.
 	fn hasRadiusDerivs (&self) -> bool;
@@ -306,12 +306,12 @@ pub trait CanHaveRadiusDerivs: Data
 /// Blanket implementation for slices of [`renderer::ElemWithRadiusDeriv`]s.
 impl<T: renderer::data::ElemWithRadiusDeriv> CanHaveRadiusDerivs for &[T]
 {
-	type RadiusDerivIterator<'data> = util::notsafe::StridedRefIter<'data, f32> where Self: 'data;
+	type RadiusDerivIterator<'data> = util::notsafe::StridedCopyIter<'data, f32> where Self: 'data;
 	fn hasRadiusDerivs (&self) -> bool { true }
 	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].radiusDeriv(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].radiusDeriv(), size_of::<T>(), self.len())
 	}}
 	fn radiusDeriv (&self, index: u32) -> f32 { *self[index as usize].radiusDeriv() }
 }
@@ -326,7 +326,7 @@ pub trait CanHaveOrientations: Data
 {
 	/// The iterator type for iterating orientations in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
-	type OrientationIterator<'data>: Iterator<Item=&'data glm::Quat> where Self: 'data;
+	type OrientationIterator<'data>: Iterator<Item=glm::Quat> where Self: 'data;
 
 	/// Indicate whether orientations are available in the data.
 	fn hasOrientations (&self) -> bool;
@@ -357,19 +357,19 @@ pub trait CanHaveOrientations: Data
 	///
 	/// If this method is called even though no orientations are available (to be checked up-front via
 	/// [`hasOrientations`](Self::hasOrientations), or if `index` was out-of-bounds.
-	fn orientation (&self, index: u32) -> &glm::Quat;
+	fn orientation (&self, index: u32) -> glm::Quat;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithOrientation`]s.
 impl<T: renderer::data::ElemWithOrientation> CanHaveOrientations for &[T]
 {
-	type OrientationIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Quat> where Self: 'data;
+	type OrientationIterator<'data> = util::notsafe::StridedCopyIter<'data, glm::Quat> where Self: 'data;
 	fn hasOrientations (&self) -> bool { true }
 	fn orientations (&self) -> Self::OrientationIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].orientation(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].orientation(), size_of::<T>(), self.len())
 	}}
-	fn orientation (&self, index: u32) -> &glm::Quat { self[index as usize].orientation() }
+	fn orientation (&self, index: u32) -> glm::Quat { *self[index as usize].orientation() }
 }
 
 ///
@@ -382,7 +382,7 @@ pub trait CanHaveScalings: Data
 {
 	/// The iterator type for iterating scaling vectors in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
-	type ScaleIterator<'data>: Iterator<Item=&'data glm::Vec3> where Self: 'data;
+	type ScaleIterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
 
 	/// Indicate whether scaling vectors are available in the data.
 	fn hasScalings (&self) -> bool;
@@ -413,19 +413,19 @@ pub trait CanHaveScalings: Data
 	///
 	/// If this method is called even though no scaling vectors are available (to be checked up-front via
 	/// [`hasScalings`](Self::hasScalings), or if `index` was out-of-bounds.
-	fn scaling (&self, index: u32) -> &glm::Vec3;
+	fn scaling (&self, index: u32) -> glm::Vec3;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithScaling`]s.
 impl<T: renderer::data::ElemWithScaling> CanHaveScalings for &[T]
 {
-	type ScaleIterator<'data> = util::notsafe::StridedRefIter<'data, glm::Vec3> where Self: 'data;
+	type ScaleIterator<'data> = util::notsafe::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
 	fn hasScalings (&self) -> bool { true }
 	fn scalings (&self) -> Self::ScaleIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].scaling(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].scaling(), size_of::<T>(), self.len())
 	}}
-	fn scaling (&self, index: u32) -> &glm::Vec3 { self[index as usize].scaling() }
+	fn scaling (&self, index: u32) -> glm::Vec3 { *self[index as usize].scaling() }
 }
 
 ///
@@ -438,7 +438,7 @@ pub trait CanHaveColors: Data
 {
 	/// The iterator type for iterating colors in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
-	type ColorIterator<'data>: Iterator<Item=&'data cgv::RGBA> where Self: 'data;
+	type ColorIterator<'data>: Iterator<Item=cgv::RGBA> where Self: 'data;
 
 	/// Indicate whether colors are available in the data.
 	fn hasColors (&self) -> bool;
@@ -469,19 +469,19 @@ pub trait CanHaveColors: Data
 	///
 	/// If this method is called even though no colors are available (to be checked up-front via
 	/// [`hasColors`](Self::hasColors), or if `index` was out-of-bounds.
-	fn color (&self, index: u32) -> &cgv::RGBA;
+	fn color (&self, index: u32) -> cgv::RGBA;
 }
 /// Blanket implementation for slices of [`renderer::ElemWithColor`]s.
 impl<T: renderer::data::ElemWithColor> CanHaveColors for &[T]
 {
-	type ColorIterator<'data> = util::notsafe::StridedRefIter<'data, cgv::RGBA> where Self: 'data;
+	type ColorIterator<'data> = util::notsafe::StridedCopyIter<'data, cgv::RGBA> where Self: 'data;
 	fn hasColors (&self) -> bool { true }
 	fn colors (&self) -> Self::ColorIterator<'_> { unsafe {
 		// SAFETY: We are a `Vec` of structs, and `Vec` can be trusted to return the correct length and place elements
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
-		util::notsafe::StridedRefIter::new(self[0].color(), size_of::<T>(), self.len())
+		util::notsafe::StridedCopyIter::new(self[0].color(), size_of::<T>(), self.len())
 	}}
-	fn color (&self, index: u32) -> &cgv::RGBA { self[index as usize].color() }
+	fn color (&self, index: u32) -> cgv::RGBA { *self[index as usize].color() }
 }
 
 ///
