@@ -17,6 +17,9 @@ pub mod gpu;
 // Imports
 //
 
+// Bitflags library
+use bitflags::bitflags;
+
 // Local imports
 pub use cgv_derive::{
 	// Re-export the relevant procedural derive macros from cgv-derive
@@ -24,6 +27,29 @@ pub use cgv_derive::{
 	ElemWithScaling, ElemWithColor
 };
 use crate::{self as cgv, *};
+
+
+
+//////
+//
+// Enums
+//
+
+// Bitflag definition: GeometryAttributes
+bitflags! {
+	/// Bitflags representing the various geometry attributes the renderer module knows about.
+	struct GeometryAttributes: u16 {
+		const NORMALS       = 1 << 1;
+		const TANGENTS      = 1 << 2;
+		const RADII         = 1 << 3;
+		const RADIUS_DERIVS = 1 << 4;
+		const ORIENTATIONS  = 1 << 5;
+		const SCALINGS      = 1 << 6;
+		const COLORS        = 1 << 7;
+    }
+}
+/// Convenience shorthand for [`GeometryAttributes`].
+type GA = GeometryAttributes;
 
 
 

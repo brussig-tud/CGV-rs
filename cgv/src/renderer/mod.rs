@@ -98,10 +98,7 @@ pub trait Renderer
 
 	/// Returns `true` if this renderer's [`GpuState`] does not depend on the data being rendered. Most implementations
 	/// will not require `&self` to answer this query, but we want this to be dynamically dispatchable.
-	///
-	/// **NOTE:** Implementations that can statically answer this query with `true` are encouraged to implement the
-	/// [`renderer::DataIndependent`] trait.
-	fn gpuStateIsIndependentFromData(&self) -> bool;
+	fn gpuStateIsIndependentFromData (&self) -> bool;
 
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
 	fn createGpuState (&self, context: &Context, renderState: &RenderState, data: &Self::GpuDataReceiver)
@@ -110,9 +107,6 @@ pub trait Renderer
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
 	fn render (&self, context: &Context, gpuState: &Self::GpuState, data: &Self::GpuDataReceiver);
 }
-
-/// Marker trait to enable the [`Managed::setData`] method that statically omits re-creating [`GpuState`].
-pub trait DataIndependent {}
 
 
 
@@ -174,9 +168,18 @@ impl<R: Renderer> Managed<R>
 		}
 	}
 
-	/// Set new data to render. This requires the wrapped renderer to implement [`renderer::DataIndependent`].
-	pub fn setData (&mut self, newData: R::GpuDataReceiver) where R: DataIndependent {
-		debug_assert!(self.renderer.gpuStateIsIndependentFromData());
+	/// Set new data to render. For renderers that are not [data-independent](Renderer::gpuStateIsIndependentFromData),
+	/// this is only possible while no [`GpuState`] has been created yet, i.e. before the first call to any of the
+	/// `rebuild...` functions. For data-independent renderers, this can be called at any time, without a rebuild of the
+	/// wrapped renderer's `GpuState` being triggered.
+	///
+	/// # Panics
+	///
+	/// If the wrapped renderer is [data-dependent](Renderer::gpuStateIsIndependentFromData) and `GpuState` was already
+	/// [created](Self::rebuildForSingleRenderState).
+	#[inline]
+	pub fn setData (&mut self, newData: R::GpuDataReceiver) {
+		assert!(self.data.is_none() || self.renderer.gpuStateIsIndependentFromData());
 		self.data = Some(newData);
 	}
 

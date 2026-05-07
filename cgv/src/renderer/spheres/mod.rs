@@ -33,6 +33,7 @@ use data::*;
 //
 
 ///
+#[derive(Clone,Copy)]
 enum PosRadLayoutType {
 	/// Positions and radii are in the same `Float32x4` shader location (preferred).
 	Composite,
@@ -58,19 +59,16 @@ impl DataReceiver
 {
 	/// Receive the provided GPU data.
 	///
-	/// **NOTE**: [`renderer::Spheres`] prefers having positions and radii packed into
-	/// the same `Float32x4` shader location when radii are present, but will work with separate locations as well, at a
-	/// (very) small performance penalty.
+	/// **NOTE**: [`renderer::Spheres`] prefers having positions and radii packed into the same `Float32x4` shader
+	/// location when radii are present, but will work with separate locations as well, at a (very) small performance
+	/// penalty.
 	pub fn new (data: Arc<dyn renderer::GpuData>) -> Self
 	{
 		// Infer the positions/radii layout type
 		let layout = data.layout();
 		let posRadLayoutType = if let Some(radii) = layout.radii {
-			if layout.positions.inSameBufferSlot(&radii) {
-				Some(PosRadLayoutType::Composite)
-			} else {
-				Some(PosRadLayoutType::Separate)
-			}
+			Some(if layout.positions.inSameBufferSlot(&radii) { PosRadLayoutType::Composite }
+			     else                                         { PosRadLayoutType::Separate  })
 		} else {
 			None
 		};
@@ -152,12 +150,11 @@ impl Spheres
 impl Renderer for Spheres
 {
 	type GpuState = wgpu::RenderPipeline;
-
 	type GpuDataReceiver = spheres::DataReceiver;
 
 	#[inline(always)]
 	fn gpuStateIsIndependentFromData (&self) -> bool {
-		true
+		false
 	}
 
 	fn createGpuState (
@@ -168,15 +165,27 @@ impl Renderer for Spheres
 		let layout = data.gpuData().layout();
 		let buffers = layout.withStepMode(wgpu::VertexStepMode::Instance);
 
-		// Decide on vertex state based on attibutes present and data layout
-		let vertexState = match data.posRadLayoutType
+		// Decide on vertex state based on available attributes
+		let vertexState = match &data.posRadLayoutType
 		{
-			Some(_) => {
-				assert!(layout.radii.is_some());
-				todo!("not yet implemented")
+			Some(posRadLayout) => {
+				debug_assert!(layout.radii.is_some()); // <- sanity check
+				if layout.colors.is_some() {
+					todo!("not yet implemented")
+				}
+				else {
+					// Positions only, no radii, no colors
+					wgpu::VertexState {
+						module: &self.shader,
+						entry_point: Some("vertexMain_posRad"),
+						buffers: &buffers,
+						compilation_options: wgpu::PipelineCompilationOptions::default(),
+					}
+				}
 			},
 
 			None => {
+				debug_assert!(layout.radii.is_none()); // <- sanity check
 				if layout.colors.is_some() {
 					todo!("not yet implemented")
 				}
@@ -223,4 +232,3 @@ impl Renderer for Spheres
 		todo!()
 	}
 }
-impl DataIndependent for Spheres {}

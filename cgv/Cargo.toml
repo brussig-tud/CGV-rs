@@ -11,6 +11,7 @@ rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+bitflags = {workspace=true}
 anyhow = {workspace=true}
 tracing = {workspace=true}
 tracing-subscriber = {workspace=true, features=["env-filter"]}

@@ -131,7 +131,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::new(
+	let spheresData = cgv::renderer::spheres::GpuData::withRadii(
 		context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData")
 	);
 
@@ -167,7 +167,7 @@ struct RenderersDemo
 	//spheresData: Arc<cgv::renderer::spheres::GpuData>,
 
 	// Test sphere renderer
-	sphereRenderer: renderer::Managed<cgv::renderer::Spheres>,
+	sphereRenderer: renderer::Managed<renderer::Spheres>,
 
 	// GUI-controllable state
 	_guiState: GuiState
@@ -236,8 +236,7 @@ impl cgv::Application for RenderersDemo
 		#[expect(unused_mut)] let mut redraw = false;
 
 		// Renderer configuration
-		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui|
-		{
+		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui| {
 			ui.label("Nothing here yet.");
 		});
 

@@ -19,7 +19,7 @@ use crate::{self as cgv, *};
 //
 
 /// Trait of GPU-side renderable data, ready for drawing by a [`Renderer`].
-pub trait Data: Sync+Send
+pub trait Data: Send+Sync
 {
 	/// Return the number of elements in the underlying data series.
 	fn num (&self) -> u32;
@@ -214,7 +214,7 @@ impl BufferAttributeSlot {
 		self.slot as usize
 	}
 
-	/// Check whether this [`BufferAttributeSlot`] combination refers to the same physical slot as another one.
+	/// Check whether this [`BufferAttributeSlot`] combination refers to the same "physical" slot as another one.
 	#[inline]
 	pub fn inSameBufferSlot (&self, other: &Self) -> bool {
 		self.buffer_offset.buffer() == other.buffer_offset.buffer() && self.slot == other.slot
@@ -289,6 +289,40 @@ impl BufferLayout
 		&& Self::checkAttrib(&self.buffers, &self.orientations, &other.buffers, &other.orientations)
 		&& Self::checkAttrib(&self.buffers, &self.scalings, &other.buffers, &other.scalings)
 		&& Self::checkAttrib(&self.buffers, &self.colors, &other.buffers, &other.colors)
+	}
+
+	/// **TODO: Remove**
+	fn filter (&self, filter: super::GeometryAttributes) -> Self
+	{
+		// Local helper
+		use super::*;
+		fn include (
+			buffers: &mut std::collections::BTreeSet<usize>, filter: GeometryAttributes, attribBit: GeometryAttributes,
+			attrib: &Option<BufferAttributeSlot>
+		) -> Option<BufferAttributeSlot>
+		{
+			if filter.contains(attribBit) && let Some(attrib) = attrib {
+				buffers.insert(attrib.buffer());
+				let newBufferIdx = buffers.len() - 1;
+				Some(BufferAttributeSlot::new(newBufferIdx as u8, attrib.slot() as u16, attrib.offset()))
+			} else {
+				None
+			}
+		}
+
+		// Perform the filtering
+		let mut buffers = std::collections::BTreeSet::new();
+		buffers.insert(self.positions.buffer());
+		let normals = include(&mut buffers, filter, GA::NORMALS, &self.normals);
+		let tangents = include(&mut buffers, filter, GA::TANGENTS, &self.tangents);
+		let radii = include(&mut buffers, filter, GA::TANGENTS, &self.tangents);
+		let radiusDerivs = include(&mut buffers, filter, GA::RADIUS_DERIVS, &self.radiusDerivs);
+		let orientations = include(&mut buffers, filter, GA::ORIENTATIONS, &self.orientations);
+		let scalings = include(&mut buffers, filter, GA::SCALINGS, &self.scalings);
+		let colors = include(&mut buffers, filter, GA::COLORS, &self.colors);
+
+		// Done!
+		unimplemented!()
 	}
 
 	/// Instantiate the [buffer layouts](Self.buffers) with the given [`wgpu::VertexStepMode`], turning them into the

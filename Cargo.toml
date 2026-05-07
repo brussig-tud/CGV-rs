@@ -40,6 +40,7 @@ incremental = false  # Don't use incremental compilation to enable full use of s
 [workspace.dependencies]
 wasm-bindgen = "*"
 wasm-bindgen-futures = "*"
+bitflags = "*"
 anyhow = "*"
 tracing = "*"
 tracing-subscriber = {version="*"}
