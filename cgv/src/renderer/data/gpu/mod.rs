@@ -5,7 +5,7 @@
 //
 
 // Standard library
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 // Local imports
 #[expect(unused_imports)] // we only use these for documentation links
@@ -19,7 +19,7 @@ use super as data;
 // Traits
 //
 
-/// Trait of GPU-side renderable data, ready for drawing by a [`Renderer`].
+/// Trait of GPU-side renderable data, ready to be [received](renderer::GpuDataReceiver) for drawing by a [`Renderer`].
 pub trait Data: Send+Sync
 {
 	/// Return the number of elements in the underlying data series.
@@ -259,6 +259,12 @@ impl Deref for GeometryAttributeOccupancy {
 		&self.0
 	}
 }
+impl DerefMut for GeometryAttributeOccupancy {
+	#[inline(always)]
+	fn deref_mut (&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
 
 #[derive(Clone)]
 pub struct BufferLayout
@@ -330,57 +336,6 @@ impl BufferLayout
 		}
 	}
 
-	/*/// **TODO: Remove**
-	fn filter (&self, filter: super::GeometryAttributeFlags) -> Self
-	{
-		// Local helper
-		use super::*;
-		fn include (
-			buffers: &mut std::collections::BTreeSet<usize>, filter: GeometryAttributeFlags,
-			attribBit: GeometryAttributeFlags, attrib: &Option<BufferAttributeSlot>
-		) -> Option<BufferAttributeSlot>
-		{
-			if filter.contains(attribBit) && let Some(attrib) = attrib {
-				buffers.insert(attrib.buffer());
-				let newBufferIdx = buffers.len() - 1;
-				Some(BufferAttributeSlot::new(newBufferIdx as u8, attrib.slot() as u16, attrib.offset()))
-			} else {
-				None
-			}
-		}
-
-		// Perform the filtering
-		let mut buffers = std::collections::BTreeSet::new();
-		buffers.insert(self.positions.buffer());
-		let normals = include(&mut buffers, filter, GAF::NORMALS, &self.normals);
-		let tangents = include(&mut buffers, filter, GAF::TANGENTS, &self.tangents);
-		let radii = include(&mut buffers, filter, GAF::TANGENTS, &self.tangents);
-		let radiusDerivs = include(&mut buffers, filter, GAF::RADIUS_DERIVS, &self.radiusDerivs);
-		let orientations = include(&mut buffers, filter, GAF::ORIENTATIONS, &self.orientations);
-		let scalings = include(&mut buffers, filter, GAF::SCALINGS, &self.scalings);
-		let colors = include(&mut buffers, filter, GAF::COLORS, &self.colors);
-
-		// Done!
-		unimplemented!()
-	}*/
-
-	/// Instantiate the [buffer layouts](Self.buffers) with the given [`wgpu::VertexStepMode`], turning them into the
-	/// corresponding [`wgpu::VertexBufferLayout`]s for consumption by *WGPU*. Optionally filter for the given set of
-	/// attributes.
-	pub fn vertexBufferLayouts (&self, step_mode: wgpu::VertexStepMode, filter: Option<data::GeometryAttributeFlags>)
-		-> Vec<wgpu::VertexBufferLayout<'_>>
-	{
-		let buffers = if let Some(filter) = filter {
-			&self.buffers
-		}
-		else {
-			&self.buffers
-		};
-		buffers.iter().map(|vbl| wgpu::VertexBufferLayout {
-			array_stride: vbl.array_stride, step_mode, attributes: vbl.attributes.as_slice()
-		}).collect()
-	}
-
 	/// Infer whether this layout is interleaved or not.
 	pub fn isInterleaved (&self) -> bool {
 		self.buffers.len() < 2 && {
@@ -416,81 +371,134 @@ impl PartialEq<Self> for BufferLayout
 impl Eq for BufferLayout {}
 
 ///
-pub struct PipelineBufferLayout<'this> {
-	shaderAttributes: Vec<Vec<wgpu::VertexAttribute>>,
-	wgpuLayouts: Vec<wgpu::VertexBufferLayout<'this>>,
-	bufferIndices: Vec<usize>,
+pub struct PipelineBufferLayout {
+	#[expect(dead_code)] // <- not dead code, but the references are hidden from the compiler inside `wgpuLayouts`
+	attribDecls: Vec<Vec<wgpu::VertexAttribute>>,
+	wgpuLayouts: Vec<wgpu::VertexBufferLayout<'static>>,
+	bufferIndices: Vec<usize>
 }
-impl PipelineBufferLayout<'_>
+impl PipelineBufferLayout
 {
-	/// **NOTE:** This currently has worst-case complexity *N*⋅*M*, which I think is required if we want to **preserve
-	/// the order in which the buffers are referenced** in the original data.
+	/// **NOTE:** This currently has worst-case complexity *O*(*N*⋅*M*), *N* being the number of buffers and *M* the
+	/// number of filtered attributes, which is probably still the most performant way if we want to **preserve the
+	/// order in which the buffers are referenced** in the original, unfiltered layout.
+	///
+	/// **TODO: It might be possible to include buffers in the vertex state of a pipeline with zero attributes bound to
+	/// shader locations. In this case this step could be greatly simplified.**
 	pub fn create (
-		dataLayout: &BufferLayout, step_mode: wgpu::VertexStepMode, includeAttribs: &[data::GeometryAttribute]
+		dataLayout: &BufferLayout, shaderLoc_positions: u32, step_mode: wgpu::VertexStepMode,
+		includeAttribs: &[(data::GeometryAttribute, u32)]
 	) -> Self
 	{
 		// Local helper functions
 		fn includeAttrib (
-			attribLoc_dest: &mut Option<BufferAttributeSlot>, newBufIdx: usize, attribLoc_src: &BufferAttributeSlot,
-			buffer_src: &VertexBufferLayoutDesc
+			attribLoc_dest: &mut Option<BufferAttributeSlot>, newBufIdx: usize, shaderLoc: u32,
+			attribLoc_src: &BufferAttributeSlot, buffer_src: &VertexBufferLayoutDesc
 		) -> wgpu::VertexAttribute {
-			assert!(attribLoc_dest.is_none(), "must not have multiple position attributes in the layout");
+			assert!(attribLoc_dest.is_none(), "must not have multiple instances of an attribute in the layout");
 			attribLoc_dest.replace(attribLoc_src.changeBuffer(newBufIdx as u8));
-			buffer_src.attributes[attribLoc_src.slot()]
+			let mut vertexAttrib = buffer_src.attributes[attribLoc_src.slot()];
+			vertexAttrib.shader_location = shaderLoc;
+			vertexAttrib
 		}
 		fn includeShaderAttrib (
 			shaderAttribs: &mut Vec<Vec<wgpu::VertexAttribute>>, bufferIdx: usize, attribute: wgpu::VertexAttribute
 		){
 			assert!(bufferIdx == shaderAttribs.len() || bufferIdx == shaderAttribs.len()-1, "INTERNAL LOGIC ERROR");
-			shaderAttribs.resize(bufferIdx+1, Default::default());
+			shaderAttribs.resize(bufferIdx+1, Vec::with_capacity(4));
 			shaderAttribs.last_mut().unwrap().push(attribute);
 		}
 
-		// Database
-		let mut filteredBuffers: Vec<usize> = Vec::with_capacity(dataLayout.buffers.len());
-		let mut filteredShaderAttribs: Vec<Vec<wgpu::VertexAttribute>> = Vec::with_capacity(filteredBuffers.capacity());
-		let mut remappedIndices: Vec<Option<usize>> = vec![None; dataLayout.buffers.len()];
+		// Build new layout database
+		let mut filteredOrigBufIndices: Vec<usize> = Vec::with_capacity(dataLayout.buffers.len());
+		let mut filteredAttribDecls: Vec<Vec<wgpu::VertexAttribute>> = Vec::with_capacity(
+			filteredOrigBufIndices.capacity()
+		);
 		let mut positions: Option<BufferAttributeSlot> = None;
-		let mut visitedAttribs = [None; data::GeometryAttribute::NUM_SLOTS as usize];
+		let mut visitedAttribs = GeometryAttributeOccupancy::default();
 		for (bufIdx, buffer) in dataLayout.buffers.iter().enumerate()
 		{
 			// Infer the new index the buffer would get, if it is included later
-			let newBufIdx = filteredBuffers.len();
+			let newBufIdx = filteredOrigBufIndices.len();
 
 			// Check if anything we need to include references this buffer
 			let mut includeBuffer = false;
+			// - the mandatory position attribue
 			if dataLayout.positions.buffer() == bufIdx {
 				let wgpuVertexAttrib = includeAttrib(
-					&mut positions, newBufIdx, &dataLayout.positions, buffer
+					&mut positions, newBufIdx, shaderLoc_positions, &dataLayout.positions, buffer
 				);
-				includeShaderAttrib(&mut filteredShaderAttribs, newBufIdx, wgpuVertexAttrib);
+				includeShaderAttrib(&mut filteredAttribDecls, newBufIdx, wgpuVertexAttrib);
 				includeBuffer = true;
 			}
-			if !includeBuffer {
-				for attrib in includeAttribs {
-					if let Some(attribLoc) = &dataLayout.attribs[attrib.slot()] {
-						if attribLoc.buffer() == bufIdx {
-							let wgpuVertexAttrib = includeAttrib(
-								&mut visitedAttribs[attrib.slot()], newBufIdx, &dataLayout.positions, buffer
-							);
-							includeShaderAttrib(&mut filteredShaderAttribs, newBufIdx, wgpuVertexAttrib);
-							includeBuffer = true;
-							break;
-						}
+			// - the optional geometry attributes
+			for (attrib, shaderLoc) in includeAttribs
+			{
+				if let Some(attribLoc) = &dataLayout.attribs[attrib.slot()]
+				{
+					// We only actually include this attribute if it's located in its own slot (implied by an offset=0).
+					// Any other offset implies co-location. The knowledge about this will be implicitely reflected in
+					// the renderer's shader code.
+					//    Co-location necessarily implies a slot in the same buffer, so unless there is a logic bug in
+					// the CPU-side code of the renderer filtering it out, the attribute that owns the slot in this
+					// buffer will get included one way or another, and we can savely skip the co-located attribute.
+					let hasOwnSlot = attribLoc.offset() == 0;
+					if attribLoc.buffer() == bufIdx && hasOwnSlot
+					{
+						let wgpuVertexAttrib = includeAttrib(
+							&mut visitedAttribs[attrib.slot()], newBufIdx, *shaderLoc, attribLoc, buffer
+						);
+						includeShaderAttrib(&mut filteredAttribDecls, newBufIdx, wgpuVertexAttrib);
+						includeBuffer = true;
+						break;
 					}
 				}
 			}
+			// - include if still referenced after filter
 			if includeBuffer {
-				// Include this buffer and keep track of its new index in the filtered list
-				remappedIndices[bufIdx].replace(newBufIdx);
-				filteredBuffers.push(bufIdx);
+				filteredOrigBufIndices.push(bufIdx);
 			}
 		}
-		/*let buffers: Vec<_> = dataLayout.buffers.iter().enumerate().map(
+
+		// Pre-create the vertex buffer layouts for WGPU consumption
+		let wgpuLayouts: Vec<_> = dataLayout.buffers.iter().enumerate().map(
 			|(bufIdx, vbl)| wgpu::VertexBufferLayout {
-				array_stride: vbl.array_stride, step_mode, attributes: &[]
+				array_stride: vbl.array_stride, step_mode, attributes: unsafe {
+					// SAFETY:
+					// The `filteredAttribDecls` vec will not be extended after this point, so the addresses of its
+					// elements will remain stable. Also, both the `wgpuLayouts` we create here and the
+					// `filteredAttribDecls` they reference will be moved into the (then self-referential)
+					// `PipelineBufferLayout` struct we return, so they will have the same lifetime. While we hand out
+					// references to `wgpuLayouts`, we will restrict them to the lifetime of our struct (see
+					// `Self::bufferLayouts`).
+					// Finally, the referenced field `attribDecls` is private and we don't provide any mutable methods
+					// that modify it, so Rust's aliasing rules are not violated.
+					util::notsafe::extendLifetime(filteredAttribDecls[bufIdx].as_slice())
+				}
 			}
-		).collect();*/
-		Self { shaderAttributes: vec![], wgpuLayouts: vec![], bufferIndices: vec![] }
+		).collect();
+
+		// Final sanity checks
+		assert_eq!(filteredAttribDecls.len(), wgpuLayouts.len());
+		assert_eq!(wgpuLayouts.len(), filteredOrigBufIndices.len());
+
+		// Done!
+		Self { attribDecls: filteredAttribDecls, wgpuLayouts, bufferIndices: filteredOrigBufIndices }
+	}
+
+	/// Reference the *WGPU* `VertexBufferLayout`s for use in [`wgpu::VertexState`].
+	#[inline(always)]
+	pub fn bufferLayouts<'this, 'outer> (&'this self) -> &'outer [wgpu::VertexBufferLayout<'this>] {
+		self.wgpuLayouts.as_slice()
+	}
+
+	/// Get a slice of buffer indices for rendering. They refer to the buffers as declared in the original
+	/// [`BufferLayout`] of the backing [`GpuData`](Data) and correspond 1:1 to the slice of pipeline
+	/// [`bufferLayouts`](Self::bufferLayouts). [`Renderer`]s need to [set](wgpu::RenderPass::set_vertex_buffer) each
+	/// indicated buffer in the order of their appearance within this slice in the [`wgpu::RenderPass`] they use for
+	/// drawing.
+	#[inline(always)]
+	pub fn bufferIndices (&self) -> &[usize] {
+		self.bufferIndices.as_slice()
 	}
 }

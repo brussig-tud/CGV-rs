@@ -10,7 +10,9 @@ pub use spheres::Spheres; // re-export
 
 /// Module defining the render data model.
 pub mod data;
-pub use data::{host::Data as HostData, gpu::Data as GpuData}; // re-export
+pub use data::{ // re-exports
+	host::Data as HostData, gpu::{Data as GpuData, PipelineBufferLayout as GpuPipelineBufferLayout}
+}; 
 
 /// The module prelude.
 pub mod prelude {

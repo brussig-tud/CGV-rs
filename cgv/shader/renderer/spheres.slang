@@ -55,9 +55,39 @@ ParameterBlock<ConstantAttribs> constAttribs;
 ////
 // Entry points
 
-/// Common vertex shader entry point for all sphere renderer code paths.
+/// Vertex shader entry point for the positions-only case.
 [shader("vertex")]
-float4 vertexMain_posOnly (uint vertexID: SV_VertexID) : SV_Position {
+float4 vertexMain_pos (uint vertexID: SV_VertexID) : SV_Position {
+	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+}
+
+/// Vertex shader entry point for the combined positions/radii case.
+[shader("vertex")]
+float4 vertexMain_posRad (uint vertexID: SV_VertexID) : SV_Position {
+	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+}
+
+/// Vertex shader entry point for the separate positions/radii case.
+[shader("vertex")]
+float4 vertexMain_posSepRad (uint vertexID: SV_VertexID) : SV_Position {
+	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+}
+
+/// Vertex shader entry point for the positions and colors case.
+[shader("vertex")]
+float4 vertexMain_posColor (uint vertexID: SV_VertexID) : SV_Position {
+	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+}
+
+/// Vertex shader entry point for the combined positions/radii and colors case.
+[shader("vertex")]
+float4 vertexMain_posRadColor (uint vertexID: SV_VertexID) : SV_Position {
+	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+}
+
+/// Vertex shader entry point for the separate positions/radii and colors case.
+[shader("vertex")]
+float4 vertexMain_posSepRadColor (uint vertexID: SV_VertexID) : SV_Position {
 	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
 }
 

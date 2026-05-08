@@ -32,7 +32,7 @@ use data::*;
 // Enum
 //
 
-///
+/*///
 #[derive(Clone,Copy)]
 enum PosRadLayoutType {
 	/// Positions and radii are in the same `Float32x4` shader location (preferred).
@@ -40,7 +40,7 @@ enum PosRadLayoutType {
 
 	/// Positions and radii are in separate shader locations.
 	Separate
-}
+}*/
 
 
 
@@ -52,8 +52,10 @@ enum PosRadLayoutType {
 ///
 pub struct DataReceiver {
 	data: Arc<dyn renderer::GpuData>,
-	posRadLayoutType: Option<PosRadLayoutType>,
+	layout: GpuPipelineBufferLayout,
+	//posRadLayoutType: Option<PosRadLayoutType>,
 	defaultAttribValues: ConstantAttributes,
+	entryPoint: String
 }
 impl DataReceiver
 {
@@ -64,17 +66,28 @@ impl DataReceiver
 	/// penalty.
 	pub fn new (data: Arc<dyn renderer::GpuData>) -> Self
 	{
-		// Infer the positions/radii layout type
+		// Infer the right shader entry point and vertex shader locations from the available attributes
 		let layout = data.layout();
-		let posRadLayoutType = if let Some(radii) = layout.attribute(GA::Radii) {
-			Some(if layout.positions.inSameBufferSlot(&radii) { PosRadLayoutType::Composite }
-			     else                                         { PosRadLayoutType::Separate  })
-		} else {
-			None
-		};
+		let mut entryPoint = "vertexMain_pos".to_string();
+		let mut shaderLoc = 0;
+		let mut includeAttribs = vec![];
+		if let Some(radii) = layout.attribute(GA::Radii) {
+			if layout.positions.inSameBufferSlot(&radii) { entryPoint += "Rad" }
+			else                                         { entryPoint += "SepRad"; shaderLoc = 1 }
+			includeAttribs.push((GA::Radii, shaderLoc));
+		}
+		if layout.hasAttribute(GA::Colors) {
+			entryPoint += "Color"; shaderLoc += 1;
+			includeAttribs.push((GA::Colors, shaderLoc));
+		}
+
+		// Create pipeline buffer layout
+		let layout = GpuPipelineBufferLayout::create(
+			layout, 0, wgpu::VertexStepMode::Instance, &includeAttribs
+		);
 
 		// Done!
-		Self { data, posRadLayoutType, defaultAttribValues: ConstantAttributes::default() }
+		Self { data, layout, defaultAttribValues: ConstantAttributes::default(), entryPoint }
 	}
 
 	/// Modify the default radius that will be used when the received [`GpuData`](renderer::GpuData) does not include
@@ -154,6 +167,9 @@ impl Renderer for Spheres
 
 	#[inline(always)]
 	fn gpuStateIsIndependentFromData (&self) -> bool {
+		// Since we use instancing, our pipeline depends on the instance attributes in the vertex state. This could be
+		// avoided with attribute-less rendering, but we don't want to give up on the potentially significant
+		// performance advantage afforded by the vertex pipeline FIFO cache.
 		false
 	}
 
@@ -161,46 +177,12 @@ impl Renderer for Spheres
 		&self, context: &Context, renderState: &RenderState, data: &Self::GpuDataReceiver
 	) -> Self::GpuState
 	{
-		// Instantiate our actual data layout
-		let layout = data.gpuData().layout();
-		let buffers = layout.vertexBufferLayouts(
-			wgpu::VertexStepMode::Instance, Some(GAF::RADII | GAF::COLORS)
-		);
-
-		// Decide on vertex state based on available attributes
-		let vertexState = match &data.posRadLayoutType
-		{
-			Some(posRadLayout) => {
-				debug_assert!(layout.hasAttribute(GA::Radii)); // <- sanity check
-				if layout.hasAttribute(GA::Colors) {
-					todo!("not yet implemented")
-				}
-				else {
-					// Positions only, no radii, no colors
-					wgpu::VertexState {
-						module: &self.shader,
-						entry_point: Some("vertexMain_posRad"),
-						buffers: &buffers,
-						compilation_options: wgpu::PipelineCompilationOptions::default(),
-					}
-				}
-			},
-
-			None => {
-				debug_assert!(layout.hasAttribute(GA::Radii)); // <- sanity check
-				if layout.hasAttribute(GA::Colors) {
-					todo!("not yet implemented")
-				}
-				else {
-					// Positions only, no radii, no colors
-					wgpu::VertexState {
-						module: &self.shader,
-						entry_point: Some("vertexMain_posOnly"),
-						buffers: &buffers,
-						compilation_options: wgpu::PipelineCompilationOptions::default(),
-					}
-				}
-			}
+		// Construct vertex state
+		let vertexState = wgpu::VertexState {
+			module: &self.shader,
+			entry_point: Some(&data.entryPoint),
+			buffers: &data.layout.bufferLayouts(),
+			compilation_options: wgpu::PipelineCompilationOptions::default(),
 		};
 
 		// Create pipeline
