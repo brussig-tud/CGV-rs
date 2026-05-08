@@ -111,13 +111,13 @@ pub trait HasColors: Data {
 /// Intermediate representation of a [`wgpu::VertexBufferLayout`] missing the
 /// [`step_mode`](wgpu::VertexBufferLayout.step_mode) field. The reason for this is that [`Renderer`]s will choose this
 /// to be different depending on how they do their rendering.
-#[derive(Clone,Copy,PartialEq,Eq)]
-pub struct VertexBufferLayoutDesc<'this> {
+#[derive(Clone,PartialEq,Eq)]
+pub struct VertexBufferLayoutDesc {
 	/// Proxy for [`wgpu::VertexBufferLayout.array_stride`](wgpu::VertexBufferLayout).
 	pub array_stride: wgpu::BufferAddress,
 
 	/// Proxy for [`wgpu::VertexBufferLayout.attributes`](wgpu::VertexBufferLayout).
-	pub attributes: &'this [wgpu::VertexAttribute],
+	pub attributes: Vec<wgpu::VertexAttribute>,
 }
 
 /// Helper union to maje [`BufferAttributeSlot`] fit into a single `u64`.
@@ -135,7 +135,7 @@ impl BufferOffsetUnion
 		buffer_offset: (buffer, offset)
 	}}
 
-	/// Access the buffer index.
+	/// Retrieve the buffer index.
 	#[inline(always)]
 	fn buffer (&self) -> u8 {
 		unsafe {
@@ -144,7 +144,13 @@ impl BufferOffsetUnion
 		}
 	}
 
-	/// Access the offset.
+	/// Change the buffer index.
+	#[inline(always)]
+	fn changeBuffer (&mut self, newBufferIdx: u8) {
+		self.buffer_offset.0 = newBufferIdx;
+	}
+
+	/// Retrieve the offset.
 	#[inline(always)]
 	fn offset (&self) -> u8 {
 		unsafe {
@@ -220,6 +226,13 @@ impl BufferAttributeSlot {
 	pub fn inSameBufferSlot (&self, other: &Self) -> bool {
 		self.buffer_offset.buffer() == other.buffer_offset.buffer() && self.slot == other.slot
 	}
+
+	///
+	#[inline(always)]
+	pub fn changeBuffer (mut self, newBufferIdx: u8) -> Self {
+		self.buffer_offset.changeBuffer(newBufferIdx);
+		self
+	}
 }
 
 ///
@@ -250,9 +263,9 @@ impl Deref for GeometryAttributeOccupancy {
 #[derive(Clone)]
 pub struct BufferLayout
 {
-	/// A slice of [`wgpu::VertexBufferLayout`]s ready for use in the [vertex state](wgpu::VertexState) of a
-	/// [`wgpu::RenderPipelineDescriptor`].
-	pub buffers: Vec<VertexBufferLayoutDesc<'static>>,
+	/// NOT TRUE ANYMORE: A slice of [`wgpu::VertexBufferLayout`]s ready for use in the
+	/// [vertex state](wgpu::VertexState) of a [`wgpu::RenderPipelineDescriptor`].
+	pub buffers: Vec<VertexBufferLayoutDesc>,
 
 	/// The exact place of the *position* attributes in the layout.
 	pub positions: BufferAttributeSlot,
@@ -265,8 +278,8 @@ impl BufferLayout
 	/// Internal helper function for checking if two [`BufferAttributeSlot`]s are compatible.
 	#[inline]
 	fn checkAttrib (
-		buffers: &[VertexBufferLayoutDesc<'static>], attrib: &Option<BufferAttributeSlot>,
-		otherBuffers: &[VertexBufferLayoutDesc<'static>], otherAttrib: &Option<BufferAttributeSlot>
+		buffers: &[VertexBufferLayoutDesc], attrib: &Option<BufferAttributeSlot>,
+		otherBuffers: &[VertexBufferLayoutDesc], otherAttrib: &Option<BufferAttributeSlot>
 	) -> bool {
 		match (attrib, otherAttrib) {
 			(Some(a), Some(b)) => {
@@ -355,7 +368,7 @@ impl BufferLayout
 	/// corresponding [`wgpu::VertexBufferLayout`]s for consumption by *WGPU*. Optionally filter for the given set of
 	/// attributes.
 	pub fn vertexBufferLayouts (&self, step_mode: wgpu::VertexStepMode, filter: Option<data::GeometryAttributeFlags>)
-		-> Vec<wgpu::VertexBufferLayout<'static>>
+		-> Vec<wgpu::VertexBufferLayout<'_>>
 	{
 		let buffers = if let Some(filter) = filter {
 			&self.buffers
@@ -364,7 +377,7 @@ impl BufferLayout
 			&self.buffers
 		};
 		buffers.iter().map(|vbl| wgpu::VertexBufferLayout {
-			array_stride: vbl.array_stride, step_mode, attributes: vbl.attributes
+			array_stride: vbl.array_stride, step_mode, attributes: vbl.attributes.as_slice()
 		}).collect()
 	}
 
@@ -401,3 +414,83 @@ impl PartialEq<Self> for BufferLayout
 	}
 }
 impl Eq for BufferLayout {}
+
+///
+pub struct PipelineBufferLayout<'this> {
+	shaderAttributes: Vec<Vec<wgpu::VertexAttribute>>,
+	wgpuLayouts: Vec<wgpu::VertexBufferLayout<'this>>,
+	bufferIndices: Vec<usize>,
+}
+impl PipelineBufferLayout<'_>
+{
+	/// **NOTE:** This currently has worst-case complexity *N*⋅*M*, which I think is required if we want to **preserve
+	/// the order in which the buffers are referenced** in the original data.
+	pub fn create (
+		dataLayout: &BufferLayout, step_mode: wgpu::VertexStepMode, includeAttribs: &[data::GeometryAttribute]
+	) -> Self
+	{
+		// Local helper functions
+		fn includeAttrib (
+			attribLoc_dest: &mut Option<BufferAttributeSlot>, newBufIdx: usize, attribLoc_src: &BufferAttributeSlot,
+			buffer_src: &VertexBufferLayoutDesc
+		) -> wgpu::VertexAttribute {
+			assert!(attribLoc_dest.is_none(), "must not have multiple position attributes in the layout");
+			attribLoc_dest.replace(attribLoc_src.changeBuffer(newBufIdx as u8));
+			buffer_src.attributes[attribLoc_src.slot()]
+		}
+		fn includeShaderAttrib (
+			shaderAttribs: &mut Vec<Vec<wgpu::VertexAttribute>>, bufferIdx: usize, attribute: wgpu::VertexAttribute
+		){
+			assert!(bufferIdx == shaderAttribs.len() || bufferIdx == shaderAttribs.len()-1, "INTERNAL LOGIC ERROR");
+			shaderAttribs.resize(bufferIdx+1, Default::default());
+			shaderAttribs.last_mut().unwrap().push(attribute);
+		}
+
+		// Database
+		let mut filteredBuffers: Vec<usize> = Vec::with_capacity(dataLayout.buffers.len());
+		let mut filteredShaderAttribs: Vec<Vec<wgpu::VertexAttribute>> = Vec::with_capacity(filteredBuffers.capacity());
+		let mut remappedIndices: Vec<Option<usize>> = vec![None; dataLayout.buffers.len()];
+		let mut positions: Option<BufferAttributeSlot> = None;
+		let mut visitedAttribs = [None; data::GeometryAttribute::NUM_SLOTS as usize];
+		for (bufIdx, buffer) in dataLayout.buffers.iter().enumerate()
+		{
+			// Infer the new index the buffer would get, if it is included later
+			let newBufIdx = filteredBuffers.len();
+
+			// Check if anything we need to include references this buffer
+			let mut includeBuffer = false;
+			if dataLayout.positions.buffer() == bufIdx {
+				let wgpuVertexAttrib = includeAttrib(
+					&mut positions, newBufIdx, &dataLayout.positions, buffer
+				);
+				includeShaderAttrib(&mut filteredShaderAttribs, newBufIdx, wgpuVertexAttrib);
+				includeBuffer = true;
+			}
+			if !includeBuffer {
+				for attrib in includeAttribs {
+					if let Some(attribLoc) = &dataLayout.attribs[attrib.slot()] {
+						if attribLoc.buffer() == bufIdx {
+							let wgpuVertexAttrib = includeAttrib(
+								&mut visitedAttribs[attrib.slot()], newBufIdx, &dataLayout.positions, buffer
+							);
+							includeShaderAttrib(&mut filteredShaderAttribs, newBufIdx, wgpuVertexAttrib);
+							includeBuffer = true;
+							break;
+						}
+					}
+				}
+			}
+			if includeBuffer {
+				// Include this buffer and keep track of its new index in the filtered list
+				remappedIndices[bufIdx].replace(newBufIdx);
+				filteredBuffers.push(bufIdx);
+			}
+		}
+		/*let buffers: Vec<_> = dataLayout.buffers.iter().enumerate().map(
+			|(bufIdx, vbl)| wgpu::VertexBufferLayout {
+				array_stride: vbl.array_stride, step_mode, attributes: &[]
+			}
+		).collect();*/
+		Self { shaderAttributes: vec![], wgpuLayouts: vec![], bufferIndices: vec![] }
+	}
+}

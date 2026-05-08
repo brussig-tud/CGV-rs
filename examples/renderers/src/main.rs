@@ -131,7 +131,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::withRadii(
+	let spheresData = cgv::renderer::spheres::GpuData::new(
 		context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData")
 	);
 
@@ -142,7 +142,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	let mut sphereRenderer = renderer::Managed::new(
 		renderer::Spheres::new(context, renderSetup)
 	);
-	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData));
+	//sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData));
 
 
 	////

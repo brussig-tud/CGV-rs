@@ -120,7 +120,7 @@ macro_rules! uve_self_keys {
 		)*
 	}
 }
-uve_self_keys!{bool, i8, u8, i16, u16, i32, u32, i64, u64, i128, u128, &str, &std::path::Path, uuid::Uuid}
+uve_self_keys!{bool, i8, u8, i16, u16, i32, u32, i64, u64, i128, u128, isize, usize, &str, &std::path::Path, uuid::Uuid}
 impl UniqueVecElement for f32 {
 	type Key = OrderedFloat<Self>;
 

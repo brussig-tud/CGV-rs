@@ -49,14 +49,14 @@ impl LayoutVariant {
 			Self::PosOnly => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_ONLY_STRIDE,
-					attributes: &Self::POS_ONLY
+					attributes: Vec::from(Self::POS_ONLY)
 				}], positions,
 				attribs: Default::default(),
 			},
 			Self::PosRadius => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_RADIUS_STRIDE,
-					attributes: &Self::POS_RADIUS,
+					attributes: Vec::from(Self::POS_RADIUS),
 				}], positions,
 				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
 					GA::Radii, gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)
@@ -65,7 +65,7 @@ impl LayoutVariant {
 			Self::PosColor => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_COLOR_STRIDE,
-					attributes: &Self::POS_COLOR,
+					attributes: Vec::from(Self::POS_COLOR),
 				}], positions,
 				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
 					GA::Colors, gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)
@@ -74,7 +74,7 @@ impl LayoutVariant {
 			Self::PosRadiusColor => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_RADIUS_COLOR_STRIDE,
-					attributes: &Self::POS_RADIUS_COLOR,
+					attributes: Vec::from(Self::POS_RADIUS_COLOR),
 				}], positions,
 				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
 					GA::Radii, gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)
