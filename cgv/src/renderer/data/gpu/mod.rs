@@ -292,13 +292,13 @@ impl BufferLayout
 	}
 
 	/// **TODO: Remove**
-	fn filter (&self, filter: super::GeometryAttributes) -> Self
+	fn filter (&self, filter: super::GeometryAttributeFlags) -> Self
 	{
 		// Local helper
 		use super::*;
 		fn include (
-			buffers: &mut std::collections::BTreeSet<usize>, filter: GeometryAttributes, attribBit: GeometryAttributes,
-			attrib: &Option<BufferAttributeSlot>
+			buffers: &mut std::collections::BTreeSet<usize>, filter: GeometryAttributeFlags,
+			attribBit: GeometryAttributeFlags, attrib: &Option<BufferAttributeSlot>
 		) -> Option<BufferAttributeSlot>
 		{
 			if filter.contains(attribBit) && let Some(attrib) = attrib {
@@ -313,13 +313,13 @@ impl BufferLayout
 		// Perform the filtering
 		let mut buffers = std::collections::BTreeSet::new();
 		buffers.insert(self.positions.buffer());
-		let normals = include(&mut buffers, filter, GA::NORMALS, &self.normals);
-		let tangents = include(&mut buffers, filter, GA::TANGENTS, &self.tangents);
-		let radii = include(&mut buffers, filter, GA::TANGENTS, &self.tangents);
-		let radiusDerivs = include(&mut buffers, filter, GA::RADIUS_DERIVS, &self.radiusDerivs);
-		let orientations = include(&mut buffers, filter, GA::ORIENTATIONS, &self.orientations);
-		let scalings = include(&mut buffers, filter, GA::SCALINGS, &self.scalings);
-		let colors = include(&mut buffers, filter, GA::COLORS, &self.colors);
+		let normals = include(&mut buffers, filter, GAF::NORMALS, &self.normals);
+		let tangents = include(&mut buffers, filter, GAF::TANGENTS, &self.tangents);
+		let radii = include(&mut buffers, filter, GAF::TANGENTS, &self.tangents);
+		let radiusDerivs = include(&mut buffers, filter, GAF::RADIUS_DERIVS, &self.radiusDerivs);
+		let orientations = include(&mut buffers, filter, GAF::ORIENTATIONS, &self.orientations);
+		let scalings = include(&mut buffers, filter, GAF::SCALINGS, &self.scalings);
+		let colors = include(&mut buffers, filter, GAF::COLORS, &self.colors);
 
 		// Done!
 		unimplemented!()

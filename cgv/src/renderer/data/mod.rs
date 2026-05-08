@@ -35,10 +35,56 @@ use crate::{self as cgv, *};
 // Enums
 //
 
+/// Enum of the *optional* geometry attributes the renderer module explicitly knows about (positions are special and
+/// always present).
+#[repr(usize)]
+pub enum GeometryAttributes {
+	Normals = 0,
+	Tangents = 1,
+	Radii = 2,
+	RadiusDerivs = 3,
+	Orientations = 4,
+	Scalings = 5,
+	Colors = 6,
+}
+impl GeometryAttributes {
+	/// Construct the enum variant that corresponds to the least-signficant *set* of the provided mask.
+	///
+	/// # Arguments
+	///
+	/// * `mask` – The bitmask of the flag to turn into a `GeometryAttributes` variant.
+	///
+	/// # Returns
+	///
+	/// The `GeometryAttributes` variant that corresponds to the least-significant bit in the mask that is set.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// let tangents = GeometryAttributes::fromMask(0b0010);
+	/// assert_eq!(tangents, GeometryAttributes::Tangents);
+	///
+	/// let radii = GeometryAttributes::fromMask(0b1100);
+	/// assert_eq!(radii, GeometryAttributes::Radii);
+	/// ```
+	pub fn fromMask (mask: GeometryAttributeFlags) -> Self
+	{
+		if mask.contains(GAF::NORMALS) { return GA::Normals }
+		if mask.contains(GAF::TANGENTS) { return GA::Tangents }
+		if mask.contains(GAF::RADII) { return GA::Radii }
+		if mask.contains(GAF::RADIUS_DERIVS) { return GA::RadiusDerivs }
+		if mask.contains(GAF::ORIENTATIONS) { return GA::Orientations }
+		if mask.contains(GAF::SCALINGS) { return GA::Scalings }
+		if mask.contains(GAF::COLORS) { return GA::Colors }
+		panic!("corrupt geometry attributes bitmask")
+	}
+}
+pub type GA = GeometryAttributes;
+
 // Bitflag definition: GeometryAttributes
 bitflags! {
-	/// Bitflags representing the various geometry attributes the renderer module knows about.
-	struct GeometryAttributes: u16 {
+	/// Bitflags representing the various geometry attributes the renderer module explicitly knows about.
+	struct GeometryAttributeFlags: u16 {
 		const NORMALS       = 1 << 1;
 		const TANGENTS      = 1 << 2;
 		const RADII         = 1 << 3;
@@ -48,8 +94,23 @@ bitflags! {
 		const COLORS        = 1 << 7;
     }
 }
+impl From<GeometryAttributes> for GeometryAttributeFlags
+{
+	fn from (value: GeometryAttributes) -> Self
+	{
+		match value {
+			GeometryAttributes::Normals => Self::NORMALS,
+			GeometryAttributes::Tangents => Self::TANGENTS,
+			GeometryAttributes::Radii => Self::RADII,
+			GeometryAttributes::RadiusDerivs => Self::RADIUS_DERIVS,
+			GeometryAttributes::Orientations => Self::ORIENTATIONS,
+			GeometryAttributes::Scalings => Self::SCALINGS,
+			GeometryAttributes::Colors => Self::COLORS
+		}
+	}
+}
 /// Convenience shorthand for [`GeometryAttributes`].
-type GA = GeometryAttributes;
+pub type GAF = GeometryAttributeFlags;
 
 
 
