@@ -51,52 +51,36 @@ impl LayoutVariant {
 					array_stride: Self::POS_ONLY_STRIDE,
 					attributes: &Self::POS_ONLY
 				}], positions,
-				normals: None,
-				tangents: None,
-				radii: None,
-				radiusDerivs: None,
-				orientations: None,
-				scalings: None,
-				colors: None,
+				attribs: Default::default(),
 			},
 			Self::PosRadius => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_RADIUS_STRIDE,
 					attributes: &Self::POS_RADIUS,
 				}], positions,
-				normals: None,
-				tangents: None,
-				radii: Some(gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)),
-				radiusDerivs: None,
-				orientations: None,
-				scalings: None,
-				colors: None,
+				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
+					GA::Radii, gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)
+				)
 			},
 			Self::PosColor => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_COLOR_STRIDE,
 					attributes: &Self::POS_COLOR,
 				}], positions,
-				normals: None,
-				tangents: None,
-				radii: None,
-				radiusDerivs: None,
-				orientations: None,
-				scalings: None,
-				colors: Some(gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)),
+				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
+					GA::Colors, gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)
+				)
 			},
 			Self::PosRadiusColor => gpu::BufferLayout {
 				buffers: vec![gpu::VertexBufferLayoutDesc {
 					array_stride: Self::POS_RADIUS_COLOR_STRIDE,
 					attributes: &Self::POS_RADIUS_COLOR,
 				}], positions,
-				normals: None,
-				tangents: None,
-				radii: Some(gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)),
-				radiusDerivs: None,
-				orientations: None,
-				scalings: None,
-				colors: Some(gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)),
+				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
+					GA::Radii, gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)
+				).withAttribute(
+					GA::Colors, gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)
+				)
 			}
 		}
 	}

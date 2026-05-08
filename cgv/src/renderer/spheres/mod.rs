@@ -22,7 +22,7 @@ use std::sync::{LazyLock, Arc};
 use egui::ecolor::Rgba;
 
 // Local imports
-use crate::{self as cgv, *, renderer::*};
+use crate::{self as cgv, *, renderer::{data::*, *}};
 use data::*;
 
 
@@ -53,7 +53,7 @@ enum PosRadLayoutType {
 pub struct DataReceiver {
 	data: Arc<dyn renderer::GpuData>,
 	posRadLayoutType: Option<PosRadLayoutType>,
-	defaultAttibValues: ConstantAttributes,
+	defaultAttribValues: ConstantAttributes,
 }
 impl DataReceiver
 {
@@ -66,7 +66,7 @@ impl DataReceiver
 	{
 		// Infer the positions/radii layout type
 		let layout = data.layout();
-		let posRadLayoutType = if let Some(radii) = layout.radii {
+		let posRadLayoutType = if let Some(radii) = layout.attribute(GA::Radii) {
 			Some(if layout.positions.inSameBufferSlot(&radii) { PosRadLayoutType::Composite }
 			     else                                         { PosRadLayoutType::Separate  })
 		} else {
@@ -74,14 +74,14 @@ impl DataReceiver
 		};
 
 		// Done!
-		Self { data, posRadLayoutType, defaultAttibValues: ConstantAttributes::default() }
+		Self { data, posRadLayoutType, defaultAttribValues: ConstantAttributes::default() }
 	}
 
 	/// Modify the default radius that will be used when the received [`GpuData`](renderer::GpuData) does not include
 	/// radii.
 	#[inline(always)]
 	pub fn defaultRadius (mut self, radius: f32) -> Self {
-		self.defaultAttibValues.radius = radius;
+		self.defaultAttribValues.radius = radius;
 		self
 	}
 
@@ -89,7 +89,7 @@ impl DataReceiver
 	/// colors.
 	#[inline(always)]
 	pub fn defaultColor (mut self, color: cgv::RGBA) -> Self {
-		self.defaultAttibValues.color = color;
+		self.defaultAttribValues.color = color;
 		self
 	}
 
@@ -163,14 +163,16 @@ impl Renderer for Spheres
 	{
 		// Instantiate our actual data layout
 		let layout = data.gpuData().layout();
-		let buffers = layout.withStepMode(wgpu::VertexStepMode::Instance);
+		let buffers = layout.vertexBufferLayouts(
+			wgpu::VertexStepMode::Instance, Some(GAF::RADII | GAF::COLORS)
+		);
 
 		// Decide on vertex state based on available attributes
 		let vertexState = match &data.posRadLayoutType
 		{
 			Some(posRadLayout) => {
-				debug_assert!(layout.radii.is_some()); // <- sanity check
-				if layout.colors.is_some() {
+				debug_assert!(layout.hasAttribute(GA::Radii)); // <- sanity check
+				if layout.hasAttribute(GA::Colors) {
 					todo!("not yet implemented")
 				}
 				else {
@@ -185,8 +187,8 @@ impl Renderer for Spheres
 			},
 
 			None => {
-				debug_assert!(layout.radii.is_none()); // <- sanity check
-				if layout.colors.is_some() {
+				debug_assert!(layout.hasAttribute(GA::Radii)); // <- sanity check
+				if layout.hasAttribute(GA::Colors) {
 					todo!("not yet implemented")
 				}
 				else {

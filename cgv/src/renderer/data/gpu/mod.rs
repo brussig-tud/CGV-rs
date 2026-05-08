@@ -5,11 +5,12 @@
 //
 
 // Standard library
-/* nothing here yet */
+use std::ops::Deref;
 
 // Local imports
 #[expect(unused_imports)] // we only use these for documentation links
 use crate::{self as cgv, *};
+use super as data;
 
 
 
@@ -221,8 +222,34 @@ impl BufferAttributeSlot {
 	}
 }
 
+///
+#[derive(Default,Clone)]
+pub struct GeometryAttributeOccupancy([Option<BufferAttributeSlot>; data::GA::NUM_SLOTS as usize]);
+impl GeometryAttributeOccupancy {
+	///
+	pub fn withAttribute (mut self, attribute: data::GeometryAttribute, loc: BufferAttributeSlot) -> Self {
+		self.0[attribute as usize].replace(loc);
+		self
+	}
+}
+impl From<GeometryAttributeOccupancy> for [Option<BufferAttributeSlot>; data::GA::NUM_SLOTS as usize] {
+	#[inline(always)]
+	fn from (occupancy: GeometryAttributeOccupancy) -> Self {
+		occupancy.0
+	}
+}
+impl Deref for GeometryAttributeOccupancy {
+	type Target = [Option<BufferAttributeSlot>; data::GA::NUM_SLOTS as usize];
+
+	#[inline(always)]
+	fn deref (&self) -> &Self::Target {
+		&self.0
+	}
+}
+
 #[derive(Clone)]
-pub struct BufferLayout {
+pub struct BufferLayout
+{
 	/// A slice of [`wgpu::VertexBufferLayout`]s ready for use in the [vertex state](wgpu::VertexState) of a
 	/// [`wgpu::RenderPipelineDescriptor`].
 	pub buffers: Vec<VertexBufferLayoutDesc<'static>>,
@@ -231,25 +258,7 @@ pub struct BufferLayout {
 	pub positions: BufferAttributeSlot,
 
 	/// The exact place, if any, of the *normal* attributes in the layout.
-	pub normals: Option<BufferAttributeSlot>,
-
-	/// The exact place, if any, of the *tangent* attributes in the layout.
-	pub tangents: Option<BufferAttributeSlot>,
-
-	/// The exact place, if any, of the *radius* attributes in the layout.
-	pub radii: Option<BufferAttributeSlot>,
-
-	/// The exact place, if any, of the *radius derivative* attributes in the layout.
-	pub radiusDerivs: Option<BufferAttributeSlot>,
-
-	/// The exact place, if any, of the *orientation* attributes in the layout.
-	pub orientations: Option<BufferAttributeSlot>,
-
-	/// The exact place, if any, of the *scaling* attributes in the layout.
-	pub scalings: Option<BufferAttributeSlot>,
-
-	/// The exact place, if any, of the *color* attributes in the layout.
-	pub colors: Option<BufferAttributeSlot>
+	pub attribs: GeometryAttributeOccupancy
 }
 impl BufferLayout
 {
@@ -269,6 +278,18 @@ impl BufferLayout
 		}
 	}
 
+	/// Check if the given attribute is present
+	#[inline(always)]
+	pub fn hasAttribute (&self, attribute: data::GeometryAttribute) -> bool {
+		self.attribs[attribute as usize].is_some()
+	}
+
+	/// Check if the given attribute is present
+	#[inline(always)]
+	pub fn attribute (&self, attribute: data::GeometryAttribute) -> Option<BufferAttributeSlot> {
+		self.attribs[attribute as usize]
+	}
+
 	/// Check if another buffer layout is compatible to be used in the same pipeline as this one.
 	///
 	/// **NOTE**: This is a thorough check that will also properly handle differences that don't actually break
@@ -282,16 +303,21 @@ impl BufferLayout
 		   	a.array_stride == b.array_stride
 		   )
 		&& self.positions == other.positions
-		&& Self::checkAttrib(&self.buffers, &self.normals, &other.buffers, &other.normals)
-		&& Self::checkAttrib(&self.buffers, &self.tangents, &other.buffers, &other.tangents)
-		&& Self::checkAttrib(&self.buffers, &self.radii, &other.buffers, &other.radii)
-		&& Self::checkAttrib(&self.buffers, &self.radiusDerivs, &other.buffers, &other.radiusDerivs)
-		&& Self::checkAttrib(&self.buffers, &self.orientations, &other.buffers, &other.orientations)
-		&& Self::checkAttrib(&self.buffers, &self.scalings, &other.buffers, &other.scalings)
-		&& Self::checkAttrib(&self.buffers, &self.colors, &other.buffers, &other.colors)
+		&& {
+			for attrib in 0..data::GA::NUM_SLOTS as usize
+			{
+				if !Self::checkAttrib(
+					&self.buffers, &self.attribs[attrib], &other.buffers,
+					&other.attribs[attrib]
+				){
+					return false
+				}
+			}
+			true
+		}
 	}
 
-	/// **TODO: Remove**
+	/*/// **TODO: Remove**
 	fn filter (&self, filter: super::GeometryAttributeFlags) -> Self
 	{
 		// Local helper
@@ -323,12 +349,21 @@ impl BufferLayout
 
 		// Done!
 		unimplemented!()
-	}
+	}*/
 
 	/// Instantiate the [buffer layouts](Self.buffers) with the given [`wgpu::VertexStepMode`], turning them into the
-	/// corresponding [`wgpu::VertexBufferLayout`]s for consumption by *WGPU*.
-	pub fn withStepMode (&self, step_mode: wgpu::VertexStepMode) -> Vec<wgpu::VertexBufferLayout<'static>> {
-		self.buffers.iter().map(|vbl| wgpu::VertexBufferLayout {
+	/// corresponding [`wgpu::VertexBufferLayout`]s for consumption by *WGPU*. Optionally filter for the given set of
+	/// attributes.
+	pub fn vertexBufferLayouts (&self, step_mode: wgpu::VertexStepMode, filter: Option<data::GeometryAttributeFlags>)
+		-> Vec<wgpu::VertexBufferLayout<'static>>
+	{
+		let buffers = if let Some(filter) = filter {
+			&self.buffers
+		}
+		else {
+			&self.buffers
+		};
+		buffers.iter().map(|vbl| wgpu::VertexBufferLayout {
 			array_stride: vbl.array_stride, step_mode, attributes: vbl.attributes
 		}).collect()
 	}
