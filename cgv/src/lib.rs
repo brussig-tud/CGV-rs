@@ -14,6 +14,10 @@
 // Module definitions
 //
 
+// Enable tests to compile cleanly
+#[doc(hidden)]
+pub extern crate self as cgv;
+
 // The module implementing the Player
 pub mod player;
 pub use player::{Player, InputEvent, EventOutcome, RenderSetup, ManagedBindGroupLayouts}; // re-export

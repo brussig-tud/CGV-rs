@@ -1,10 +1,11 @@
+
 //////
 //
 // Imports
 //
 
 // Standard library
-use std::{marker::PhantomData, panic::catch_unwind};
+use std::marker::PhantomData;
 
 // Local imports
 use crate::{self as cgv, *, renderer::{*, data::{*, host::*}}};
@@ -215,7 +216,28 @@ fn staticAssertHasColors<T: host::HasColors> () {}
 //
 
 #[test]
-fn test_guaranteeWrappers_allTypeAliasesResolve ()
+fn test_HostData_blanketImpls ()
+{
+	// The test data
+	use super::data::PosTanColor;
+	let testData = vec![
+		PosTanColor {
+			pos: glm::vec3(0., 0., 0.), tan: glm::vec3(1., 0., 0.),
+			col: cgv::RGBA::from_rgba_unmultiplied(1., 0., 0., 1.)
+		},
+		PosTanColor {
+			pos: glm::vec3(1., 2., 3.), tan: glm::vec3(0., 1., 1.),
+			col: cgv::RGBA::from_rgba_unmultiplied(0., 1., 0., 1.)
+		}
+	];
+
+	// Check we got the blanket implementations
+	staticAssertHasNormals::<&[PosTanColor]>(); // <- should fail to compile!!!
+	staticAssertInterleaved::<&[PosTanColor]>();
+}
+
+#[test]
+fn test_GuaranteeAttributes_allTypeAliasesResolve ()
 {
 	// Assert helper
 	macro_rules! assertAliasesExist {
@@ -310,7 +332,7 @@ fn test_guaranteeWrappers_allTypeAliasesResolve ()
 }
 
 #[test]
-fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
+fn test_GuaranteeAttributes_forwardMarkerTraitsAndData ()
 {
 	// Compile-time check that the marker traits get propagated
 	staticAssertIndexed::<GuaranteeNormals<MockData>>();
@@ -348,7 +370,7 @@ fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
 }
 
 #[test]
-fn test_guaranteeWrappers_selectCombosGuaranteeAttributes ()
+fn test_GuaranteeAttributes_selectCombosGuaranteeAttributes ()
 {
 	// Compile-time check guarantees on test combo 1
 	type GuaranteedCombo1 = GuaranteeNormalsTangentsRadiusDerivsColors<MockData>;
@@ -382,7 +404,7 @@ fn test_guaranteeWrappers_selectCombosGuaranteeAttributes ()
 }
 
 #[test]
-fn test_guaranteeWrappers_selectCombosPreserveExistingGuarantees ()
+fn test_GuaranteeAttributes_selectCombosPreserveExistingGuarantees ()
 {
 	// Compile-time check existing guarantees get propagated on test combo 1
 	type GuaranteedBaseCombo1 = GuaranteeOrientationsScalings<MockData>;
@@ -434,41 +456,34 @@ fn test_guaranteeWrappers_selectCombosPreserveExistingGuarantees ()
 }
 
 #[test]
-fn test_guaranteeWrappers_constructorsRejectMissingAttributes ()
+fn test_GuaranteeAttributes_constructorsRejectMissingAttributes ()
 {
-	// Assert helper
-	macro_rules! assertPanics {
-		($expression:expr) => {
-			assert!(catch_unwind(|| $expression).is_err());
-		};
-	}
-
 	// Check that constructors correctly reject
-	assertPanics!(GuaranteeNormals::new(
+	util::assertPanics!(GuaranteeNormals::new(
 		MockData::withFlags(/* missing normals: */false, true, true, true, true, true, true)
 	));
-	assertPanics!(GuaranteeTangents::new(
+	util::assertPanics!(GuaranteeTangents::new(
 		MockData::withFlags(true, /* missing tangents: */false, true, true, true, true, true)
 	));
-	assertPanics!(GuaranteeRadii::new(
+	util::assertPanics!(GuaranteeRadii::new(
 		MockData::withFlags(true, true, /* missing radii: */false, false, true, true, true)
 	));
-	assertPanics!(GuaranteeRadiusDerivs::new(
+	util::assertPanics!(GuaranteeRadiusDerivs::new(
 		MockData::withFlags(true, true, true, /* missing radius derivatives: */false, true, true, true)
 	));
-	assertPanics!(GuaranteeOrientations::new(
+	util::assertPanics!(GuaranteeOrientations::new(
 		MockData::withFlags(true, true, true, true, /* missing orientations: */false, true, true)
 	));
-	assertPanics!(GuaranteeScalings::new(
+	util::assertPanics!(GuaranteeScalings::new(
 		MockData::withFlags(true, true, true, true, true, /* missing scaling vectors: */false, true)
 	));
-	assertPanics!(GuaranteeColors::new(
+	util::assertPanics!(GuaranteeColors::new(
 		MockData::withFlags(true, true, true, true, true, true, /* missing colors: */false)
 	));
-	assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
+	util::assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
 		MockData::withFlags(/* missing normals: */false, true, true, true, true, true, true))
 	);
-	assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
+	util::assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
 		MockData::withFlags(true, true, true, true, true, true, /* missing colors: */false))
 	);
 }
