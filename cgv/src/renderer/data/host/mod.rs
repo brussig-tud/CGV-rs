@@ -8,6 +8,14 @@
 mod guarantees;
 pub use guarantees::*; // re-export all public facilities (mainly the guarantee wrapper and combination aliases).
 
+/// Our derives
+pub mod derives {
+	pub use cgv_derive::{
+		// Re-export our related procedural derive macros from cgv-derive
+		NoNormals, NoTangents, NoRadii, NoRadiusDerivs, NoOrientations, NoScalings, NoColors
+	};
+}
+
 
 
 //////
@@ -19,10 +27,7 @@ pub use guarantees::*; // re-export all public facilities (mainly the guarantee 
 /* nothing here yet */
 
 // Local imports
-pub use cgv_derive::{
-	// Re-export derive macros for generating empty CanHave* implementations
-	NoNormals, NoTangents, NoRadii, NoRadiusDerivs, NoOrientations, NoScalings, NoColors
-};
+pub use derives::*; // re-export our derives for easy access
 use crate::{self as cgv, *};
 
 
@@ -47,7 +52,7 @@ pub trait Data:
 	fn positions (&self) -> Self::PosIterator<'_>;
 
 	/// Reference a single position at the given index.
-	fn pos (&self, index: u32) -> &glm::Vec3;
+	fn pos (&self, index: u32) -> glm::Vec3;
 
 	/// Return the preferred [topology](wgpu::PrimitiveTopology) of the data. Some renderers, like
 	/// [`renderer::Spheres`], will completely ignore this, while others like [`renderer::Mesh`] will require specific
@@ -64,7 +69,7 @@ impl<T: renderer::data::InterleavedElem> Data for &[T]
 		// with appropriate alignment, so the validity of the fields the iterator accesses is guaranteed.
 		util::notsafe::StridedCopyIter::new(self[0].pos(), size_of::<T>(), self.len())
 	}}
-	fn pos (&self, index: u32) -> &glm::Vec3 { self[index as usize].pos() }
+	fn pos (&self, index: u32) -> glm::Vec3 { *self[index as usize].pos() }
 	fn topology (&self) -> wgpu::PrimitiveTopology { wgpu::PrimitiveTopology::PointList }
 }
 
@@ -86,13 +91,13 @@ pub trait Indexed: Data
 {
 	/// The iterator type for iterating indices in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
-	type IndexIterator: Iterator<Item=u32>;
+	type IndexIterator<'data>: Iterator<Item=u32> where Self: 'data;
 
 	/// Return the number of indices over the underlying data series.
 	fn numIndices (&self) -> u32;
 
 	/// Iterate over the indices.
-	fn indices (&self) -> Self::IndexIterator;
+	fn indices (&self) -> Self::IndexIterator<'_>;
 
 	/// Reference a single data index or a slice of data indices.
 	fn index (&self, index: u32) -> u32;

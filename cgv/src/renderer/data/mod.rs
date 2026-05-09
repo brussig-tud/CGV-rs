@@ -11,6 +11,15 @@ pub mod host;
 pub mod gpu;
 pub use gpu::InterleavedBuffer; // re-export
 
+/// Our derives
+pub mod derives {
+	pub use cgv_derive::{
+		// Re-export our related procedural derive macros from cgv-derive
+		InterleavedElem, ElemWithNormal, ElemWithTangent, ElemWithRadius, ElemWithRadiusDeriv, ElemWithOrientation,
+		ElemWithScaling, ElemWithColor, NoNormal, NoTangent, NoRadius, NoRadiusDeriv, NoOrientation, NoScaling, NoColor
+	};
+}
+
 
 
 //////
@@ -22,11 +31,7 @@ pub use gpu::InterleavedBuffer; // re-export
 use bitflags::bitflags;
 
 // Local imports
-pub use cgv_derive::{
-	// Re-export the relevant procedural derive macros from cgv-derive
-	InterleavedElem, ElemWithNormal, ElemWithTangent, ElemWithRadius, ElemWithRadiusDeriv, ElemWithOrientation,
-	ElemWithScaling, ElemWithColor, NoNormal, NoTangent, NoRadius, NoRadiusDeriv, NoOrientation, NoScaling, NoColor
-};
+pub use derives::*; // re-export our derives for easy access
 use crate::{self as cgv, *};
 
 
@@ -39,7 +44,7 @@ use crate::{self as cgv, *};
 /// Enum of the *optional* geometry attributes the renderer module explicitly knows about (positions are special and
 /// always present).
 #[repr(u8)]
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum GeometryAttribute {
 	Normals = 0,
 	Tangents = 1,
@@ -59,7 +64,8 @@ impl GeometryAttribute
 	///
 	/// # Examples
 	///
-	/// ```
+	/// ```rust
+	/// # use cgv::renderer::data::*;
 	/// assert_eq!(GA::Colors.slot(), GeometryAttribute::MAX_SLOT as usize);
 	/// ```
 	pub const MAX_SLOT: u8 = {
@@ -107,11 +113,12 @@ impl GeometryAttribute
 	/// # Examples
 	///
 	/// ```rust
-	/// let tangents = GeometryAttributes::fromMask(0b0010);
-	/// assert_eq!(tangents, GeometryAttributes::Tangents);
+	/// # use cgv::renderer::data::*;
+	/// let tangents = GeometryAttribute::fromMask(GAF::RADII|GAF::TANGENTS);
+	/// assert_eq!(tangents, GA::Tangents);  // mask is 0b0000110
 	///
-	/// let radii = GeometryAttributes::fromMask(0b1100);
-	/// assert_eq!(radii, GeometryAttributes::Radii);
+	/// let radii = GeometryAttribute::fromMask(GAF::SCALINGS|GAF::RADII);
+	/// assert_eq!(radii, GA::Radii);        // mask is 0b0100100
 	/// ```
 	pub fn fromMask (mask: GeometryAttributeFlags) -> Self
 	{
@@ -132,17 +139,25 @@ pub type GA = GeometryAttribute;
 bitflags! {
 	/// Bitflags representing the various geometry attributes the renderer module explicitly knows about.
 	pub struct GeometryAttributeFlags: u16 {
-		const NORMALS       = 1 << 1;
-		const TANGENTS      = 1 << 2;
-		const RADII         = 1 << 3;
-		const RADIUS_DERIVS = 1 << 4;
-		const ORIENTATIONS  = 1 << 5;
-		const SCALINGS      = 1 << 6;
-		const COLORS        = 1 << 7;
+		const NORMALS       = 1 << 0;
+		const TANGENTS      = 1 << 1;
+		const RADII         = 1 << 2;
+		const RADIUS_DERIVS = 1 << 3;
+		const ORIENTATIONS  = 1 << 4;
+		const SCALINGS      = 1 << 5;
+		const COLORS        = 1 << 6;
     }
+}
+impl From<u16> for GeometryAttributeFlags {
+	#[inline(always)]
+	fn from (value: u16) -> Self {
+		debug_assert!(value <= Self::all().bits());
+		Self::from_bits(value).unwrap()
+	}
 }
 impl From<GeometryAttribute> for GeometryAttributeFlags
 {
+	#[inline]
 	fn from (value: GeometryAttribute) -> Self
 	{
 		match value {
@@ -172,8 +187,14 @@ pub type GAF = GeometryAttributeFlags;
 /// This trait can be derived:
 /// ```rust
 /// # use cgv::glm as glm;
+/// use cgv::renderer::data::derives::*;
 /// # fn assertHostData<D: cgv::renderer::HostData>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem)]
+/// #[derive(
+///    // generate InterleavedElem impl
+///    InterleavedElem,
+///    // empty impls for the InterleavedElem bounds that we don't have the attributes for
+///    NoNormal,NoTangent,NoRadius,NoRadiusDeriv,NoOrientation,NoScaling,NoColor
+/// )]
 /// struct MyVertex {
 ///     #[cgv_renderAttr(pos)]
 ///     position: glm::Vec3
@@ -194,10 +215,8 @@ pub trait InterleavedElem:
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasNormals<D: cgv::renderer::data::host::HasNormals>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithNormal)]
+/// #[derive(cgv::renderer::data::ElemWithNormal)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
 ///     #[cgv_renderAttr(normal)]
 ///     normal: glm::Vec3
 ///     // ...
@@ -215,10 +234,8 @@ pub trait ElemWithNormal {
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasTangents<D: cgv::renderer::data::host::HasTangents>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithTangent)]
+/// #[derive(cgv::renderer::data::ElemWithTangent)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
 ///     #[cgv_renderAttr(tangent)]
 ///     tangent: glm::Vec3
 ///     // ...
@@ -236,10 +253,8 @@ pub trait ElemWithTangent {
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasRadii<D: cgv::renderer::data::host::HasRadii>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithRadius)]
+/// #[derive(cgv::renderer::data::ElemWithRadius)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
 ///     #[cgv_renderAttr(radius)]
 ///     radius: f32
 ///     // ...
@@ -257,14 +272,8 @@ pub trait ElemWithRadius {
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasRadiusDerivs<D: cgv::renderer::data::host::HasRadiusDerivs>() -> bool { true }
-/// #[derive(
-///     cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithRadiusDeriv
-/// )]
+/// #[derive(cgv::renderer::data::ElemWithRadiusDeriv)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
-///     #[cgv_renderAttr(radius)]
-///     radius: f32,
 ///     #[cgv_renderAttr(radiusDeriv)]
 ///     radiusDeriv: f32
 ///     // ...
@@ -282,10 +291,8 @@ pub trait ElemWithRadiusDeriv {
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasOrientations<D: cgv::renderer::data::host::HasOrientations>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithOrientation)]
+/// #[derive(cgv::renderer::data::ElemWithOrientation)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
 ///     #[cgv_renderAttr(orientation)]
 ///     orientation: glm::Quat
 ///     // ...
@@ -303,10 +310,8 @@ pub trait ElemWithOrientation {
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasScalings<D: cgv::renderer::data::host::HasScalings>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithScaling)]
+/// #[derive(cgv::renderer::data::ElemWithScaling)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
 ///     #[cgv_renderAttr(scaling)]
 ///     scaling: glm::Vec3
 ///     // ...
@@ -324,10 +329,8 @@ pub trait ElemWithScaling {
 /// ```rust
 /// # use cgv::glm as glm;
 /// # fn assertHasColors<D: cgv::renderer::data::host::HasColors>() -> bool { true }
-/// #[derive(cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithColor)]
+/// #[derive(cgv::renderer::data::ElemWithColor)]
 /// struct MyVertex {
-///     #[cgv_renderAttr(pos)]
-///     position: glm::Vec3,
 ///     #[cgv_renderAttr(color)]
 ///     color: cgv::RGBA
 ///     // ...
