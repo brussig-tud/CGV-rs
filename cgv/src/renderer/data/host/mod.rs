@@ -34,7 +34,8 @@ use crate::{self as cgv, *};
 
 /// Trait of a collection of renderable data, ready for being turned into
 /// [GPU-side render data](renderer::data::gpu::Data) for consumption by a [`Renderer`].
-pub trait Data
+pub trait Data:
+	CanHaveNormals+CanHaveTangents+CanHaveRadii+CanHaveRadiusDerivs+CanHaveOrientations+CanHaveScalings+CanHaveColors
 {
 	/// The iterator type for iterating positions in the data.
 	type PosIterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
@@ -98,7 +99,7 @@ pub trait Indexed: Data
 }
 
 ///
-pub trait CanHaveNormals: Data
+pub trait CanHaveNormals
 {
 	/// The iterator type for iterating normals in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
@@ -154,7 +155,7 @@ pub trait HasNormals: CanHaveNormals {}
 impl<T: renderer::data::ElemWithNormal> HasNormals for &[T] {}
 
 ///
-pub trait CanHaveTangents: Data
+pub trait CanHaveTangents
 {
 	/// The iterator type for iterating tangents in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
@@ -210,7 +211,7 @@ pub trait HasTangents: CanHaveTangents {}
 impl<T: renderer::data::ElemWithTangent> HasTangents for &[T] {}
 
 ///
-pub trait CanHaveRadii: Data
+pub trait CanHaveRadii
 {
 	/// The iterator type for iterating radii in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.
@@ -266,7 +267,7 @@ pub trait HasRadii: CanHaveRadii {}
 impl<T: renderer::data::ElemWithRadius> HasRadii for &[T] {}
 
 ///
-pub trait CanHaveRadiusDerivs: Data
+pub trait CanHaveRadiusDerivs
 {
 	/// The iterator type for iterating radius derivatives in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
@@ -322,7 +323,7 @@ pub trait HasRadiusDerivs: CanHaveRadiusDerivs {}
 impl<T: renderer::data::ElemWithRadiusDeriv> HasRadiusDerivs for &[T] {}
 
 ///
-pub trait CanHaveOrientations: Data
+pub trait CanHaveOrientations
 {
 	/// The iterator type for iterating orientations in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
@@ -378,7 +379,7 @@ pub trait HasOrientations: CanHaveOrientations {}
 impl<T: renderer::data::ElemWithOrientation> HasOrientations for &[T] {}
 
 ///
-pub trait CanHaveScalings: Data
+pub trait CanHaveScalings
 {
 	/// The iterator type for iterating scaling vectors in the data. The lifetime parameter `'data` ensures that
 	/// implementations can use borrowing iterators.
@@ -434,7 +435,7 @@ pub trait HasScalings: CanHaveScalings {}
 impl<T: renderer::data::ElemWithScaling> HasScalings for &[T] {}
 
 ///
-pub trait CanHaveColors: Data
+pub trait CanHaveColors
 {
 	/// The iterator type for iterating colors in the data. The lifetime parameter `'data` ensures that implementations
 	/// can use borrowing iterators.

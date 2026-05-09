@@ -398,6 +398,125 @@ pub fn deriveElemWithColor(input: TokenStream) -> TokenStream
 		.into()
 }
 
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithNormal`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoNormal)]
+pub fn deriveNoNormal(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithNormal
+			for #name #tyGenerics #whereClause
+		{
+			fn normal(&self) -> &::cgv::glm::Vec3 { panic!("no normal available") }
+		}
+	}
+	.into()
+}
+
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithTangent`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoTangent)]
+pub fn deriveNoTangent(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithTangent
+			for #name #tyGenerics #whereClause
+		{
+			fn tangent(&self) -> &::cgv::glm::Vec3 { panic!("no tangent available") }
+		}
+	}
+	.into()
+}
+
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithRadius`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoRadius)]
+pub fn deriveNoRadius(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithRadius
+			for #name #tyGenerics #whereClause
+		{
+			fn radius(&self) -> &f32 { panic!("no radius available") }
+		}
+	}
+	.into()
+}
+
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithRadiusDeriv`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoRadiusDeriv)]
+pub fn deriveNoRadiusDeriv(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
+			for #name #tyGenerics #whereClause
+		{
+			fn radiusDeriv(&self) -> &f32 { panic!("no radius derivative available") }
+		}
+	}
+	.into()
+}
+
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithOrientation`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoOrientation)]
+pub fn deriveNoOrientation(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
+			for #name #tyGenerics #whereClause
+		{
+			fn orientation(&self) -> &::cgv::glm::Quat { panic!("no orientation available") }
+		}
+	}
+	.into()
+}
+
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithScaling`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoScaling)]
+pub fn deriveNoScaling(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithScaling
+			for #name #tyGenerics #whereClause
+		{
+			fn scaling(&self) -> &::cgv::glm::Vec3 { panic!("no scaling available") }
+		}
+	}
+	.into()
+}
+
+/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithColor`]. The accessor method will panic if invoked.
+#[proc_macro_derive(NoColor)]
+pub fn deriveNoColor(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::ElemWithColor
+			for #name #tyGenerics #whereClause
+		{
+			fn color(&self) -> &::cgv::RGBA { panic!("no color available") }
+		}
+	}
+	.into()
+}
+
 /// Derive a "no normals" impl of [`cgv::renderer::data::host::CanHaveNormals`].
 ///
 /// `hasNormals()` will return `false`; the other methods will panic if invoked.

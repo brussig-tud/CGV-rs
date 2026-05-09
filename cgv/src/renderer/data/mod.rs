@@ -25,7 +25,7 @@ use bitflags::bitflags;
 pub use cgv_derive::{
 	// Re-export the relevant procedural derive macros from cgv-derive
 	InterleavedElem, ElemWithNormal, ElemWithTangent, ElemWithRadius, ElemWithRadiusDeriv, ElemWithOrientation,
-	ElemWithScaling, ElemWithColor
+	ElemWithScaling, ElemWithColor, NoNormal, NoTangent, NoRadius, NoRadiusDeriv, NoOrientation, NoScaling, NoColor
 };
 use crate::{self as cgv, *};
 
@@ -181,7 +181,9 @@ pub type GAF = GeometryAttributeFlags;
 /// }
 /// assertHostData::<&[MyVertex]>();
 /// ```
-pub trait InterleavedElem {
+pub trait InterleavedElem:
+	ElemWithNormal+ElemWithTangent+ElemWithRadius+ElemWithRadiusDeriv+ElemWithOrientation+ElemWithScaling+ElemWithColor
+{
 	fn pos (&self) -> &glm::Vec3;
 }
 
@@ -202,7 +204,7 @@ pub trait InterleavedElem {
 /// }
 /// assertHasNormals::<&[MyVertex]>();
 /// ```
-pub trait ElemWithNormal: InterleavedElem {
+pub trait ElemWithNormal {
 	fn normal (&self) -> &glm::Vec3;
 }
 
@@ -223,7 +225,7 @@ pub trait ElemWithNormal: InterleavedElem {
 /// }
 /// assertHasTangents::<&[MyVertex]>();
 /// ```
-pub trait ElemWithTangent: InterleavedElem {
+pub trait ElemWithTangent {
 	fn tangent (&self) -> &glm::Vec3;
 }
 
@@ -244,7 +246,7 @@ pub trait ElemWithTangent: InterleavedElem {
 /// }
 /// assertHasRadii::<&[MyVertex]>();
 /// ```
-pub trait ElemWithRadius: InterleavedElem {
+pub trait ElemWithRadius {
 	fn radius (&self) -> &f32;
 }
 
@@ -269,7 +271,7 @@ pub trait ElemWithRadius: InterleavedElem {
 /// }
 /// assertHasRadiusDerivs::<&[MyVertex]>();
 /// ```
-pub trait ElemWithRadiusDeriv: InterleavedElem {
+pub trait ElemWithRadiusDeriv {
 	fn radiusDeriv (&self) -> &f32;
 }
 
@@ -290,7 +292,7 @@ pub trait ElemWithRadiusDeriv: InterleavedElem {
 /// }
 /// assertHasOrientations::<&[MyVertex]>();
 /// ```
-pub trait ElemWithOrientation: InterleavedElem {
+pub trait ElemWithOrientation {
 	fn orientation (&self) -> &glm::Quat;
 }
 
@@ -311,7 +313,7 @@ pub trait ElemWithOrientation: InterleavedElem {
 /// }
 /// assertHasScalings::<&[MyVertex]>();
 /// ```
-pub trait ElemWithScaling: InterleavedElem {
+pub trait ElemWithScaling {
 	fn scaling (&self) -> &glm::Vec3;
 }
 
@@ -332,6 +334,6 @@ pub trait ElemWithScaling: InterleavedElem {
 /// }
 /// assertHasColors::<&[MyVertex]>();
 /// ```
-pub trait ElemWithColor: InterleavedElem {
+pub trait ElemWithColor {
 	fn color (&self) -> &cgv::RGBA;
 }

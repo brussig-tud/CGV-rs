@@ -96,11 +96,18 @@ const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5,
 ////
 // Point
 
-/// **TODO: move into to-be-created `media` module.**
+/// A "data point" suitable for interleaved storage, providing all attributes we're testing out here. 
 #[repr(C)]
 #[derive(
-	Clone,cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithTangent,cgv::renderer::data::ElemWithRadius,
-	cgv::renderer::data::ElemWithRadiusDeriv,cgv::renderer::data::ElemWithColor
+	// Standard traits
+	Clone,
+
+	// Attributes we have
+	renderer::data::InterleavedElem,renderer::data::ElemWithTangent,renderer::data::ElemWithRadius,
+	renderer::data::ElemWithRadiusDeriv,renderer::data::ElemWithColor,
+
+	// Attributes we don't have
+	renderer::data::NoNormal,renderer::data::NoOrientation,renderer::data::NoScaling
 )]
 pub struct DataPoint
 {
