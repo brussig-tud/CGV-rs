@@ -9,6 +9,7 @@ pub mod host;
 
 /// Module defining the GPU-side data model.
 pub mod gpu;
+pub use gpu::InterleavedBuffer; // re-export
 
 
 
@@ -38,6 +39,7 @@ use crate::{self as cgv, *};
 /// Enum of the *optional* geometry attributes the renderer module explicitly knows about (positions are special and
 /// always present).
 #[repr(u8)]
+#[derive(Clone,Copy)]
 pub enum GeometryAttribute {
 	Normals = 0,
 	Tangents = 1,

@@ -1,6 +1,17 @@
 
 //////
 //
+// Module definitions
+//
+
+/// Module defining the interleaved reference implementations of [`gpu::Data`](Data).
+mod interleaved_buffer;
+pub use interleaved_buffer::InterleavedBuffer; // re-export
+
+
+
+//////
+//
 // Imports
 //
 
@@ -10,7 +21,38 @@ use std::ops::{Deref, DerefMut};
 // Local imports
 #[expect(unused_imports)] // we only use these for documentation links
 use crate::{self as cgv, *};
+use crate::renderer::data::GeometryAttribute;
 use super as data;
+
+
+
+//////
+//
+// Enums
+//
+
+/// Where to store scalar attributes in [GPU-side render data](Data). Right now, only storing them
+/// [separately](ScalarAttributeStorage::Separate) or [in the *w*-component](ScalarAttributeStorage::InWComponent) of a
+/// vector-valued attribute is supported to keep the burden of checking dozens of possible  configurations low on
+/// [`Renderer`]s.
+///
+/// **TODO: Add more options once [`BufferLayout`] gains the functionality to auto-generate a Slang "geometry input"
+/// implementation for use by renderers that make use of [runtime shader compilation](cgv_shader::compile).**
+#[derive(Clone,Copy)]
+pub enum ScalarAttributeStorage
+{
+	/// Store the attribute in the *w*-component of the *positions*.
+	InPosWComponent,
+
+	/// Store the attribute in the *w*-component of the provided [`GeometryAttribute`].
+	InWComponent(GeometryAttribute),
+
+	/// Store the attribute in its own, separate shader location.
+	Separate
+}
+
+/// Convenience shorthand for [`ScalarAttributeStorage`].
+pub type SAS = ScalarAttributeStorage;
 
 
 
@@ -266,6 +308,9 @@ impl DerefMut for GeometryAttributeOccupancy {
 	}
 }
 
+/// **TODO: Add functionality to auto-generate implementations of the projected `IGeometryInput` interface from the
+/// *CGV-rs* core *Slang* shader library for use by renderers that make use of
+/// [runtime shader compilation](cgv_shader::compile).**
 #[derive(Clone)]
 pub struct BufferLayout
 {
