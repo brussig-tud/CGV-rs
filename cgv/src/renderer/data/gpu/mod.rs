@@ -38,7 +38,7 @@ use super as data;
 ///
 /// **TODO: Add more options once [`BufferLayout`] gains the functionality to auto-generate a Slang "geometry input"
 /// implementation for use by renderers that make use of [runtime shader compilation](cgv_shader::compile).**
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,PartialEq,Eq,Debug)]
 pub enum ScalarAttributeStorage
 {
 	/// Store the attribute in the *w*-component of the *positions*.
@@ -329,8 +329,7 @@ impl DerefMut for GeometryAttributeOccupancy {
 #[derive(Clone)]
 pub struct BufferLayout
 {
-	/// NOT TRUE ANYMORE: A slice of [`wgpu::VertexBufferLayout`]s ready for use in the
-	/// [vertex state](wgpu::VertexState) of a [`wgpu::RenderPipelineDescriptor`].
+	///
 	pub buffers: Vec<VertexBufferLayoutDesc>,
 
 	/// The exact place of the *position* attributes in the layout.
@@ -341,6 +340,14 @@ pub struct BufferLayout
 }
 impl BufferLayout
 {
+	/// Construct an "empty" buffer layout with no buffers and no attributes. This is useful as a starting point for
+	/// building up more complex layouts, without which it will be *functionally uninitialized*, if not in the sense
+	/// that *Rust* is using the term.
+	pub fn empty () -> Self { Self {
+		buffers: Vec::with_capacity(1), positions: BufferAttributeSlot::new(0,0,0),
+		attribs: Default::default()
+	}}
+
 	/// Internal helper function for checking if two [`BufferAttributeSlot`]s are compatible.
 	#[inline]
 	fn checkAttrib (
@@ -359,13 +366,13 @@ impl BufferLayout
 
 	/// Check if the given attribute is present
 	#[inline(always)]
-	pub fn hasAttribute (&self, attribute: data::GeometryAttribute) -> bool {
+	pub fn hasAttribute (&self, attribute: GeometryAttribute) -> bool {
 		self.attribs[attribute as usize].is_some()
 	}
 
 	/// Check if the given attribute is present
 	#[inline(always)]
-	pub fn attribute (&self, attribute: data::GeometryAttribute) -> Option<BufferAttributeSlot> {
+	pub fn attribute (&self, attribute: GeometryAttribute) -> Option<BufferAttributeSlot> {
 		self.attribs[attribute as usize]
 	}
 

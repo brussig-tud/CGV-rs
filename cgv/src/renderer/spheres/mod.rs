@@ -29,23 +29,6 @@ use data::*;
 
 //////
 //
-// Enum
-//
-
-/*///
-#[derive(Clone,Copy)]
-enum PosRadLayoutType {
-	/// Positions and radii are in the same `Float32x4` shader location (preferred).
-	Composite,
-
-	/// Positions and radii are in separate shader locations.
-	Separate
-}*/
-
-
-
-//////
-//
 // Structs
 //
 
@@ -53,7 +36,6 @@ enum PosRadLayoutType {
 pub struct DataReceiver {
 	data: Arc<dyn renderer::GpuData>,
 	layout: GpuPipelineBufferLayout,
-	//posRadLayoutType: Option<PosRadLayoutType>,
 	defaultAttribValues: ConstantAttributes,
 	entryPoint: String
 }

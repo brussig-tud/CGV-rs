@@ -101,6 +101,20 @@ impl GeometryAttribute
 		}
 	}
 
+	/// Get the preferred [`wgpu::VertexFormat`] for this attribute. For scalar attributes, this will be the format when
+	/// [stored separately](gpu::ScalarAttributeStorage::Separate).
+	pub fn vertexFormat (&self) -> wgpu::VertexFormat {
+		match self {
+			GeometryAttribute::Normals => wgpu::VertexFormat::Float32x4,
+			GeometryAttribute::Tangents => wgpu::VertexFormat::Float32x4,
+			GeometryAttribute::Radii => wgpu::VertexFormat::Float32,
+			GeometryAttribute::RadiusDerivs => wgpu::VertexFormat::Float32,
+			GeometryAttribute::Orientations => wgpu::VertexFormat::Float32x4,
+			GeometryAttribute::Scalings => wgpu::VertexFormat::Float32x4,
+			GeometryAttribute::Colors => wgpu::VertexFormat::Float32x4
+		}
+	}
+
 	/// Construct the enum variant that corresponds to the least-signficant *set* of the provided mask.
 	///
 	/// # Arguments
@@ -131,6 +145,24 @@ impl GeometryAttribute
 		if mask.contains(GAF::SCALINGS) { return GA::Scalings }
 		if mask.contains(GAF::COLORS) { return GA::Colors }
 		panic!("corrupt geometry attributes bitmask")
+	}
+
+	/// Construct from the given `u8` primitive value.
+	///
+	/// # Panics
+	///
+	/// If the value is not a valid discriminant of the `GeometryAttribute` enum (i.e. if it's greater than
+	/// [`GeometryAttribute::MAX_SLOT`]).
+	#[inline(always)]
+	pub fn fromU8 (value: u8) -> Self
+	{
+		if value < Self::NUM_SLOTS {
+			return unsafe {
+				// SAFETY: We are guarding against invalid discriminants.
+				std::mem::transmute(value)
+			}
+		}
+		panic!("invalid geometry attribute discriminant value");
 	}
 }
 /// Convenience shorthand for [`GeometryAttribute`].

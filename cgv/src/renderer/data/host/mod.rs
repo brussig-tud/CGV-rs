@@ -27,7 +27,7 @@ pub mod derives {
 /* nothing here yet */
 
 // Local imports
-use crate::{self as cgv, *};
+use crate::{self as cgv, *, renderer::data::*};
 pub use derives::*; // re-export our derives for easy access
 
 
@@ -58,6 +58,20 @@ pub trait Data:
 	/// [`renderer::Spheres`], will completely ignore this, while others like [`renderer::Mesh`] will require specific
 	/// topologies.
 	fn topology (&self) -> wgpu::PrimitiveTopology;
+
+	/// Check if the attribute indicated at runtime is available.
+	fn hasAttrib (&self, attrib: GeometryAttribute) -> bool
+	{
+		match attrib {
+			GA::Normals => self.hasNormals(),
+			GA::Tangents => self.hasTangents(),
+			GA::Radii => self.hasRadii(),
+			GA::RadiusDerivs => self.hasRadiusDerivs(),
+			GA::Orientations => self.hasOrientations(),
+			GA::Scalings => self.hasScalings(),
+			GA::Colors => self.hasColors(),
+		}
+	}
 }
 /// Blanket implementation for slices of [`renderer::InterleavedElem`]s.
 impl<T: renderer::data::InterleavedElem> Data for [T]
