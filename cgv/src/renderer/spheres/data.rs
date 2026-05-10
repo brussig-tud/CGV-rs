@@ -137,7 +137,7 @@ pub struct GpuData {
 impl GpuData
 {
 	/// Helper function for common initialization.
-	fn commonInit<D: HostData, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
+	fn commonInit<D: HostData+?Sized, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
 		-> (gpu::BufferLayout, wgpu::Buffer, std::ptr::NonNull<T>)
 	{
 		// Prepare the buffer
@@ -153,11 +153,11 @@ impl GpuData
 
 
 	///
-	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
+	pub fn new<D: HostData+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
 		let (layout, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosOnly, &data, label);
+			= Self::commonInit(context, LayoutVariant::PosOnly, data, label);
 
 		// Upload the data
 		for ref pos in data.positions() {
@@ -174,11 +174,11 @@ impl GpuData
 	}
 
 	///
-	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
+	pub fn withRadii<D: HostData+host::HasRadii+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
 		let (layout, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosRadius, &data, label);
+			= Self::commonInit(context, LayoutVariant::PosRadius, data, label);
 
 		// Upload the data
 		for (pos, radius) in data.positions().zip(data.radii()) {
@@ -195,11 +195,11 @@ impl GpuData
 	}
 
 	///
-	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
+	pub fn withColors<D: HostData+host::HasColors+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
 		let (layout, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosColor, &data, label);
+			= Self::commonInit(context, LayoutVariant::PosColor, data, label);
 
 		// Upload the data
 		for (ref pos, color) in data.positions().zip(data.colors()) {
@@ -216,12 +216,12 @@ impl GpuData
 	}
 
 	///
-	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors> (
-		context: &Context, data: D, label: Option<&str>
+	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors+?Sized> (
+		context: &Context, data: &D, label: Option<&str>
 	) -> Arc<Self> {
 		// Common initialization
 		let (layout, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosRadiusColor, &data, label);
+			= Self::commonInit(context, LayoutVariant::PosRadiusColor, data, label);
 
 		// Upload the data
 		for ((pos, radius), color) in data.positions().zip(data.radii()).zip(data.colors()) {

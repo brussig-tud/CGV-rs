@@ -30,7 +30,7 @@ use cgv::{self, renderer};
 // Statics
 //
 
-const DATA_POINTS: &[DataPoint; 8] = &[
+const DATA_POINTS: [DataPoint; 8] = [
 	// Front side:
 	DataPoint {
 		pos: glm::Vec3::new(-1., -1., -1.), radius: 1.,
@@ -138,8 +138,8 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::withRadiiAndColors(
-		context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData")
+	let spheresData = renderer::spheres::GpuData::withRadiiAndColors(
+		context, &DATA_POINTS, Some("RenderersDemo_spheresData")
 	);
 
 

@@ -32,11 +32,6 @@ macro_rules! ref_body {
 	($field:ident) => { quote! { &self.#$field } };
 }
 
-/// Given a field ident, generate `self.<field>` (value copy, for `f32` etc.).
-macro_rules! copy_body {
-	($field:ident) => { quote! { self.#$field } };
-}
-
 
 
 //////
@@ -160,10 +155,45 @@ pub fn deriveElemWithNormal(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithNormal
+		impl #implGenerics ::cgv::renderer::data::_ElemNormalBase
 			for #name #tyGenerics #whereClause
 		{
-			fn normal(&self) -> &::cgv::glm::Vec3 { #body }
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				// SAFETY: We will be originating from an array of structs, thus `len` will be known and can be trusted,
+				// and elements will have been placed with appropriate alignment, so the validity of the fields that the
+				// iterator accesses is guaranteed.
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn normal (&self) -> &::cgv::glm::Vec3 { #body }
+		}
+		impl #implGenerics ::cgv::renderer::data::ElemWithNormal
+			for #name #tyGenerics #whereClause
+		{}
+	}
+	.into()
+}
+
+/// Mark the element struct as not including a normal, causing the
+/// [`host::CanHaveNormals`](cgv::renderer::data::host::CanHaveNormals) blanket implementation for slices over it to
+/// report their absence and panic on access.
+#[proc_macro_derive(NoNormal)]
+pub fn deriveNoNormal(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemNormalBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = std::iter::Empty<glm::Vec3>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) ->  Self::_Iterator<'_> {
+				panic!("no normals available")
+			}
+			#[inline(always)] fn normal (&self) -> &::cgv::glm::Vec3 { panic!("no normal available") }
 		}
 	}
 	.into()
@@ -198,10 +228,45 @@ pub fn deriveElemWithTangent(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithTangent
+		impl #implGenerics ::cgv::renderer::data::_ElemTangentBase
 			for #name #tyGenerics #whereClause
 		{
-			fn tangent(&self) -> &::cgv::glm::Vec3 { #body }
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				// SAFETY: We will be originating from an array of structs, thus `len` will be known and can be trusted,
+				// and elements will have been placed with appropriate alignment, so the validity of the fields that the
+				// iterator accesses is guaranteed.
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn tangent (&self) -> &::cgv::glm::Vec3 { #body }
+		}
+		impl #implGenerics ::cgv::renderer::data::ElemWithTangent
+			for #name #tyGenerics #whereClause
+		{}
+	}
+	.into()
+}
+
+/// Mark the element struct as not including a tangent, causing the
+/// [`host::CanHaveTangents`](cgv::renderer::data::host::CanHaveTangents) blanket implementation for slices over it to
+/// report their absence and panic on access.
+#[proc_macro_derive(NoTangent)]
+pub fn deriveNoTangent(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemTangentBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = std::iter::Empty<glm::Vec3>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) ->  Self::_Iterator<'_> {
+				panic!("no tangents available")
+			}
+			#[inline(always)] fn tangent (&self) -> &::cgv::glm::Vec3 { panic!("no tangent available") }
 		}
 	}
 	.into()
@@ -209,8 +274,7 @@ pub fn deriveElemWithTangent(input: TokenStream) -> TokenStream
 
 /// Derive [`cgv::renderer::ElemWithRadius`] for a struct.
 ///
-/// Mark exactly one field with `#[cgv_renderAttr(radius)]`.  The field must be `f32` (or any `Copy` type that satisfies
-/// the trait's return type – the compiler will check this).
+/// Mark exactly one field with `#[cgv_renderAttr(radius)]`.
 #[proc_macro_derive(ElemWithRadius, attributes(cgv_renderAttr))]
 pub fn deriveElemWithRadius(input: TokenStream) -> TokenStream
 {
@@ -235,12 +299,44 @@ pub fn deriveElemWithRadius(input: TokenStream) -> TokenStream
 		}
 	};
 
-	let body = copy_body!(fieldIdent);
+	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithRadius
+		impl #implGenerics ::cgv::renderer::data::_ElemRadiusBase
 			for #name #tyGenerics #whereClause
 		{
-			fn radius(&self) -> &f32 { &#body }
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, f32> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn radius (&self) -> &f32 { #body }
+		}
+		impl #implGenerics ::cgv::renderer::data::ElemWithRadius
+			for #name #tyGenerics #whereClause
+		{}
+	}
+	.into()
+}
+
+/// Mark the element struct as not including a radius, causing the
+/// [`host::CanHaveRadii`](cgv::renderer::data::host::CanHaveRadii) blanket implementation for slices over it to report
+/// their absence and panic on access.
+#[proc_macro_derive(NoRadius)]
+pub fn deriveNoRadius(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemRadiusBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = std::iter::Empty<f32>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> {
+				panic!("no radii available")
+			}
+			#[inline(always)] fn radius (&self) -> &f32 { panic!("no radius available") }
 		}
 	}
 	.into()
@@ -273,12 +369,44 @@ pub fn deriveElemWithRadiusDeriv(input: TokenStream) -> TokenStream
 		}
 	};
 
-	let body = copy_body!(fieldIdent);
+	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
+		impl #implGenerics ::cgv::renderer::data::_ElemRadiusDerivBase
 			for #name #tyGenerics #whereClause
 		{
-			fn radiusDeriv(&self) -> &f32 { &#body }
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, f32> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn radiusDeriv (&self) -> &f32 { #body }
+		}
+		impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
+			for #name #tyGenerics #whereClause
+		{}
+	}
+	.into()
+}
+
+/// Mark the element struct as not including a radius derivative, causing the
+/// [`host::CanHaveRadiusDerivs`](cgv::renderer::data::host::CanHaveRadiusDerivs) blanket implementation for slices over
+/// it to report their absence and panic on access.
+#[proc_macro_derive(NoRadiusDeriv)]
+pub fn deriveNoRadiusDeriv(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemRadiusDerivBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = std::iter::Empty<f32>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> {
+				panic!("no radius derivatives available")
+			}
+			#[inline(always)] fn radiusDeriv (&self) -> &f32 { panic!("no radius derivative available") }
 		}
 	}
 	.into()
@@ -313,10 +441,42 @@ pub fn deriveElemWithOrientation(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
+		impl #implGenerics ::cgv::renderer::data::_ElemOrientationBase
 			for #name #tyGenerics #whereClause
 		{
-			fn orientation(&self) -> &::cgv::glm::Quat { #body }
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, glm::Quat> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn orientation (&self) -> &::cgv::glm::Quat { #body }
+		}
+		impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
+			for #name #tyGenerics #whereClause
+		{}
+	}
+	.into()
+}
+
+/// Mark the element struct as not including an orientation, causing the
+/// [`host::CanHaveOrientations`](cgv::renderer::data::host::CanHaveOrientations) blanket implementation for slices over
+/// it to report their absence and panic on access.
+#[proc_macro_derive(NoOrientation)]
+pub fn deriveNoOrientation(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemOrientationBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = std::iter::Empty<glm::Quat>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> {
+				panic!("no orientations available")
+			}
+			#[inline(always)] fn orientation (&self) -> &::cgv::glm::Quat { panic!("no orientation available") }
 		}
 	}
 	.into()
@@ -351,10 +511,42 @@ pub fn deriveElemWithScaling(input: TokenStream) -> TokenStream
 
 	let body = ref_body!(fieldIdent);
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithScaling
+		impl #implGenerics ::cgv::renderer::data::_ElemScalingBase
 			for #name #tyGenerics #whereClause
 		{
-			fn scaling(&self) -> &::cgv::glm::Vec3 { #body }
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, glm::Vec3> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn scaling (&self) -> &::cgv::glm::Vec3 { #body }
+		}
+		impl #implGenerics ::cgv::renderer::data::ElemWithScaling
+			for #name #tyGenerics #whereClause
+		{}
+	}
+	.into()
+}
+
+/// Mark the element struct as not including a scaling, causing the
+/// [`host::CanHaveScalings`](cgv::renderer::data::host::CanHaveScalings) blanket implementation for slices over it to
+/// report their absence and panic on access.
+#[proc_macro_derive(NoScaling)]
+pub fn deriveNoScaling(input: TokenStream) -> TokenStream
+{
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = &input.ident;
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
+	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemScalingBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = std::iter::Empty<glm::Vec3>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> {
+				panic!("no scalings available")
+			}
+			#[inline(always)] fn scaling (&self) -> &::cgv::glm::Vec3 { panic!("no scaling available") }
 		}
 	}
 	.into()
@@ -383,124 +575,32 @@ pub fn deriveElemWithColor(input: TokenStream) -> TokenStream
 					with `#[cgv_renderAttr(color)]`"
 				);
 			}
-				.into()
+			.into()
 		}
 	};
 
 	let body = ref_body!(fieldIdent);
 	quote! {
+		impl #implGenerics ::cgv::renderer::data::_ElemColorBase
+			for #name #tyGenerics #whereClause
+		{
+			type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, ::cgv::RGBA> where Self: 'data;
+			#[inline(always)] fn _available () -> bool { true }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+				::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+			}}
+			#[inline(always)] fn color (&self) -> &::cgv::RGBA { #body }
+		}
 		impl #implGenerics ::cgv::renderer::data::ElemWithColor
 			for #name #tyGenerics #whereClause
-		{
-			fn color(&self) -> &::cgv::RGBA { #body }
-		}
-	}
-		.into()
-}
-
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithNormal`]. The accessor method will panic if invoked.
-#[proc_macro_derive(NoNormal)]
-pub fn deriveNoNormal(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithNormal
-			for #name #tyGenerics #whereClause
-		{
-			fn normal(&self) -> &::cgv::glm::Vec3 { panic!("no normal available") }
-		}
+		{}
 	}
 	.into()
 }
 
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithTangent`]. The accessor method will panic if invoked.
-#[proc_macro_derive(NoTangent)]
-pub fn deriveNoTangent(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithTangent
-			for #name #tyGenerics #whereClause
-		{
-			fn tangent(&self) -> &::cgv::glm::Vec3 { panic!("no tangent available") }
-		}
-	}
-	.into()
-}
-
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithRadius`]. The accessor method will panic if invoked.
-#[proc_macro_derive(NoRadius)]
-pub fn deriveNoRadius(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithRadius
-			for #name #tyGenerics #whereClause
-		{
-			fn radius(&self) -> &f32 { panic!("no radius available") }
-		}
-	}
-	.into()
-}
-
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithRadiusDeriv`]. The accessor method will panic if invoked.
-#[proc_macro_derive(NoRadiusDeriv)]
-pub fn deriveNoRadiusDeriv(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
-			for #name #tyGenerics #whereClause
-		{
-			fn radiusDeriv(&self) -> &f32 { panic!("no radius derivative available") }
-		}
-	}
-	.into()
-}
-
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithOrientation`]. The accessor method will panic if invoked.
-#[proc_macro_derive(NoOrientation)]
-pub fn deriveNoOrientation(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
-			for #name #tyGenerics #whereClause
-		{
-			fn orientation(&self) -> &::cgv::glm::Quat { panic!("no orientation available") }
-		}
-	}
-	.into()
-}
-
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithScaling`]. The accessor method will panic if invoked.
-#[proc_macro_derive(NoScaling)]
-pub fn deriveNoScaling(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithScaling
-			for #name #tyGenerics #whereClause
-		{
-			fn scaling(&self) -> &::cgv::glm::Vec3 { panic!("no scaling available") }
-		}
-	}
-	.into()
-}
-
-/// Derive an "empty" impl of [`cgv::renderer::data::ElemWithColor`]. The accessor method will panic if invoked.
+/// Mark the element struct as not including color, causing the
+/// [`host::CanHaveColors`](cgv::renderer::data::host::CanHaveColors) blanket implementation for slices over it to
+/// report their absence and panic on access.
 #[proc_macro_derive(NoColor)]
 pub fn deriveNoColor(input: TokenStream) -> TokenStream
 {
@@ -508,10 +608,15 @@ pub fn deriveNoColor(input: TokenStream) -> TokenStream
 	let name = &input.ident;
 	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
 	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithColor
+		impl #implGenerics ::cgv::renderer::data::_ElemColorBase
 			for #name #tyGenerics #whereClause
 		{
-			fn color(&self) -> &::cgv::RGBA { panic!("no color available") }
+			type _Iterator<'data> = std::iter::Empty<::cgv::RGBA>;
+			#[inline(always)] fn _available () -> bool { false }
+			#[inline(always)] fn _iter (&self, len: usize) -> Self::_Iterator<'_> {
+				panic!("no color available")
+			}
+			#[inline(always)] fn color (&self) -> &::cgv::RGBA { panic!("no color available") }
 		}
 	}
 	.into()

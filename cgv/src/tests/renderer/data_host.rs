@@ -187,11 +187,17 @@ fn staticAssertIndexed<T: host::Indexed> () {}
 /// For testing at compile time that the generic argument is a type that represents interleaved render data.
 fn staticAssertInterleaved<T: host::Interleaved> () {}
 
+/// For testing at compile time that the function argument has a type that guarantees normals.
+fn staticAssertArgIsInterleaved<T: host::Interleaved+?Sized> (_testee: &T) -> bool { true }
+
 /// For testing at compile time that the generic argument is a type that guarantees normals.
 fn staticAssertHasNormals<T: host::HasNormals> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees tangents.
 fn staticAssertHasTangents<T: host::HasTangents> () {}
+
+/// For testing at compile time that the function argument has a type that guarantees tangents.
+fn staticAssertArgHasTangents<T: host::HasTangents+?Sized> (_testee: &T) -> bool { true }
 
 /// For testing at compile time that the generic argument is a type that guarantees radii.
 fn staticAssertHasRadii<T: host::HasRadii> () {}
@@ -208,6 +214,9 @@ fn staticAssertHasScalings<T: host::HasScalings> () {}
 /// For testing at compile time that the generic argument is a type that guarantees colors.
 fn staticAssertHasColors<T: host::HasColors> () {}
 
+/// For testing at compile time that the function argument has a type that guarantees colors.
+fn staticAssertArgHasColors<T: host::HasColors+?Sized> (_testee: &T) -> bool { true }
+
 
 
 //////
@@ -220,20 +229,96 @@ fn test_HostData_blanketImpls ()
 {
 	// The test data
 	use super::data::PosTanColor;
-	let testData = vec![
-		PosTanColor {
-			pos: glm::vec3(0., 0., 0.), tan: glm::vec3(1., 0., 0.),
-			col: cgv::RGBA::from_rgba_unmultiplied(1., 0., 0., 1.)
-		},
-		PosTanColor {
-			pos: glm::vec3(1., 2., 3.), tan: glm::vec3(0., 1., 1.),
-			col: cgv::RGBA::from_rgba_unmultiplied(0., 1., 0., 1.)
-		}
+	let testData = [
+		PosTanColor {pos: glm::vec3(0., 0., 0.), tan: glm::vec3(1., 0., 0.),
+		             col: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.)},
+		PosTanColor {pos: glm::vec3(1., 2., 3.), tan: glm::vec3(0., 1., 1.),
+		             col: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.)}
 	];
+	let testDataVec = testData.to_vec();
 
-	// Check we got the blanket implementations
-	staticAssertHasNormals::<&[PosTanColor]>(); // <- should fail to compile!!!
-	staticAssertInterleaved::<&[PosTanColor]>();
+	// Check that we got the blanket implementations
+	staticAssertArgIsInterleaved(testData.as_slice());
+	staticAssertArgIsInterleaved(&testData);
+	staticAssertArgIsInterleaved(&testDataVec);
+	staticAssertArgHasTangents(testData.as_slice());
+	staticAssertArgHasTangents(&testData);
+	staticAssertArgHasTangents(&testDataVec);
+	staticAssertArgHasColors(testData.as_slice());
+	staticAssertArgHasColors(&testData);
+	staticAssertArgHasColors(&testDataVec);
+
+	// Check the blanket implementations work at runtime
+	assert!(testData.hasTangents());
+	assert!(testData.as_slice().hasTangents());
+	assert!(testDataVec.hasTangents());
+	assert!(testData.hasColors());
+	assert!(testData.as_slice().hasColors());
+	assert!(testDataVec.hasColors());
+	assert!(!testData.hasNormals());
+	assert!(!testData.as_slice().hasNormals());
+	assert!(!testDataVec.hasNormals());
+	assert!(!testData.hasRadii());
+	assert!(!testData.as_slice().hasRadii());
+	assert!(!testDataVec.hasRadii());
+	assert!(!testData.hasRadiusDerivs());
+	assert!(!testData.as_slice().hasRadiusDerivs());
+	assert!(!testDataVec.hasRadiusDerivs());
+	assert!(!testData.hasOrientations());
+	assert!(!testData.as_slice().hasOrientations());
+	assert!(!testDataVec.hasOrientations());
+	assert!(!testData.hasScalings());
+	assert!(!testData.as_slice().hasScalings());
+	assert!(!testDataVec.hasScalings());
+
+	// Check data access
+	assert_eq!(testData.len(), testData.num() as usize);
+	assert_eq!(testDataVec.len(), testDataVec.num() as usize);
+	// - positions
+	let mut iter = testData.positions();
+	assert_eq!(testData.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(0., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(1., 2., 3.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testData.pos(0), glm::vec3(0., 0., 0.));
+	assert_eq!(testData.pos(1), glm::vec3(1., 2., 3.));
+	iter = testDataVec.positions();
+	assert_eq!(testDataVec.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(0., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(1., 2., 3.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testDataVec.pos(0), glm::vec3(0., 0., 0.));
+	assert_eq!(testDataVec.pos(1), glm::vec3(1., 2., 3.));
+	// - tangents
+	iter = testData.tangents();
+	assert_eq!(testData.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(1., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(0., 1., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testData.tangent(0), glm::vec3(1., 0., 0.));
+	assert_eq!(testData.tangent(1), glm::vec3(0., 1., 1.));
+	iter = testDataVec.tangents();
+	assert_eq!(testDataVec.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(1., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(0., 1., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testDataVec.tangent(0), glm::vec3(1., 0., 0.));
+	assert_eq!(testDataVec.tangent(1), glm::vec3(0., 1., 1.));
+	// - colors
+	let mut iter = testData.colors();
+	assert_eq!(testData.len(), iter.len());
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.)));
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testData.color(0), cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.));
+	assert_eq!(testData.color(1), cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.));
+	iter = testDataVec.colors();
+	assert_eq!(testDataVec.len(), iter.len());
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.)));
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testDataVec.color(0), cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.));
+	assert_eq!(testDataVec.color(1), cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.));
 }
 
 #[test]

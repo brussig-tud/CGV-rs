@@ -50,6 +50,21 @@ pub enum ScalarAttributeStorage
 	/// Store the attribute in its own, separate shader location.
 	Separate
 }
+impl ScalarAttributeStorage
+{
+	/// Create some arbitrary "don't care" value. The exact value constructed is undefined, except that it vil be a
+	/// valid `ScalarAttributeStorage`.
+	#[inline(always)]
+	pub fn dontCare () -> Self {
+		ScalarAttributeStorage::Separate
+	}
+
+	/// Check whether this storage strategy implies co-location with another attribute.
+	#[inline(always)]
+	pub fn isColocated (&self) -> bool {
+		matches!(self, Self::InPosWComponent | Self::InWComponent(_))
+	}
+}
 
 /// Convenience shorthand for [`ScalarAttributeStorage`].
 pub type SAS = ScalarAttributeStorage;
@@ -546,4 +561,43 @@ impl PipelineBufferLayout
 	pub fn bufferIndices (&self) -> &[usize] {
 		self.bufferIndices.as_slice()
 	}
+}
+
+
+
+//////
+//
+// Functions
+//
+
+/// Compute the size in bytes of a sequence of `num` elements of type `T`.
+#[inline(always)]
+pub fn attribSeriesSize<T: Sized> (num: u32) -> wgpu::BufferAddress {
+	(size_of::<T>() * num as usize) as wgpu::BufferAddress
+}
+
+/// Compute the ***aligned and padded*** size that all the values of all the geometry attributes contained in the given
+/// host data would consume in GPU memory.
+pub fn hostDataGpuSize<D: renderer::HostData+?Sized> (
+	hostData: &D, radiusStorage: ScalarAttributeStorage, radiusDerivStorage: ScalarAttributeStorage
+) -> wgpu::BufferAddress
+{
+	// We will definitely need this calculation
+	let vecValuedSize = attribSeriesSize::<glm::Vec4>(hostData.num());
+
+	// Add up
+	  vecValuedSize // <- positions
+	+ if hostData.hasNormals()      { vecValuedSize } else { 0 }
+	+ if hostData.hasTangents()     { vecValuedSize } else { 0 }
+	+ if hostData.hasRadii()        { match radiusStorage {
+	  	SAS::InPosWComponent | SAS::InWComponent(_) => 0,
+	  	SAS::Separate => attribSeriesSize::<f32>(hostData.num())
+	  }} else { 0 }
+	+ if hostData.hasRadiusDerivs() { match radiusDerivStorage {
+	  	SAS::InPosWComponent | SAS::InWComponent(_) => 0,
+	  	SAS::Separate => attribSeriesSize::<f32>(hostData.num())
+	  }} else { 0 }
+	+ if hostData.hasOrientations() { vecValuedSize } else { 0 }
+	+ if hostData.hasScalings()     { vecValuedSize } else { 0 }
+	+ if hostData.hasColors()       { vecValuedSize } else { 0 }
 }
