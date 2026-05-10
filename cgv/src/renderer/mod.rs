@@ -134,7 +134,7 @@ impl<R: Renderer> Managed<R>
 	#[inline]
 	fn needsRebuild (&self, newData: &R::GpuDataReceiver) -> bool
 	{!(
-		self.renderer.gpuStateIsIndependentFromData() ||
+		!self.renderer.gpuStateIsIndependentFromData() ||
 		if let Some(data) = &self.data {
 			data.isCompatible(newData.gpuData())
 		} else {
