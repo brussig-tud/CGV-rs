@@ -41,12 +41,33 @@ pub struct InterleavedBuffer {
 	topology: wgpu::PrimitiveTopology
 }
 impl InterleavedBuffer {
-	/*pub fn fromHost<D: HostData> (
-		context: &Context, data: D, specialOptions: Option<InterleavedBufferOptions>, label: Option<&str>
-	) -> Arc<Self>
+	pub fn fromHost<D: HostData+?Sized> (
+		context: &Context, data: &D, specialOptions: Option<InterleavedBufferOptions>, label: Option<&str>
+	)// -> Arc<Self>
 	{
-		/// Gather host attributes
-	}*/
+		// Decide on scalar attribute storage
+		let (radiiStorage, radiusDerivsStorage) = if let Some(
+			options
+		) = specialOptions {
+			(options.radiusStorage, options.radiusDerivStorage)
+		}
+		else {(
+			gpu::ScalarAttributeStorage::InPosWComponent,
+			if data.hasTangents() {
+				gpu::ScalarAttributeStorage::InWComponent(GA::Tangents)
+			}
+			else {
+				gpu::ScalarAttributeStorage::Separate
+			}
+		)};
+
+		// Create buffer
+		let size = gpu::hostDataGpuSize(data, radiiStorage, radiusDerivsStorage);
+		let buffer = context.device().create_buffer(&wgpu::BufferDescriptor {
+			label, size, usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
+			mapped_at_creation: true,
+		});
+	}
 }
 impl GpuData for InterleavedBuffer
 {
