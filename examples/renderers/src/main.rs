@@ -138,8 +138,8 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = renderer::spheres::GpuData::withRadiiAndColors(
-		context, &DATA_POINTS, Some("RenderersDemo_spheresData")
+	let spheresData = renderer::data::gpu::InterleavedBuffer::fromHost (
+		context, &DATA_POINTS, Default::default(), Some("RenderersDemo_spheresData")
 	);
 
 

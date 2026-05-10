@@ -101,17 +101,38 @@ impl GeometryAttribute
 		}
 	}
 
+	/// Return the number of data components (i.e. number of floats that are taken up by actual data) the attribute
+	/// needs.
+	pub fn components (&self) -> u8
+	{
+		match self {
+			GA::Normals => 3,
+			GA::Tangents => 3,
+			GA::Radii => 1,
+			GA::RadiusDerivs => 1,
+			GA::Orientations => 4,
+			GA::Scalings => 3,
+			GA::Colors => 4
+		}
+	}
+
+	///
+	#[inline(always)]
+	fn isScalar (&self) -> bool {
+		self.components() == 1
+	}
+
 	/// Get the preferred [`wgpu::VertexFormat`] for this attribute. For scalar attributes, this will be the format when
 	/// [stored separately](gpu::ScalarAttributeStorage::Separate).
 	pub fn vertexFormat (&self) -> wgpu::VertexFormat {
 		match self {
-			GeometryAttribute::Normals => wgpu::VertexFormat::Float32x4,
-			GeometryAttribute::Tangents => wgpu::VertexFormat::Float32x4,
-			GeometryAttribute::Radii => wgpu::VertexFormat::Float32,
-			GeometryAttribute::RadiusDerivs => wgpu::VertexFormat::Float32,
-			GeometryAttribute::Orientations => wgpu::VertexFormat::Float32x4,
-			GeometryAttribute::Scalings => wgpu::VertexFormat::Float32x4,
-			GeometryAttribute::Colors => wgpu::VertexFormat::Float32x4
+			GA::Normals => wgpu::VertexFormat::Float32x4,
+			GA::Tangents => wgpu::VertexFormat::Float32x4,
+			GA::Radii => wgpu::VertexFormat::Float32,
+			GA::RadiusDerivs => wgpu::VertexFormat::Float32,
+			GA::Orientations => wgpu::VertexFormat::Float32x4,
+			GA::Scalings => wgpu::VertexFormat::Float32x4,
+			GA::Colors => wgpu::VertexFormat::Float32x4
 		}
 	}
 

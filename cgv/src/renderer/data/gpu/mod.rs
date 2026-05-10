@@ -36,8 +36,9 @@ use super as data;
 /// vector-valued attribute is supported to keep the burden of checking dozens of possible  configurations low on
 /// [`Renderer`]s.
 ///
-/// **TODO: Add more options once [`BufferLayout`] gains the functionality to auto-generate a Slang "geometry input"
-/// implementation for use by renderers that make use of [runtime shader compilation](cgv_shader::compile).**
+/// **TODO: Replace by a different mechanism once [`BufferLayout`] gains the functionality to auto-generate a Slang
+/// "geometry input" implementation for use by renderers that can/want to make use of
+/// [runtime shader compilation](cgv_shader::compile).**
 #[derive(Clone,Copy,PartialEq,Eq,Debug)]
 pub enum ScalarAttributeStorage
 {
@@ -201,12 +202,6 @@ impl BufferOffsetUnion
 		}
 	}
 
-	/// Change the buffer index.
-	#[inline(always)]
-	fn changeBuffer (&mut self, newBufferIdx: u8) {
-		self.buffer_offset.0 = newBufferIdx;
-	}
-
 	/// Retrieve the offset.
 	#[inline(always)]
 	fn offset (&self) -> u8 {
@@ -214,6 +209,12 @@ impl BufferOffsetUnion
 			// SAFETY: Every contiguous 8-bit sequence in a `u16` always constitutes a valid `u8`.
 			self.buffer_offset.1
 		}
+	}
+
+	/// Change the buffer index.
+	#[inline(always)]
+	fn changeBuffer (&mut self, newBufferIdx: u8) {
+		self.buffer_offset.0 = newBufferIdx;
 	}
 }
 impl Clone for BufferOffsetUnion
@@ -289,6 +290,12 @@ impl BufferAttributeSlot {
 	pub fn changeBuffer (mut self, newBufferIdx: u8) -> Self {
 		self.buffer_offset.changeBuffer(newBufferIdx);
 		self
+	}
+
+	///
+	#[inline(always)]
+	pub fn withNewOffset (&self, newOffset: u8) -> Self {
+		Self::new(self.buffer_offset.buffer(), self.slot, newOffset)
 	}
 }
 
@@ -577,34 +584,30 @@ impl PipelineBufferLayout
 // Functions
 //
 
-/// Compute the size in bytes of a sequence of `num` elements of type `T`.
-#[inline(always)]
-pub fn attribSeriesSize<T: Sized> (num: u32) -> wgpu::BufferAddress {
-	(size_of::<T>() * num as usize) as wgpu::BufferAddress
-}
-
 /// Compute the ***aligned and padded*** size that all the values of all the geometry attributes contained in the given
 /// host data would consume in GPU memory.
 pub fn hostDataGpuSize<D: renderer::HostData+?Sized> (
 	hostData: &D, radiusStorage: ScalarAttributeStorage, radiusDerivStorage: ScalarAttributeStorage
 ) -> wgpu::BufferAddress
 {
-	// We will definitely need this calculation
-	let vecValuedSize = attribSeriesSize::<glm::Vec4>(hostData.num());
+	// Convenience shorthands
+	const VECTOR_SIZE: wgpu::BufferAddress = size_of::<glm::Vec4>() as wgpu::BufferAddress;
+	const SCALAR_SIZE: wgpu::BufferAddress = size_of::<f32>() as wgpu::BufferAddress;
 
-	// Add up
-	  vecValuedSize // <- positions
-	+ if hostData.hasNormals()      { vecValuedSize } else { 0 }
-	+ if hostData.hasTangents()     { vecValuedSize } else { 0 }
-	+ if hostData.hasRadii()        { match radiusStorage {
-	  	SAS::InPosWComponent | SAS::InWComponent(_) => 0,
-	  	SAS::Separate => attribSeriesSize::<f32>(hostData.num())
-	  }} else { 0 }
-	+ if hostData.hasRadiusDerivs() { match radiusDerivStorage {
-	  	SAS::InPosWComponent | SAS::InWComponent(_) => 0,
-	  	SAS::Separate => attribSeriesSize::<f32>(hostData.num())
-	  }} else { 0 }
-	+ if hostData.hasOrientations() { vecValuedSize } else { 0 }
-	+ if hostData.hasScalings()     { vecValuedSize } else { 0 }
-	+ if hostData.hasColors()       { vecValuedSize } else { 0 }
+	/* add up */ (
+		  VECTOR_SIZE // <- positions
+		+ if hostData.hasNormals()      { VECTOR_SIZE } else { 0 }
+		+ if hostData.hasTangents()     { VECTOR_SIZE } else { 0 }
+		+ if hostData.hasRadii()        { match radiusStorage {
+		  	SAS::InPosWComponent | SAS::InWComponent(_) => 0,
+		  	SAS::Separate => SCALAR_SIZE
+		  }} else { 0 }
+		+ if hostData.hasRadiusDerivs() { match radiusDerivStorage {
+		  	SAS::InPosWComponent | SAS::InWComponent(_) => 0,
+		  	SAS::Separate => SCALAR_SIZE
+		  }} else { 0 }
+		+ if hostData.hasOrientations() { VECTOR_SIZE } else { 0 }
+		+ if hostData.hasScalings()     { VECTOR_SIZE } else { 0 }
+		+ if hostData.hasColors()       { VECTOR_SIZE } else { 0 }
+	)  *  hostData.num() as wgpu::BufferAddress
 }

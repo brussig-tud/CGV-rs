@@ -24,29 +24,45 @@ pub struct InterleavedBufferOptions {
 	radiusStorage: ScalarAttributeStorage,
 	radiusDerivStorage: ScalarAttributeStorage
 }
-impl InterleavedBufferOptions {
+impl InterleavedBufferOptions
+{
 	pub fn validate<D: HostData+?Sized> (&self, data: &D) -> bool
 	{
-		if self.radiusStorage.isColocated() && self.radiusDerivStorage.isColocated() {
-			if self.radiusStorage == self.radiusDerivStorage {
-				return false;
-			}
-		}
+		let mut  rHostAttrib: Option<GeometryAttribute> = None;
+		let mut rdHostAttrib: Option<GeometryAttribute> = None;
+
+		// Radius is co-located with a non-existing or unsuited other attribute
 		if let SAS::InWComponent(hostAttrib) = self.radiusStorage {
-			if !data.hasAttrib(hostAttrib) {
+			if !data.hasAttrib(hostAttrib) || hostAttrib.isScalar() || hostAttrib.components() > 3 {
 				return false;
 			}
+			rHostAttrib = Some(hostAttrib);
 		}
+
+		// Radius derivative is co-located with a non-existing or unsuited other attribute
 		if let SAS::InWComponent(hostAttrib) = self.radiusDerivStorage {
-			if !data.hasAttrib(hostAttrib) {
+			if !data.hasAttrib(hostAttrib) || hostAttrib.isScalar() || hostAttrib.components() > 3 {
 				return false;
 			}
+			rdHostAttrib = Some(hostAttrib);
 		}
+
+		// Radius and derivative both try to co-locate with the position
+		if self.radiusStorage==SAS::InPosWComponent && self.radiusDerivStorage==SAS::InPosWComponent {
+			return false;
+		}
+
+		// Radius and derivative are co-located with the same attribute
+		if    let Some(rHostAttrib) = rHostAttrib
+		   && let Some(rdHostAttrib) = rdHostAttrib && rHostAttrib == rdHostAttrib {
+			return false
+		}
+
+		// All clear
 		true
 	}
 }
-impl Default for InterleavedBufferOptions
-{
+impl Default for InterleavedBufferOptions {
 	#[inline(always)]
 	fn default () -> Self { Self {
 		radiusStorage: SAS::InPosWComponent, radiusDerivStorage: SAS::InWComponent(GA::Tangents),
@@ -65,7 +81,7 @@ pub struct InterleavedBuffer {
 impl InterleavedBuffer {
 	pub fn fromHost<D: HostData+?Sized> (
 		context: &Context, data: &D, options: InterleavedBufferOptions, label: Option<&str>
-	)// -> Arc<Self>
+	) -> Arc<Self>
 	{
 		// Sanity check scalar attribute storage
 		assert!(options.validate(data));
@@ -95,19 +111,32 @@ impl InterleavedBuffer {
 		if data.hasTangents() {
 			registerAttrib::<glm::Vec4>(&mut layout, GA::Tangents, GA::Tangents.vertexFormat());
 		}
-		if data.hasRadii()
+		if data.hasRadii() { match options.radiusStorage
 		{
-			match options.radiusStorage
-			{
-				SAS::InPosWComponent => {
-
-				},
-				ScalarAttributeStorage::InWComponent(parent) => {
-
-				},
-				SAS::Separate => registerAttrib::<f32>(&mut layout, GA::Radii, GA::Radii.vertexFormat())
-			};
-		}
+			SAS::InPosWComponent => {
+				layout.attribs[GA::Radii.slot()].replace(layout.positions.withNewOffset(3));
+			},
+			ScalarAttributeStorage::InWComponent(hostAttrib) => {
+				let hostAttribLoc = &layout.attribs[hostAttrib.slot()].expect(
+					"all attributes suitable for co-hosting a scalar should have been registered already"
+				);
+				layout.attribs[GA::Radii.slot()].replace(hostAttribLoc.withNewOffset(3));
+			},
+			SAS::Separate => registerAttrib::<f32>(&mut layout, GA::Radii, GA::Radii.vertexFormat())
+		}}
+		if data.hasRadiusDerivs() { match options.radiusDerivStorage
+		{
+			SAS::InPosWComponent => {
+				layout.attribs[GA::RadiusDerivs.slot()].replace(layout.positions.withNewOffset(3));
+			},
+			ScalarAttributeStorage::InWComponent(hostAttrib) => {
+				let hostAttribLoc = &layout.attribs[hostAttrib.slot()].expect(
+					"all attributes suitable for co-hosting a scalar should have been registered already"
+				);
+				layout.attribs[GA::RadiusDerivs.slot()].replace(hostAttribLoc.withNewOffset(3));
+			},
+			SAS::Separate => registerAttrib::<f32>(&mut layout, GA::RadiusDerivs, GA::RadiusDerivs.vertexFormat())
+		}}
 		if data.hasOrientations() {
 			registerAttrib::<glm::Vec4>(&mut layout, GA::Orientations, GA::Orientations.vertexFormat());
 		}
@@ -119,11 +148,15 @@ impl InterleavedBuffer {
 		}
 
 		// Create buffer
-		let size = hostDataGpuSize(data, options.radiusStorage, options.radiusDerivStorage);
+		let size = layout.buffers[0].array_stride  *  data.num() as wgpu::BufferAddress;
+		assert_eq!(size, hostDataGpuSize(data, options.radiusStorage, options.radiusDerivStorage));
 		let buffer = context.device().create_buffer(&wgpu::BufferDescriptor {
 			label, size, usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
 			mapped_at_creation: true,
 		});
+
+		// Done!
+		Arc::new(Self { num: data.num(), layout, buffer, topology: options.topology })
 	}
 }
 impl GpuData for InterleavedBuffer
