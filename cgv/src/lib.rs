@@ -198,10 +198,13 @@ impl GlobalPass {
 }
 
 /// Configuration for a global render pass.
+/// **TODO: The design needs overhauling - cameras cannot know the *index* of any of their declared render passes, as
+/// that also depends on other cameras.**
 pub struct GlobalPassInfo {
 	pub pass: GlobalPass,
-	/// Index of the associated [`RenderState`] within [`GlobalPasses::renderStates`].
-	pub renderState: u32,
+	/// Index of the associated [`RenderState`] within [`GlobalPasses::renderStates`].<br />
+	/// **TODO: remove and replace by player-managed data structure that cameras don't interact with.**
+	pub index: usize,
 	pub clearColor: wgpu::Color,
 	pub depthClearValue: f32,
 	completionCallback: std::cell::Cell<Option<Box<dyn FnMut(&Context, u32) + Send>>>,
@@ -323,7 +326,7 @@ pub trait Application: Component
 	///
 	/// `Some` array of command buffers containing any commands the application might need to perform before being able
 	/// to render, or `None` if no preparation is required.
-	fn prepareFrame (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass)
+	fn prepareFrame (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPassInfo)
 		-> Option<Vec<wgpu::CommandBuffer>>;
 
 	/// Called when the [player](Player) needs the application to render its contents.
@@ -337,7 +340,7 @@ pub trait Application: Component
 	/// * `globalPass` – Identifies the global pass over the scene that the render pass is for.
 	fn render (
 		&mut self, context: &Context, renderState: &RenderState, managedRenderPass: &mut wgpu::RenderPass,
-		globalPass: &GlobalPass
+		globalPass: &GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>;
 
 	/// Called when the [player](Player) needs the application to define its graphical main UI (which goes in the

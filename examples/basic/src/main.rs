@@ -398,7 +398,7 @@ impl cgv::Application for ExampleApplication
 		for pass in globalPasses.info {
 			self.pipelines.push(self.createPipeline(
 				context,
-				&globalPasses.renderStates[pass.renderState as usize],
+				&globalPasses.renderStates[pass.index as usize],
 				renderSetup
 			));
 		}
@@ -430,7 +430,7 @@ impl cgv::Application for ExampleApplication
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
+	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
@@ -438,7 +438,7 @@ impl cgv::Application for ExampleApplication
 
 	fn render (
 		&mut self, _: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
-		_: &cgv::GlobalPass
+		_: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
 		renderPass.set_pipeline(&self.pipelines[0]);

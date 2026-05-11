@@ -226,7 +226,7 @@ impl cgv::Application for RenderersDemo
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
+	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
@@ -234,7 +234,7 @@ impl cgv::Application for RenderersDemo
 
 	fn render (
 		&mut self, context: &cgv::Context, _: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
-		globalPass: &cgv::GlobalPass
+		globalPass: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
 		// Render our test data

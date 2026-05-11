@@ -36,7 +36,7 @@ impl MonoCamera
 	{
 		vec![GlobalPassInfo {
 			pass: GlobalPass::Simple,
-			renderState: 0,
+			index: 0,
 			clearColor: *renderSetup.defaultClearColor(),
 			depthClearValue: renderSetup.defaultDepthClearValue(),
 			completionCallback: None.into(),
@@ -116,9 +116,7 @@ impl Camera for MonoCamera
 			if passes.len() == 0 {return};
 			let reqPtr = passes[0] as *const GlobalPassInfo;
 			let ourPtr = &self.globalPasses[0] as *const GlobalPassInfo;
-			if reqPtr != ourPtr {
-				panic!("FATAL: overrideClearColor received a reference to a pass we don't own!");
-			}
+			assert_eq!(reqPtr, ourPtr, "overrideClearColor received a reference to a pass we don't own!");
 		}
 		if let Some(clearColor) = clearColor {
 			self.globalPasses[0].clearColor = clearColor;
