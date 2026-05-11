@@ -139,7 +139,10 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 	/* generate test data */
 	let spheresData = renderer::data::gpu::InterleavedBuffer::fromHost (
-		context, &DATA_POINTS, Default::default(), Some("RenderersDemo_spheresData")
+		context, &DATA_POINTS, renderer::data::gpu::InterleavedBufferOptions {
+			radiusStorage: renderer::data::gpu::SAS::Separate,
+			..Default::default()
+		}, Some("RenderersDemo_spheresData")
 	);
 
 

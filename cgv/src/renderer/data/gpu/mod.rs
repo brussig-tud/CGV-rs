@@ -6,7 +6,7 @@
 
 /// Module defining the interleaved reference implementations of [`gpu::Data`](Data).
 mod interleaved_buffer;
-pub use interleaved_buffer::InterleavedBuffer; // re-export
+pub use interleaved_buffer::{InterleavedBuffer, InterleavedBufferOptions}; // re-export
 
 
 
@@ -60,7 +60,8 @@ impl ScalarAttributeStorage
 		ScalarAttributeStorage::Separate
 	}
 
-	/// Check whether this storage strategy implies co-location with another attribute.
+	/// Check whether this storage strategy implies co-location with another attribute, e.g.
+	/// [`InPosWComponent`](Self::InPosWComponent) or [`InWComponent(...)`](Self::InWComponent)
 	#[inline(always)]
 	pub fn isColocated (&self) -> bool {
 		matches!(self, Self::InPosWComponent | Self::InWComponent(_))
@@ -457,8 +458,7 @@ impl PipelineBufferLayout
 	/// number of filtered attributes, which is probably still the most performant way if we want to **preserve the
 	/// order in which the buffers are referenced** in the original, unfiltered layout.
 	///
-	/// **TODO: It might be possible to include buffers in the vertex state of a pipeline with zero attributes bound to
-	/// shader locations. In this case this step could be greatly simplified.**
+	/// **TODO: Currently buggy for non-colocated scalar attributes (radii and radius derivs)**
 	pub fn create (
 		dataLayout: &BufferLayout, shaderLoc_positions: u32, step_mode: wgpu::VertexStepMode,
 		includeAttribs: &[(data::GeometryAttribute, u32)]

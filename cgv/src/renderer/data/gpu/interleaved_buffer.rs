@@ -18,14 +18,19 @@ use crate::{*, renderer::{*, data::{*, gpu::*}}};
 //
 
 /// Additional options to influence how an [`InterleavedBuffer`] stores and layouts its contents.
+///
+/// **TODO**: Introduce builder-like API to prevent construction with [invalid](Self::validate) settings.
 #[derive(Clone,Copy)]
 pub struct InterleavedBufferOptions {
-	topology: wgpu::PrimitiveTopology,
-	radiusStorage: ScalarAttributeStorage,
-	radiusDerivStorage: ScalarAttributeStorage
+	pub topology: wgpu::PrimitiveTopology,
+	pub radiusStorage: ScalarAttributeStorage,
+	pub radiusDerivStorage: ScalarAttributeStorage
 }
 impl InterleavedBufferOptions
 {
+	/// Checks logical consistency of the selected options. For example, [`radiusStorage`](Self.radiusStorage) and
+	/// [`radiusDerivStorage`](Self.radiusDerivStorage) must not request
+	/// [co-location](ScalarAttributeStorage::isColocated) at the same host attribute.
 	pub fn validate<D: HostData+?Sized> (&self, data: &D) -> bool
 	{
 		let mut  rHostAttrib: Option<GeometryAttribute> = None;
@@ -78,7 +83,26 @@ pub struct InterleavedBuffer {
 	buffer: wgpu::Buffer,
 	topology: wgpu::PrimitiveTopology
 }
-impl InterleavedBuffer {
+impl InterleavedBuffer
+{
+	/// Create a single-buffer [interleaved](Interleaved) [`GpuData`] from arbitrary host data.
+	///
+	/// # Arguments
+	///
+	/// * `context` – The *CGV-rs* context under which to create the GPU resources.
+	/// * `data` – The host-side collection of renderable attributes and their values.
+	/// * `options` – Additional options to influence how the buffer is laid out (the desired [`GpuData::topology`] can
+	///               be set here as well).
+	/// * `label` – A string to internally label the GPU-side buffer object with, if desired.
+	///
+	/// # Returns
+	///
+	/// An `Arc` owning a fully-built, interleaved `GpuData`-compliant instance of `InterleavedBuffer` containing a
+	/// copy of the provided host data.
+	///
+	/// # Panics
+	///
+	/// If the `options` contain [invalid](InterleavedBufferOptions::validate) settings combinations.
 	pub fn fromHost<D: HostData+?Sized> (
 		context: &Context, data: &D, options: InterleavedBufferOptions, label: Option<&str>
 	) -> Arc<Self>
@@ -91,7 +115,7 @@ impl InterleavedBuffer {
 		fn registerAttrib<T> (layout: &mut BufferLayout, attrib: GA, format: wgpu::VertexFormat) {
 			let offset = layout.buffers[0].array_stride;
 			let sloc = layout.buffers[0].attributes.len() as u16;
-			layout.buffers[0].array_stride += size_of::<glm::Vec4>() as wgpu::BufferAddress;
+			layout.buffers[0].array_stride += size_of::<T>() as wgpu::BufferAddress;
 			layout.attribs[attrib.slot()] = Some(BufferAttributeSlot::new(0, sloc, 0));
 			layout.buffers[0].attributes.push(wgpu::VertexAttribute {
 				format, offset, shader_location: sloc as wgpu::ShaderLocation
@@ -149,7 +173,10 @@ impl InterleavedBuffer {
 
 		// Create buffer
 		let size = layout.buffers[0].array_stride  *  data.num() as wgpu::BufferAddress;
-		assert_eq!(size, hostDataGpuSize(data, options.radiusStorage, options.radiusDerivStorage));
+		debug_assert_eq!(
+			size, hostDataGpuSize(data, options.radiusStorage, options.radiusDerivStorage),
+			"buffer size calculation consitency check failed"
+		);
 		let buffer = context.device().create_buffer(&wgpu::BufferDescriptor {
 			label, size, usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
 			mapped_at_creation: true,
