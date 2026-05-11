@@ -175,7 +175,7 @@ impl InterleavedBuffer
 		let size = layout.buffers[0].array_stride  *  data.num() as wgpu::BufferAddress;
 		debug_assert_eq!(
 			size, hostDataGpuSize(data, options.radiusStorage, options.radiusDerivStorage),
-			"buffer size calculation consitency check failed"
+			"buffer size calculation consistency check failed"
 		);
 		let buffer = context.device().create_buffer(&wgpu::BufferDescriptor {
 			label, size, usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
