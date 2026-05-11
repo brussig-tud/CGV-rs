@@ -167,7 +167,9 @@ impl GeometryAttribute
 		if mask.contains(GAF::COLORS) { return GA::Colors }
 		panic!("corrupt geometry attributes bitmask")
 	}
-
+}
+impl From<u8> for GeometryAttribute
+{
 	/// Construct from the given `u8` primitive value.
 	///
 	/// # Panics
@@ -175,7 +177,7 @@ impl GeometryAttribute
 	/// If the value is not a valid discriminant of the `GeometryAttribute` enum (i.e. if it's greater than
 	/// [`GeometryAttribute::MAX_SLOT`]).
 	#[inline(always)]
-	pub fn fromU8 (value: u8) -> Self
+	fn from (value: u8) -> Self
 	{
 		if value < Self::NUM_SLOTS {
 			return unsafe {
@@ -186,6 +188,7 @@ impl GeometryAttribute
 		panic!("invalid geometry attribute discriminant value");
 	}
 }
+
 /// Convenience shorthand for [`GeometryAttribute`].
 pub type GA = GeometryAttribute;
 

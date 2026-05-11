@@ -182,6 +182,10 @@ impl InterleavedBuffer
 			mapped_at_creation: true,
 		});
 
+		// Upload the data
+		layout.structuredUpload(data, std::slice::from_mut(&mut buffer.get_mapped_range_mut(..)));
+		buffer.unmap();
+
 		// Done!
 		Arc::new(Self { num: data.num(), layout, buffer, topology: options.topology })
 	}

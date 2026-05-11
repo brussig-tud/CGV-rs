@@ -109,7 +109,7 @@ impl GpuDataReceiver for DataReceiver {
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	_constantAttribUniforms: ConstantAttribsUniformGroup
+	constantAttribUniforms: ConstantAttribsUniformGroup
 }
 impl Spheres
 {
@@ -143,7 +143,7 @@ impl Spheres
 		).expect("shader module could not be compiled by WGPU");
 
 		// Done!
-		Self { shader, pipelineLayout, _constantAttribUniforms: constantAttribUniforms }
+		Self { shader, pipelineLayout, constantAttribUniforms }
 	}
 }
 impl Renderer for Spheres
@@ -201,8 +201,15 @@ impl Renderer for Spheres
 	}
 
 	fn render (
-		&self, _: &Context, renderPass: &mut wgpu::RenderPass, gpuState: &Self::GpuState, data: &Self::GpuDataReceiver
+		&self, _: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass, gpuState: &Self::GpuState,
+		data: &Self::GpuDataReceiver
 	){
 		renderPass.set_pipeline(gpuState); // <- in our case it's literally just the pipeline
+		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
+		renderPass.set_bind_group(1, &self.constantAttribUniforms.bindGroup, &[]);
+		let buffers = data.data.geometry();
+		for (slot, buffer) in data.layout.bufferIndices().iter().enumerate() {
+			renderPass.set_vertex_buffer(slot as u32, buffers[*buffer]);
+		}
 	}
 }

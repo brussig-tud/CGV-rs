@@ -20,9 +20,7 @@ use std::ops::{Deref, DerefMut};
 
 // Local imports
 #[expect(unused_imports)] // we only use these for documentation links
-use crate::{self as cgv, *};
-use crate::renderer::data::GeometryAttribute;
-use super as data;
+use crate::{self as cgv, *, renderer::{*, data::*}};
 
 
 
@@ -302,22 +300,22 @@ impl BufferAttributeSlot {
 
 ///
 #[derive(Default,Clone)]
-pub struct GeometryAttributeOccupancy([Option<BufferAttributeSlot>; data::GA::NUM_SLOTS as usize]);
+pub struct GeometryAttributeOccupancy([Option<BufferAttributeSlot>; GA::NUM_SLOTS as usize]);
 impl GeometryAttributeOccupancy {
 	///
-	pub fn withAttribute (mut self, attribute: data::GeometryAttribute, loc: BufferAttributeSlot) -> Self {
+	pub fn withAttribute (mut self, attribute: GeometryAttribute, loc: BufferAttributeSlot) -> Self {
 		self.0[attribute as usize].replace(loc);
 		self
 	}
 }
-impl From<GeometryAttributeOccupancy> for [Option<BufferAttributeSlot>; data::GA::NUM_SLOTS as usize] {
+impl From<GeometryAttributeOccupancy> for [Option<BufferAttributeSlot>; GA::NUM_SLOTS as usize] {
 	#[inline(always)]
 	fn from (occupancy: GeometryAttributeOccupancy) -> Self {
 		occupancy.0
 	}
 }
 impl Deref for GeometryAttributeOccupancy {
-	type Target = [Option<BufferAttributeSlot>; data::GA::NUM_SLOTS as usize];
+	type Target = [Option<BufferAttributeSlot>; GA::NUM_SLOTS as usize];
 
 	#[inline(always)]
 	fn deref (&self) -> &Self::Target {
@@ -398,7 +396,7 @@ impl BufferLayout
 		   )
 		&& self.positions == other.positions
 		&& {
-			for attrib in 0..data::GA::NUM_SLOTS as usize
+			for attrib in 0..GA::NUM_SLOTS as usize
 			{
 				if !Self::checkAttrib(
 					&self.buffers, &self.attribs[attrib], &other.buffers,
@@ -418,6 +416,100 @@ impl BufferLayout
 			self.buffers[0].attributes.iter().all(|a| a.offset < stride)
 		}
 	}
+
+	/// Perform upload structured according to the layout that `self` describes, of the given host data to the indicated
+	/// [pre-mapped buffers ranges](wgpu::Buffer::get_mapped_range_mut).
+	///
+	/// # Arguments
+	///
+	/// * `data` – The [`HostData`] storing the source attribute values.
+	/// * `bufferViews`  – [Host-mapped buffers ranges](wgpu::Buffer::get_mapped_range_mut), one for each
+	///                    [buffer layout descriptor](Self.buffers) entry described by this layout.
+	pub fn structuredUpload<D: HostData+?Sized> (&self, data: &D, bufferViews: &mut [wgpu::BufferViewMut])
+	{
+		// Obtain destination pointers
+		let dests: Vec<_> = bufferViews.iter_mut().map(
+			|bufferView| bufferView.slice(..).as_raw_ptr()
+		).collect();
+
+		// Build map from host attribute to hosted (co-located) attribute(s), if any. The one additional slot is for
+		// positions
+		// TODO: eliminate this search by pre-storing this information directly in the `BufferLayout`.
+		let mut hostedAttribs: [Option<GeometryAttribute>; GA::NUM_SLOTS as usize+1] = Default::default();
+		for (attrib,loc) in self.attribs.iter().enumerate()
+		{
+			if let Some(loc) = loc
+			{
+				if loc.offset() == 3
+				{
+					if self.positions.inSameBufferSlot(loc) {
+						hostedAttribs[GA::NUM_SLOTS as usize].replace((attrib as u8).into());
+						continue;
+					}
+					let mut found = false;
+					for (otherAttrib, otherLoc) in self.attribs.iter().enumerate()
+					{
+						if    otherAttrib != attrib 
+						   && let Some(otherLoc) = otherLoc && loc.inSameBufferSlot(otherLoc)
+						{
+							hostedAttribs[otherAttrib].replace((attrib as u8).into());
+							found = true;
+							break;
+						}
+					}
+					if found {
+						continue;
+					}
+					panic!(
+						"INTERNAL LOGIC ERROR: attribute `{:?}` is co-located with some other attribute that is not in \
+						 the layout", GeometryAttribute::from(attrib as u8)
+					);
+				}
+			}
+		}
+
+		// Upload every attribute in non-interleaved fashion.
+		// TODO: come up with an algorithm to do interleaved uploads, and use that instead for interleaved source data
+		self.upload::<glm::Vec4, _>(
+			dests.as_slice(), self.positions, data.positions().map(
+				if let Some(hostedAttrib) = hostedAttribs[GA::NUM_SLOTS as usize] {
+					|p: glm::Vec3| glm::vec4(p.x, p.y, p.z, 1.0)
+				} else {
+					|p: glm::Vec3| glm::vec4(p.x, p.y, p.z, 1.0)
+				}
+			),
+		);
+	}
+
+	/// Private helper function for use inside [`structuredUpload`].
+	fn upload <T, Iter: Iterator<Item=T>> (
+		&self, dests: &[core::ptr::NonNull<[u8]>], attribute: BufferAttributeSlot, source: Iter
+	){
+		// Obtain target information
+		let buffer = attribute.buffer();
+		let mut ptr = dests[buffer].cast::<u8>();
+		let layout = &self.buffers[buffer];
+
+		// Upload
+		for value in source
+		{
+			// Write current value
+			unsafe {
+				// SAFETY: `ptr` points to a valid `T` initially, and always will as (a) the shift below will never take
+				//         us outside the mapped buffer range, and (b) the shift observes alignment requirements and
+				//         padding amounts of `T`.
+				ptr.cast::<T>().write(value);
+			}
+			// Move destination pointer
+			unsafe {
+				// SAFETY: `array_stride` is ground-truth regarding alignment/padding of `T` within the mapped buffer
+				//         range we're writing to, which we trust the caller sized appropriately such that we won't go
+				//         out of bounds here.
+				// TODO: with the current design, we cannot assert the last invariant.
+				ptr = ptr.add(layout.array_stride as usize);
+			}
+		}
+	}
 }
 impl PartialEq<Self> for BufferLayout
 {
@@ -427,7 +519,7 @@ impl PartialEq<Self> for BufferLayout
 		if self.buffers.len() != other.buffers.len() {
 			return false;
 		}
-		for (a,b) in self.buffers.iter().zip(other.buffers.iter())
+		for (a, b) in self.buffers.iter().zip(other.buffers.iter())
 		{
 			if a.array_stride != b.array_stride || a.attributes.len() != b.attributes.len() {
 				return false;
@@ -461,7 +553,7 @@ impl PipelineBufferLayout
 	/// **TODO: Validate validity of shader locations, which right now could be made inconsistent by the caller**
 	pub fn create (
 		dataLayout: &BufferLayout, shaderLoc_positions: u32, step_mode: wgpu::VertexStepMode,
-		includeAttribs: &[(data::GeometryAttribute, u32)]
+		includeAttribs: &[(GeometryAttribute, u32)]
 	) -> Self
 	{
 		// Local helper functions

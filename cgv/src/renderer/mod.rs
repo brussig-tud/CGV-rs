@@ -108,8 +108,8 @@ pub trait Renderer
 
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
 	fn render (
-		&self, context: &Context, renderPass: &mut wgpu::RenderPass, gpuState: &Self::GpuState,
-		data: &Self::GpuDataReceiver
+		&self, context: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass,
+		gpuState: &Self::GpuState, data: &Self::GpuDataReceiver
 	);
 }
 
@@ -244,19 +244,22 @@ impl<R: Renderer> Managed<R>
 	/// Dispatch rendering for the very first set of [`GpuState`], typically for use when the managed renderer was
 	/// [built for a single render state](Self::rebuildForSingleRenderState).
 	#[inline(always)]
-	pub fn render (&self, context: &Context, renderPass: &mut wgpu::RenderPass) {
-		self.renderForGlobalPass(context, renderPass, 0);
+	pub fn render (&self, context: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass) {
+		self.renderForGlobalPass(context, renderState, renderPass, 0);
 	}
 
 	/// Dispatch rendering for the set of [`GpuState`] associated with the specified [`GlobalPass`].
-	pub fn renderForGlobalPass (&self, context: &Context, renderPass: &mut wgpu::RenderPass, globalPassIdx: usize)
-	{
+	pub fn renderForGlobalPass (
+		&self, context: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass, globalPassIdx: usize
+	){
 		assert!(
 			globalPassIdx < self.gpuStates.len(), "invalid GPU state index - was the renderer properly initialized?"
 		);
-		self.renderer.render(context, renderPass, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
-			"render data should be set before rendering"
-		));
+		self.renderer.render(
+			context, renderState, renderPass, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
+				"render data should be set before rendering"
+			)
+		);
 	}
 }
 impl<R: Renderer> Deref for Managed<R> {
