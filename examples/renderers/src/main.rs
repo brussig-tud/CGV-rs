@@ -233,11 +233,14 @@ impl cgv::Application for RenderersDemo
 	}
 
 	fn render (
-		&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &mut wgpu::RenderPass,
-		_: &cgv::GlobalPass
+		&mut self, context: &cgv::Context, _: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		globalPass: &cgv::GlobalPass
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
-		None // we don't need the Player to submit any custom command buffers for us
+		// Render our test data
+		self.sphereRenderer.render(context, renderPass);
+
+		None // <- we don't need the Player to submit any custom command buffers for us
 	}
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)

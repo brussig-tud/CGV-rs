@@ -200,7 +200,9 @@ impl Renderer for Spheres
 		pipeline
 	}
 
-	fn render (&self, _context: &Context, _gpuState: &Self::GpuState, _data: &Self::GpuDataReceiver) {
-		todo!()
+	fn render (
+		&self, _: &Context, renderPass: &mut wgpu::RenderPass, gpuState: &Self::GpuState, data: &Self::GpuDataReceiver
+	){
+		renderPass.set_pipeline(gpuState); // <- in our case it's literally just the pipeline
 	}
 }

@@ -107,7 +107,10 @@ pub trait Renderer
 		-> Self::GpuState;
 
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
-	fn render (&self, context: &Context, gpuState: &Self::GpuState, data: &Self::GpuDataReceiver);
+	fn render (
+		&self, context: &Context, renderPass: &mut wgpu::RenderPass, gpuState: &Self::GpuState,
+		data: &Self::GpuDataReceiver
+	);
 }
 
 
@@ -212,8 +215,7 @@ impl<R: Renderer> Managed<R>
 	/// `Player` reference will not be detected and constitutes a logic bug. Since there is just one (global) `Player`
 	/// instance that applications will typically use, this contract will virtually always be fulfilled in practice.
 	#[inline]
-	pub fn setDataWithPlayer (&mut self, context: &Context, player: &Player, newData: R::GpuDataReceiver)
-	{
+	pub fn setDataWithPlayer (&mut self, context: &Context, player: &Player, newData: R::GpuDataReceiver) {
 		let rebuild = self.needsRebuild(&newData);
 		self.data = Some(newData);
 		if rebuild {
@@ -242,17 +244,17 @@ impl<R: Renderer> Managed<R>
 	/// Dispatch rendering for the very first set of [`GpuState`], typically for use when the managed renderer was
 	/// [built for a single render state](Self::rebuildForSingleRenderState).
 	#[inline(always)]
-	pub fn render (&self, context: &Context) {
-		self.renderForGlobalPass(context, 0);
+	pub fn render (&self, context: &Context, renderPass: &mut wgpu::RenderPass) {
+		self.renderForGlobalPass(context, renderPass, 0);
 	}
 
 	/// Dispatch rendering for the set of [`GpuState`] associated with the specified [`GlobalPass`].
-	pub fn renderForGlobalPass (&self, context: &Context, globalPassIdx: usize)
+	pub fn renderForGlobalPass (&self, context: &Context, renderPass: &mut wgpu::RenderPass, globalPassIdx: usize)
 	{
 		assert!(
 			globalPassIdx < self.gpuStates.len(), "invalid GPU state index - was the renderer properly initialized?"
 		);
-		self.renderer.render(context, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
+		self.renderer.render(context, renderPass, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
 			"render data should be set before rendering"
 		));
 	}
