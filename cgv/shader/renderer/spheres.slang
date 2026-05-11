@@ -18,10 +18,101 @@ using namespace cgv;
 
 //////
 //
+// Structs
+//
+
+/// Representation of a sphere.
+struct Sphere {
+	/// The position of the sphere center in camera space.
+	var pos_rad: float4;
+
+	/// The color of the sphere.
+	var color: float4;
+
+	/// Slang initializer for constructing a new instances of this struct.
+	[ForceInline]
+	__init (const in float4 pos_rad, const in float4 color) {
+		this.pos_rad = pos_rad; this.color = color;
+	}
+};
+
+
+
+//////
+//
 // Streams
 //
 
-/* no custom structs - for now we just use builtin primitives (float4 in our case). */
+////
+// Vertex shader input
+
+/// Sphere attributes input stream for the positions/co-located radius plus colors case.
+struct VSInput_posRadColor {
+	/// The position of the sphere center in world space, and potentially the radius in the *w*-component.
+	[vk::location(0)] var pos_rad: float4;
+
+	/// The color of the sphere.
+	[vk::location(1)] var color: float4;
+};
+
+/// Sphere attributes input stream for the positions with separate radius case.
+struct VSInput_posSepRad {
+	/// The position of the sphere center in world space.
+	[vk::location(0)] var pos: float4;
+
+	/// The radius of the sphere.
+	[vk::location(1)] var radius: float;
+};
+
+/// Sphere attributes input stream for the positions with separate radius and color case.
+struct VSInput_posSepRadColor {
+	/// The position of the sphere center in world space.
+	[vk::location(0)] var pos: float4;
+
+	/// The radius of the sphere.
+	[vk::location(1)] var radius: float;
+
+	/// The color of the sphere.
+	[vk::location(2)] var color: float4;
+};
+
+
+////
+// Vertex shader output / fragment shader input
+
+/// Splat vertex attributes for the positions-only/co-located radius case.
+struct SphereSplat_posRad {
+	/// Clip-space position of the splat vertex.
+	float4 pos_clip: SV_Position;
+
+	/// Camera-space position of the sphere center (and optionally radius).
+	nointerpolation float4 pos_rad;
+
+	/// Slang initializer for constructing a new instances of this struct.
+	[ForceInline]
+	__init (const in float4 pos_clip, const in float4 pos_rad) {
+		this.pos_clip = pos_clip; this.pos_rad = pos_rad;
+	}
+};
+
+/// Splat vertex attributes for the positions/co-located radius plus colors case.
+struct SphereSplat_posRadColor {
+	/// Clip-space position of the splat vertex.
+	float4 pos_clip: SV_Position;
+
+	/// Camera-space position of the sphere center (and optionally radius).
+	nointerpolation float4 pos_rad;
+
+	/// The color of the sphere.
+	nointerpolation float4 color;
+
+	/// Slang initializer for constructing a new instances of this struct.
+	[ForceInline]
+	__init (const in float4 pos_clip, const in float4 pos_rad, const in float4 color) {
+		this.pos_clip = pos_clip; this.pos_rad = pos_rad; this.color = color;
+	}
+};
+
 
 
 
@@ -57,37 +148,77 @@ ParameterBlock<ConstantAttribs> constAttribs;
 
 /// Vertex shader entry point for the positions-only case.
 [shader("vertex")]
-float4 vertexMain_pos (uint vertexID: SV_VertexID) : SV_Position {
-	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
+	var sphere = Sphere(float4(pos.xyz, constAttribs.radius), constAttribs.color);
+	return SphereSplat_posRad(
+		/* pos_clip: */ splatSphere(sphere, vertexID),
+		/* pos_rad:  */ sphere.pos_rad
+	);
 }
 
 /// Vertex shader entry point for the combined positions/radii case.
 [shader("vertex")]
-float4 vertexMain_posRad (uint vertexID: SV_VertexID) : SV_Position {
-	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+func vertexMain_posRad (in pos_rad: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
+	var sphere = Sphere(pos_rad, constAttribs.color);
+	return SphereSplat_posRad(
+		/* pos_clip: */ splatSphere(sphere, vertexID),
+		/* pos_rad:  */ sphere.pos_rad
+	);
 }
 
 /// Vertex shader entry point for the separate positions/radii case.
 [shader("vertex")]
-float4 vertexMain_posSepRad (uint vertexID: SV_VertexID) : SV_Position {
-	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+func vertexMain_posSepRad (in sphere: VSInput_posSepRad, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
+	var sphere = Sphere(float4(sphere.pos.xyz, sphere.radius), constAttribs.color);
+	return SphereSplat_posRad(
+		/* pos_clip: */ splatSphere(sphere, vertexID),
+		/* pos_rad:  */ sphere.pos_rad
+	);
 }
 
 /// Vertex shader entry point for the positions and colors case.
 [shader("vertex")]
-float4 vertexMain_posColor (uint vertexID: SV_VertexID) : SV_Position {
-	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+func vertexMain_posColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
+{
+	var sphere = Sphere(float4(sphere.pos_rad.xyz, constAttribs.radius), sphere.color);
+	return SphereSplat_posRadColor(
+		/* pos_clip: */ splatSphere(sphere, vertexID),
+		/* pos_rad:  */ sphere.pos_rad,
+		/* color:    */ sphere.color
+	);
 }
 
 /// Vertex shader entry point for the combined positions/radii and colors case.
 [shader("vertex")]
-float4 vertexMain_posRadColor (uint vertexID: SV_VertexID) : SV_Position {
-	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+func vertexMain_posRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
+{
+	var sphere = Sphere(sphere.pos_rad, sphere.color);
+		return SphereSplat_posRadColor(
+		/* pos_clip: */ splatSphere(sphere, vertexID),
+		/* pos_rad:  */ sphere.pos_rad,
+		/* color:    */ sphere.color
+	);
 }
 
 /// Vertex shader entry point for the separate positions/radii and colors case.
 [shader("vertex")]
-float4 vertexMain_posSepRadColor (uint vertexID: SV_VertexID) : SV_Position {
+func vertexMain_posSepRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
+{
+	var sphere = Sphere(float4(sphere.pos_rad.xyz, constAttribs.radius), constAttribs.color);
+		return SphereSplat_posRadColor(
+		/* pos_clip: */ splatSphere(sphere, vertexID),
+		/* pos_rad:  */ sphere.pos_rad,
+		/* color:    */ sphere.color
+	);
+}
+
+
+////
+// Functions
+
+/// The splatting shading logic.
+func splatSphere (inout sphere: Sphere, const in uint vertexID) -> float4 {
+	sphere.pos_rad.xyz = (viewing.modelview * float4(sphere.pos_rad.xyz, 1.)).xyz;
 	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
 }
 
@@ -99,26 +230,53 @@ float4 vertexMain_posSepRadColor (uint vertexID: SV_VertexID) : SV_Position {
 //
 
 ////
-// Helper functions
+// Entry points
 
-/// Tests the `IHit` interface.
-func evaluateHit (hit: geom::intersect::IHit<float3>) -> float4 {
-	return constAttribs.color * float4(hit.point, 1.);
+/// Fragment shader entry point for the positions-only case.
+[shader("fragment")]
+func fragmentMain_pos (splat: SphereSplat_posRad) -> float4 {
+	// Delegate to actual shading routine
+	return shadeSphere(Sphere(float4(splat.pos_rad.xyz, constAttribs.radius), constAttribs.color));
+}
+
+/// Fragment shader entry point for the positions and radii case.
+[shader("fragment")]
+func fragmentMain_posRad (splat: SphereSplat_posRad) -> float4 {
+	// Delegate to actual shading routine
+	return shadeSphere(Sphere(splat.pos_rad, constAttribs.color));
+}
+
+/// Fragment shader entry point for the positions and colors case.
+[shader("fragment")]
+func fragmentMain_posColor (splat: SphereSplat_posRadColor) -> float4 {
+	// Delegate to actual shading routine
+	return shadeSphere(Sphere(float4(splat.pos_rad.xyz, constAttribs.radius), splat.color));
+}
+
+/// Fragment shader entry point for the positions, radii and colors case.
+[shader("fragment")]
+func fragmentMain_posRadColor (splat: SphereSplat_posRadColor) -> float4 {
+	// Delegate to actual shading routine
+	return shadeSphere(Sphere(splat.pos_rad, splat.color));
 }
 
 
 ////
-// Entry points
+// Functions
 
-/// Our sole fragment shader entry point.
-[shader("fragment")]
-func fragmentMain_posOnly (pos: float4) -> float4
+/// The actual shading logic.
+func shadeSphere (const in sphere: Sphere) -> float4
 {
 	// Test intersect and billboard module
 	var hit: geom::intersect::Hit<float3>;
-	hit.point = geom::Billboards<float>::quad[1].xyz + pos.xyz / pos.w;
-	hit.l = pos.w;
+	hit.point = geom::Billboards<float>::quad[1].xyz + sphere.pos_rad.xyz / sphere.pos_rad.w;
+	hit.l = sphere.pos_rad.w;
 
 	// Just emit unlit default color for whole billboard
 	return evaluateHit(hit);
+}
+
+/// Tests the `IHit` interface.
+func evaluateHit (hit: geom::intersect::IHit<float3>) -> float4 {
+	return constAttribs.color * float4(hit.point, 1.);
 }

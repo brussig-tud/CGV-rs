@@ -37,7 +37,8 @@ pub struct DataReceiver {
 	data: Arc<dyn renderer::GpuData>,
 	layout: GpuPipelineBufferLayout,
 	defaultAttribValues: ConstantAttributes,
-	entryPoint: String
+	vsEntryPoint: String,
+	fsEntryPoint: String
 }
 impl DataReceiver
 {
@@ -50,16 +51,19 @@ impl DataReceiver
 	{
 		// Infer the right shader entry point and vertex shader locations from the available attributes
 		let layout = data.layout();
-		let mut entryPoint = "vertexMain_pos".to_string();
+		let mut vsEntryPoint = "vertexMain_pos".to_string();
+		let mut fsEntryPoint = "fragmentMain_pos".to_string();
 		let mut shaderLoc = 0;
 		let mut includeAttribs = vec![];
 		if let Some(radii) = layout.attribute(GA::Radii) {
-			if layout.positions.inSameBufferSlot(&radii) { entryPoint += "Rad" }
-			else                                         { entryPoint += "SepRad"; shaderLoc = 1 }
+			if layout.positions.inSameBufferSlot(&radii) { vsEntryPoint += "Rad" }
+			else                                         { vsEntryPoint += "SepRad"; shaderLoc = 1 }
+			fsEntryPoint += "Rad";
 			includeAttribs.push((GA::Radii, shaderLoc));
 		}
 		if layout.hasAttribute(GA::Colors) {
-			entryPoint += "Color"; shaderLoc += 1;
+			vsEntryPoint += "Color"; shaderLoc += 1;
+			fsEntryPoint += "Color";
 			includeAttribs.push((GA::Colors, shaderLoc));
 		}
 
@@ -69,7 +73,7 @@ impl DataReceiver
 		);
 
 		// Done!
-		Self { data, layout, defaultAttribValues: ConstantAttributes::default(), entryPoint }
+		Self { data, layout, defaultAttribValues: ConstantAttributes::default(), vsEntryPoint, fsEntryPoint }
 	}
 
 	/// Modify the default radius that will be used when the received [`GpuData`](renderer::GpuData) does not include
@@ -151,7 +155,9 @@ impl Renderer for Spheres
 	fn gpuStateIsIndependentFromData (&self) -> bool {
 		// Since we use instancing, our pipeline depends on the instance attributes in the vertex state. This could be
 		// avoided with attribute-less rendering, but we don't want to give up on the potentially significant
-		// performance advantage afforded by the vertex pipeline FIFO cache.
+		// performance advantage afforded by the vertex pipeline FIFO cache, which we stand to gain a lot from due to
+		// our low number of vertex attributes. (Note: using a compute shader to emulate the geometry shader would not
+		// fundamentally change this argument – we still need to get the attributes to the fragment shader)
 		false
 	}
 
@@ -162,7 +168,7 @@ impl Renderer for Spheres
 		// Construct vertex state
 		let vertexState = wgpu::VertexState {
 			module: &self.shader,
-			entry_point: Some(&data.entryPoint),
+			entry_point: Some(&data.vsEntryPoint),
 			buffers: &data.layout.bufferLayouts(),
 			compilation_options: wgpu::PipelineCompilationOptions::default(),
 		};
@@ -174,7 +180,7 @@ impl Renderer for Spheres
 			vertex: vertexState,
 			fragment: Some(wgpu::FragmentState {
 				module: &self.shader,
-				entry_point: Some("fragmentMain_posOnly"),
+				entry_point: Some(&data.fsEntryPoint),
 				targets: &[Some(renderstate::changeColorTargetState_blending(
 					renderState.colorTargetState(), renderstate::BlendingOperation::AlphaPreMultiplied
 				))],
