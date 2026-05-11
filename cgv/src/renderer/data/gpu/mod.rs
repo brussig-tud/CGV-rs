@@ -458,7 +458,7 @@ impl PipelineBufferLayout
 	/// number of filtered attributes, which is probably still the most performant way if we want to **preserve the
 	/// order in which the buffers are referenced** in the original, unfiltered layout.
 	///
-	/// **TODO: Currently buggy for non-colocated scalar attributes (radii and radius derivs)**
+	/// **TODO: Validate validity of shader locations, which right now could be made inconsistent by the caller**
 	pub fn create (
 		dataLayout: &BufferLayout, shaderLoc_positions: u32, step_mode: wgpu::VertexStepMode,
 		includeAttribs: &[(data::GeometryAttribute, u32)]
@@ -524,7 +524,6 @@ impl PipelineBufferLayout
 						);
 						includeShaderAttrib(&mut filteredAttribDecls, newBufIdx, wgpuVertexAttrib);
 						includeBuffer = true;
-						break;
 					}
 				}
 			}
