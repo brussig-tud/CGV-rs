@@ -216,7 +216,7 @@ impl cgv::Application for RenderersDemo
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
+	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
@@ -224,7 +224,7 @@ impl cgv::Application for RenderersDemo
 
 	fn render (
 		&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &mut wgpu::RenderPass,
-		_: &cgv::GlobalPass
+		_: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
 		None // we don't need the Player to submit any custom command buffers for us
