@@ -183,7 +183,7 @@ impl InterleavedBuffer
 		});
 
 		// Upload the data
-		layout.structuredUpload(data, std::slice::from_mut(&mut buffer.get_mapped_range_mut(..)));
+		layout.structuredUpload(data, std::slice::from_ref(&buffer));
 		buffer.unmap();
 
 		// Done!

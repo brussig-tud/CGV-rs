@@ -418,18 +418,21 @@ impl BufferLayout
 	}
 
 	/// Perform upload structured according to the layout that `self` describes, of the given host data to the indicated
-	/// [pre-mapped buffers ranges](wgpu::Buffer::get_mapped_range_mut).
+	/// [pre-mapped](wgpu::Buffer::map_async) buffers ranges.
 	///
 	/// # Arguments
 	///
 	/// * `data` – The [`HostData`] storing the source attribute values.
-	/// * `bufferViews`  – [Host-mapped buffers ranges](wgpu::Buffer::get_mapped_range_mut), one for each
-	///                    [buffer layout descriptor](Self.buffers) entry described by this layout.
-	pub fn structuredUpload<D: HostData+?Sized> (&self, data: &D, bufferViews: &mut [wgpu::BufferViewMut])
+	/// * `buffers` – Host-mapped buffers, one for each [buffer layout descriptor](Self.buffers) entry described by
+	///               this layout.
+	pub fn structuredUpload<D: HostData+?Sized> (&self, data: &D, buffers: &[wgpu::Buffer])
 	{
 		// Obtain destination pointers
-		let dests: Vec<_> = bufferViews.iter_mut().map(
-			|bufferView| bufferView.slice(..).as_raw_ptr()
+		let dests: Vec<_> = self.buffers.iter().zip(buffers.iter()).map(
+			|(layout, buffer)| {
+				let range = 0..(data.num() as wgpu::BufferAddress*layout.array_stride);
+				buffer.get_mapped_range_mut(range).slice(..).as_raw_ptr().cast::<u8>()
+			}
 		).collect();
 
 		// Build map from host attribute to hosted (co-located) attribute(s), if any. The one additional slot is for
@@ -483,7 +486,7 @@ impl BufferLayout
 
 	/// Private helper function for use inside [`structuredUpload`].
 	fn upload <T, Iter: Iterator<Item=T>> (
-		&self, dests: &[core::ptr::NonNull<[u8]>], attribute: BufferAttributeSlot, source: Iter
+		&self, dests: &[core::ptr::NonNull<u8>], attribute: BufferAttributeSlot, source: Iter
 	){
 		// Obtain target information
 		let buffer = attribute.buffer();
@@ -504,8 +507,8 @@ impl BufferLayout
 			unsafe {
 				// SAFETY: `array_stride` is ground-truth regarding alignment/padding of `T` within the mapped buffer
 				//         range we're writing to, which we trust the caller sized appropriately such that we won't go
-				//         out of bounds here.
-				// TODO: with the current design, we cannot assert the last invariant.
+				//         out of bounds here (this is a private helper method and we do actually map such that it stays
+				//         in bounds in `Self::structuredUpload`).
 				ptr = ptr.add(layout.array_stride as usize);
 			}
 		}
