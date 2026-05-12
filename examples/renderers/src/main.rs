@@ -15,7 +15,7 @@
 //
 
 // Standard library
-use std::default::Default;
+use std::{sync::Arc, default::Default};
 
 // CGV re-imports
 use cgv::{wgpu, glm, egui, tracing};
@@ -103,11 +103,11 @@ const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5,
 	Clone,
 
 	// Attributes we have
-	renderer::data::InterleavedElem,renderer::data::ElemWithTangent,renderer::data::ElemWithRadius,
-	renderer::data::ElemWithRadiusDeriv,renderer::data::ElemWithColor,
+	renderer::data::InterleavedElem,renderer::data::ElemWithRadius,renderer::data::ElemWithTangent,
+	renderer::data::ElemWithRadiusDeriv, renderer::data::ElemWithNormal,renderer::data::ElemWithColor,
 
 	// Attributes we don't have
-	renderer::data::NoNormal,renderer::data::NoOrientation,renderer::data::NoScaling
+	renderer::data::NoOrientation,renderer::data::NoScaling
 )]
 pub struct DataPoint
 {
@@ -115,8 +115,8 @@ pub struct DataPoint
 	#[cgv_renderAttr(radius)]      pub radius: f32,
 	#[cgv_renderAttr(tangent)]     pub tangent: glm::Vec3,
 	#[cgv_renderAttr(radiusDeriv)] pub radDeriv: f32,
-	#[cgv_renderAttr(color)]       pub color: cgv::RGBA,
 	#[cgv_renderAttr(normal)]      pub normal: glm::Vec3,
+	#[cgv_renderAttr(color)]       pub color: cgv::RGBA,
 }
 
 
@@ -139,20 +139,15 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 	/* generate test data */
 	let spheresData = renderer::data::gpu::InterleavedBuffer::fromHost (
-		context, &DATA_POINTS, renderer::data::gpu::InterleavedBufferOptions {
-			radiusStorage: renderer::data::gpu::SAS::Separate,
-			..Default::default()
-		}, Some("RenderersDemo_spheresData")
+		context, &DATA_POINTS, /* options: */Default::default(), Some("RenderersDemo_spheresData")
 	);
 
 
 	////
 	// Initialize renderers
 
-	let mut sphereRenderer = renderer::Managed::new(
-		renderer::Spheres::new(context, renderSetup)
-	);
-	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData));
+	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, renderSetup));
+	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData.clone()));
 
 
 	////
@@ -165,7 +160,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { sphereRenderer, _guiState: guiState }))
+	Ok(Box::new(RenderersDemo { spheresData, sphereRenderer, _guiState: guiState }))
 }
 
 #[derive(Default,Debug)]
@@ -174,7 +169,8 @@ struct GuiState {}
 struct RenderersDemo
 {
 	// The renderable test data
-	//spheresData: Arc<cgv::renderer::spheres::GpuData>,
+	#[expect(dead_code)]
+	spheresData: Arc<renderer::data::gpu::InterleavedBuffer>,
 
 	// Test sphere renderer
 	sphereRenderer: renderer::Managed<renderer::Spheres>,
