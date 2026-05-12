@@ -224,6 +224,19 @@ pub struct GlobalPasses<'cam> {
 // Traits
 //
 
+/// Convenience extension trait for our default color type to convert it to [`glm::Vec4`]
+pub trait AsVec4 {
+	fn as_vec4 (&self) -> &glm::Vec4;
+}
+impl AsVec4 for cgv::RGBA {
+	fn as_vec4 (&self) -> &glm::Vec4 {
+		unsafe {
+			// SAFETY: `RGBA` is just `[f32; 4]`, exactly like `glm::Vec4`.
+			&*(self as *const Self as *const glm::Vec4)
+		}
+	}
+}
+
 /// Base trait for different kinds of objects stored in the [`Player`], such as [applications](Application) and
 /// [camera interactors](view::CameraInteractor).
 /// To allow runtime downcasts, implementors must be `'static`, i.e. not have any lifetime parameters.

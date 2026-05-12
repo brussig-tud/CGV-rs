@@ -19,7 +19,6 @@ pub use interleaved_buffer::{InterleavedBuffer, InterleavedBufferOptions}; // re
 use std::ops::{Deref, DerefMut};
 
 // Local imports
-#[expect(unused_imports)] // we only use these for documentation links
 use crate::{self as cgv, *, renderer::{*, data::*}};
 
 
@@ -157,6 +156,69 @@ pub trait HasColors: Data {
 	/// Directly reference the exact location of the colors in the overall buffer layout.
 	fn colors (&self) -> &BufferAttributeSlot;
 }
+
+/// Private helper trait to allow generic construction of [`UploadableElem`]-compliant structs.
+trait UploadSourceElem {
+	type Target: UploadableElem;
+	fn upload (&self) -> Self::Target;
+	fn uploadWithScalar (&self, scalar: f32) -> Self::Target;
+}
+impl UploadSourceElem for f32 {
+	type Target = Self;
+	#[inline(always)]
+	fn upload (&self) -> Self::Target { *self }
+	#[inline(always)]
+	fn uploadWithScalar (&self, _: f32) -> Self::Target {
+		panic!("INTERNAL LOGIC ERROR: embedding another scalar into `Float32`")
+	}
+}
+impl UploadSourceElem for glm::Vec3 {
+	type Target = glm::Vec4;
+	#[inline(always)]
+	fn upload (&self) -> Self::Target { glm::vec3_to_vec4(self) }
+	#[inline(always)]
+	fn uploadWithScalar (&self, scalar: f32) -> Self::Target {
+		glm::vec4(self.x, self.y, self.z, scalar)
+	}
+}
+impl UploadSourceElem for glm::Vec4 {
+	type Target = Self;
+	#[inline(always)]
+	fn upload (&self) -> Self::Target { *self }
+	#[inline(always)]
+	fn uploadWithScalar (&self, _: f32) -> Self::Target {
+		panic!("INTERNAL LOGIC ERROR: embedding scalar into `Float32x4`")
+	}
+}
+impl UploadSourceElem for glm::Quat {
+	type Target = glm::Vec4;
+	#[inline(always)]
+	fn upload (&self) -> Self::Target { self.coords }
+	#[inline(always)]
+	fn uploadWithScalar (&self, _: f32) -> Self::Target {
+		panic!("INTERNAL LOGIC ERROR: embedding scalar into `Float32x4`")
+	}
+}
+impl UploadSourceElem for cgv::RGBA {
+	type Target = glm::Vec4;
+	#[inline(always)]
+	fn upload (&self) -> Self::Target { *self.as_vec4() }
+	#[inline(always)]
+	fn uploadWithScalar (&self, _: f32) -> Self::Target {
+		panic!("INTERNAL LOGIC ERROR: embedding scalar into `Float32x4`")
+	}
+}
+
+/// Private helper trait to unsure soundness in [`BufferLayout::upload`] by restricting the type of uploadable elements
+/// to those which we know will get aligned/padded correctly.
+trait UploadableElem: Sized {
+	#[inline(always)]
+	fn from (source: &impl UploadSourceElem<Target=Self>) -> Self { source.upload() }
+	#[inline(always)]
+	fn withScalar (source: &impl UploadSourceElem<Target=Self>, scalar: f32) -> Self { source.uploadWithScalar(scalar) }
+}
+impl UploadableElem for f32 {}
+impl UploadableElem for glm::Vec4 {}
 
 
 
@@ -439,12 +501,14 @@ impl BufferLayout
 		// positions
 		// TODO: eliminate this search by pre-storing this information directly in the `BufferLayout`.
 		let mut hostedAttribs: [Option<GeometryAttribute>; GA::NUM_SLOTS as usize+1] = Default::default();
+		let mut isHosted: [bool; GA::NUM_SLOTS as usize+1] = Default::default();
 		for (attrib,loc) in self.attribs.iter().enumerate()
 		{
 			if let Some(loc) = loc
 			{
 				if loc.offset() == 3
 				{
+					isHosted[attrib] = true;
 					if self.positions.inSameBufferSlot(loc) {
 						hostedAttribs[GA::NUM_SLOTS as usize].replace((attrib as u8).into());
 						continue;
@@ -472,20 +536,79 @@ impl BufferLayout
 		}
 
 		// Upload every attribute in non-interleaved fashion.
-		// TODO: come up with an algorithm to do interleaved uploads, and use that instead for interleaved source data
-		self.upload::<glm::Vec4, _>(
-			dests.as_slice(), self.positions, data.positions().map(
-				if let Some(hostedAttrib) = hostedAttribs[GA::NUM_SLOTS as usize] {
-					|p: glm::Vec3| glm::vec4(p.x, p.y, p.z, 1.0)
-				} else {
-					|p: glm::Vec3| glm::vec4(p.x, p.y, p.z, 1.0)
-				}
-			),
+		// TODO: come up with some way to write this down in a less repetitive way (will probably require macro)
+		self.upload(
+			dests.as_slice(), self.positions, hostedAttribs[GA::NUM_SLOTS as usize], data.positions(), data
 		);
+		if let Some(normals) = self.attribs[GA::Normals.slot()] && !isHosted[GA::Normals.slot()] {
+			self.upload(
+				dests.as_slice(), normals, hostedAttribs[GA::Normals.slot()], data.normals(), data
+			)
+		}
+		if let Some(tangents) = self.attribs[GA::Tangents.slot()] && !isHosted[GA::Tangents.slot()] {
+			self.upload(
+				dests.as_slice(), tangents, hostedAttribs[GA::Tangents.slot()], data.tangents(), data
+			)
+		}
+		if let Some(radii) = self.attribs[GA::Radii.slot()] && !isHosted[GA::Radii.slot()] {
+			self.upload(
+				dests.as_slice(), radii, hostedAttribs[GA::Radii.slot()], data.radii(), data
+			)
+		}
+		if    let Some(radiusDerivs) = self.attribs[GA::RadiusDerivs.slot()]
+		   && !isHosted[GA::RadiusDerivs.slot()] {
+			self.upload(
+				dests.as_slice(), radiusDerivs, hostedAttribs[GA::RadiusDerivs.slot()], data.radiusDerivs(),
+				data
+			)
+		}
+		if    let Some(orientations) = self.attribs[GA::Orientations.slot()]
+		   && !isHosted[GA::Orientations.slot()] {
+			self.upload(
+				dests.as_slice(), orientations, hostedAttribs[GA::Orientations.slot()], data.orientations(),
+				data
+			)
+		}
+		if let Some(scalings) = self.attribs[GA::Scalings.slot()] && !isHosted[GA::Scalings.slot()] {
+			self.upload(
+				dests.as_slice(), scalings, hostedAttribs[GA::Scalings.slot()], data.scalings(), data
+			)
+		}
+		if let Some(colors) = self.attribs[GA::Colors.slot()] && !isHosted[GA::Colors.slot()] {
+			self.upload(
+				dests.as_slice(), colors, hostedAttribs[GA::Colors.slot()], data.colors(), data
+			)
+		}
 	}
 
-	/// Private helper function for use inside [`structuredUpload`].
-	fn upload <T, Iter: Iterator<Item=T>> (
+	/// Private helper function for use inside [`Self::structuredUpload`].
+	fn upload<TDst, TSrc, IterSrc, D: HostData+?Sized> (
+		&self, dests: &[core::ptr::NonNull<u8>], attrib: BufferAttributeSlot, hostedAttrib: Option<GeometryAttribute>,
+		iterSrc: IterSrc, data: &D
+	)
+		where TDst: UploadableElem, TSrc: UploadSourceElem<Target=TDst>, IterSrc: Iterator<Item=TSrc>
+	{
+		if let Some(hostedAttrib) = hostedAttrib
+		{
+			match hostedAttrib
+			{
+				GA::Radii => self.uploadImpl(
+					dests, attrib, iterSrc.zip(data.radii()).map(|(v, r)| TDst::withScalar(&v, r)),
+				),
+				GA::RadiusDerivs => self.uploadImpl(
+					dests, attrib, iterSrc.zip(data.radiusDerivs()).map(|(v, rd)| TDst::withScalar(&v, rd)),
+				),
+				_ => unreachable!("only scalar attributes can be hosted")
+			}
+		}
+		else {
+			self.uploadImpl(dests, attrib, iterSrc.map(|val| TDst::from(&val)))
+		}
+	}
+
+	/// Private helper function for use inside [`Self::upload`].
+	#[inline]
+	fn uploadImpl<T: UploadableElem, Iter: Iterator<Item=T>> (
 		&self, dests: &[core::ptr::NonNull<u8>], attribute: BufferAttributeSlot, source: Iter
 	){
 		// Obtain target information
@@ -494,21 +617,29 @@ impl BufferLayout
 		let layout = &self.buffers[buffer];
 
 		// Upload
+		unsafe {
+			// SAFETY: `VertexBufferLayoutDesc::offset` is ground-truth regarding alignment/padding of `T` within the
+			//         mapped buffer range we're writing to. It also can't move us outside the range that our caller
+			//         `Self::structuredUpload` mapped, because if there are no elements, we won't actually access it.
+			let offset = self.buffers[buffer].attributes[attribute.slot()].offset as usize;
+			ptr = ptr.add(offset);
+		}
 		for value in source
 		{
 			// Write current value
 			unsafe {
 				// SAFETY: `ptr` points to a valid `T` initially, and always will as (a) the shift below will never take
 				//         us outside the mapped buffer range, and (b) the shift observes alignment requirements and
-				//         padding amounts of `T`.
+				//         padding amounts of `T` ensured by the `UploadableElem` trait.
 				ptr.cast::<T>().write(value);
 			}
+
 			// Move destination pointer
 			unsafe {
 				// SAFETY: `array_stride` is ground-truth regarding alignment/padding of `T` within the mapped buffer
 				//         range we're writing to, which we trust the caller sized appropriately such that we won't go
-				//         out of bounds here (this is a private helper method and we do actually map such that it stays
-				//         in bounds in `Self::structuredUpload`).
+				//         out of bounds here (this is a private helper method, and `Self::structuredUpload` does
+				//         actually map such that it stays in bounds in `Self::structuredUpload`).
 				ptr = ptr.add(layout.array_stride as usize);
 			}
 		}
