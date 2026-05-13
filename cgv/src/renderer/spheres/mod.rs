@@ -104,6 +104,14 @@ impl GpuDataReceiver for DataReceiver {
 		self.data.as_ref()
 	}
 }
+impl Deref for DataReceiver {
+	type Target = dyn renderer::GpuData;
+
+	#[inline(always)]
+	fn deref (&self) -> &Self::Target {
+		self.data.as_ref()
+	}
+}
 
 ///
 pub struct Spheres {
@@ -211,5 +219,6 @@ impl Renderer for Spheres
 		for (slot, buffer) in data.layout.bufferIndices().iter().enumerate() {
 			renderPass.set_vertex_buffer(slot as u32, buffers[*buffer]);
 		}
+		renderPass.draw(0..4, 0..data.num());
 	}
 }

@@ -218,8 +218,10 @@ func vertexMain_posSepRadColor (in sphere: VSInput_posRadColor, uint vertexID: S
 
 /// The splatting shading logic.
 func splatSphere (inout sphere: Sphere, const in uint vertexID) -> float4 {
-	sphere.pos_rad.xyz = (viewing.modelview * float4(sphere.pos_rad.xyz, 1.)).xyz;
-	return viewing.projection*viewing.modelview * geom::Billboards<float>::quad[vertexID];
+	let center_eye = (viewing.modelview * float4(sphere.pos_rad.xyz, 1)).xyz;
+	return viewing.projection*viewing.modelview * float4(
+		(geom::Billboards<float>::quad[vertexID].xyz * sphere.pos_rad.w) + sphere.pos_rad.xyz, 1
+	);
 }
 
 
@@ -273,10 +275,10 @@ func shadeSphere (const in sphere: Sphere) -> float4
 	hit.l = sphere.pos_rad.w;
 
 	// Just emit unlit default color for whole billboard
-	return evaluateHit(hit);
+	return evaluateHit(hit, sphere.color);
 }
 
 /// Tests the `IHit` interface.
-func evaluateHit (hit: geom::intersect::IHit<float3>) -> float4 {
-	return constAttribs.color * float4(hit.point, 1.);
+func evaluateHit (hit: geom::intersect::IHit<float3>, materialColor: float4) -> float4 {
+	return materialColor;
 }
