@@ -66,10 +66,10 @@ fn main() -> cgv_build::Result<()>
 		).addSearchPaths(buildSetup.shaderPath()),
 		"coreshaderlib.env", "shader/lib",
 		"CgvCoreShaderLib", |mut env, recommendedStorage| {
+			env.addModule(recommendedStorage, "cgv/math/lin/inverse.slang")?;
 			env.addModule(recommendedStorage, "cgv/prelude.slang")?;
 			env.addModule(recommendedStorage, "cgv/meta.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/lin/common.slang")?;
-			env.addModule(recommendedStorage, "cgv/math/lin/operators.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/lin/transform.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/util.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/field.slang")?;
@@ -80,6 +80,7 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/billboard.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/intersect/common.slang")?;
+			env.addModule(recommendedStorage, "cgv/geom/splat/sphere.slang")?;
 			env.addModule(recommendedStorage, "cgv/gpu/filter/kernel.slang")?;
 			env.addModule(recommendedStorage, "cgv/gpu/filter.slang")
 		}

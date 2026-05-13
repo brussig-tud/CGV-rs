@@ -8,14 +8,14 @@
 module texture;
 
 
-//////
+////
 // Imports
 
 // Local imports
 import "cgv/math/util.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::media::tex namespace

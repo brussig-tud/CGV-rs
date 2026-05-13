@@ -8,14 +8,14 @@
 module common;
 
 
-//////
+////
 // Imports
 
 // Shaderlib prelude
 import "cgv/prelude.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::geom namespace

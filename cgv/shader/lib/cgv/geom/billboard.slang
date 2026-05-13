@@ -8,7 +8,7 @@
 module billboard;
 
 
-//////
+////
 // Imports
 
 // Shaderlib prelude
@@ -18,7 +18,7 @@ import "cgv/prelude.slang";
 import "cgv/media/geom.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv namespace

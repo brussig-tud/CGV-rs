@@ -8,7 +8,7 @@
 module filter;
 
 
-//////
+////
 // Imports
 
 // Linear algebra module
@@ -18,7 +18,7 @@ import "cgv/math/lin/common.slang";
 import "cgv/gpu/filter/kernel.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::gpu namespace

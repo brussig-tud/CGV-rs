@@ -5,7 +5,7 @@
 //
 
 // Enable GLSL-style linear algebra mathematical operators
-import "lib/operators.slang";
+import "cgv/prelude.slang";
 
 
 

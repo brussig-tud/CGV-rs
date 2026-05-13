@@ -33,25 +33,25 @@ use cgv::{self, renderer};
 const DATA_POINTS: [DataPoint; 8] = [
 	// Front side:
 	DataPoint {
-		pos: glm::Vec3::new(-1., -1., -1.), radius: 4./64.,
+		pos: glm::Vec3::new(-0.5, -0.5, -0.5), radius: 4./64.,
 		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: -1./64.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
 		normal: glm::Vec3::new(0., 0., -1.),
 	},
 	DataPoint {
-		pos: glm::Vec3::new(1., -1., -1.), radius: 2./64.,
+		pos: glm::Vec3::new(0.5, -0.5, -0.5), radius: 2./64.,
 		tangent: glm::Vec3::new(-1., 1., 0.), radDeriv: 1./64.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
 		normal: glm::Vec3::new(0., 0., -1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(-1., 1., -1.), radius: 3./64.,
+		pos: glm::Vec3::new(-0.5, 0.5, -0.5), radius: 3./64.,
 		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 1./64.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 0.),
 		normal: glm::Vec3::new(0., 0., -1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(1., 1., -1.), radius: 3./64.,
+		pos: glm::Vec3::new(0.5, 0.5, -0.5), radius: 3./64.,
 		tangent: glm::Vec3::new(0., 0., 1.), radDeriv: -1./64.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
 		normal: glm::Vec3::new(1., 0., 0.,)
@@ -59,25 +59,25 @@ const DATA_POINTS: [DataPoint; 8] = [
 
 	// Back side:
 	DataPoint {
-		pos: glm::Vec3::new(1., 1., 1.), radius: 2./64.,
+		pos: glm::Vec3::new(0.5, 0.5, 0.5), radius: 2./64.,
 		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: -1./128.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(-1., 1., 1.), radius: 1./64.,
+		pos: glm::Vec3::new(-0.5, 0.5, 0.5), radius: 1./64.,
 		tangent: glm::Vec3::new(1., -1., 0.), radDeriv: 2./64.,
 		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(1., -1., 1.), radius: 4./64.,
+		pos: glm::Vec3::new(0.5, -0.5, 0.5), radius: 4./64.,
 		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 1./64.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)
 	},
 	DataPoint {
-		pos: glm::Vec3::new(-1., -1., 1.), radius: 4./64.,
+		pos: glm::Vec3::new(-0.5, -0.5, 0.5), radius: 4./64.,
 		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
 		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
 		normal: glm::Vec3::new(0., 0., 1.,)

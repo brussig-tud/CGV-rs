@@ -8,7 +8,7 @@
 module kernel;
 
 
-//////
+////
 // Imports
 
 // Shaderlib prelude
@@ -24,7 +24,7 @@ import "cgv/math/util.slang";
 import "cgv/math/lin/common.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::gpu::filter namespace

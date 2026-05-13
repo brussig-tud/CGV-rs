@@ -196,6 +196,7 @@ impl Renderer for Spheres
 			}),
 			primitive: wgpu::PrimitiveState {
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				cull_mode: Some(wgpu::Face::Back),
 				..Default::default()
 			},
 			depth_stencil: Some(renderState.depthStencilState().clone()),

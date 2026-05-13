@@ -8,7 +8,7 @@
 module common;
 
 
-//////
+////
 // Imports
 
 // Shaderlib prelude
@@ -18,7 +18,7 @@ import "cgv/prelude.slang";
 import "cgv/math/lin/common.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::geom::intersect namespace

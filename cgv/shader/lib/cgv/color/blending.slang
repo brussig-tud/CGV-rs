@@ -8,7 +8,7 @@
 module blending;
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::color namespace

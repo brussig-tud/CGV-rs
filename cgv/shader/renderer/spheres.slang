@@ -5,9 +5,9 @@
 //
 
 // CGV-rs core shader library
+import "cgv/prelude.slang";               // enable GLSL-style linear algebra mathematical operators
 import "cgv/api/uniforms.slang";          // interface with managed uniforms handled by CGV-rs
 import "cgv/math/lin/common.slang";       // enables the cgv::math::lin::IElement interface for all float-based builtins
-import "cgv/math/lin/operators.slang";    // enable GLSL-style linear algebra mathematical operators
 import "cgv/geom/billboard.slang";        // access the pre-defined billboards
 import "cgv/geom/intersect/common.slang"; // test common intersection facilities
 

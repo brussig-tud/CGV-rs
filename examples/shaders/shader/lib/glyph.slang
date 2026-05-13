@@ -8,7 +8,7 @@
 module glyph;
 
 
-//////
+////
 // Imports
 
 // CGV-rs core shader library
@@ -19,7 +19,7 @@ import "cgv/geom/common.slang";
 import "lib/sdf.slang";
 
 
-/////
+////
 // Module namespace
 
 // The common example namespace.

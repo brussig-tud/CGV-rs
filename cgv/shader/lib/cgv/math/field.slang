@@ -8,14 +8,14 @@
 module field;
 
 
-//////
+////
 // Imports
 
 // Shaderlib prelude
 import "cgv/prelude.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::math namespace

@@ -8,14 +8,14 @@
 module uniforms;
 
 
-//////
+////
 // Imports
 
 // Local imports
 import "cgv/media/texture.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::api namespace
