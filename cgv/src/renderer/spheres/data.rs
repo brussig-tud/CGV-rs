@@ -138,17 +138,30 @@ impl GpuData
 {
 	/// Helper function for common initialization.
 	fn commonInit<D: HostData+?Sized, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
-		-> (gpu::BufferLayout, wgpu::Buffer, std::ptr::NonNull<T>)
+		-> (gpu::BufferLayout, wgpu::Buffer, std::ptr::NonNull<T>, Option<Vec<u8>>)
 	{
+		// Under WASM, we have a super weird buffer mapping problem that seems related to the one we encountered for
+		// `InterleavedBuffer`, although it manifests in randomly corrupted heap memory. To work around this, we compile
+		// the attributes in a staging area first and let WGPU handle the upload.
+		#[cfg(target_arch="wasm32")]
+			let mut stagingMem = Some(vec![0; data.num() as usize * size_of::<T>()]);
+		#[cfg(not(target_arch="wasm32"))]
+			let stagingMem: Option<Vec<u8>> = None;
+
 		// Prepare the buffer
 		let attributes = variant.createBuffer(context, data.num(), label);
 
 		// Gain mapped pointer for uploading
-		let ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
-			.cast::<T>();
+		let ptr;
+		#[cfg(target_arch="wasm32")] {
+			ptr = std::ptr::NonNull::new(stagingMem.as_mut().unwrap().as_mut_ptr()).unwrap().cast::<T>();
+		}
+		#[cfg(not(target_arch="wasm32"))] {
+			ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr().cast::<T>();
+		}
 
 		// Done!
-		(variant.layout(), attributes, ptr)
+		(variant.layout(), attributes, ptr, stagingMem)
 	}
 
 
@@ -156,7 +169,7 @@ impl GpuData
 	pub fn new<D: HostData+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (layout, attributes, mut ptr)
+		let (layout, attributes, mut ptr, _stagingMem)
 			= Self::commonInit(context, LayoutVariant::PosOnly, data, label);
 
 		// Upload the data
@@ -166,6 +179,9 @@ impl GpuData
 				ptr.write(/* pos_rad: */glm::vec3_to_vec4(pos));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
@@ -177,7 +193,7 @@ impl GpuData
 	pub fn withRadii<D: HostData+host::HasRadii+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (layout, attributes, mut ptr)
+		let (layout, attributes, mut ptr, _stagingMem)
 			= Self::commonInit(context, LayoutVariant::PosRadius, data, label);
 
 		// Upload the data
@@ -187,6 +203,9 @@ impl GpuData
 				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, radius));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
@@ -198,7 +217,7 @@ impl GpuData
 	pub fn withColors<D: HostData+host::HasColors+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (layout, attributes, mut ptr)
+		let (layout, attributes, mut ptr, _stagingMem)
 			= Self::commonInit(context, LayoutVariant::PosColor, data, label);
 
 		// Upload the data
@@ -208,6 +227,9 @@ impl GpuData
 				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */color));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
@@ -220,7 +242,7 @@ impl GpuData
 		context: &Context, data: &D, label: Option<&str>
 	) -> Arc<Self> {
 		// Common initialization
-		let (layout, attributes, mut ptr)
+		let (layout, attributes, mut ptr, _stagingMem)
 			= Self::commonInit(context, LayoutVariant::PosRadiusColor, data, label);
 
 		// Upload the data
@@ -230,6 +252,9 @@ impl GpuData
 				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, radius), /* color: */color));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 

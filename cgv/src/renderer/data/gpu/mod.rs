@@ -744,15 +744,7 @@ impl PipelineBufferLayout
 		);
 		let mut positions: Option<BufferAttributeSlot> = None;
 		let mut visitedAttribs = GeometryAttributeOccupancy::default();
-		let numBufs = dataLayout.buffers.len();
-		let mut why = Vec::<VertexBufferLayoutDesc>::with_capacity(numBufs);
-		for bufIdx in 0..numBufs {
-			let bufStride = dataLayout.buffers[bufIdx].array_stride;
-			let bufAttribNum = dataLayout.buffers[bufIdx].attributes.len();
-			let clonedBuf = dataLayout.buffers[bufIdx].clone();
-			why.push(clonedBuf);
-		}
-		for (bufIdx, buffer) in why.iter().enumerate()
+		for (bufIdx, buffer) in dataLayout.buffers.iter().enumerate()
 		{
 			// Infer the new index the buffer would get, if it is included later
 			let newBufIdx = filteredOrigBufIndices.len();
