@@ -489,13 +489,35 @@ impl BufferLayout
 	///               this layout.
 	pub fn structuredUpload<D: HostData+?Sized> (&self, data: &D, buffers: &[wgpu::Buffer])
 	{
+		// Prepare copy/upload targets
+		let dests: Vec<_>;
+		#[cfg(target_arch="wasm32")] let stagingMem: Vec<u8>;
+		#[cfg(target_arch="wasm32")] let stagingMemSlices: Vec<&[u8]>;
+		#[cfg(target_arch="wasm32")] {
+			// For some reason, we cannot write to the buffer pointer with our loop below in WASM. The data never
+			// actually gets to the GPU :/ We have to create a staging area for the WGPU `copy_from_slice` method, which
+			// does something we don't know about and actually does get the data to the GPU.
+			let mut size: usize = 0;
+			let bufRanges: Vec<_> = self.buffers.iter().map(|layout| {
+				let bufStart = size;
+				size += data.num() as usize * layout.array_stride as usize;
+				std::ops::Range { start: bufStart, end: size }
+			}).collect();
+			stagingMem = vec![0; size];
+			stagingMemSlices = bufRanges.iter().map(|range| &stagingMem[range.clone()]).collect();
+			dests = bufRanges.into_iter().map(
+				|range| core::ptr::NonNull::new(stagingMem[range].as_ptr() as *mut u8).unwrap()
+			).collect();
+		}
 		// Obtain destination pointers
-		let dests: Vec<_> = self.buffers.iter().zip(buffers.iter()).map(
-			|(layout, buffer)| {
-				let range = 0..(data.num() as wgpu::BufferAddress*layout.array_stride);
-				buffer.get_mapped_range_mut(range).slice(..).as_raw_ptr().cast::<u8>()
-			}
-		).collect();
+		#[cfg(not(target_arch="wasm32"))] {
+			dests = self.buffers.iter().zip(buffers.iter()).map(
+				|(layout, buffer)| {
+					let range = 0..(data.num() as wgpu::BufferAddress*layout.array_stride);
+					buffer.get_mapped_range_mut(range).slice(..).as_raw_ptr().cast::<u8>()
+				}
+			).collect();
+		}
 
 		// Build map from host attribute to hosted (co-located) attribute(s), if any. The one additional slot is for
 		// positions
@@ -578,6 +600,12 @@ impl BufferLayout
 			self.upload(
 				dests.as_slice(), colors, hostedAttribs[GA::Colors.slot()], data.colors(), data
 			)
+		}
+
+		// Actual upload on WASM
+		#[cfg(target_arch="wasm32")]
+		for (buffer, &source) in buffers.iter().zip(stagingMemSlices.iter()) {
+			buffer.slice(..).get_mapped_range_mut().copy_from_slice(source);
 		}
 	}
 
@@ -716,7 +744,15 @@ impl PipelineBufferLayout
 		);
 		let mut positions: Option<BufferAttributeSlot> = None;
 		let mut visitedAttribs = GeometryAttributeOccupancy::default();
-		for (bufIdx, buffer) in dataLayout.buffers.iter().enumerate()
+		let numBufs = dataLayout.buffers.len();
+		let mut why = Vec::<VertexBufferLayoutDesc>::with_capacity(numBufs);
+		for bufIdx in 0..numBufs {
+			let bufStride = dataLayout.buffers[bufIdx].array_stride;
+			let bufAttribNum = dataLayout.buffers[bufIdx].attributes.len();
+			let clonedBuf = dataLayout.buffers[bufIdx].clone();
+			why.push(clonedBuf);
+		}
+		for (bufIdx, buffer) in why.iter().enumerate()
 		{
 			// Infer the new index the buffer would get, if it is included later
 			let newBufIdx = filteredOrigBufIndices.len();

@@ -22,7 +22,8 @@ using namespace cgv;
 //
 
 /// Representation of a sphere.
-struct Sphere {
+struct Sphere
+{
 	/// The position of the sphere center in camera space.
 	var pos_rad: float4;
 
@@ -47,7 +48,8 @@ struct Sphere {
 // Vertex shader input
 
 /// Sphere attributes input stream for the positions/co-located radius plus colors case.
-struct VSInput_posRadColor {
+struct VSInput_posRadColor
+{
 	/// The position of the sphere center in world space, and potentially the radius in the *w*-component.
 	[vk::location(0)] var pos_rad: float4;
 
@@ -56,7 +58,8 @@ struct VSInput_posRadColor {
 };
 
 /// Sphere attributes input stream for the positions with separate radius case.
-struct VSInput_posSepRad {
+struct VSInput_posSepRad
+{
 	/// The position of the sphere center in world space.
 	[vk::location(0)] var pos: float4;
 
@@ -65,7 +68,8 @@ struct VSInput_posSepRad {
 };
 
 /// Sphere attributes input stream for the positions with separate radius and color case.
-struct VSInput_posSepRadColor {
+struct VSInput_posSepRadColor
+{
 	/// The position of the sphere center in world space.
 	[vk::location(0)] var pos: float4;
 
@@ -81,7 +85,8 @@ struct VSInput_posSepRadColor {
 // Vertex shader output / fragment shader input
 
 /// Splat vertex attributes for the positions-only/co-located radius case.
-struct SphereSplat_posRad {
+struct SphereSplat_posRad
+{
 	/// Clip-space position of the splat vertex.
 	float4 pos_clip: SV_Position;
 
@@ -96,7 +101,8 @@ struct SphereSplat_posRad {
 };
 
 /// Splat vertex attributes for the positions/co-located radius plus colors case.
-struct SphereSplat_posRadColor {
+struct SphereSplat_posRadColor
+{
 	/// Clip-space position of the splat vertex.
 	float4 pos_clip: SV_Position;
 
@@ -126,7 +132,8 @@ struct SphereSplat_posRadColor {
 let viewing: ParameterBlock<cgv::api::Viewing>;
 
 /// The set of constant sphere attributes. Changed infrequently by the user, thus group(1).
-struct ConstantAttribs {
+struct ConstantAttribs
+{
 	/// The user-defined default color for all spheres.
 	var radius: float;
 
