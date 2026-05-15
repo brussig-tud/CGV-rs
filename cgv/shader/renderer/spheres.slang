@@ -135,10 +135,10 @@ let viewing: ParameterBlock<cgv::api::Viewing>;
 struct ConstantAttribs
 {
 	/// The user-defined default color for all spheres.
-	var radius: float;
+	var color: float4;
 
 	/// The user-defined default radius of all spheres.
-	var color: float4;
+	var radius: float;
 };
 [vk::binding(0, 1)] // <- start at binding(0) of group(1)
 ParameterBlock<ConstantAttribs> constAttribs;

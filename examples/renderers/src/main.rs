@@ -138,7 +138,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Prepare data
 
 	/* generate test data */
-	let spheresData = renderer::data::gpu::InterleavedBuffer::fromHost (
+	let spheresData = renderer::data::InterleavedBuffer::fromHost(
 		context, &DATA_POINTS, /* options: */Default::default(), Some("RenderersDemo_spheresData")
 	);
 
@@ -148,6 +148,10 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, renderSetup));
 	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData.clone()));
+	sphereRenderer.setDefaults(context, |d| {
+		d.radius = 7./64.; // these defaults will actually get overridden by our data since we have all attributes
+		d.color = cgv::RGBA::from_srgba_premultiplied(127, 127, 127, 127);
+	});
 
 
 	////
@@ -170,7 +174,7 @@ struct RenderersDemo
 {
 	// The renderable test data
 	#[expect(dead_code)]
-	spheresData: Arc<renderer::data::gpu::InterleavedBuffer>,
+	spheresData: Arc<renderer::data::InterleavedBuffer>,
 
 	// Test sphere renderer
 	sphereRenderer: renderer::Managed<renderer::Spheres>,

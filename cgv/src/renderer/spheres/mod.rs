@@ -22,7 +22,7 @@ use std::sync::{LazyLock, Arc};
 use egui::ecolor::Rgba;
 
 // Local imports
-use crate::{self as cgv, *, renderer::{data::*, *}};
+use crate::{*, renderer::{data::*, *}};
 use data::*;
 
 
@@ -36,7 +36,6 @@ use data::*;
 pub struct DataReceiver {
 	data: Arc<dyn renderer::GpuData>,
 	layout: GpuPipelineBufferLayout,
-	defaultAttribValues: ConstantAttributes,
 	vsEntryPoint: String,
 	fsEntryPoint: String
 }
@@ -73,35 +72,18 @@ impl DataReceiver
 		);
 
 		// Done!
-		Self { data, layout, defaultAttribValues: ConstantAttributes::default(), vsEntryPoint, fsEntryPoint }
-	}
-
-	/// Modify the default radius that will be used when the received [`GpuData`](renderer::GpuData) does not include
-	/// radii.
-	#[inline(always)]
-	pub fn defaultRadius (mut self, radius: f32) -> Self {
-		self.defaultAttribValues.radius = radius;
-		self
-	}
-
-	/// Modify the default color that will be used when the received [`GpuData`](renderer::GpuData) does not include
-	/// colors.
-	#[inline(always)]
-	pub fn defaultColor (mut self, color: cgv::RGBA) -> Self {
-		self.defaultAttribValues.color = color;
-		self
-	}
-
-	/// Modify the default attribute values that will be used when the received [`GpuData`](renderer::GpuData) does not
-	/// include any optional attributes.
-	#[inline(always)]
-	pub fn withDefaultAttributes (self, radius: f32, color: cgv::RGBA) -> Self {
-		self.defaultRadius(radius).defaultColor(color)
+		Self { data, layout, vsEntryPoint, fsEntryPoint }
 	}
 }
 impl GpuDataReceiver for DataReceiver {
-	fn gpuData(&self) -> &dyn renderer::GpuData {
+	fn gpuData (&self) -> &dyn renderer::GpuData {
 		self.data.as_ref()
+	}
+}
+impl From<Arc<dyn renderer::GpuData+'static>> for DataReceiver {
+	#[inline(always)]
+	fn from (data: Arc<dyn renderer::GpuData>) -> Self {
+		Self::new(data)
 	}
 }
 impl Deref for DataReceiver {
@@ -117,7 +99,7 @@ impl Deref for DataReceiver {
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	constantAttribUniforms: ConstantAttribsUniformGroup
+	defaultAttribUniforms: DefaultAttribsUniformGroup
 }
 impl Spheres
 {
@@ -134,7 +116,7 @@ impl Spheres
 	pub fn new (context: &Context, renderSetup: &RenderSetup) -> Self
 	{
 		// Create constant (not state-dependent) GPU objects
-		let constantAttribUniforms = ConstantAttribsUniformGroup::create(
+		let defaultAttribUniforms = DefaultAttribsUniformGroup::createAndUpload(
 			context, wgpu::ShaderStages::VERTEX_FRAGMENT,
 			Some("CGV__renderer_Spheres_constantAttribUniforms").as_deref()
 		);
@@ -142,7 +124,7 @@ impl Spheres
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("CGV__renderer_Spheres_renderPipelineLayout"),
 				bind_group_layouts: &[
-					Some(&renderSetup.bindGroupLayouts().viewing), Some(&constantAttribUniforms.bindGroupLayout)
+					Some(&renderSetup.bindGroupLayouts().viewing), Some(&defaultAttribUniforms.bindGroupLayout)
 				],
 				immediate_size: 0
 			});
@@ -151,7 +133,14 @@ impl Spheres
 		).expect("shader module could not be compiled by WGPU");
 
 		// Done!
-		Self { shader, pipelineLayout, constantAttribUniforms }
+		Self { shader, pipelineLayout, defaultAttribUniforms }
+	}
+
+	#[inline(always)]
+	pub fn setDefaults<R, Setter: FnOnce(&mut DefaultAttributes)->R> (
+		&mut self, context: &Context, setter: Setter
+	) -> R {
+		self.defaultAttribUniforms.update(context, setter)
 	}
 }
 impl Renderer for Spheres
@@ -215,7 +204,7 @@ impl Renderer for Spheres
 	){
 		renderPass.set_pipeline(gpuState); // <- in our case it's literally just the pipeline
 		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-		renderPass.set_bind_group(1, &self.constantAttribUniforms.bindGroup, &[]);
+		renderPass.set_bind_group(1, &self.defaultAttribUniforms.bindGroup, &[]);
 		let buffers = data.data.geometry();
 		for (slot, buffer) in data.layout.bufferIndices().iter().enumerate() {
 			renderPass.set_vertex_buffer(slot as u32, buffers[*buffer]);

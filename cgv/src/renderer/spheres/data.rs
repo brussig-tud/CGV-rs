@@ -5,8 +5,7 @@
 //
 
 // Local imports
-use super::*;
-use crate::{self as cgv, renderer::data::gpu, renderer::data::host};
+use crate::{self as cgv, renderer::{data::{gpu, host}, spheres::*}};
 
 
 
@@ -114,19 +113,20 @@ impl LayoutVariant {
 
 /// Stores the default attributes that the [`Spheres`](renderer::Spheres) will use when rendering spheres when the
 /// corresponding attributes are not sourced from user data.
-pub struct ConstantAttributes {
-	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
-	pub radius: f32,
-
+#[repr(C,align(16))]
+pub struct DefaultAttributes {
 	/// The default color of the rendered spheres, used when the color attribute is not sourced from user data.
 	pub color: Rgba,
+
+	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
+	pub radius: f32,
 }
-impl Default for ConstantAttributes {
+impl Default for DefaultAttributes {
 	fn default () -> Self { Self {
-		radius: 1.0, color: Rgba::from_rgb(0.75, 0.75, 0.75)
+		radius: 1.0, color: Rgba::from_rgb(2./5., 2./5., 2./5.)
 	}}
 }
-pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
+pub type DefaultAttribsUniformGroup = hal::UniformGroup<DefaultAttributes>;
 
 /// A [`renderer::GpuData`]-compliant interleaved storage optimized for use with the [spheres renderer](Spheres).
 pub struct GpuData {
@@ -214,7 +214,8 @@ impl GpuData
 	}
 
 	///
-	pub fn withColors<D: HostData+host::HasColors+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
+	pub fn withColors<D: HostData+host::HasColors+?Sized> (context: &Context, data: &D, label: Option<&str>)
+		-> Arc<Self>
 	{
 		// Common initialization
 		let (layout, attributes, mut ptr, _stagingMem)

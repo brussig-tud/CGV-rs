@@ -5,7 +5,7 @@
 //
 
 // Standard library
-/* nothing here yet */
+use std::ops::{Deref, DerefMut};
 
 // WGPU API
 use wgpu;
@@ -27,7 +27,6 @@ pub struct UniformGroup<UniformsStruct: Sized+Default> {
 	pub bindGroupLayout: wgpu::BindGroupLayout,
 	pub bindGroup: wgpu::BindGroup,
 }
-
 impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 {
 	pub fn create (context: &Context, visibility: wgpu::ShaderStages, name: Option<&str>) -> Self
@@ -51,6 +50,15 @@ impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 
 		// Done!
 		Self {data: Default::default(), buffer, bindGroupLayout, bindGroup}
+	}
+
+	/// [Create](Self::create) the uniform group and schedule an [upload](Self::upload) of the default values to the GPU
+	/// before returning.
+	#[inline]
+	pub fn createAndUpload (context: &Context, visibility: wgpu::ShaderStages, name: Option<&str>) -> Self {
+		let new = Self::create(context, visibility, name);
+		new.upload(context);
+		new
 	}
 
 	pub(crate) fn createBindGroupLayout (context: &Context, visibility: wgpu::ShaderStages, groupName: Option<&str>)
@@ -82,12 +90,47 @@ impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 		&mut self.data
 	}
 
+	/// Perform the actions defined by the user closure on the uniform data and [upload](Self::upload) before returning.
+	#[inline]
+	pub fn update<R, Writer: FnOnce(&mut UniformsStruct)->R> (&mut self, context: &Context, writer: Writer) -> R {
+		let retVal = writer(&mut self.data);
+		self.upload(context);
+		retVal
+	}
+
+	/// Perform the actions defined by the user closure on the uniform data and
+	/// [upload immediately](Self::uploadImmediately) before returning.
+	#[inline]
+	pub fn updateImmediately<R, Writer: FnOnce(&mut UniformsStruct)->R> (
+		&mut self, context: &Context, writer: Writer
+	) -> R {
+		let retVal = writer(&mut self.data);
+		self.uploadImmediately(context);
+		retVal
+	}
+
+	#[inline(always)]
 	pub fn upload (&self, context: &Context) {
 		context.queue().write_buffer(&self.buffer, 0, util::slicify(&self.data));
 	}
 
-	pub fn uploadImmediatly (&self, context: &Context) {
+	#[inline(always)]
+	pub fn uploadImmediately (&self, context: &Context) {
 		context.queue().write_buffer(&self.buffer, 0, util::slicify(&self.data));
 		context.queue().submit([]);
+	}
+}
+impl<UniformsStruct: Sized+Default> Deref for UniformGroup<UniformsStruct> {
+	type Target = UniformsStruct;
+
+	#[inline(always)]
+	fn deref (&self) -> &Self::Target {
+		&self.data
+	}
+}
+impl<UniformsStruct: Sized+Default> DerefMut for UniformGroup<UniformsStruct> {
+	#[inline(always)]
+	fn deref_mut (&mut self) -> &mut Self::Target {
+		&mut self.data
 	}
 }
