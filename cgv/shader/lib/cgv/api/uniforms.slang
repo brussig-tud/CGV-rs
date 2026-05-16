@@ -29,12 +29,31 @@ namespace cgv::api {
 //
 
 /// The uniform group containing viewing information. Corresponds to `cgv::RenderState::viewingUniforms`.
-public struct Viewing {
+public struct Viewing
+{
 	/// The modelview matrix.
 	public float4x4 modelview;
 
 	/// The projection matrix.
 	public float4x4 projection;
+
+	/// The combined `projection`×`modelview` matrix
+	public float4x4 projModelview;
+
+	/// The inverse modelview transformation matrix.
+	public float4x4 modelview_inv;
+
+	/// The inverse projection matrix.
+	public float4x4 projection_inv;
+
+	/// The inverse combined `projection`×`modelview` matrix (i.e. `modelview_inv`×`projection_inv`).
+	public float4x4 projModelview_inv;
+
+	/// The normal matrix.
+	public float4x4 normal;
+
+	/// The inverse normal matrix.
+	public float4x4 normal_inv;
 }
 
 /// The uniform group containing input/output texture for mipmap generation. Used by all `cgv::gpu::mipmap::ShaderFilter`s.
