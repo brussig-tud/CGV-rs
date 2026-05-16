@@ -20,6 +20,7 @@ import "cgv/math/lin/inverse.slang";
 
 // Geometry module
 import "cgv/geom/billboard.slang";
+import "cgv/geom/intersect/common.slang";
 
 
 ////
@@ -39,6 +40,7 @@ using cgv;
 //
 
 /// **S**phere **P**arameter **S**pace or *SPS* for short. **TODO: investigate.**
+///
 /// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
 public struct ParameterSpace<Scalar: __BuiltinFloatingPointType>
 {
@@ -130,6 +132,7 @@ public struct ParameterSpace<Scalar: __BuiltinFloatingPointType>
 }
 
 /// **S**phere **S**plat **I**nfo or *SSI* for short. **TODO: investigate.**
+///
 /// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
 public struct SplatInfo<Scalar: __BuiltinFloatingPointType>
 {
@@ -156,7 +159,8 @@ public struct SplatInfo<Scalar: __BuiltinFloatingPointType>
 //
 
 /// **TODO: investigate.**
-/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
+///
+/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
 public func splatVertexWithSPS<Scalar: __BuiltinFloatingPointType> (
 	in const pos_rad: cgv::Vec4<Scalar>, in const corner: uint, in sps: ParameterSpace<Scalar>,
 	in MV: cgv::Mat4<Scalar>, in MVP: cgv::Mat4<Scalar>, in NM: cgv::Mat3<Scalar>, inout ssi: SplatInfo<Scalar>
@@ -203,6 +207,62 @@ public func splatVertex<Scalar: __BuiltinFloatingPointType> (
 	ssi.inv_T_square_e_c = sps.inv_T_square_e_c_vs;
 	ssi.e_zw_clip = sps.e_zw_clip_vs;
 	return splatVertexWithSPS(pos_rad, corner, sps, modelview, projModelview, normalMat, ssi);
+}
+
+/// **TODO: investigate how the pure ray-sphere intersection can be factored out such that it is generally re-usable.**
+///
+/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glfs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glfs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
+public func intersectRay<Scalar: __BuiltinFloatingPointType> (
+	in const ssi: SplatInfo<Scalar>, in const percentualSplatSize: float, out splat_tc: float2, out clipDepth: Scalar,
+	out percentualRadialPos: Scalar
+) -> Optional<geom::intersect::Hit<cgv::Vec3<Scalar>>>
+{
+	// Check for intersection with q_tilde parameterization of unit circle
+	var q_tilde_squared_length = dot(ssi.q_tilde.xy, ssi.q_tilde.xy);
+	percentualRadialPos = sqrt(q_tilde_squared_length);
+	if (percentualRadialPos > Scalar(percentualSplatSize)) {
+		splat_tc = float2(0);
+		clipDepth = Scalar(0);
+		return none;
+	}
+	q_tilde_squared_length = min(q_tilde_squared_length, Scalar(1));
+
+	// Splat texture coordinates
+	splat_tc = .5*(float2(ssi.q_tilde) + float2(1));
+
+	// Compute ray parameter of intersection
+	let beta = ssi.inv_e*sqrt(Scalar(1) - q_tilde_squared_length);
+	let lambda = Scalar(1) / (Scalar(1) + beta);
+
+	// Compute hit information (in eye space)
+	var hit: geom::intersect::Hit<cgv::Vec3<Scalar>>;
+	hit.point = lambda * ssi.v_eye;
+	hit.normal = normalize(ssi.inv_T_square_e_c + lambda * ssi.inv_T_square_v);
+	hit.l = length(hit.point);
+
+	// culling
+	/*// determine side in eye space
+	if (!keep_this_side(p_eye, n_eye, side)) {
+		lambda = 1.0 / (1.0 - beta);
+		p_eye = lambda * ssi.v_eye;
+		n_eye = normalize(ssi.inv_T_square_e_c + lambda * ssi.inv_T_square_v);
+	}*/
+
+	// compute the depth value in clip coordinates
+	let zw = ssi.e_zw_clip + lambda * ssi.v_zw_clip;
+	let z_clip = zw.x / zw.y;
+	clipDepth = Scalar(.5)*(z_clip + Scalar(1)); // transform from [-1,1] to [0,1]
+
+	return hit;
+}
+
+///
+public func intersectRay<Scalar: __BuiltinFloatingPointType> (
+	in const ssi: SplatInfo<Scalar>, out splat_tc: float2, out clipDepth: Scalar
+) -> Optional<geom::intersect::Hit<cgv::Vec3<Scalar>>>
+{
+	var dummy: Scalar;
+	return intersectRay(ssi, 1., splat_tc, clipDepth, dummy);
 }
 
 
