@@ -9,6 +9,7 @@ import "cgv/prelude.slang";               // enable GLSL-style linear algebra ma
 import "cgv/api/uniforms.slang";          // interface with managed uniforms handled by CGV-rs
 import "cgv/math/lin/common.slang";       // enables the cgv::math::lin::IElement interface for all float-based builtins
 import "cgv/geom/billboard.slang";        // access the pre-defined billboards
+import "cgv/geom/splat/sphere.slang";     // sphere splatting library
 import "cgv/geom/intersect/common.slang"; // test common intersection facilities
 
 // Use CGV namespace by default
@@ -200,7 +201,7 @@ func vertexMain_posColor (in sphere: VSInput_posRadColor, uint vertexID: SV_Vert
 func vertexMain_posRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
 {
 	var sphere = Sphere(sphere.pos_rad, sphere.color);
-		return SphereSplat_posRadColor(
+	return SphereSplat_posRadColor(
 		/* pos_clip: */ splatSphere(sphere, vertexID),
 		/* pos_rad:  */ sphere.pos_rad,
 		/* color:    */ sphere.color
@@ -212,7 +213,7 @@ func vertexMain_posRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_V
 func vertexMain_posSepRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
 {
 	var sphere = Sphere(float4(sphere.pos_rad.xyz, constAttribs.radius), constAttribs.color);
-		return SphereSplat_posRadColor(
+	return SphereSplat_posRadColor(
 		/* pos_clip: */ splatSphere(sphere, vertexID),
 		/* pos_rad:  */ sphere.pos_rad,
 		/* color:    */ sphere.color
@@ -224,10 +225,12 @@ func vertexMain_posSepRadColor (in sphere: VSInput_posRadColor, uint vertexID: S
 // Functions
 
 /// The splatting shading logic.
-func splatSphere (inout sphere: Sphere, const in uint vertexID) -> float4 {
-	let center_eye = (viewing.modelview * float4(sphere.pos_rad.xyz, 1)).xyz;
-	return viewing.projection*viewing.modelview * float4(
-		(geom::Billboards<float>::quad[vertexID].xyz * sphere.pos_rad.w) + sphere.pos_rad.xyz, 1
+[ForceInline]
+func splatSphere (in const sphere: Sphere, const in uint vertexID) -> float4 {
+	var ssi: geom::splat::sphere::SplatInfo<float>;
+	return geom::splat::sphere::splatVertex(
+		sphere.pos_rad, vertexID, viewing.modelview, viewing.modelview_inv, viewing.projModelview,
+		float3x3(viewing.normal), ssi
 	);
 }
 

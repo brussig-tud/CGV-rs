@@ -18,6 +18,9 @@ import "cgv/prelude.slang";
 import "cgv/math/lin/common.slang";
 import "cgv/math/lin/inverse.slang";
 
+// Geometry module
+import "cgv/geom/billboard.slang";
+
 
 ////
 // Module namespace
@@ -84,7 +87,7 @@ public struct ParameterSpace<Scalar: __BuiltinFloatingPointType>
 	/// * `NM` – The normal matrix.
 	/// # Returns
 	/// The constructed *SPS*.
-	__init (in const Vec4 pos_rad, in const Mat4 MV, in const Mat4 iMV, in const Mat4 MVP, in const Mat3 NM)
+	public __init (in const Vec4 pos_rad, in const Mat4 MV, in const Mat4 iMV, in const Mat4 MVP, in const Mat3 NM)
 	{
 		// Convenience helpers
 		constexpr static const Scalar _1 = Scalar(1);
@@ -121,9 +124,85 @@ public struct ParameterSpace<Scalar: __BuiltinFloatingPointType>
 	}
 
 	///
-	__init(in const Vec4 pos_rad, in const Mat4 MV, in const Mat4 MVP, in const Mat3 NM) {
+	public __init(in const Vec4 pos_rad, in const Mat4 MV, in const Mat4 MVP, in const Mat3 NM) {
 		This(pos_rad, MV, MV.inv(), MVP, NM);
 	}
+}
+
+/// **S**phere **S**plat **I**nfo or *SSI* for short. **TODO: investigate.**
+/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
+public struct SplatInfo<Scalar: __BuiltinFloatingPointType>
+{
+	/// Our 2D vector type.
+	typealias Vec2 = cgv::Vec2<Scalar>;
+
+	/// Our 3D vector type.
+	typealias Vec3 = cgv::Vec3<Scalar>;
+
+	public var q_tilde: Vec2;
+	public var inv_T_square_v: Vec3;
+	public var inv_T_square_e_c: Vec3;
+	public var inv_e: Scalar;
+	public var e_zw_clip: Vec2;
+	public var v_zw_clip: Vec2;
+	public var v_eye: Vec3;
+};
+
+
+
+//////
+//
+// Functions
+//
+
+/// **TODO: investigate.**
+/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
+public func splatVertexWithSPS<Scalar: __BuiltinFloatingPointType> (
+	in const pos_rad: cgv::Vec4<Scalar>, in const corner: uint, in sps: ParameterSpace<Scalar>,
+	in MV: cgv::Mat4<Scalar>, in MVP: cgv::Mat4<Scalar>, in NM: cgv::Mat3<Scalar>, inout ssi: SplatInfo<Scalar>
+) -> cgv::Vec4<Scalar>
+{
+	// Our vector types
+	typealias Vec3 = cgv::Vec3<Scalar>;
+	typealias Vec4 = cgv::Vec4<Scalar>;
+
+	// compute the corner point in homogeneous object coordinates
+	ssi.q_tilde = geom::Billboards<Scalar>::quad[corner].xy;
+	let V_tilde: Vec3 = sps.m_tilde + ssi.q_tilde.x*sps.x_tilde + ssi.q_tilde.y*sps.y_tilde;
+	let v_tilde: Vec3 = V_tilde - sps.e_tilde;
+
+	// Vertex output
+	var V: Vec4;
+	V.xyz = pos_rad.w*V_tilde + pos_rad.xyz;
+	V.w = Scalar(1);
+
+	// compute vector from eye to vertex in eye space
+	var v4d: Vec4 = MV * V;
+	ssi.v_eye = v4d.xyz / v4d.w;
+
+	// compute components to compute normal in eye space
+	ssi.inv_T_square_v = NM * (v_tilde);
+
+	//ssi.v = -normalize(ssi.v_eye);
+	let clipPos = MVP * V;
+	ssi.v_zw_clip = clipPos.zw - ssi.e_zw_clip;
+	return clipPos;
+}
+
+/// **TODO: investigate.**
+public func splatVertex<Scalar: __BuiltinFloatingPointType> (
+	in const pos_rad: cgv::Vec4<Scalar>, in const corner: uint, in const modelview: cgv::Mat4<Scalar>,
+	in const modelview_inv: cgv::Mat4<Scalar>, in projModelview: cgv::Mat4<Scalar>, in normalMat: cgv::Mat3<Scalar>,
+	inout ssi: SplatInfo<Scalar>
+) -> cgv::Vec4<Scalar>
+{
+	let sps = geom::splat::sphere::ParameterSpace<Scalar>(
+		pos_rad, modelview,  modelview_inv, projModelview, normalMat
+	);
+	ssi.inv_e = sps.inv_e_vs;
+	ssi.inv_T_square_e_c = sps.inv_T_square_e_c_vs;
+	ssi.e_zw_clip = sps.e_zw_clip_vs;
+	return splatVertexWithSPS(pos_rad, corner, sps, modelview, projModelview, normalMat, ssi);
 }
 
 
