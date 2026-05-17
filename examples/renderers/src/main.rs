@@ -142,7 +142,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData.clone()));
 	sphereRenderer.setDefaults(context, |d| {
 		d.radius = 7./64.; // these defaults will actually get overridden by our data since we have all attributes
-		d.color = cgv::RGBA::from_srgba_premultiplied(127, 127, 127, 127);
+		d.color = cgv::RGBA::from_srgba_premultiplied(127, 127, 127, 255);
 	});
 
 
