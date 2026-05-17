@@ -36,6 +36,41 @@ using cgv;
 
 //////
 //
+// Interfaces
+//
+
+/// The interface to the geometric sphere attributes.
+public interface ISphere<Scalar: __BuiltinFloatingPointType> {
+	/// The position and radius of the sphere, packed into a single 4D vector.
+	public property pos_rad: cgv::Vec4<Scalar> {get; set;}
+};
+public extension<Scalar: __BuiltinFloatingPointType> vector<Scalar, 4>: ISphere<Scalar>
+{
+	/// Access `this`.
+	property pos_rad : This {
+		get { return this; }
+		set { this = newValue; }
+	}
+}
+
+/// **S**phere **S**plat **I**nfo or *SSI* for short. **TODO: investigate.**
+///
+/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
+public interface ISplatInfo<Scalar: __BuiltinFloatingPointType>
+{
+	public property q_tilde: cgv::Vec2<Scalar> {get; set;}
+	public property inv_T_square_v: cgv::Vec3<Scalar> {get; set;}
+	public property inv_T_square_e_c: cgv::Vec3<Scalar> {get; set;}
+	public property inv_e: Scalar {get; set;}
+	public property e_zw_clip: cgv::Vec2<Scalar> {get; set;}
+	public property v_zw_clip: cgv::Vec2<Scalar> {get; set;}
+	public property v_eye: cgv::Vec3<Scalar> {get; set;}
+};
+
+
+
+//////
+//
 // Structs
 //
 
@@ -131,26 +166,6 @@ public struct ParameterSpace<Scalar: __BuiltinFloatingPointType>
 	}
 }
 
-/// **S**phere **S**plat **I**nfo or *SSI* for short. **TODO: investigate.**
-///
-/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
-public struct SplatInfo<Scalar: __BuiltinFloatingPointType>
-{
-	/// Our 2D vector type.
-	typealias Vec2 = cgv::Vec2<Scalar>;
-
-	/// Our 3D vector type.
-	typealias Vec3 = cgv::Vec3<Scalar>;
-
-	public var q_tilde: Vec2;
-	public var inv_T_square_v: Vec3;
-	public var inv_T_square_e_c: Vec3;
-	public var inv_e: Scalar;
-	public var e_zw_clip: Vec2;
-	public var v_zw_clip: Vec2;
-	public var v_eye: Vec3;
-};
-
 
 
 //////
@@ -161,9 +176,9 @@ public struct SplatInfo<Scalar: __BuiltinFloatingPointType>
 /// **TODO: investigate.**
 ///
 /// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
-public func splatVertexWithSPS<Scalar: __BuiltinFloatingPointType> (
+public func splatVertexWithSPS<Scalar: __BuiltinFloatingPointType, SplatInfo: ISplatInfo<Scalar>> (
 	in const pos_rad: cgv::Vec4<Scalar>, in const corner: uint, in sps: ParameterSpace<Scalar>,
-	in MV: cgv::Mat4<Scalar>, in MVP: cgv::Mat4<Scalar>, in NM: cgv::Mat3<Scalar>, inout ssi: SplatInfo<Scalar>
+	in MV: cgv::Mat4<Scalar>, in MVP: cgv::Mat4<Scalar>, in NM: cgv::Mat3<Scalar>, inout ssi: SplatInfo
 ) -> cgv::Vec4<Scalar>
 {
 	// Our vector types
@@ -194,10 +209,10 @@ public func splatVertexWithSPS<Scalar: __BuiltinFloatingPointType> (
 }
 
 /// **TODO: investigate.**
-public func splatVertex<Scalar: __BuiltinFloatingPointType> (
+public func splatVertex<Scalar: __BuiltinFloatingPointType, SplatInfo: ISplatInfo<Scalar>> (
 	in const pos_rad: cgv::Vec4<Scalar>, in const corner: uint, in const modelview: cgv::Mat4<Scalar>,
 	in const modelview_inv: cgv::Mat4<Scalar>, in projModelview: cgv::Mat4<Scalar>, in normalMat: cgv::Mat3<Scalar>,
-	inout ssi: SplatInfo<Scalar>
+	inout ssi: SplatInfo
 ) -> cgv::Vec4<Scalar>
 {
 	let sps = geom::splat::sphere::ParameterSpace<Scalar>(
@@ -212,8 +227,8 @@ public func splatVertex<Scalar: __BuiltinFloatingPointType> (
 /// **TODO: investigate how the pure ray-sphere intersection can be factored out such that it is generally re-usable.**
 ///
 /// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glfs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glfs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
-public func intersectRay<Scalar: __BuiltinFloatingPointType> (
-	in const ssi: SplatInfo<Scalar>, in const percentualSplatSize: float, out splat_tc: float2, out clipDepth: Scalar,
+public func intersectRay<Scalar: __BuiltinFloatingPointType, SplatInfo: ISplatInfo<Scalar>> (
+	in const ssi: SplatInfo, in const percentualSplatSize: float, out splat_tc: float2, out clipDepth: Scalar,
 	out percentualRadialPos: Scalar
 ) -> Optional<geom::intersect::Hit<cgv::Vec3<Scalar>>>
 {
@@ -250,15 +265,14 @@ public func intersectRay<Scalar: __BuiltinFloatingPointType> (
 
 	// compute the depth value in clip coordinates
 	let zw = ssi.e_zw_clip + lambda * ssi.v_zw_clip;
-	let z_clip = zw.x / zw.y;
-	clipDepth = Scalar(.5)*(z_clip + Scalar(1)); // transform from [-1,1] to [0,1]
+	clipDepth = zw.x / zw.y;
 
 	return hit;
 }
 
 ///
-public func intersectRay<Scalar: __BuiltinFloatingPointType> (
-	in const ssi: SplatInfo<Scalar>, out splat_tc: float2, out clipDepth: Scalar
+public func intersectRay<Scalar: __BuiltinFloatingPointType, SplatInfo: ISplatInfo<Scalar>> (
+	in const ssi: SplatInfo, out splat_tc: float2, out clipDepth: Scalar
 ) -> Optional<geom::intersect::Hit<cgv::Vec3<Scalar>>>
 {
 	var dummy: Scalar;
