@@ -13,11 +13,7 @@ pub use gpu::InterleavedBuffer; // re-export
 
 /// Our derives
 pub mod derives {
-	pub use cgv_derive::{
-		// Re-export our related procedural derive macros from cgv-derive
-		InterleavedElem, ElemWithNormal, ElemWithTangent, ElemWithRadius, ElemWithRadiusDeriv, ElemWithOrientation,
-		ElemWithScaling, ElemWithColor, NoNormal, NoTangent, NoRadius, NoRadiusDeriv, NoOrientation, NoScaling, NoColor
-	};
+	pub use cgv_derive::InterleavedElem; // re-export our related procedural derive macro from cgv-derive
 }
 
 
@@ -246,16 +242,11 @@ pub type GAF = GeometryAttributeFlags;
 /// # use cgv::glm as glm;
 /// use cgv::renderer::data::derives::*;
 /// # fn assertHostData<D: cgv::renderer::HostData+?Sized>() -> bool { true }
-/// #[derive(
-///    // generate InterleavedElem impl
-///    InterleavedElem,
-///    // empty impls for the InterleavedElem bounds that we don't have the attributes for
-///    NoNormal,NoTangent,NoRadius,NoRadiusDeriv,NoOrientation,NoScaling,NoColor
-/// )]
+/// #[derive(InterleavedElem)]
 /// struct MyVertex {
 ///     #[cgv_renderAttr(pos)]
 ///     position: glm::Vec3
-///     // ...
+///     // ... optional fields tagged with #[cgv_renderAttr(...)] for normal, tangent, radius, etc.
 /// }
 /// assertHostData::<[MyVertex]>();
 /// ```
@@ -268,8 +259,8 @@ pub trait InterleavedElem:
 
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveNormals`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithNormal` or `derive::NoNormal` procedural macros, depending on whether your element has a normal.
+/// of the [`host::CanHaveNormals`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(normal)]` field is present. Do not implement directly.
 pub trait _ElemNormalBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
@@ -282,26 +273,13 @@ pub trait _ElemNormalBase {
 	fn normal (&self) -> &glm::Vec3;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the [`host::HasNormals`]
-/// trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasNormals<D: cgv::renderer::data::host::HasNormals+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithNormal)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(normal)]
-///     normal: glm::Vec3
-///     // ...
-/// }
-/// assertHasNormals::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have a normal field (`#[cgv_renderAttr(normal)]`). Automatically
+/// implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithNormal: _ElemNormalBase {}
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveTangents`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithTangent` or `derive::NoTangent` procedural macros, depending on whether your element has a tangent.
+/// of the [`host::CanHaveTangents`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(tangent)]` field is present. Do not implement directly.
 pub trait _ElemTangentBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
@@ -314,26 +292,13 @@ pub trait _ElemTangentBase {
 	fn tangent (&self) -> &glm::Vec3;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the [`host::HasTangents`]
-/// trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasTangents<D: cgv::renderer::data::host::HasTangents+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithTangent)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(tangent)]
-///     tangent: glm::Vec3
-///     // ...
-/// }
-/// assertHasTangents::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have a tangent field (`#[cgv_renderAttr(tangent)]`). Automatically
+/// implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithTangent: _ElemTangentBase {}
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveRadii`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithRadius` or `derive::NoRadius` procedural macros, depending on whether your element has a radius.
+/// of the [`host::CanHaveRadii`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(radius)]` field is present. Do not implement directly.
 pub trait _ElemRadiusBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=f32> where Self: 'data;
@@ -346,27 +311,13 @@ pub trait _ElemRadiusBase {
 	fn radius (&self) -> &f32;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
-/// [`data::host::HasRadii`] trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasRadii<D: cgv::renderer::data::host::HasRadii+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithRadius)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(radius)]
-///     radius: f32
-///     // ...
-/// }
-/// assertHasRadii::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have a radius field (`#[cgv_renderAttr(radius)]`). Automatically
+/// implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithRadius: _ElemRadiusBase {}
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveRadiusDerivs`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithRadiusDeriv` or `derive::NoRadiusDeriv` procedural macros, depending on whether your element has a
-/// radius derivative.
+/// of the [`host::CanHaveRadiusDerivs`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(radiusDeriv)]` field is present. Do not implement directly.
 pub trait _ElemRadiusDerivBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=f32> where Self: 'data;
@@ -379,27 +330,13 @@ pub trait _ElemRadiusDerivBase {
 	fn radiusDeriv (&self) -> &f32;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
-/// [`host::HasRadiusDerivs`] trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasRadiusDerivs<D: cgv::renderer::data::host::HasRadiusDerivs+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithRadiusDeriv)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(radiusDeriv)]
-///     radiusDeriv: f32
-///     // ...
-/// }
-/// assertHasRadiusDerivs::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have a radius-derivative field (`#[cgv_renderAttr(radiusDeriv)]`).
+/// Automatically implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithRadiusDeriv: _ElemRadiusDerivBase {}
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveOrientations`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithOrientation` or `derive::NoOrientation` procedural macros, depending on whether your element has an
-/// orientation.
+/// of the [`host::CanHaveOrientations`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(orientation)]` field is present. Do not implement directly.
 pub trait _ElemOrientationBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=glm::Quat> where Self: 'data;
@@ -412,26 +349,13 @@ pub trait _ElemOrientationBase {
 	fn orientation (&self) -> &glm::Quat;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the
-/// [`data::host::HasOrientations`] trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasOrientations<D: cgv::renderer::data::host::HasOrientations+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithOrientation)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(orientation)]
-///     orientation: glm::Quat
-///     // ...
-/// }
-/// assertHasOrientations::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have an orientation field (`#[cgv_renderAttr(orientation)]`).
+/// Automatically implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithOrientation: _ElemOrientationBase {}
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveScalings`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithScaling` or `derive::NoScaling` procedural macros, depending on whether your element has a scaling.
+/// of the [`host::CanHaveScalings`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(scaling)]` field is present. Do not implement directly.
 pub trait _ElemScalingBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=glm::Vec3> where Self: 'data;
@@ -444,26 +368,13 @@ pub trait _ElemScalingBase {
 	fn scaling (&self) -> &glm::Vec3;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the [`host::HasScalings`]
-/// trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasScalings<D: cgv::renderer::data::host::HasScalings+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithScaling)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(scaling)]
-///     scaling: glm::Vec3
-///     // ...
-/// }
-/// assertHasScalings::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have a scaling field (`#[cgv_renderAttr(scaling)]`). Automatically
+/// implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithScaling: _ElemScalingBase {}
 
 /// Helper trait serving as a bridge for [`InterleavedElem`]s to become eligible for receiving a blanket-implementation
-/// of the [`host::CanHaveColors`] trait on its slices. Don't implement directly, rather use the
-/// `derive::ElemWithColor` or `derive::NoColor` procedural macros, depending on whether your element has a color.
+/// of the [`host::CanHaveColors`] trait on its slices. Automatically implemented by `#[derive(InterleavedElem)]`
+/// depending on whether a `#[cgv_renderAttr(color)]` field is present. Do not implement directly.
 pub trait _ElemColorBase {
 	#[doc(hidden)]
 	type _Iterator<'data>: Iterator<Item=cgv::RGBA> where Self: 'data;
@@ -476,19 +387,6 @@ pub trait _ElemColorBase {
 	fn color (&self) -> &cgv::RGBA;
 }
 
-/// Helper/convenience trait making a type eligible for receiving a blanket-implementation of the [`host::HasColors`]
-/// trait on its slices.
-///
-/// This trait can be derived:
-/// ```rust
-/// # use cgv::glm as glm;
-/// # fn assertHasColors<D: cgv::renderer::data::host::HasColors+?Sized>() -> bool { true }
-/// #[derive(cgv::renderer::data::ElemWithColor)]
-/// struct MyVertex {
-///     #[cgv_renderAttr(color)]
-///     color: cgv::RGBA
-///     // ...
-/// }
-/// assertHasColors::<[MyVertex]>();
-/// ```
+/// Marker trait for [`InterleavedElem`]s that have a color field (`#[cgv_renderAttr(color)]`). Automatically
+/// implemented by `#[derive(InterleavedElem)]` when the field is present.
 pub trait ElemWithColor: _ElemColorBase {}

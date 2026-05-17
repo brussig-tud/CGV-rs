@@ -17,14 +17,14 @@ use crate::{self as cgv, *, renderer::data::*};
 // Structs
 //
 
-// A position-only `InterleavedElem`.
-#[derive(Clone,InterleavedElem,NoNormal,NoTangent,NoRadius,NoRadiusDeriv,NoOrientation,NoScaling,NoColor)]
+/// A position-only `InterleavedElem`.
+#[derive(Clone, InterleavedElem)]
 pub struct Position {
 	#[cgv_renderAttr(pos)] pub pos: glm::Vec3
 }
 
-// An `InterleavedElem` with tangents and colors.
-#[derive(Clone,InterleavedElem,ElemWithTangent,ElemWithColor,NoNormal,NoRadius,NoRadiusDeriv,NoOrientation,NoScaling)]
+/// An `InterleavedElem` with tangents and colors.
+#[derive(Clone, InterleavedElem)]
 pub struct PosTanColor {
 	#[cgv_renderAttr(pos)]     pub pos: glm::Vec3,
 	#[cgv_renderAttr(tangent)] pub tan: glm::Vec3,
@@ -45,7 +45,7 @@ fn test_derive_interleavedElem ()
 	let posOnly = Position { pos: glm::vec3(0., 1., 0.2) };
 	assert_eq!(posOnly.pos(), &glm::vec3(0., 1., 0.2));
 
-	// Check select other `ElemWith...` impls
+	// Check selection of other `ElemWith...` impls
 	let posTanColor = PosTanColor {
 		pos: glm::vec3(0.3, 2., 0.1), tan: glm::vec3(2., 0.1, 0.),
 		col: cgv::RGBA::from_rgba_premultiplied(0.1, 0.2, 0.3, 0.5)

@@ -30,6 +30,7 @@ use cgv::{self, renderer};
 // Statics
 //
 
+/// Our test data.
 const DATA_POINTS: [DataPoint; 8] = [
 	// Front side:
 	DataPoint {
@@ -84,6 +85,7 @@ const DATA_POINTS: [DataPoint; 8] = [
 	}
 ];
 
+/// Triangle-strip topology connecting our test data into a mesh.
 const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
 
 
@@ -98,17 +100,7 @@ const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5,
 
 /// A "data point" suitable for interleaved storage, providing all attributes we're testing out here. 
 #[repr(C)]
-#[derive(
-	// Standard traits
-	Clone,
-
-	// Attributes we have
-	renderer::data::InterleavedElem,renderer::data::ElemWithRadius,renderer::data::ElemWithTangent,
-	renderer::data::ElemWithRadiusDeriv, renderer::data::ElemWithNormal,renderer::data::ElemWithColor,
-
-	// Attributes we don't have
-	renderer::data::NoOrientation,renderer::data::NoScaling
-)]
+#[derive(Clone, renderer::data::InterleavedElem)]
 pub struct DataPoint
 {
 	#[cgv_renderAttr(pos)]         pub pos: glm::Vec3,
