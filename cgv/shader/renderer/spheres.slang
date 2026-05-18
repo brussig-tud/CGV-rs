@@ -48,8 +48,7 @@ struct Sphere: geom::splat::sphere::ISphere<float>
 // Vertex shader input
 
 /// Sphere attributes input stream for the positions/co-located radius plus colors case.
-struct VSInput_posRadColor
-{
+struct VSInput_posRadColor {
 	/// The position of the sphere center in world space, and potentially the radius in the *w*-component.
 	[vk::location(0)] var pos_rad: float4;
 
@@ -129,7 +128,8 @@ struct SphereSplat_posRadColor: geom::splat::sphere::ISplatInfo<float>
 ////
 // Fragment shader output
 
-struct FSOutput {
+struct FSOutput
+{
 	/// The final fragment color.
 	float4 color: SV_Target;
 
@@ -157,8 +157,7 @@ struct FSOutput {
 let viewing: ParameterBlock<cgv::api::Viewing>;
 
 /// The set of constant sphere attributes. Changed infrequently by the user, thus group(1).
-struct ConstantAttribs
-{
+struct ConstantAttribs {
 	/// The user-defined default color for all spheres.
 	var color: float4;
 
@@ -180,8 +179,7 @@ ParameterBlock<ConstantAttribs> constAttribs;
 
 /// Vertex shader entry point for the positions-only case.
 [shader("vertex")]
-func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad
-{
+func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
 	var sphere = Sphere(float4(pos.xyz, constAttribs.radius), constAttribs.color);
 	var vertex: SphereSplat_posRad;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
@@ -191,8 +189,7 @@ func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_
 
 /// Vertex shader entry point for the combined positions/radii case.
 [shader("vertex")]
-func vertexMain_posRad (in pos_rad: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad
-{
+func vertexMain_posRad (in pos_rad: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
 	var sphere = Sphere(pos_rad, constAttribs.color);
 	var vertex: SphereSplat_posRad;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
@@ -202,8 +199,7 @@ func vertexMain_posRad (in pos_rad: float4, uint vertexID: SV_VertexID) -> Spher
 
 /// Vertex shader entry point for the separate positions/radii case.
 [shader("vertex")]
-func vertexMain_posSepRad (in sphere: VSInput_posSepRad, uint vertexID: SV_VertexID) -> SphereSplat_posRad
-{
+func vertexMain_posSepRad (in sphere: VSInput_posSepRad, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
 	var sphere = Sphere(float4(sphere.pos.xyz, sphere.radius), constAttribs.color);
 	var vertex: SphereSplat_posRad;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
