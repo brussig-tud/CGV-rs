@@ -19,6 +19,8 @@ cfg-if = "*"
 ctor = "*"
 arrayvec = {workspace=true}
 dashmap = "*"
+rand = {workspace=true}
+rand_distr = {workspace=true}
 web-time = "*"
 eframe = {workspace=true, features=["default_fonts", "wgpu"]}
 winit = "*"

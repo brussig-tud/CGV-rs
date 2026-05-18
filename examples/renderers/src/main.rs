@@ -11,6 +11,16 @@
 
 //////
 //
+// Module definitions
+//
+
+/// Submodule implementing various auxiliary functionality.
+mod helpers;
+
+
+
+//////
+//
 // Imports
 //
 
@@ -23,70 +33,8 @@ use cgv::{wgpu, glm, egui, tracing};
 // CGV-rs Framework
 use cgv::{self, renderer};
 
-
-
-//////
-//
-// Statics
-//
-
-/// Our test data.
-const DATA_POINTS: [DataPoint; 8] = [
-	// Front side:
-	DataPoint {
-		pos: glm::Vec3::new(-0.5, -0.5, -0.5), radius: 4./32.,
-		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: -1./32.,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
-		normal: glm::Vec3::new(0., 0., -1.),
-	},
-	DataPoint {
-		pos: glm::Vec3::new(0.5, -0.5, -0.5), radius: 2./32.,
-		tangent: glm::Vec3::new(-1., 1., 0.), radDeriv: 1./32.,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
-		normal: glm::Vec3::new(0., 0., -1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(-0.5, 0.5, -0.5), radius: 3./32.,
-		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 1./32.,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 0.),
-		normal: glm::Vec3::new(0., 0., -1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(0.5, 0.5, -0.5), radius: 3./32.,
-		tangent: glm::Vec3::new(0., 0., 1.), radDeriv: -1./32.,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
-		normal: glm::Vec3::new(1., 0., 0.,)
-	},
-
-	// Back side:
-	DataPoint {
-		pos: glm::Vec3::new(0.5, 0.5, 0.5), radius: 2./32.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: -1./64.,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(-0.5, 0.5, 0.5), radius: 1./32.,
-		tangent: glm::Vec3::new(1., -1., 0.), radDeriv: 2./32.,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(0.5, -0.5, 0.5), radius: 4./32.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 1./32.,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(-0.5, -0.5, 0.5), radius: 4./32.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	}
-];
-
-/// Triangle-strip topology connecting our test data into a mesh.
-const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
+// Local imports
+use helpers::*;
 
 
 
@@ -127,19 +75,26 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 
 	////
+	// Defaults
+
+	let guiState = GuiState {
+		numDataPoints: 64
+	};
+
+
+	////
 	// Prepare data
 
-	/* generate test data */
-	let spheresData = renderer::data::InterleavedBuffer::fromHost(
-		context, &DATA_POINTS, /* options: */Default::default(), Some("RenderersDemo_spheresData")
-	);
+	// Generate initial test data
+	let mut testData = TestData::default();
+	let renderData = testData.regenerateData(context, guiState.numDataPoints);
 
 
 	////
 	// Initialize renderers
 
 	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, renderSetup));
-	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData.clone()));
+	sphereRenderer.setData(renderer::spheres::DataReceiver::new(renderData.clone()));
 	sphereRenderer.setDefaults(context, |d| {
 		d.radius = 7./64.; // these defaults will actually get overridden by our data since we have all attributes
 		d.color = cgv::RGBA::from_srgba_premultiplied(127, 127, 127, 255);
@@ -147,32 +102,64 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 
 	////
-	// Initialize GUI state
-
-	let guiState = GuiState {};
-
-
-	////
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { spheresData, sphereRenderer, _guiState: guiState }))
+	Ok(Box::new(RenderersDemo { testData, renderData, sphereRenderer, guiState }))
 }
 
+/// Test data holder. We make this its own struct so it can be used even before the `RenderersDemo` is fully
+/// constructed.
+#[derive(Default)]
+struct TestData {
+	samples: Vec<DataPoint>
+}
+impl TestData
+{
+	/// (Re-)generate the test data and upload to the given `renderer::GpuData`.
+	fn regenerateData (&mut self, context: &cgv::Context, num: usize) -> Arc<renderer::data::InterleavedBuffer> {
+		regenerateData(&mut self.samples, num);
+		renderer::data::InterleavedBuffer::fromHost(
+			context, &self.samples, /* options: */Default::default(), Some("RenderersDemo_spheresData")
+		)
+	}
+}
+impl std::ops::Deref for TestData {
+	type Target = Vec<DataPoint>;
+
+	fn deref (&self) -> &Self::Target {
+		&self.samples
+	}
+}
+
+/// Backing state for the GUI controls
 #[derive(Default,Debug)]
-struct GuiState {}
+struct GuiState {
+	numDataPoints: usize
+}
 
 struct RenderersDemo
 {
-	// The renderable test data
-	#[expect(dead_code)]
-	spheresData: Arc<renderer::data::InterleavedBuffer>,
+	// The renderable test data.
+	testData: TestData,
 
-	// Test sphere renderer
+	/// GPU buffer containing the test data.
+	renderData: Arc<renderer::data::InterleavedBuffer>,
+
+	// Test sphere renderer.
 	sphereRenderer: renderer::Managed<renderer::Spheres>,
 
-	// GUI-controllable state
-	_guiState: GuiState
+	// GUI-controllable state.
+	guiState: GuiState
+}
+impl RenderersDemo
+{
+	fn regenerateData (&mut self, player: &cgv::Player) {
+		self.renderData = self.testData.regenerateData(&player.context, self.guiState.numDataPoints);
+		self.sphereRenderer.setDataWithPlayer(
+			&player.context, player, renderer::spheres::DataReceiver::new(self.renderData.clone())
+		);
+	}
 }
 impl cgv::Application for RenderersDemo
 {
@@ -238,7 +225,22 @@ impl cgv::Application for RenderersDemo
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Keep track of whether we need to redraw our scene contents
-		#[expect(unused_mut)] let mut redraw = false;
+		let mut redraw = false;
+
+		// Test data configuration
+		egui::CollapsingHeader::new("Data").default_open(true).show(ui, |ui|
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+				.layout(ui, "Cgv.Ex.Renderers-Data", |controlTable| {
+					if controlTable.add("Num. Data Points", |ui, _|
+						ui.add(
+							egui::Slider::new(&mut self.guiState.numDataPoints, 8..=2482176).logarithmic(true),
+						).changed()
+					){
+						self.regenerateData(player);
+						redraw = true;
+					}
+				})
+		);
 
 		// Renderer configuration
 		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui| {

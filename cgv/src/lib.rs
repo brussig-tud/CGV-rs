@@ -58,6 +58,8 @@ pub extern crate nalgebra_glm as glm;
 /// Re-export important 3rd party libraries/library components
 pub use tracing;
 pub use anyhow::{anyhow, Result, Error};
+pub use rand;
+pub use rand_distr;
 pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
@@ -149,7 +151,8 @@ fn initTracing ()
 // Enums and structs
 //
 
-/// The common color type.<br />
+/// The common color type.
+///
 /// **TODO**: put into to-be-done `media` module/crate.
 pub type RGBA = egui::ecolor::Rgba;
 
@@ -176,7 +179,8 @@ pub enum GlobalPass
 	/// A custom pass, with a custom value.
 	Custom(Box<dyn Any + Send>)
 }
-impl GlobalPass {
+impl GlobalPass
+{
 	/// Construct a `GlobalPass::Stereo` value for the given eye index, with the [`StereoEye::max`] field set to a
 	/// *don't care* value. Useful for interacting with various [`view::Camera`] APIs that require you to state a global
 	/// pass for the operation.
@@ -200,7 +204,8 @@ impl GlobalPass {
 /// Configuration for a global render pass.
 /// **TODO: The design needs overhauling - cameras cannot know the *index* of any of their declared render passes, as
 /// that also depends on other cameras.**
-pub struct GlobalPassInfo {
+pub struct GlobalPassInfo
+{
 	pub pass: GlobalPass,
 	/// Index of the associated [`RenderState`] within [`GlobalPasses::renderStates`].<br />
 	/// **TODO: remove and replace by player-managed data structure that cameras don't interact with.**
