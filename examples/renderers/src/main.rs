@@ -238,7 +238,6 @@ impl cgv::Application for RenderersDemo
 	{
 		// Render our test data
 		self.sphereRenderer.renderForGlobalPass(context, renderState, renderPass, globalPass.index);
-
 		None // <- we don't need the Player to submit any custom command buffers for us
 	}
 

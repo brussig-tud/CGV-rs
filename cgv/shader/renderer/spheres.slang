@@ -254,8 +254,7 @@ func vertexMain_posSepRadColor (in sphere: VSInput_posRadColor, uint vertexID: S
 [ForceInline]
 func splatSphere<Sphere: geom::splat::sphere::ISphere<float>, SplatInfo: geom::splat::sphere::ISplatInfo<float>> (
 	in const sphere: Sphere, in const uint vertexID, out ssi: SplatInfo
-) -> float4
-{
+) -> float4 {
 	return geom::splat::sphere::splatVertex(
 		float4(sphere.pos_rad.xyz, sphere.pos_rad.w*style.radiusScale), vertexID, viewing.modelview,
 		viewing.modelview_inv, viewing.projModelview, float3x3(viewing.normal), ssi
@@ -336,7 +335,7 @@ func evaluateHit (in const hit: geom::intersect::IHit<float3>, in const material
 	let halfDir = normalize(dirLight + dirEye);
 	let specular = pow(max(0., dot(hit.normal, halfDir)), shininess);
 	// - shade
-	let litColor = float4(materialColor.rgb * lightColor*(diffuse+specular+ambient), 1);
+	let litColor = float4(materialColor.rgb * lightColor*(diffuse+specular+ambient), materialColor.a);
 
 	// Done!
 	return litColor;
