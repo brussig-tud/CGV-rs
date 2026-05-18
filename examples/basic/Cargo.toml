@@ -11,6 +11,7 @@ nice-name = "CGV-rs Basic Example"
                                # though, so we don't actually define it, this is just here for documentation purposes.
 [dependencies]
 cgv = {path="../../cgv", default-features=false} # make sure only the features resulting from our own feature set are used
+bytemuck = {workspace=true}
 
 [build-dependencies]
 cgv-build = {path="../../cgv-build"}

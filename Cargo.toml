@@ -34,6 +34,7 @@ opt-level = 3
 wasm-bindgen = "*"
 wasm-bindgen-futures = "*"
 bitflags = "*"
+bytemuck = {version="1.0", features=["derive"]}
 anyhow = "*"
 tracing = "*"
 tracing-subscriber = {version="*"}
@@ -44,7 +45,7 @@ egui = "*"
 egui_extras = "*"
 arrayvec = "*"
 nalgebra = "*"
-nalgebra-glm = "*"
+nalgebra-glm = {version="*", features=["convert-bytemuck"]}
 alum = "*"
 rand = "0.9"
 rand_distr = "0.5"

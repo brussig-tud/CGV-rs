@@ -35,48 +35,48 @@ use cgv::{self, util};
 
 const QUAD_VERTS: &[QuadVertex; 8] = &[
 	// Front side:
-	QuadVertex {
-		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 0.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 0.)
-	},
+	QuadVertex::new(
+		glm::Vec4::new(-1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(-1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 0.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 0.)
+	),
 
 	// Back side (texture coordinates flipped horizontally):
-	QuadVertex {
-		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 0.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 0.)
-	}
+	QuadVertex::new(
+		glm::Vec4::new(-1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(-1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 0.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 0.)
+	),
 ];
 
 const INDICES: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
@@ -92,16 +92,22 @@ const INDICES: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4
 // QuadVertex
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, bytemuck::NoUninit)]
 struct QuadVertex {
 	pos: glm::Vec4,
 	color: glm::Vec4,
-	texcoord: glm::Vec2
+	texcoord: glm::Vec2,
+	pad: [u32; 2]
 }
 impl QuadVertex
 {
 	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
 		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
+
+	const fn new (pos: glm::Vec4, color: glm::Vec4, texcoord: glm::Vec2) -> Self
+	{
+		Self{pos, color, texcoord, pad: [0; 2]}
+	}
 
 	fn layoutDesc () -> wgpu::VertexBufferLayout<'static> {
 		wgpu::VertexBufferLayout {
@@ -118,7 +124,7 @@ impl QuadVertex
 
 ///
 #[repr(C,align(16))] // Slang currently imposes that everything in a buffer must be 16-byte aligned
-#[derive(Default, Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone, bytemuck::NoUninit)]
 pub struct Appearance
 {
 	/// The color of the CGV logo.
@@ -134,7 +140,9 @@ pub struct Appearance
 	pub evenCheckersColor: egui::Rgba,
 
 	/// How many checkers to draw on the canvas in each direction
-	pub checkerCounts: egui::Vec2
+	pub checkerCounts: egui::Vec2,
+
+	pub pad: [u32; 2]
 }
 pub type AppearanceUniformGroup = cgv::hal::UniformGroup<Appearance>;
 
@@ -160,7 +168,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	let vertexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
 			label: Some("ExBasic__QuadVertices"),
-			contents: util::slicify(QUAD_VERTS),
+			contents: bytemuck::cast_slice(QUAD_VERTS),
 			usage: wgpu::BufferUsages::VERTEX
 		}
 	);
@@ -169,7 +177,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	let indexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
 			label: Some("ExBasic__QuadIndices"),
-			contents: util::slicify(INDICES),
+			contents: bytemuck::bytes_of(INDICES),
 			usage: wgpu::BufferUsages::INDEX
 		}
 	);

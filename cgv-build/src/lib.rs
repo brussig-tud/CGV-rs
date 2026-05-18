@@ -184,7 +184,7 @@ pub fn dependOnGeneratedDirectory (dirpath: impl AsRef<Path>) -> Result<()> {
 }
 
 /// Reference the target triple of the currently running *Cargo* build.
-pub fn cargoBuildTargetTriple() -> &'static util::meta::TargetTriple<'static> {
+pub fn cargoBuildTargetTriple() -> &'static util::meta::TargetTriple {
 	static TARGET_TRIPLE: LazyLock<util::meta::TargetTriple> = LazyLock::new(|| {
 		let targetTriple = env::var("TARGET").expect("`TARGET` should be defined by Cargo");
 		util::meta::TargetTriple::from_str(&targetTriple).expect(

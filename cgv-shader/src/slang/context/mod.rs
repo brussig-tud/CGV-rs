@@ -135,6 +135,8 @@ impl compile::env::Module for EnvModule {}
 //
 
 /// Helper struct for encapsulating [compatibility-relevant](Context::environmentCompatHash) Slang session options
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::NoUninit)]
 struct CompatOptions {
 	matrixLayoutColumn: bool
 }
@@ -168,7 +170,7 @@ impl CompatOptions
 
 	///
 	pub fn digest (self) -> u64 {
-		SLANG_COMPILER_SALT | (crc32::hash(util::slicify(&self)) as u64)
+		SLANG_COMPILER_SALT | (crc32::hash(bytemuck::bytes_of(&self)) as u64)
 	}
 }
 

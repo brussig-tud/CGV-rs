@@ -56,7 +56,7 @@ pub trait Realm<EntityType> : Sized+Send+Sync {
 
 /// A realm of unique unsigned 32-bit integers.
 #[derive(Default)]
-pub struct RealmU32 {
+pub struct RealmU32 where Self: Send + Sync {
 	counter: AtomicU32
 }
 impl RealmU32 {
@@ -68,12 +68,6 @@ impl RealmU32 {
 		RealmU32 { counter: AtomicU32::new(1) }
 	}
 }
-unsafe impl Send for RealmU32 {
-	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Send.
-}
-unsafe impl Sync for RealmU32 {
-	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Sync.
-}
 impl Realm<u32> for RealmU32 {
 	/// Create and return a new 32-bit integer that is unique to this realm.
 	fn newEntity (&self) -> u32 {
@@ -83,7 +77,7 @@ impl Realm<u32> for RealmU32 {
 
 /// A realm of unique unsigned 64-bit integers.
 #[derive(Default)]
-pub struct RealmU64 {
+pub struct RealmU64 where Self: Send + Sync {
 	counter: AtomicU64
 }
 impl RealmU64 {
@@ -94,12 +88,6 @@ impl RealmU64 {
 	pub const fn one () -> RealmU64 {
 		RealmU64 { counter: AtomicU64::new(1) }
 	}
-}
-unsafe impl Send for RealmU64 {
-	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Send.
-}
-unsafe impl Sync for RealmU64 {
-	// SAFETY: RealmU32 has an atomic as its only member, which is inherently Sync.
 }
 impl Realm<u64> for RealmU64 {
 	/// Create and return a new 64-bit integer that is unique to this realm.

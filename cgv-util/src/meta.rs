@@ -41,7 +41,7 @@ static CURRENT_EXE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 /// The target triple the module was built for according the build-time values of the *Cargo* `TARGET` environment
 /// variable.
 static TARGET_TRIPLE_CARGO: LazyLock<TargetTriple> = LazyLock::new(||
-	TargetTriple::fromString(env!("CGV_TARGET_TRIPLE_CARGO").to_owned()).unwrap_or_else(|err| panic!("{}", err))
+	TargetTriple::from_str(env!("CGV_TARGET_TRIPLE_CARGO")).unwrap_or_else(|err| panic!("{err}"))
 );
 
 /// Typed description of the platform the module was built for according to the build-time values of the *Cargo*
@@ -203,73 +203,16 @@ pub enum PlatformSystem
 
 /// Representation of the [target triple](https://doc.rust-lang.org/cargo/appendix/glossary.html#target) that allows
 /// easy individual access to all (sub-)components of the triple.
-#[derive(Debug,Eq)]
-pub struct TargetTriple<'this> {
-	full: String,
-	arch: &'this str,
-	vendor: &'this str,
-	sys: &'this str,
-	abi: &'this str
-}
-impl TargetTriple<'_>
+#[derive(Clone,Debug,Eq)]
+pub struct TargetTriple
 {
-	/// Internal function to create a functionally uninitialized instance.
-	#[inline]
-	fn uninitialized() -> Self
-	{
-		let triple = String::default();
-		let full = unsafe {
-			// SAFETY: `triple` is moved into `Self.full` below, so the heap allocation it owns remains valid for the
-			// lifetime of the struct. The returned `&str` slice (`full`) points into that allocation and is stored
-			// alongside it (and can thus not outlive it), making this a self-referential struct with a stable address
-			// for the referenced data.
-			notsafe::extendLifetime(&triple).as_str()
-		};
-		Self {
-			full: triple, arch: full, vendor: full, sys: full, abi: full
-		}
-	}
-
-	/// Create from the given target triple descriptor string.
-	pub fn fromString (triple: String) -> Result<Self>
-	{
-		let full = unsafe {
-			// SAFETY: `triple` is moved into the returned `TargetTriple.full` at the end of this function, so its heap
-			// allocation remains valid for the lifetime of the struct. All `&str` slices derived from `full` below
-			// point into that allocation and are stored alongside it (and can thus not outlive it), forming a
-			// self-referential struct with a stable backing allocation.
-			notsafe::extendLifetime(&triple)
-		};
-		let generateTripleErrorMsg = || {
-			Err(anyhow!("Invalid target triple: {full}"))
-		};
-
-		let tripleElems: Vec<&str> = full.splitn(3, '-').collect();
-		if tripleElems.len() < 3 {
-			return generateTripleErrorMsg();
-		}
-		let arch = tripleElems[0];
-		let vendor = tripleElems[1];
-		let (sys, abi) = {
-			let sys_abi: Vec<&str> = tripleElems[2].split('-').collect();
-			if sys_abi.len() > 2 {
-				return generateTripleErrorMsg();
-			};
-			let sys = sys_abi[0];
-			let abi = if sys_abi.len() > 1 {
-				sys_abi[1]
-			}
-			else {
-				sys.split_at(sys.len()).1
-			};
-			(sys, abi)
-		};
-		Ok(TargetTriple {
-			full: triple,
-			arch, vendor, sys, abi
-		})
-	}
-
+	full: Box<str>,
+	/// Byte indices of the hyphens after arch, vendor and potentially sys.
+	/// If no ABI is given, the third entry is `full.len()`.
+	seps: [u8; 3],
+}
+impl TargetTriple
+{
 	/// Borrow a slice over the full target triple descriptor string.
 	pub fn full (&self) -> &str {
 		return &self.full;
@@ -277,72 +220,62 @@ impl TargetTriple<'_>
 
 	/// Borrow a slice over the architecture part of the target triple descriptor string.
 	pub fn arch (&self) -> &str {
-		return &self.arch;
+		// SAFETY: The entries of `seps` monotonically increase and point to either a single-byte character or one past
+		// the last byte.
+		unsafe{self.full.get_unchecked(0..self.seps[0] as usize)}
 	}
 
 	/// Borrow a slice over the vendor part of the target triple descriptor string.
 	pub fn vendor (&self) -> &str {
-		return &self.vendor;
+		// SAFETY: See `arch`.
+		unsafe{self.full.get_unchecked(self.seps[0] as usize + 1..self.seps[1] as usize)}
 	}
 
 	/// Borrow a slice over the system part of the target triple descriptor string.
 	pub fn sys (&self) -> &str {
-		return &self.sys;
+		// SAFETY: See `arch`.
+		unsafe{self.full.get_unchecked(self.seps[1] as usize + 1..self.seps[2] as usize)}
 	}
 
 	/// Borrow a slice over the ABI part of the target triple descriptor string.
 	pub fn abi (&self) -> &str {
-		return &self.abi;
+		// SAFETY: See `arch`.
+		unsafe{self.full.get_unchecked(self.seps[2] as usize + 1..self.full.len())}
 	}
 }
-impl FromStr for TargetTriple<'_> {
+impl TryFrom<Box<str>> for TargetTriple {
+	type Error = anyhow::Error;
+
+	fn try_from(full: Box<str>) -> Result<Self> {
+		let error = || Err(anyhow!("Invalid target triple: {full}"));
+
+		if full.len() > u8::MAX as usize {return Err(anyhow!("Target triple is too long"))}
+
+		let mut seps = [full.len() as u8; 3];
+		let mut part = 0;
+		for (idx, _) in full.match_indices('-') {
+			if part > seps.len() {return error()}
+			seps[part] = idx as u8;
+			part += 1;
+		}
+
+		if part < 2 {error()} else {Ok(Self{full, seps})}
+	}
+}
+impl FromStr for TargetTriple {
 	type Err = anyhow::Error;
 
 	#[inline(always)]
-	fn from_str (triple: &str) -> anyhow::Result<Self> {
-		Self::fromString(triple.to_owned())
+	fn from_str (triple: &str) -> Result<Self> {
+		Self::try_from(Box::from(triple))
 	}
 }
-impl PartialEq<TargetTriple<'_>> for TargetTriple<'_> {
-	fn eq (&self, other: &TargetTriple<'_>) -> bool {
+impl PartialEq<TargetTriple> for TargetTriple {
+	fn eq (&self, other: &TargetTriple) -> bool {
 		self.full == other.full
 	}
 }
-impl Clone for TargetTriple<'_>
-{
-	#[inline(always)]
-	fn clone (&self) -> Self {
-		let mut new = Self::uninitialized();
-		new.clone_from(self); // actually clone without re-parsing the target triple string
-		new
-	}
-
-	fn clone_from (&mut self, source: &Self)
-	{
-		// In this implementation, we re-use the parsing results from `source` since we know the contents of the cloned
-		// `self.full` string are identical to that of `source.full`. The unsafe code below basically "slides" the
-		// source slices onto the cloned target triple string.
-		self.full = source.full.clone();
-		let offset = unsafe {
-			// SAFETY: We are violating the "from the same allocation" invariant here, but we know the behavior of the
-			//         platforms we support (desktop[x86,arm] and WASM) and there it works exactly like we expect. The
-			//         other invariants hold, most notably "distance must be multiple of size of T>" since we are
-			//         dealing with T=u8 here which is the smallest possible address difference on all supported
-			//         platforms
-			self.full.as_ptr().offset_from(source.full.as_ptr())
-		};
-		unsafe {
-			// SAFETY: The full string is identical to the input one, so we can use all the same indices and offsets
-			//         from the input. Also, TargetTriple hides all its fields inside the private scope and defines no
-			//         mutating methods, meaning Rust's aliasing rules are effectively never violated.
-			self.arch = notsafe::offsetStr(&source.arch, offset);
-			self.vendor = notsafe::offsetStr(&source.vendor, offset);
-			self.sys = notsafe::offsetStr(&source.sys, offset);
-			self.abi = notsafe::offsetStr(&source.abi, offset);
-		}
-	}
-}
-impl std::fmt::Display for TargetTriple<'_> {
+impl std::fmt::Display for TargetTriple {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.full)
 	}
@@ -371,7 +304,7 @@ impl SupportedPlatform
 	pub fn fromTargetTriple (triple: &TargetTriple, debug: Option<bool>) -> Result<Self>
 	{
 		// Determine architecture
-		let arch = match triple.arch
+		let arch = match triple.arch()
 		{
 			// Aarch64
 			"aarch64"   => PlatformArchitecture::Aarch64(ARM64Sub::Generic),
@@ -398,11 +331,11 @@ impl SupportedPlatform
 			"wasm64"    => PlatformArchitecture::Wasm64,
 
 			// Unsupported
-			_ => return Err(anyhow!("Unsupported platform architecture: {}", triple.arch))
+			arch => return Err(anyhow!("Unsupported platform architecture: {arch}"))
 		};
 
 		// Determine vendor
-		let vendor = match triple.vendor
+		let vendor = match triple.vendor()
 		{
 			// Aarch64
 			"unknown" => PlatformVendor::Unknown,
@@ -412,60 +345,57 @@ impl SupportedPlatform
 			"win7"    => PlatformVendor::Win7,
 
 			// Unsupported
-			_ => return Err(anyhow!("Unsupported platform vendor: {}", triple.vendor))
+			vendor => return Err(anyhow!("Unsupported platform vendor: {vendor}"))
 		};
 
 		// Determine system
 		// - shared error output
-		#[inline(always)] fn unsupportedABI (sys: &str, abi: &str) -> Result<SupportedPlatform> {
-			Err(anyhow!("Unsupported ABI on '{sys}': {abi}"))
-		}
+		let unsupportedABI = |abi| Err(anyhow!("Unsupported ABI on '{}': {abi}", triple.sys()));
 		// - actual parsing
-		let sys = match triple.sys
+		let sys = match triple.sys()
 		{
 			"unknown" => PlatformSystem::Unknown,
 			"darwin"  => PlatformSystem::Darwin,
-			"linux"   => match triple.abi {
+			"linux"   => match triple.abi() {
 				"gnu"    => PlatformSystem::Linux(LinuxABI::GNU),
 				"musl"   => PlatformSystem::Linux(LinuxABI::MUSL),
-				  _      => return unsupportedABI(triple.sys, triple.abi)
+				abi      => return unsupportedABI(abi)
 			},
-			"windows" => match triple.abi {
+			"windows" => match triple.abi() {
 				"msvc"   => PlatformSystem::Windows(WindowsABI::MSVC),
 				"gnu"    => PlatformSystem::Windows(WindowsABI::GNU),
 				"gnullvm"=> PlatformSystem::Windows(WindowsABI::UCRT),
-				  _      => return unsupportedABI(triple.sys, triple.abi)
+				abi      => return unsupportedABI(abi)
 			},
-			"ios"     => match triple.abi {
+			"ios"     => match triple.abi() {
 				""       => PlatformSystem::iOS(AppleiOSABI::Generic),
 				"macabi" => PlatformSystem::iOS(AppleiOSABI::MacABI),
 				"sim"    => PlatformSystem::iOS(AppleiOSABI::Sim),
-				  _      => return unsupportedABI(triple.sys, triple.abi)
+				abi      => return unsupportedABI(abi)
 			},
-			"visionos"=> match triple.abi {
+			"visionos"=> match triple.abi() {
 				""       => PlatformSystem::VisionOS(AppleEmbeddedABI::Generic),
 				"sim"    => PlatformSystem::VisionOS(AppleEmbeddedABI::Sim),
-				  _      => return unsupportedABI(triple.sys, triple.abi)
+				abi      => return unsupportedABI(abi)
 			},
-			"tvos"    => match triple.abi {
+			"tvos"    => match triple.abi() {
 				""       => PlatformSystem::TVOS(AppleEmbeddedABI::Generic),
 				"sim"    => PlatformSystem::TVOS(AppleEmbeddedABI::Sim),
-				  _      => return unsupportedABI(triple.sys, triple.abi)
+				abi      => return unsupportedABI(abi)
 			},
 
 			// Unsupported
-			_ => return Err(anyhow!("Unsupported platform system: {}", triple.sys))
+			sys => return Err(anyhow!("Unsupported platform system: {sys}"))
 		};
 
 		// Done!
 		Ok(Self { arch, vendor, sys, debug })
 	}
 
-	/// Create the platform representation from a full target triple descriptor string. This is equivalent to
-	/// calling `Self::fromTargetTriple(SupportedPlatform::fromString(...))`
+	/// Create the platform representation from a full target triple descriptor string.
 	#[inline(always)]
-	pub fn fromString (triple: String, debug: Option<bool>) -> Result<Self> {
-		Self::fromTargetTriple(&TargetTriple::fromString(triple)?, debug)
+	pub fn fromString (triple: Box<str>, debug: Option<bool>) -> Result<Self> {
+		Self::fromTargetTriple(&TargetTriple::try_from(triple)?, debug)
 	}
 
 	/// This is merely a convenience shorthand for [`Self::arch::isWasm`](PlatformArchitecture::isWasm).
@@ -484,7 +414,7 @@ impl FromStr for SupportedPlatform {
 	type Err = anyhow::Error;
 
 	fn from_str (triple: &str) -> anyhow::Result<Self> {
-		Self::fromString(triple.to_owned(), None)
+		Self::fromString(Box::from(triple), None)
 	}
 }
 
@@ -511,7 +441,7 @@ pub fn currentExeDir() -> &'static Path {
 
 /// Retrieve the [target triple](https://doc.rust-lang.org/cargo/appendix/glossary.html#target) that the calling code
 /// was compiled for.
-pub fn platformTargetTriple() -> &'static TargetTriple<'static> {
+pub fn platformTargetTriple() -> &'static TargetTriple {
 	&TARGET_TRIPLE_CARGO
 }
 
