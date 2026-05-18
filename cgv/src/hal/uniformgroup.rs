@@ -10,6 +10,8 @@ use std::ops::{Deref, DerefMut};
 // WGPU API
 use wgpu;
 
+use bytemuck::NoUninit;
+
 // Local imports
 use crate::*;
 
@@ -21,13 +23,13 @@ use crate::*;
 //
 
 #[derive(Debug)]
-pub struct UniformGroup<UniformsStruct: Sized+Default> {
+pub struct UniformGroup<UniformsStruct: Default+NoUninit> {
 	data: UniformsStruct,
 	buffer: wgpu::Buffer,
 	pub bindGroupLayout: wgpu::BindGroupLayout,
 	pub bindGroup: wgpu::BindGroup,
 }
-impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
+impl<UniformsStruct: Default+NoUninit> UniformGroup<UniformsStruct>
 {
 	pub fn create (context: &Context, visibility: wgpu::ShaderStages, name: Option<&str>) -> Self
 	{
@@ -111,16 +113,16 @@ impl<UniformsStruct: Sized+Default + 'static> UniformGroup<UniformsStruct>
 
 	#[inline(always)]
 	pub fn upload (&self, context: &Context) {
-		context.queue().write_buffer(&self.buffer, 0, util::slicify(&self.data));
+		context.queue().write_buffer(&self.buffer, 0, bytemuck::bytes_of(&self.data));
 	}
 
 	#[inline(always)]
 	pub fn uploadImmediately (&self, context: &Context) {
-		context.queue().write_buffer(&self.buffer, 0, util::slicify(&self.data));
+		context.queue().write_buffer(&self.buffer, 0, bytemuck::bytes_of(&self.data));
 		context.queue().submit([]);
 	}
 }
-impl<UniformsStruct: Sized+Default> Deref for UniformGroup<UniformsStruct> {
+impl<UniformsStruct: Default+NoUninit> Deref for UniformGroup<UniformsStruct> {
 	type Target = UniformsStruct;
 
 	#[inline(always)]
@@ -128,7 +130,7 @@ impl<UniformsStruct: Sized+Default> Deref for UniformGroup<UniformsStruct> {
 		&self.data
 	}
 }
-impl<UniformsStruct: Sized+Default> DerefMut for UniformGroup<UniformsStruct> {
+impl<UniformsStruct: Default+NoUninit> DerefMut for UniformGroup<UniformsStruct> {
 	#[inline(always)]
 	fn deref_mut (&mut self) -> &mut Self::Target {
 		&mut self.data

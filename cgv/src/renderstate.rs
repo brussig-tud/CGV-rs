@@ -98,7 +98,7 @@ impl BlendingOperation
 
 /// The CPU-side representation of the UniformBuffer used for storing the viewing information.
 #[repr(C,align(16))]
-#[derive(Default,Debug,Copy,Clone)]
+#[derive(Default,Debug,Copy,Clone,bytemuck::NoUninit)]
 pub struct ViewingStruct
 {
 	/// The view transformation matrix.

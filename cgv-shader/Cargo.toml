@@ -8,6 +8,7 @@ tracing = {version="*", optional=true}
 wgpu = {workspace=true, optional=true, features=["spirv"]}
 anyhow = "*"
 bitcode = "*"
+bytemuck = {workspace=true}
 serde = {version="*", optional=true}
 postcard = {version="*", optional=true, features=["alloc"]}
 crc32fast = "*"

@@ -35,6 +35,9 @@ struct SamplerDescriptor {
 }
 impl SamplerDescriptor {
 	pub fn fromWgpuSamplerDescriptor(descriptor: &wgpu::SamplerDescriptor) -> Self {
+		// NaN breaks equality and makes little sense to use.
+		assert!(!descriptor.lod_min_clamp.is_nan() && !descriptor.lod_max_clamp.is_nan());
+
 		Self { inner: wgpu::SamplerDescriptor {
 			label: Some("CGV__contextManagedSampler"),
 			..*descriptor
@@ -44,8 +47,22 @@ impl SamplerDescriptor {
 impl Eq for SamplerDescriptor {}
 impl Hash for SamplerDescriptor {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		let bytes: &[usize] = util::slicifyInto(self);
-		bytes.hash(state);
+		macro_rules! hashFields {( $($field:ident),+ $(,)? ) => {
+			$( self.inner.$field.hash(state); )+
+		}}
+		hashFields!(
+			address_mode_u,
+			address_mode_v,
+			address_mode_w,
+			mag_filter,
+			min_filter,
+			mipmap_filter,
+			compare,
+			anisotropy_clamp,
+			border_color,
+		);
+		self.inner.lod_min_clamp.to_bits().hash(state);
+		self.inner.lod_max_clamp.to_bits().hash(state);
 	}
 }
 

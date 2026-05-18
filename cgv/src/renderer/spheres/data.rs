@@ -114,16 +114,18 @@ impl LayoutVariant {
 /// Stores the default attributes that the [`Spheres`](renderer::Spheres) will use when rendering spheres when the
 /// corresponding attributes are not sourced from user data.
 #[repr(C,align(16))]
+#[derive(Clone, Copy, bytemuck::NoUninit)]
 pub struct DefaultAttributes {
 	/// The default color of the rendered spheres, used when the color attribute is not sourced from user data.
 	pub color: Rgba,
 
 	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
 	pub radius: f32,
+	pub pad: [u32; 3],
 }
 impl Default for DefaultAttributes {
 	fn default () -> Self { Self {
-		radius: 1.0, color: Rgba::from_rgb(2./5., 2./5., 2./5.)
+		radius: 1.0, color: Rgba::from_rgb(2./5., 2./5., 2./5.), pad: [0; 3]
 	}}
 }
 pub type DefaultAttribsUniformGroup = hal::UniformGroup<DefaultAttributes>;
