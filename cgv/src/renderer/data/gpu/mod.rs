@@ -700,8 +700,8 @@ impl PartialEq<Self> for BufferLayout
 impl Eq for BufferLayout {}
 
 ///
+#[derive(PartialEq,Eq)]
 pub struct PipelineBufferLayout {
-	#[expect(dead_code)] // <- not dead code, but the references are hidden from the compiler inside `wgpuLayouts`
 	attribDecls: Vec<Vec<wgpu::VertexAttribute>>,
 	wgpuLayouts: Vec<wgpu::VertexBufferLayout<'static>>,
 	bufferIndices: Vec<usize>

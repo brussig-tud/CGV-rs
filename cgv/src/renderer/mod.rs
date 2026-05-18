@@ -80,8 +80,15 @@ pub trait GpuDataReceiver {
 
 	/// Check if the wrapped GPU data is [compatible](data::gpu::BufferLayout::isCompatible) with another.
 	#[inline]
-	fn isCompatible (&self, otherData: &dyn GpuData) -> bool {
+	fn isDataCompatible (&self, otherData: &dyn GpuData) -> bool {
 		self.gpuData().layout().isCompatible(&otherData.layout())
+	}
+
+	/// Check if the data receiver is compatible with another. Will typically just involve checking
+	/// [data compatibility](Self::isDataCompatible), but implementations might want to take more things into account.
+	#[inline(always)]
+	fn isCompatible (&self, otherReceiver: &Self) -> bool {
+		self.isDataCompatible(otherReceiver.gpuData())
 	}
 }
 
@@ -136,14 +143,16 @@ impl<R: Renderer> Managed<R>
 	/// Helper function to decide whether the `setData...` family of functions need to rebuild [`GpuState`].
 	#[inline]
 	fn needsRebuild (&self, newData: &R::GpuDataReceiver) -> bool
-	{!(
-		!self.renderer.gpuStateIsIndependentFromData() ||
-		if let Some(data) = &self.data {
-			data.isCompatible(newData.gpuData())
-		} else {
-			false
-		}
-	)}
+	{
+		let dataIndependent = self.renderer.gpuStateIsIndependentFromData();
+		!(
+			dataIndependent || if let Some(data) = &self.data {
+				data.isCompatible(&newData)
+			} else {
+				false
+			}
+		)
+	}
 
 	/// Rebuild the wrapped renderer's [render state](crate::RenderState)-dependent [`GpuState`] for the given single
 	/// render state.

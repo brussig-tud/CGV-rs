@@ -115,20 +115,26 @@ impl LayoutVariant {
 /// corresponding attributes are not sourced from user data.
 #[repr(C,align(16))]
 #[derive(Clone, Copy, bytemuck::NoUninit)]
-pub struct DefaultAttributes {
+pub struct Style
+{
 	/// The default color of the rendered spheres, used when the color attribute is not sourced from user data.
-	pub color: Rgba,
+	pub defaultColor: Rgba,
 
 	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
-	pub radius: f32,
-	pub pad: [u32; 3],
+	pub defaultRadius: f32,
+
+	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
+	pub radiusScale: f32,
+
+	/// Explicit padding for *bytemuck*.
+	pub pad: [u32; 2]
 }
-impl Default for DefaultAttributes {
+impl Default for Style {
 	fn default () -> Self { Self {
-		radius: 1.0, color: Rgba::from_rgb(2./5., 2./5., 2./5.), pad: [0; 3]
+		radiusScale: 1., defaultRadius: 1., defaultColor: Rgba::from_rgb(2./5., 2./5., 2./5.), pad: [0; 2]
 	}}
 }
-pub type DefaultAttribsUniformGroup = hal::UniformGroup<DefaultAttributes>;
+pub type StyleUniformGroup = hal::UniformGroup<Style>;
 
 /// A [`renderer::GpuData`]-compliant interleaved storage optimized for use with the [spheres renderer](Spheres).
 pub struct GpuData {

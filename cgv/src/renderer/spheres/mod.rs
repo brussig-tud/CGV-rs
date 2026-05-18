@@ -35,6 +35,7 @@ use data::*;
 ///
 pub struct DataReceiver {
 	data: Arc<dyn renderer::GpuData>,
+	includedAttribs: GeometryAttributeFlags,
 	layout: GpuPipelineBufferLayout,
 	vsEntryPoint: String,
 	fsEntryPoint: String
@@ -43,10 +44,34 @@ impl DataReceiver
 {
 	/// Receive the provided GPU data.
 	///
-	/// **NOTE**: [`renderer::Spheres`] prefers having positions and radii packed into the same `Float32x4` shader
-	/// location when radii are present, but will work with separate locations as well, at a (very) small performance
-	/// penalty.
-	pub fn new (data: Arc<dyn renderer::GpuData>) -> Self
+	#[doc=include_str!("_doc/_spheres_layoutRemarks.md")]
+	///
+	/// # Arguments
+	///
+	/// * `data` – The `GpuData` to render.
+	///
+	/// # Returns
+	///
+	/// A `DataReceiver` for feeding into a `renderer::Spheres`.
+	#[inline(always)]
+	pub fn new (data: Arc<dyn renderer::GpuData>) -> Self {
+		Self::withAttributes(data, GAF::all())
+	}
+	/// Receive the provided GPU data, using only the specified attributes, the rest will be fixed as indicated by the
+	/// current [style](Spheres::setStyleUniforms).
+	///
+	#[doc=include_str!("_doc/_spheres_layoutRemarks.md")]
+	///
+	/// # Arguments
+	///
+	/// * `data` – The `GpuData` to render.
+	/// * `filter` – The attributes to use from the data. Only specifying [`GAF::RADII`] and [`GAF::COLORS`] will have
+	///              an effect; other attributes are always ignored by `renderer::Spheres`.
+	///
+	/// # Returns
+	///
+	/// A `DataReceiver` for feeding into a `renderer::Spheres`.
+	pub fn withAttributes (data: Arc<dyn renderer::GpuData>, filter: GeometryAttributeFlags) -> Self
 	{
 		// Infer the right shader entry point and vertex shader locations from the available attributes
 		let layout = data.layout();
@@ -54,16 +79,19 @@ impl DataReceiver
 		let mut fsEntryPoint = "fragmentMain_pos".to_string();
 		let mut shaderLoc = 0;
 		let mut includeAttribs = vec![];
-		if let Some(radii) = layout.attribute(GA::Radii) {
+		let mut includedAttribs = GAF::empty();
+		if filter.contains(GAF::RADII) && let Some(radii) = layout.attribute(GA::Radii) {
 			if layout.positions.inSameBufferSlot(&radii) { vsEntryPoint += "Rad" }
 			else                                         { vsEntryPoint += "SepRad"; shaderLoc = 1 }
 			fsEntryPoint += "Rad";
 			includeAttribs.push((GA::Radii, shaderLoc));
+			includedAttribs |= GAF::RADII;
 		}
-		if layout.hasAttribute(GA::Colors) {
+		if filter.contains(GAF::COLORS) && layout.hasAttribute(GA::Colors) {
 			vsEntryPoint += "Color"; shaderLoc += 1;
 			fsEntryPoint += "Color";
 			includeAttribs.push((GA::Colors, shaderLoc));
+			includedAttribs |= GAF::COLORS;
 		}
 
 		// Create pipeline buffer layout
@@ -72,12 +100,18 @@ impl DataReceiver
 		);
 
 		// Done!
-		Self { data, layout, vsEntryPoint, fsEntryPoint }
+		Self { data, includedAttribs, layout, vsEntryPoint, fsEntryPoint }
 	}
 }
 impl GpuDataReceiver for DataReceiver {
 	fn gpuData (&self) -> &dyn renderer::GpuData {
 		self.data.as_ref()
+	}
+
+	/// Custom implementation to also take ignored/included attributes into account
+	#[inline]
+	fn isCompatible (&self, otherReceiver: &Self) -> bool {
+		self.layout == otherReceiver.layout && self.includedAttribs.bits() == otherReceiver.includedAttribs.bits()
 	}
 }
 impl From<Arc<dyn renderer::GpuData+'static>> for DataReceiver {
@@ -99,7 +133,7 @@ impl Deref for DataReceiver {
 pub struct Spheres {
 	shader: wgpu::ShaderModule,
 	pipelineLayout: wgpu::PipelineLayout,
-	defaultAttribUniforms: DefaultAttribsUniformGroup
+	styleUniforms: StyleUniformGroup
 }
 impl Spheres
 {
@@ -116,15 +150,15 @@ impl Spheres
 	pub fn new (context: &Context, renderSetup: &RenderSetup) -> Self
 	{
 		// Create constant (not state-dependent) GPU objects
-		let defaultAttribUniforms = DefaultAttribsUniformGroup::createAndUpload(
+		let styleUniforms = StyleUniformGroup::createAndUpload(
 			context, wgpu::ShaderStages::VERTEX_FRAGMENT,
-			Some("CGV__renderer_Spheres_constantAttribUniforms").as_deref()
+			Some("CGV__renderer_Spheres_styleUniforms").as_deref()
 		);
 		let pipelineLayout =
 			context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label: Some("CGV__renderer_Spheres_renderPipelineLayout"),
 				bind_group_layouts: &[
-					Some(&renderSetup.bindGroupLayouts().viewing), Some(&defaultAttribUniforms.bindGroupLayout)
+					Some(&renderSetup.bindGroupLayouts().viewing), Some(&styleUniforms.bindGroupLayout)
 				],
 				immediate_size: 0
 			});
@@ -133,14 +167,14 @@ impl Spheres
 		).expect("shader module could not be compiled by WGPU");
 
 		// Done!
-		Self { shader, pipelineLayout, defaultAttribUniforms }
+		Self { shader, pipelineLayout, styleUniforms }
 	}
 
 	#[inline(always)]
-	pub fn setDefaults<R, Setter: FnOnce(&mut DefaultAttributes)->R> (
+	pub fn setStyleUniforms <R, Setter: FnOnce(&mut Style)->R> (
 		&mut self, context: &Context, setter: Setter
 	) -> R {
-		self.defaultAttribUniforms.update(context, setter)
+		self.styleUniforms.update(context, setter)
 	}
 }
 impl Renderer for Spheres
@@ -204,7 +238,7 @@ impl Renderer for Spheres
 	){
 		renderPass.set_pipeline(gpuState); // <- in our case it's literally just the pipeline
 		renderPass.set_bind_group(0, &renderState.viewingUniforms.bindGroup, &[]);
-		renderPass.set_bind_group(1, &self.defaultAttribUniforms.bindGroup, &[]);
+		renderPass.set_bind_group(1, &self.styleUniforms.bindGroup, &[]);
 		let buffers = data.data.geometry();
 		for (slot, buffer) in data.layout.bufferIndices().iter().enumerate() {
 			renderPass.set_vertex_buffer(slot as u32, buffers[*buffer]);

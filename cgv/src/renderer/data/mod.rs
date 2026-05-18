@@ -191,6 +191,7 @@ pub type GA = GeometryAttribute;
 // Bitflag definition: GeometryAttributes
 bitflags! {
 	/// Bitflags representing the various geometry attributes the renderer module explicitly knows about.
+	#[derive(Clone,Copy)]
 	pub struct GeometryAttributeFlags: u16 {
 		const NORMALS       = 1 << 0;
 		const TANGENTS      = 1 << 1;
@@ -199,7 +200,7 @@ bitflags! {
 		const ORIENTATIONS  = 1 << 4;
 		const SCALINGS      = 1 << 5;
 		const COLORS        = 1 << 6;
-    }
+	}
 }
 impl From<u16> for GeometryAttributeFlags {
 	#[inline(always)]

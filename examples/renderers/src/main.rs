@@ -77,8 +77,10 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	////
 	// Defaults
 
-	let guiState = GuiState {
-		numDataPoints: 64
+	let mut guiState = GuiState {
+		numDataPoints: 128, radiusScale: 1., defaultRadius: 7./64.,
+		defaultColor: Default::default(), // <- we'll set this to the renderer's default later
+		radiiFromData: true, colorsFromData: true
 	};
 
 
@@ -95,9 +97,10 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, renderSetup));
 	sphereRenderer.setData(renderer::spheres::DataReceiver::new(renderData.clone()));
-	sphereRenderer.setDefaults(context, |d| {
-		d.radius = 7./64.; // these defaults will actually get overridden by our data since we have all attributes
-		d.color = cgv::RGBA::from_srgba_premultiplied(127, 127, 127, 255);
+	sphereRenderer.setStyleUniforms(context, |u| {
+		u.radiusScale = guiState.radiusScale;
+		u.defaultRadius = guiState.defaultRadius;
+		guiState.defaultColor = u.defaultColor.into();
 	});
 
 
@@ -135,7 +138,12 @@ impl std::ops::Deref for TestData {
 /// Backing state for the GUI controls
 #[derive(Default,Debug)]
 struct GuiState {
-	numDataPoints: usize
+	numDataPoints: usize,
+	radiusScale: f32,
+	defaultRadius: f32,
+	defaultColor: egui::Color32,
+	radiiFromData: bool,
+	colorsFromData: bool
 }
 
 struct RenderersDemo
@@ -154,11 +162,23 @@ struct RenderersDemo
 }
 impl RenderersDemo
 {
+	fn reassignData (&mut self, player: &cgv::Player)
+	{
+		// Decide which attributes to use from the data
+		use renderer::data::GAF;
+		let mut dataAttribs = renderer::data::GeometryAttributeFlags::empty();
+		if self.guiState.radiiFromData { dataAttribs |= GAF::RADII; }
+		if self.guiState.colorsFromData { dataAttribs |= GAF::COLORS; }
+
+		// (Re-)assign with the selected attributes
+		self.sphereRenderer.setDataWithPlayer(&player.context, player, renderer::spheres::DataReceiver::withAttributes(
+			self.renderData.clone(), dataAttribs
+		));
+	}
+
 	fn regenerateData (&mut self, player: &cgv::Player) {
 		self.renderData = self.testData.regenerateData(&player.context, self.guiState.numDataPoints);
-		self.sphereRenderer.setDataWithPlayer(
-			&player.context, player, renderer::spheres::DataReceiver::new(self.renderData.clone())
-		);
+		self.reassignData(player);
 	}
 }
 impl cgv::Application for RenderersDemo
@@ -225,27 +245,72 @@ impl cgv::Application for RenderersDemo
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Keep track of whether we need to redraw our scene contents
-		let mut redraw = false;
+		#[expect(unused_mut)]
+		let mut redraw = true;
 
 		// Test data configuration
 		egui::CollapsingHeader::new("Data").default_open(true).show(ui, |ui|
 			cgv::gui::layout::ControlTableLayouter::new(ui)
-				.layout(ui, "Cgv.Ex.Renderers-Data", |controlTable| {
-					if controlTable.add("Num. Data Points", |ui, _|
+				.layout(ui, "Cgv.Ex.Renderers-Data", |controlTable|
+				{
+					if controlTable.add("Count", |ui, _| {
+						ui.spacing_mut().slider_width *= 0.9;
 						ui.add(
 							egui::Slider::new(&mut self.guiState.numDataPoints, 8..=2482176).logarithmic(true),
 						).changed()
-					){
+					}){
 						self.regenerateData(player);
-						redraw = true;
 					}
-				})
+				}
+			)
 		);
 
 		// Renderer configuration
-		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui| {
-			ui.label("Nothing here yet.");
-		});
+		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui|
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+				.layout(ui, "Cgv.Ex.Renderers-Settings", |controlTable|
+				{
+					if controlTable.add("Defaults", |ui, _| {
+						ui.label(" color ");
+						ui.color_edit_button_srgba(&mut self.guiState.defaultColor).changed()
+					}){
+						self.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.defaultColor = self.guiState.defaultColor.into()
+						);
+					};
+					if controlTable.add("", |ui, _| {
+						ui.label("radius");
+						ui.spacing_mut().slider_width *= 0.65;
+						ui.add(
+							egui::Slider::new(&mut self.guiState.defaultRadius, 0.0625f32..=8.)
+								.logarithmic(true).max_decimals(3),
+						).changed()
+					}){
+						self.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.defaultRadius = self.guiState.defaultRadius
+						);
+					}
+					controlTable.add("Use attribs", |ui, _| {
+						if ui.checkbox(&mut self.guiState.radiiFromData, "radii").changed() {
+							self.reassignData(player);
+						}
+						ui.add_space(0.5*ui.style().spacing.item_spacing.x);
+						if ui.checkbox(&mut self.guiState.colorsFromData, "colors").changed() {
+							self.reassignData(player);
+						}
+					});
+					if controlTable.add("Radius scale", |ui, _|
+						ui.add(
+							egui::Slider::new(&mut self.guiState.radiusScale, 0.0625f32..=8.).logarithmic(true),
+						).changed()
+					){
+						self.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.radiusScale = self.guiState.radiusScale
+						);
+					}
+				}
+			)
+		);
 
 		// Links section
 		ui.add_space(ui.style().spacing.item_spacing.y * 3.);

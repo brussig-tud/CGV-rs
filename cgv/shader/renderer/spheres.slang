@@ -157,15 +157,18 @@ struct FSOutput
 let viewing: ParameterBlock<cgv::api::Viewing>;
 
 /// The set of constant sphere attributes. Changed infrequently by the user, thus group(1).
-struct ConstantAttribs {
+struct Style {
 	/// The user-defined default color for all spheres.
 	var color: float4;
 
 	/// The user-defined default radius of all spheres.
 	var radius: float;
+
+    /// The user-defined global radius multiplier.
+    var radiusScale: float;
 };
 [vk::binding(0, 1)] // <- start at binding(0) of group(1)
-ParameterBlock<ConstantAttribs> constAttribs;
+ParameterBlock<Style> style;
 
 
 
@@ -180,7 +183,7 @@ ParameterBlock<ConstantAttribs> constAttribs;
 /// Vertex shader entry point for the positions-only case.
 [shader("vertex")]
 func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
-	var sphere = Sphere(float4(pos.xyz, constAttribs.radius), constAttribs.color);
+	var sphere = Sphere(float4(pos.xyz, style.radius), style.color);
 	var vertex: SphereSplat_posRad;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
 	vertex.pos_rad = sphere.pos_rad;
@@ -190,7 +193,7 @@ func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_
 /// Vertex shader entry point for the combined positions/radii case.
 [shader("vertex")]
 func vertexMain_posRad (in pos_rad: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
-	var sphere = Sphere(pos_rad, constAttribs.color);
+	var sphere = Sphere(pos_rad, style.color);
 	var vertex: SphereSplat_posRad;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
 	vertex.pos_rad = sphere.pos_rad;
@@ -200,7 +203,7 @@ func vertexMain_posRad (in pos_rad: float4, uint vertexID: SV_VertexID) -> Spher
 /// Vertex shader entry point for the separate positions/radii case.
 [shader("vertex")]
 func vertexMain_posSepRad (in sphere: VSInput_posSepRad, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
-	var sphere = Sphere(float4(sphere.pos.xyz, sphere.radius), constAttribs.color);
+	var sphere = Sphere(float4(sphere.pos.xyz, sphere.radius), style.color);
 	var vertex: SphereSplat_posRad;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
 	vertex.pos_rad = sphere.pos_rad;
@@ -211,7 +214,7 @@ func vertexMain_posSepRad (in sphere: VSInput_posSepRad, uint vertexID: SV_Verte
 [shader("vertex")]
 func vertexMain_posColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
 {
-	var sphere = Sphere(float4(sphere.pos_rad.xyz, constAttribs.radius), sphere.color);
+	var sphere = Sphere(float4(sphere.pos_rad.xyz, style.radius), sphere.color);
 	var vertex: SphereSplat_posRadColor;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
 	vertex.pos_rad = sphere.pos_rad;
@@ -235,7 +238,7 @@ func vertexMain_posRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_V
 [shader("vertex")]
 func vertexMain_posSepRadColor (in sphere: VSInput_posRadColor, uint vertexID: SV_VertexID) -> SphereSplat_posRadColor
 {
-	var sphere = Sphere(float4(sphere.pos_rad.xyz, constAttribs.radius), constAttribs.color);
+	var sphere = Sphere(float4(sphere.pos_rad.xyz, style.radius), style.color);
 	var vertex: SphereSplat_posRadColor;
 	vertex.pos_clip = splatSphere(sphere, vertexID, vertex);
 	vertex.pos_rad = sphere.pos_rad;
@@ -254,8 +257,8 @@ func splatSphere<Sphere: geom::splat::sphere::ISphere<float>, SplatInfo: geom::s
 ) -> float4
 {
 	return geom::splat::sphere::splatVertex(
-		sphere.pos_rad, vertexID, viewing.modelview, viewing.modelview_inv, viewing.projModelview,
-		float3x3(viewing.normal), ssi
+		float4(sphere.pos_rad.xyz, sphere.pos_rad.w*style.radiusScale), vertexID, viewing.modelview,
+		viewing.modelview_inv, viewing.projModelview, float3x3(viewing.normal), ssi
 	);
 }
 
@@ -273,21 +276,21 @@ func splatSphere<Sphere: geom::splat::sphere::ISphere<float>, SplatInfo: geom::s
 [shader("fragment")]
 func fragmentMain_pos (splat: SphereSplat_posRad) -> FSOutput {
 	// Delegate to actual shading routine
-	return shadeSphere(Sphere(float4(splat.pos_rad.xyz, constAttribs.radius), constAttribs.color), splat);
+	return shadeSphere(Sphere(float4(splat.pos_rad.xyz, style.radius*style.radiusScale), style.color), splat);
 }
 
 /// Fragment shader entry point for the positions and radii case.
 [shader("fragment")]
 func fragmentMain_posRad (splat: SphereSplat_posRad) -> FSOutput {
 	// Delegate to actual shading routine
-	return shadeSphere(Sphere(splat.pos_rad, constAttribs.color), splat);
+	return shadeSphere(Sphere(splat.pos_rad, style.color), splat);
 }
 
 /// Fragment shader entry point for the positions and colors case.
 [shader("fragment")]
 func fragmentMain_posColor (splat: SphereSplat_posRadColor) -> FSOutput {
 	// Delegate to actual shading routine
-	return shadeSphere(Sphere(float4(splat.pos_rad.xyz, constAttribs.radius), splat.color), splat);
+	return shadeSphere(Sphere(float4(splat.pos_rad.xyz, style.radius*style.radiusScale), splat.color), splat);
 }
 
 /// Fragment shader entry point for the positions, radii and colors case.
