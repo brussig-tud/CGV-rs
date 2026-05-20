@@ -247,8 +247,7 @@ impl cgv::Application for RenderersDemo
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Keep track of whether we need to redraw our scene contents
-		#[expect(unused_mut)]
-		let mut redraw = true;
+		let mut redraw = false;
 
 		// Test data configuration
 		egui::CollapsingHeader::new("Data").default_open(true).show(ui, |ui|
@@ -262,6 +261,7 @@ impl cgv::Application for RenderersDemo
 						).changed()
 					}){
 						self.regenerateData(player);
+						redraw = true;
 					}
 				}
 			)
@@ -279,6 +279,7 @@ impl cgv::Application for RenderersDemo
 						self.sphereRenderer.setStyleUniforms(&player.context, |u|
 							u.defaultColor = self.guiState.defaultColor.into()
 						);
+						redraw = true;
 					};
 					if controlTable.add("", |ui, _| {
 						ui.label("radius");
@@ -291,14 +292,17 @@ impl cgv::Application for RenderersDemo
 						self.sphereRenderer.setStyleUniforms(&player.context, |u|
 							u.defaultRadius = self.guiState.defaultRadius
 						);
+						redraw = true;
 					}
 					controlTable.add("Use attribs", |ui, _| {
 						if ui.checkbox(&mut self.guiState.radiiFromData, "radii").changed() {
 							self.reassignData(player);
+							redraw = true;
 						}
 						ui.add_space(0.5*ui.style().spacing.item_spacing.x);
 						if ui.checkbox(&mut self.guiState.colorsFromData, "colors").changed() {
 							self.reassignData(player);
+							redraw = true;
 						}
 					});
 					if controlTable.add("Radius scale", |ui, _|
@@ -309,6 +313,7 @@ impl cgv::Application for RenderersDemo
 						self.sphereRenderer.setStyleUniforms(&player.context, |u|
 							u.radiusScale = self.guiState.radiusScale
 						);
+						redraw = true;
 					}
 				}
 			)
