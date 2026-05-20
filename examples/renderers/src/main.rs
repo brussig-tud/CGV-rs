@@ -119,7 +119,7 @@ struct TestData {
 }
 impl TestData
 {
-	/// (Re-)generate the test data and upload to the given `renderer::GpuData`.
+	/// (Re-)generate the test data and upload to a new [`InterleavedBuffer`](renderer::data::InterleavedBuffer).
 	fn regenerateData (&mut self, context: &cgv::Context, num: usize) -> Arc<renderer::data::InterleavedBuffer> {
 		regenerateData(&mut self.samples, num);
 		renderer::data::InterleavedBuffer::fromHost(
@@ -137,7 +137,8 @@ impl std::ops::Deref for TestData {
 
 /// Backing state for the GUI controls
 #[derive(Default,Debug)]
-struct GuiState {
+struct GuiState
+{
 	numDataPoints: usize,
 	radiusScale: f32,
 	defaultRadius: f32,
@@ -162,6 +163,7 @@ struct RenderersDemo
 }
 impl RenderersDemo
 {
+	/// Assign the current GPU-side [render data](Self::renderData) to the currently selected renderer.
 	fn reassignData (&mut self, player: &cgv::Player)
 	{
 		// Decide which attributes to use from the data
@@ -176,6 +178,7 @@ impl RenderersDemo
 		));
 	}
 
+	/// Re-generate the test data and upload to the GPU.
 	fn regenerateData (&mut self, player: &cgv::Player) {
 		self.renderData = self.testData.regenerateData(&player.context, self.guiState.numDataPoints);
 		self.reassignData(player);
