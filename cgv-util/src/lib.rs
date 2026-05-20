@@ -36,6 +36,9 @@ pub mod notsafe;
 /// Submodule providing operations on file system paths.
 pub mod path;
 
+pub mod tagged_ptr;
+pub use tagged_ptr::{Aligned, Pointer, SafePointer, Tagged};
+
 /// Submodule providing unique entity generators (IDs etc.)
 pub mod unique;
 
