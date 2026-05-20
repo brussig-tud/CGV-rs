@@ -41,6 +41,7 @@ impl SlangSyntax for Syntax
 			comment: "//",
 			comment_multiline: ["/*", "*/"],
 			quotes: ['\'', '"'].into(),
+			word_start: Default::default(),
 			hyperlinks: BTreeSet::from(["http"]),
 			keywords: BTreeSet::from([
 				"module", "func", "struct", "interface", "break", "continue", "if", "else", "const", "static", "let",
@@ -75,6 +76,7 @@ impl SlangSyntax for Syntax
 			special: BTreeSet::from([
 				"true", "false", "%", "->", "=>", "Unroll", "Inline", "ForceUnroll" ,"ForceInline"
 			]),
+			patch: Default::default(),
 		}
 	}
 }
