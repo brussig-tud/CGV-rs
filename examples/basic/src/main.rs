@@ -104,8 +104,7 @@ impl QuadVertex
 	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
 		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
 
-	const fn new (pos: glm::Vec4, color: glm::Vec4, texcoord: glm::Vec2) -> Self
-	{
+	const fn new (pos: glm::Vec4, color: glm::Vec4, texcoord: glm::Vec2) -> Self {
 		Self{pos, color, texcoord, pad: [0; 2]}
 	}
 
@@ -463,15 +462,12 @@ impl cgv::Application for ExampleApplication
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
-		// Keep track of whether we need to redraw our scene contents
-		let mut redraw = false;
-
 		// Appearance section
 		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
 		{
 			// Add the standard 2-column layout control grid
-			cgv::gui::layout::ControlTableLayouter::new(ui).layout(ui, "Cgv.Ex.Basic-color",
-				|controlTable|
+			cgv::gui::layout::ControlTableLayouter::new(ui).layout(
+				ui, "Cgv.Ex.Basic-color", |controlTable|
 				{
 					// Mutable access to our color uniforms in case something changes
 					let appearance = self.appearanceUniforms.borrowData_mut();
@@ -524,7 +520,7 @@ impl cgv::Application for ExampleApplication
 					// Upload new color values if something changed
 					if uploadFlag {
 						self.appearanceUniforms.upload(&player.context);
-						redraw = true;
+						player.requireSceneRedraw();
 					}
 				}
 			);
@@ -536,9 +532,11 @@ impl cgv::Application for ExampleApplication
 			// Add the standard 2-column layout control grid
 			cgv::gui::layout::ControlTableLayouter::new(ui)
 			.layout(ui, "Cgv.Ex.Basic-render", |controlTable| {
-				redraw |= controlTable.add("geometry", |ui, _| ui.add(
+				if controlTable.add("geometry", |ui, _| ui.add(
 					egui::Checkbox::new(&mut self.guiState.drawBackside, "draw backside")
-				)).changed();
+				)).changed() {
+					player.requireSceneRedraw();
+				}
 			});
 		});
 
@@ -553,11 +551,6 @@ impl cgv::Application for ExampleApplication
 				)
 			})
 		);
-
-		// Make sure the scene will get re-rendered in the current draw pass
-		if redraw {
-			player.requireSceneRedraw();
-		}
 	}
 }
 

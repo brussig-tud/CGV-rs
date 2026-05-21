@@ -149,16 +149,16 @@ struct GuiState
 
 struct RenderersDemo
 {
-	// The renderable test data.
+	/// The renderable test data.
 	testData: TestData,
 
 	/// GPU buffer containing the test data.
 	renderData: Arc<renderer::data::InterleavedBuffer>,
 
-	// Test sphere renderer.
+	/// Test sphere renderer.
 	sphereRenderer: renderer::Managed<renderer::Spheres>,
 
-	// GUI-controllable state.
+	/// GUI-controllable state.
 	guiState: GuiState
 }
 impl RenderersDemo
@@ -246,9 +246,6 @@ impl cgv::Application for RenderersDemo
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
-		// Keep track of whether we need to redraw our scene contents
-		let mut redraw = false;
-
 		// Test data configuration
 		egui::CollapsingHeader::new("Data").default_open(true).show(ui, |ui|
 			cgv::gui::layout::ControlTableLayouter::new(ui)
@@ -261,7 +258,7 @@ impl cgv::Application for RenderersDemo
 						).changed()
 					}){
 						self.regenerateData(player);
-						redraw = true;
+						player.requireSceneRedraw();
 					}
 				}
 			)
@@ -279,7 +276,7 @@ impl cgv::Application for RenderersDemo
 						self.sphereRenderer.setStyleUniforms(&player.context, |u|
 							u.defaultColor = self.guiState.defaultColor.into()
 						);
-						redraw = true;
+						player.requireSceneRedraw();
 					};
 					if controlTable.add("", |ui, _| {
 						ui.label("radius");
@@ -292,17 +289,17 @@ impl cgv::Application for RenderersDemo
 						self.sphereRenderer.setStyleUniforms(&player.context, |u|
 							u.defaultRadius = self.guiState.defaultRadius
 						);
-						redraw = true;
+						player.requireSceneRedraw();
 					}
 					controlTable.add("Use attribs", |ui, _| {
 						if ui.checkbox(&mut self.guiState.radiiFromData, "radii").changed() {
 							self.reassignData(player);
-							redraw = true;
+							player.requireSceneRedraw();
 						}
 						ui.add_space(0.5*ui.style().spacing.item_spacing.x);
 						if ui.checkbox(&mut self.guiState.colorsFromData, "colors").changed() {
 							self.reassignData(player);
-							redraw = true;
+							player.requireSceneRedraw();
 						}
 					});
 					if controlTable.add("Radius scale", |ui, _|
@@ -313,7 +310,7 @@ impl cgv::Application for RenderersDemo
 						self.sphereRenderer.setStyleUniforms(&player.context, |u|
 							u.radiusScale = self.guiState.radiusScale
 						);
-						redraw = true;
+						player.requireSceneRedraw();
 					}
 				}
 			)
@@ -330,11 +327,6 @@ impl cgv::Application for RenderersDemo
 				)
 			})
 		);
-
-		// Make sure the scene will get re-rendered in the current draw pass
-		if redraw {
-			player.requireSceneRedraw();
-		}
 	}
 }
 
