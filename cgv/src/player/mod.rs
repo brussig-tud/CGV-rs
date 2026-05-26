@@ -11,6 +11,9 @@ mod font;
 mod ui;
 pub use ui::SIDEPANEL_SAFETY_MARGINS; // re-export
 
+/// Private submodule providing the `egui_tiles` pane definitions
+mod panes;
+
 /// Submodule providing the [`RenderSetup`].
 mod rendersetup;
 pub use rendersetup::RenderSetup; // - re-export
@@ -44,12 +47,10 @@ use wgpu;
 
 // Egui library and framework
 use egui;
-use eframe::egui_wgpu;
-use eframe::epaint;
+use eframe::{egui_wgpu, epaint};
 
 // Local imports
-use crate::*;
-use crate::view::{Camera, CameraInteractor};
+use crate::{*, view::{Camera, CameraInteractor}};
 
 
 
@@ -218,7 +219,6 @@ static INSTANCE: Lock = Lock{
 
 /// Store a new [`Player`] in the global instance, dropping any previous value.
 /// Panics if the player is currently locked.
-#[inline]
 pub fn set (player: Player) -> LockGuard
 {
 	match INSTANCE.state.swap(state::LOCKED, Ordering::Acquire) {
@@ -228,7 +228,7 @@ pub fn set (player: Player) -> LockGuard
 		_ => panic!(msg!(BAD_STATE))
 	}
 	unsafe{&mut*INSTANCE.data.get()}.write(player);
-	return LockGuard(std::marker::PhantomData);
+	LockGuard(std::marker::PhantomData)
 }
 
 /// Acquire the global [`Player`] instance for exclusive access.
@@ -251,6 +251,7 @@ pub fn lock () -> LockGuard
 
 /// Mark the global [`Player`] instance as available for referencing.
 /// Implies that the player is initialized.
+#[inline(always)]
 fn unlock ()
 {
 	INSTANCE.state.store(state::AVAILABLE, Ordering::Release);
@@ -412,6 +413,9 @@ pub struct State
 	pub egui: egui::Context,
 	pub context: Context,
 
+	menubarResponse: Option<egui::Response>,
+	sidepanelResponse: Option<egui::Response>,
+
 	pub renderSetup: RenderSetup,
 	pub(crate) defaultClearColor: egui::Color32,
 	prevFramebufferResolution: glm::UVec2,
@@ -518,6 +522,9 @@ impl Player
 				quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
 				egui: cc.egui_ctx.clone(),
 				activeSidePanel: 0,
+
+				menubarResponse: None,
+				sidepanelResponse: None,
 
 				context,
 				renderSetup,
@@ -767,10 +774,8 @@ impl Player
 		Ok(())
 	}
 
-	fn prepareEvents (
-		&self, inputState: &egui::InputState, viewportResponse: &egui::Response, menubarResponse: &egui::Response,
-		sidepanelResponse: &egui::Response, highDpiScaleFactor: f32
-	) -> Vec<InputEvent>
+	fn prepareEvents (&self, inputState: &egui::InputState, viewportResponse: &egui::Response, highDpiScaleFactor: f32)
+		-> Vec<InputEvent>
 	{
 		// Pre-allocate event list
 		let mut preparedEvents = Vec::with_capacity(4); // <-- heuristically chosen
@@ -786,8 +791,9 @@ impl Player
 		{
 			// Try pinch zoom next
 			let zoomDelta = inputState.zoom_delta_2d();
-			let forwardPinch =    viewportResponse.contains_pointer() || menubarResponse.contains_pointer()
-			                        || sidepanelResponse.contains_pointer();
+			let forwardPinch =
+				   viewportResponse.contains_pointer() || self.state.menubarResponse.as_ref().unwrap().contains_pointer()
+				|| self.state.sidepanelResponse.as_ref().unwrap().contains_pointer();
 			if forwardPinch && (zoomDelta.x != 1. || zoomDelta.y != 1.) {
 				const PINCH_SENSITIVITY: f32 = 20./3.;
 				(false, true, glm::vec2(
@@ -1189,11 +1195,15 @@ impl eframe::App for StaticImpls
 		////
 		// Main GUI
 
-		// Draw the main menu bar
-		let menubarResponse = ui::menuBar(player, ui);
+		/* Draw the main menu bar */ {
+			let menubarResponse = ui::menuBar(player, ui);
+			player.state.menubarResponse.replace(menubarResponse);
+		}
 
-		// Draw the side panel
-		let sidepanelResponse = ui::sidepanel(player, ui);
+		/* Draw the side panel */ {
+			let sidepanelResponse = ui::sidepanel(player, ui);
+			player.state.sidepanelResponse.replace(sidepanelResponse);
+		}
 
 		// Draw any free-floating UIs
 		if let Some(mut app) = player.applications.takeActive() {
@@ -1243,14 +1253,14 @@ impl eframe::App for StaticImpls
 				// unlocking the context every time, which is probably faster?
 				// The third alternative would be to copy only some parts of the input state into a custom type.
 				let inputState = ui.input(|state| state.clone());
-				let complexEvents = player.prepareEvents(
-					&inputState, &response, &menubarResponse, &sidepanelResponse, pxlsPerPoint
-				);
+				let complexEvents = player.prepareEvents(&inputState, &response, pxlsPerPoint);
 				redrawScene |= player.dispatchEvents(&inputState.events, &complexEvents);
 			}
 
 			// If nobody else did, consume the global [ESC] quit shortcut
-			if   (   response.contains_pointer() || menubarResponse.contains_pointer()
+			let menuBarResponse = player.state.menubarResponse.as_ref().unwrap();
+			let sidepanelResponse = player.state.sidepanelResponse.as_ref().unwrap();
+			if   (   response.contains_pointer() || menuBarResponse.contains_pointer()
 			      || sidepanelResponse.contains_pointer())
 			   && ui.input_mut(|i| i.consume_shortcut(&player.quitShortcut))
 			{

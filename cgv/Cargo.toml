@@ -32,6 +32,7 @@ egui = {workspace=true, default-features=true, features=[
 egui_extras = {workspace=true, default-features=true, features=[
 	"all_loaders", "datepicker", "syntect"
 ]}
+egui_tiles = "*"
 image = {version="*", default-features=false, features=["png", "jpeg"]}
 #webbrowser = "*"
 nalgebra = {workspace=true}
