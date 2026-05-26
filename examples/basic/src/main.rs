@@ -356,7 +356,9 @@ impl ExampleApplication
 			fragment: Some(wgpu::FragmentState {
 				module: &self.shader,
 				entry_point: Some("fragmentMain"), // Slang (for now) requires explicitly stating entry points
-				targets: &[Some(renderState.colorTargetState().clone())],
+				targets: &[Some(cgv::renderstate::changeColorTargetState_blending(
+					renderState.colorTargetState(), cgv::renderstate::BlendingOperation::AlphaPreMultiplied
+				))],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			}),
 			primitive: wgpu::PrimitiveState {
