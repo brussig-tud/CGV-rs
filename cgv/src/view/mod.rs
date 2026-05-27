@@ -244,7 +244,7 @@ impl<'a> DepthReadbackDispatcher<'a>
 //
 
 /// A camera that can produce images of the scene.
-pub trait Camera: Send
+pub trait Camera: Component
 {
 	/// Borrow the projection matrix for the given global pass.
 	///
@@ -279,7 +279,7 @@ pub trait Camera: Send
 	/// settings).
 	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup);
 
-	/// Report a viewport change to the camera. The framework guarantees that the *active* camera will get this method
+	/// Report a viewport change to the camera. The framework guarantees that any *active* camera will have this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
 	/// cameras which are *inactive* as far as the [`Player`] is concerned, resizing is the responsibility of the
 	/// [`Application`].
@@ -354,7 +354,7 @@ pub trait CameraInteractor: Component
 	/// A string slice containing a short descriptive title for the interactor.
 	fn title (&self) -> &str;
 
-	/// Indicates that the camera interactor should perform any calculations needed to prepare the player's active
+	/// Indicates that the camera interactor should perform any calculations needed to prepare the player's main
 	/// camera for rendering the next frame.
 	///
 	/// # Arguments
@@ -364,12 +364,12 @@ pub trait CameraInteractor: Component
 	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	fn update (&mut self, player: &mut Player, this: player::Handle);
 
-	/// Report a window event to the player's active camera.
+	/// Report a window event to the player's main camera.
 	///
 	/// # Arguments
 	///
 	/// * `event` – The event that the camera should inspect and potentially act upon.
-	/// * `player` – The global *CGV-rs* [`Player`] instance containing the active camera.
+	/// * `player` – The global *CGV-rs* [`Player`] instance containing the camera.
 	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns

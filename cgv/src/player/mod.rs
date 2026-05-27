@@ -307,25 +307,32 @@ pub use instance::{lock, LockGuard};
 pub struct Handle (usize);
 
 
-/// Defines containers storing a specific kind of [`Component`] as trait objects, with one component per container
-/// marked as active.
+/// Smart pointer with unique ownership used to store [`Component`] trait objects owned by the player. The tag indicates
+/// whether the component is active (0) or not (1).
+type CompPtr<T> = cgv_util::Tagged<Box<T>, 1>;
+
+/// Defines containers storing a specific kind of [`Component`] as boxed trait objects. Components can be individually
+/// marked as inactive, and independently one of them is selected as the main component of the container's kind.
+/// The meaning of these designations depends on the component.
 /// Implemented as a macro because traits cannot be used as generic parameters.
-macro_rules! Components {( $($Container:ident<$Trait:ident>),+ $(,)? ) =>
+macro_rules! Components {( $($Container:ident<$Component:ident>),+ $(,)? ) =>
 {$(
 
 /// Stores multiple [`
-#[doc = stringify!($Trait)]
-/// `] trait objects and tracks which one is currently active.
+#[doc = stringify!($Component)]
+/// `] trait objects. Each can be either active (tag 0) or not (tag 1); independently, one may be selected as "main".
 pub struct $Container
 {
-	list: Vec<Option<Box<dyn $Trait>>>,
-	pub(self) active: usize,
+
+	slots: Vec<Option<CompPtr<dyn $Component>>>,
+	pub(self) main: usize,
 }
 
 impl $Container
 {
-	#[allow(unused)]
-	const NONE: Self = Self{list: Vec::new(), active: 0};
+	#![allow(unused)]
+
+	const EMPTY: Self = Self{slots: Vec::new(), main: 0};
 
 	const MSG_BAD_HANDLE: &'static str = "Invalid handle: The requested object no longer exists.";
 	const MSG_MISSING_OBJ: &'static str
@@ -333,60 +340,60 @@ impl $Container
 	const MSG_WRONG_TYPE: &'static str = "Invalid handle: The requested object is not of the expected type.";
 
 	/// Borrow the [`
-	#[doc = stringify!($Trait)]
+	#[doc = stringify!($Component)]
 	/// `] identified by the given handle and downcast to `T`.
 	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get<T: $Trait> (&self, handle: Handle) -> &T
+	pub fn get<T: $Component> (&self, handle: Handle) -> &T
 	{
 		<dyn Any>::downcast_ref::<T>(
-			self.list.get(handle.0).expect(Self::MSG_BAD_HANDLE)
+			self.slots.get(handle.0).expect(Self::MSG_BAD_HANDLE)
 			.as_deref().expect(Self::MSG_MISSING_OBJ)
 		).expect(Self::MSG_WRONG_TYPE)
 	}
 
 	/// Mutably borrow the [`
-	#[doc = stringify!($Trait)]
+	#[doc = stringify!($Component)]
 	/// `] identified by the given handle and downcast to `T`.
 	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get_mut<T: $Trait> (&mut self, handle: Handle) -> &mut T
+	pub fn get_mut<T: $Component> (&mut self, handle: Handle) -> &mut T
 	{
 		<dyn Any>::downcast_mut::<T>(
-			self.list.get_mut(handle.0).expect(Self::MSG_BAD_HANDLE)
+			self.slots.get_mut(handle.0).expect(Self::MSG_BAD_HANDLE)
 			.as_deref_mut().expect(Self::MSG_MISSING_OBJ)
 		).expect(Self::MSG_WRONG_TYPE)
 	}
 
-	/// Borrow the currently active component if there is one.
-	fn active (&self) -> Option<&dyn $Trait>
+	/// Borrow the current main component if there is one.
+	fn main (&self) -> Option<&dyn $Component>
 	{
-		self.list.get(self.active)?.as_deref()
+		self.slots.get(self.main)?.as_deref()
 	}
 
-	/// Mutably borrow the currently active component if there is one.
-	fn active_mut (&mut self) -> Option<&mut dyn $Trait>
+	/// Mutably borrow the current main component if there is one.
+	fn main_mut (&mut self) -> Option<&mut dyn $Component>
 	{
-		self.list.get_mut(self.active)?.as_deref_mut()
+		self.slots.get_mut(self.main)?.as_deref_mut()
 	}
 
-	/// If there is an active component, move it out of the container.
-	/// This allows calling a method of the component with a reference to the player, since they no longer alias.
-	/// Make sure to reinsert the component afterwards using [`Self::putActive`].
-	pub(self) fn takeActive (&mut self) -> Option<Box<dyn $Trait>>
+	/// If there is a main component, move it out of the container. This allows calling a method of the component with
+	/// a reference to the player, since they no longer alias. Make sure to reinsert the component afterwards using
+	/// [`Self::putMain`].
+	pub(self) fn takeMain (&mut self) -> Option<CompPtr<dyn $Component>>
 	{
-		self.list.get_mut(self.active)?.take()
+		self.slots.get_mut(self.main)?.take()
 	}
 
-	/// Store the given component in the active slot, dropping any previous value.
-	/// Should generally be used only after [`Self::takeActive`], not to change which component is active.
-	pub(self) fn putActive (&mut self, new_actor: Box<dyn $Trait>)
+	/// Store the given component in the slot selected as main, dropping any previous value. Should generally be used
+	/// only to undo [`Self::takeMain`]. For seleting a different main component, set [`Self::main`] instead.
+	pub(self) fn putMain (&mut self, new_actor: CompPtr<dyn $Component>)
 	{
-		self.list[self.active] = Some(new_actor);
+		self.slots[self.main] = Some(new_actor);
 	}
 }
 
 )+}} // macro_rules! Components
 
-Components!{Applications<Application>, CameraInteractors<CameraInteractor>}
+Components!{Cameras<Camera>, CameraInteractors<CameraInteractor>, Applications<Application>}
 
 
 //////
@@ -507,13 +514,13 @@ impl Player
 		let mut player = Self {
 			camera,
 			cameraInteractors: CameraInteractors {
-				list: vec![
-					Some(Box::new(view::OrbitInteractor::new())),
-					Some(Box::new(view::WASDInteractor::new()))
+				slots: vec![
+					Some(CompPtr::fromSafe(Box::new(view::OrbitInteractor::new()), 1)),
+					Some(CompPtr::fromSafe(Box::new(view::WASDInteractor::new()), 1)),
 				],
-				active: 0,
+				main: 0,
 			},
-			applications: Applications::NONE,
+			applications: Applications::EMPTY,
 			state: State {
 				quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
 				egui: cc.egui_ctx.clone(),
@@ -538,15 +545,15 @@ impl Player
 		};
 
 		// Init application(s)
-		let mut activeApplication = applicationFactory.create(
+		let mut mainApplication = applicationFactory.create(
 			&player.state.context, &player.state.renderSetup, environment
 		)?;
-		activeApplication.preInit(&mut player)?;
-		activeApplication.recreatePipelines(
+		mainApplication.preInit(&mut player)?;
+		mainApplication.recreatePipelines(
 			&player.context, &player.renderSetup, &Player::globalPassesFromCameras(player.activeCameras())
 		);
-		activeApplication.postInit(&mut player)?;
-		player.applications.list.push(Some(activeApplication));
+		mainApplication.postInit(&mut player)?;
+		player.applications.slots.push(Some(CompPtr::fromSafe(mainApplication, 0)));
 		player.activeSidePanel = 2;
 
 		// Done!
@@ -859,10 +866,10 @@ impl Player
 		let mut redraw = false;
 
 		// Applications get first dibs
-		// - the active (foreground) application
-		if let Some(mut app) = self.applications.takeActive() {
-			let outcome = app.input(&event, self, Handle(self.applications.active));
-			self.applications.putActive(app);
+		// - the main (foreground) application
+		if let Some(mut app) = self.applications.takeMain() {
+			let outcome = app.input(&event, self, Handle(self.applications.main));
+			self.applications.putMain(app);
 
 			match outcome {
 				// Event was closed by the receiver
@@ -876,12 +883,12 @@ impl Player
 			}
 		}
 
-		// - now any background applications in some undefined order.
-		for idx in 0..self.applications.list.len() {
-			if idx == self.applications.active {continue};
-			let Some(mut app) = self.applications.list[idx].take() else {continue};
+		// - now all active background applications in some undefined order.
+		for idx in 0..self.applications.slots.len() {
+			if idx == self.applications.main {continue};
+			let Some(mut app) = self.applications.slots[idx].take_if(|ptr| ptr.tag() == 0) else {continue};
 			let outcome = app.input(&event, self, Handle(idx));
-			self.applications.list[idx] = Some(app);
+			self.applications.slots[idx] = Some(app);
 
 			match outcome {
 				// Event was closed by the receiver
@@ -895,10 +902,10 @@ impl Player
 			}
 		}
 
-		// Finally, the active camera interactor
-		if let Some(mut ci) = self.cameraInteractors.takeActive() {
-			let outcome = ci.input(&event, self, Handle(self.cameraInteractors.active));
-			self.cameraInteractors.putActive(ci);
+		// Finally, the main camera interactor
+		if let Some(mut ci) = self.cameraInteractors.takeMain() {
+			let outcome = ci.input(&event, self, Handle(self.cameraInteractors.main));
+			self.cameraInteractors.putMain(ci);
 
 			match outcome {
 				// Event was handled
@@ -941,7 +948,7 @@ impl Player
 		&mut self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
-		// Make all global passes needed by the active camera
+		// Make all global passes needed by the main camera
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let cameraName = self.camera.name();
 		let globalPasses = Self::globalPassesFromCameras(activeCameras!(self));
@@ -957,8 +964,8 @@ impl Player
 			// - viewing
 			renderState.viewingUniforms.upload(&self.context);
 
-			// Prepare the active application (if any)
-			if let Some(application) = self.applications.active_mut() {
+			// Prepare the main application (if any)
+			if let Some(application) = self.applications.main_mut() {
 				if let Some(newCommands) = application.prepareFrame(
 					&self.state.context, renderState, &passInfo.pass
 				){
@@ -966,10 +973,9 @@ impl Player
 				}
 			}
 
-			// Prepare the other applications
-			self.applications.list.iter_mut().fold(
+			// Prepare other active applications
+			self.applications.slots.iter_mut().filter_map(|slot| slot.as_mut().take_if(|ptr| ptr.tag() == 0)).fold(
 				&mut cmdBuffers, |commands, app| {
-					let Some(app) = app.as_deref_mut() else {return commands};
 					if let Some(newCommands) = app.prepareFrame(
 						&self.state.context, renderState, &passInfo.pass
 					){
@@ -989,7 +995,7 @@ impl Player
 		&mut self, _: &wgpu::Device, _: &wgpu::Queue, _: &mut wgpu::CommandEncoder
 	) -> Vec<wgpu::CommandBuffer>
 	{
-		// Make all global passes needed by the active camera
+		// Make all global passes needed by the main camera
 		let mut cmdBuffers = Vec::with_capacity(8);
 		let mut cmdEncoder = self.context.device().create_command_encoder(&Default::default());
 		let cameraName = self.camera.name();
@@ -1018,17 +1024,17 @@ impl Player
 			};
 			let mut renderPass = cmdEncoder.begin_render_pass(&desc);
 
-			// Render the active application (if any)
-			if let Some(application) = self.applications.active_mut() {
+			// Render the main application (if any)
+			if let Some(application) = self.applications.main_mut() {
 				application.render(&self.state.context, renderState, &mut renderPass, &passInfo.pass);
 			}
 
-			// Render the other applications
-			for idx in 0..self.applications.list.len() {
-				if idx == self.applications.active {continue};
-				let Some(mut app) = self.applications.list[idx].take() else {continue};
+			// Render other active applications
+			for idx in 0..self.applications.slots.len() {
+				if idx == self.applications.main {continue};
+				let Some(mut app) = self.applications.slots[idx].take_if(|ptr| ptr.tag() == 0) else {continue};
 				app.render(&self.context, renderState, &mut renderPass, &passInfo.pass);
-				self.applications.list[idx] = Some(app);
+				self.applications.slots[idx] = Some(app);
 			}
 
 			if let Some(mut callback) = passInfo.completionCallback.take() {
@@ -1062,10 +1068,12 @@ impl Player
 	}
 
 	pub fn postRecreatePipelines (&mut self) {
-		// TODO: What about other applications?
-		let Some(mut app) = self.applications.takeActive() else {return};
-		app.recreatePipelines(&self.context, &self.renderSetup, &self.activeGlobalPasses());
-		self.applications.putActive(app);
+		for i in 0..self.applications.slots.len() {
+			let Some(mut app) = self.applications.slots[i].take_if(|ptr| ptr.tag() == 0 || i == self.applications.main)
+				else {continue};
+			app.recreatePipelines(&self.context, &self.renderSetup, &self.activeGlobalPasses());
+			self.applications.slots[i] = Some(app);
+		}
 	}
 
 	pub fn getDepthAtSurfacePixel_async<Closure: FnOnce(Option<f32>) + wgpu::WasmNotSend + 'static> (
@@ -1196,9 +1204,9 @@ impl eframe::App for StaticImpls
 		let sidepanelResponse = ui::sidepanel(player, ui);
 
 		// Draw any free-floating UIs
-		if let Some(mut app) = player.applications.takeActive() {
+		if let Some(mut app) = player.applications.takeMain() {
 			app.freeUi(ui, player);
-			player.applications.putActive(app);
+			player.applications.putMain(app);
 		}
 
 
@@ -1258,9 +1266,9 @@ impl eframe::App for StaticImpls
 			}
 
 			// Update camera interactor
-			if let Some(mut ci) = player.cameraInteractors.takeActive() {
-				ci.update(player, Handle(player.cameraInteractors.active));
-				player.cameraInteractors.putActive(ci);
+			if let Some(mut ci) = player.cameraInteractors.takeMain() {
+				ci.update(player, Handle(player.cameraInteractors.main));
+				player.cameraInteractors.putMain(ci);
 			}
 			if player.camera.update() {
 				redrawScene = true;

@@ -90,7 +90,7 @@ pub(crate) fn menuBar (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 						player.activeSidePanel = 0;
 					}
 				}*/
-				if let Some(app) = player.applications.active() && ui.selectable_label(
+				if let Some(app) = player.applications.main() && ui.selectable_label(
 					player.activeSidePanel == 2,
 					app.title(),
 				).clicked() {
@@ -114,12 +114,12 @@ pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Respon
 			{
 				0 => self::player(player, ui),
 				1 => self::view(player, ui),
-				2 => if let Some(mut app) = player.applications.takeActive() {
+				2 => if let Some(mut app) = player.applications.takeMain() {
 					// Application UI
 					ui.centered_and_justified(|ui| ui.heading(app.title()));
 					ui.separator();
 					app.ui(ui, player);
-					player.applications.putActive(app);
+					player.applications.putMain(app);
 				},
 
 				_ => {
@@ -249,27 +249,27 @@ pub(crate) fn view (player: &mut Player, ui: &mut egui::Ui)
 	ui.centered_and_justified(|ui| ui.heading("📷 View"));
 	ui.separator();
 
-	// Active camera and interactor selection
+	// Camera and interactor selection
 	gui::layout::ControlTableLayouter::new(ui).layout(ui, "CGV__CameraUi", |cameraUi|
 	{
-		// activeCameraInteractor
-		cameraUi.add("Interactor", |ui, idealSize|
+		// CameraInteractor
+		cameraUi.add("Camera interactor", |ui, idealSize|
 			egui::ComboBox::from_id_salt("CGV_view_inter")
 				.selected_text(
-					player.cameraInteractors.active().map(|ci| ci.title()).unwrap_or("None")
+					player.cameraInteractors.main().map(|ci| ci.title()).unwrap_or("None")
 				)
 				.width(idealSize)
 				.show_ui(ui, |ui|
-					for (i, ci) in player.cameraInteractors.list.iter().enumerate() {
+					for (i, ci) in player.cameraInteractors.slots.iter().enumerate() {
 						let Some(ci) = ci else {continue};
-						ui.selectable_value(&mut player.cameraInteractors.active, i, ci.title());
+						ui.selectable_value(&mut player.cameraInteractors.main, i, ci.title());
 					}
 				)
 		);
 
-		// activeCamera
+		// Camera
 		let mut sel: usize = 0; // dummy, remove once camera management is done
-		cameraUi.add("Active Camera", |ui, idealSize|
+		cameraUi.add("Main camera", |ui, idealSize|
 			egui::ComboBox::from_id_salt("CGV_view_act")
 				.selected_text(player.camera.name())
 				.width(idealSize)
@@ -279,12 +279,12 @@ pub(crate) fn view (player: &mut Player, ui: &mut egui::Ui)
 		);
 	});
 
-	// Settings from active camera and interactor
+	// Settings for main camera and interactor
 	ui.add_space(6.);
-	if let Some(ci) = player.cameraInteractors.active_mut() {
+	if let Some(ci) = player.cameraInteractors.main_mut() {
 		egui::CollapsingHeader::new("Interactor settings").id_salt("CGV_view_inter_s")
 			.show(ui, |ui| ci.ui(&mut*player.camera, ui));
 	}
-	egui::CollapsingHeader::new("Active camera settings").id_salt("CGV_view_act_s")
+	egui::CollapsingHeader::new("Main camera settings").id_salt("CGV_view_act_s")
 		.show(ui, |ui| CameraParameters::ui(&mut*player.camera, ui));
 }
