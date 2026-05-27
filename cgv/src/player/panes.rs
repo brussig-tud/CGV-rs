@@ -75,9 +75,9 @@ impl etiles::Behavior<SceneView> for Player
 		}
 
 		// Update camera interactor
-		if let Some(mut ci) = self.cameraInteractors.takeActive() {
-			ci.update(self, Handle(self.cameraInteractors.active));
-			self.cameraInteractors.putActive(ci);
+		if let Some(mut ci) = self.cameraInteractors.takeMain() {
+			ci.update(self, Handle(self.cameraInteractors.main));
+			self.cameraInteractors.putMain(ci);
 		}
 		if self.camera.update() {
 			redrawScene = true;

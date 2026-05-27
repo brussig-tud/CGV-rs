@@ -243,8 +243,9 @@ impl AsVec4 for cgv::RGBA {
 }
 
 /// Base trait for different kinds of objects stored in the [`Player`], such as [applications](Application) and
-/// [camera interactors](view::CameraInteractor).
-/// To allow runtime downcasts, implementors must be `'static`, i.e. not have any lifetime parameters.
+/// [camera interactors](view::CameraInteractor). To allow runtime downcasts, implementors must be `'static`, i.e. not
+/// have any lifetime parameters. Additionally, all component types must have an alignment of at least two bytes.
+/// This requirement cannot be reliably enforced at compile time, but is checked when adding a component to the player.
 pub trait Component: Any + Send {}
 impl<T> Component for T where T: Any + Send + ?Sized {}
 

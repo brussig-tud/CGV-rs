@@ -13,6 +13,8 @@ mod notsafe;
 /// Tests for the `math` module.
 mod math;
 
+mod tagged_ptr;
+
 
 
 //////
