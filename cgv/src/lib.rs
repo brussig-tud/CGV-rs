@@ -14,6 +14,10 @@
 // Module definitions
 //
 
+// Enable tests to compile cleanly
+#[doc(hidden)]
+pub extern crate self as cgv;
+
 // The module implementing the Player
 pub mod player;
 pub use player::{Player, InputEvent, EventOutcome, RenderSetup, ManagedBindGroupLayouts}; // re-export
@@ -54,6 +58,8 @@ pub extern crate nalgebra_glm as glm;
 /// Re-export important 3rd party libraries/library components
 pub use tracing;
 pub use anyhow::{anyhow, Result, Error};
+pub use rand;
+pub use rand_distr;
 pub mod time {
 	pub use web_time::{Instant as Instant, Duration as Duration};
 }
@@ -145,7 +151,8 @@ fn initTracing ()
 // Enums and structs
 //
 
-/// The common color type.<br />
+/// The common color type.
+///
 /// **TODO**: put into to-be-done `media` module/crate.
 pub type RGBA = egui::ecolor::Rgba;
 
@@ -172,7 +179,8 @@ pub enum GlobalPass
 	/// A custom pass, with a custom value.
 	Custom(Box<dyn Any + Send>)
 }
-impl GlobalPass {
+impl GlobalPass
+{
 	/// Construct a `GlobalPass::Stereo` value for the given eye index, with the [`StereoEye::max`] field set to a
 	/// *don't care* value. Useful for interacting with various [`view::Camera`] APIs that require you to state a global
 	/// pass for the operation.
@@ -194,10 +202,14 @@ impl GlobalPass {
 }
 
 /// Configuration for a global render pass.
-pub struct GlobalPassInfo {
+/// **TODO: The design needs overhauling - cameras cannot know the *index* of any of their declared render passes, as
+/// that also depends on other cameras.**
+pub struct GlobalPassInfo
+{
 	pub pass: GlobalPass,
-	/// Index of the associated [`RenderState`] within [`GlobalPasses::renderStates`].
-	pub renderState: u32,
+	/// Index of the associated [`RenderState`] within [`GlobalPasses::renderStates`].<br />
+	/// **TODO: remove and replace by player-managed data structure that cameras don't interact with.**
+	pub index: usize,
 	pub clearColor: wgpu::Color,
 	pub depthClearValue: f32,
 	completionCallback: std::cell::Cell<Option<Box<dyn FnMut(&Context, u32) + Send>>>,
@@ -216,6 +228,19 @@ pub struct GlobalPasses<'cam> {
 //
 // Traits
 //
+
+/// Convenience extension trait for our default color type to convert it to [`glm::Vec4`]
+pub trait AsVec4 {
+	fn as_vec4 (&self) -> &glm::Vec4;
+}
+impl AsVec4 for cgv::RGBA {
+	fn as_vec4 (&self) -> &glm::Vec4 {
+		unsafe {
+			// SAFETY: `RGBA` is just `[f32; 4]`, exactly like `glm::Vec4`.
+			&*(self as *const Self as *const glm::Vec4)
+		}
+	}
+}
 
 /// Base trait for different kinds of objects stored in the [`Player`], such as [applications](Application) and
 /// [camera interactors](view::CameraInteractor). To allow runtime downcasts, implementors must be `'static`, i.e. not
@@ -320,7 +345,7 @@ pub trait Application: Component
 	///
 	/// `Some` array of command buffers containing any commands the application might need to perform before being able
 	/// to render, or `None` if no preparation is required.
-	fn prepareFrame (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPass)
+	fn prepareFrame (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPassInfo)
 		-> Option<Vec<wgpu::CommandBuffer>>;
 
 	/// Called when the [player](Player) needs the application to render its contents.
@@ -334,7 +359,7 @@ pub trait Application: Component
 	/// * `globalPass` – Identifies the global pass over the scene that the render pass is for.
 	fn render (
 		&mut self, context: &Context, renderState: &RenderState, managedRenderPass: &mut wgpu::RenderPass,
-		globalPass: &GlobalPass
+		globalPass: &GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>;
 
 	/// Called when the [player](Player) needs the application to define its graphical main UI (which goes in the

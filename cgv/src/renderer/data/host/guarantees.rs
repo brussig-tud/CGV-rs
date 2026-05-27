@@ -206,7 +206,10 @@ impl<
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > HostData for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
->{
+>
+	where Self:  host::CanHaveNormals + host::CanHaveTangents + host::CanHaveRadii + host::CanHaveRadiusDerivs
+	           + host::CanHaveOrientations + host::CanHaveScalings + host::CanHaveColors
+{
 	type PosIterator<'data> = Wrappee::PosIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
@@ -214,7 +217,7 @@ impl<
 	#[inline(always)]
 	fn positions (&self) -> Self::PosIterator<'_> { self.0.positions() }
 	#[inline(always)]
-	fn pos (&self, index: u32) -> &glm::Vec3 { self.0.pos(index) }
+	fn pos (&self, index: u32) -> glm::Vec3 { self.0.pos(index) }
 	#[inline(always)]
 	fn topology(&self) -> wgpu::PrimitiveTopology { self.0.topology() }
 }
@@ -223,7 +226,10 @@ impl<
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::Indexed for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
->{
+>
+	where Self:  host::CanHaveNormals + host::CanHaveTangents + host::CanHaveRadii + host::CanHaveRadiusDerivs
+	           + host::CanHaveOrientations + host::CanHaveScalings + host::CanHaveColors
+{
 	type IndexIterator<'data> = Wrappee::IndexIterator<'data> where Wrappee: 'data;
 
 	#[inline(always)]
@@ -238,18 +244,24 @@ impl<
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::Interleaved for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
->{}
+>
+	where Self:  host::CanHaveNormals + host::CanHaveTangents + host::CanHaveRadii + host::CanHaveRadiusDerivs
+	           + host::CanHaveOrientations + host::CanHaveScalings + host::CanHaveColors
+{}
 impl<
 	Wrappee: host::NonInterleaved, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
 	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::NonInterleaved for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
->{}
+>
+	where Self:  host::CanHaveNormals + host::CanHaveTangents + host::CanHaveRadii + host::CanHaveRadiusDerivs
+	           + host::CanHaveOrientations + host::CanHaveScalings + host::CanHaveColors
+{}
 
 // Guarantee normals
 impl<
-	Wrappee: host::CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveNormals for GuaranteeAttributes<
 	Wrappee, true, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -260,17 +272,17 @@ impl<
 	#[inline(always)]
 	fn normals (&self) -> Self::NormalIterator<'_> { self.0.normals() }
 	#[inline(always)]
-	fn normal (&self, index: u32) -> &glm::Vec3 { self.0.normal(index) }
+	fn normal (&self, index: u32) -> glm::Vec3 { self.0.normal(index) }
 }
 impl<
-	Wrappee: host::CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::HasNormals for GuaranteeAttributes<
 	Wrappee, true, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveNormals for GuaranteeAttributes<
 	Wrappee, false, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -281,10 +293,10 @@ impl<
 	#[inline(always)]
 	fn normals (&self) -> Self::NormalIterator<'_> { self.0.normals() }
 	#[inline(always)]
-	fn normal (&self, index: u32) -> &glm::Vec3 { self.0.normal(index) }
+	fn normal (&self, index: u32) -> glm::Vec3 { self.0.normal(index) }
 }
 impl<
-	Wrappee: host::HasNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData + host::HasNormals, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasNormals for GuaranteeAttributes<
 	Wrappee, false, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
@@ -292,8 +304,8 @@ impl<
 
 // Guarantee tangents
 impl<
-	Wrappee: host::CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, true, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -304,17 +316,17 @@ impl<
 	#[inline(always)]
 	fn tangents (&self) -> Self::TangentIterator<'_> { self.0.tangents() }
 	#[inline(always)]
-	fn tangent (&self, index: u32) -> &glm::Vec3 { self.0.tangent(index) }
+	fn tangent (&self, index: u32) -> glm::Vec3 { self.0.tangent(index) }
 }
 impl<
-	Wrappee: host::CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::HasTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, true, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, false, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -325,10 +337,10 @@ impl<
 	#[inline(always)]
 	fn tangents (&self) -> Self::TangentIterator<'_> { self.0.tangents() }
 	#[inline(always)]
-	fn tangent (&self, index: u32) -> &glm::Vec3 { self.0.tangent(index) }
+	fn tangent (&self, index: u32) -> glm::Vec3 { self.0.tangent(index) }
 }
 impl<
-	Wrappee: host::HasTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData + host::HasTangents, const NORMALS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasTangents for GuaranteeAttributes<
 	Wrappee, NORMALS, false, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
@@ -336,8 +348,8 @@ impl<
 
 // Guarantee radii
 impl<
-	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -351,14 +363,14 @@ impl<
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
 impl<
-	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::HasRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, true, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -372,7 +384,7 @@ impl<
 	fn radius (&self, index: u32) -> f32 { self.0.radius(index) }
 }
 impl<
-	Wrappee: host::HasRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
+	Wrappee: HostData + host::HasRadii, const NORMALS: bool, const TANGENTS: bool, const RADIUS_DERIVS: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasRadii for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, false, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, COLORS
@@ -380,8 +392,8 @@ impl<
 
 // Guarantee radius derivatives
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, true, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -395,14 +407,14 @@ impl<
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::HasRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, true, ORIENTATIONS, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const ORIENTATIONS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, false, ORIENTATIONS, SCALINGS, COLORS
 >{
@@ -416,7 +428,7 @@ impl<
 	fn radiusDeriv (&self, index: u32) -> f32 { self.0.radiusDeriv(index) }
 }
 impl<
-	Wrappee: host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	Wrappee: HostData + host::HasRadiusDerivs, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
 	const ORIENTATIONS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasRadiusDerivs for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, false, ORIENTATIONS, SCALINGS, COLORS
@@ -424,8 +436,8 @@ impl<
 
 // Guarantee orientations
 impl<
-	Wrappee: host::CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, true, SCALINGS, COLORS
 >{
@@ -436,17 +448,17 @@ impl<
 	#[inline(always)]
 	fn orientations (&self) -> Self::OrientationIterator<'_> { self.0.orientations() }
 	#[inline(always)]
-	fn orientation (&self, index: u32) -> &glm::Quat { self.0.orientation(index) }
+	fn orientation (&self, index: u32) -> glm::Quat { self.0.orientation(index) }
 }
 impl<
-	Wrappee: host::CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::HasOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, true, SCALINGS, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const SCALINGS: bool, const COLORS: bool
 > host::CanHaveOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS
 >{
@@ -457,10 +469,10 @@ impl<
 	#[inline(always)]
 	fn orientations (&self) -> Self::OrientationIterator<'_> { self.0.orientations() }
 	#[inline(always)]
-	fn orientation (&self, index: u32) -> &glm::Quat { self.0.orientation(index) }
+	fn orientation (&self, index: u32) -> glm::Quat { self.0.orientation(index) }
 }
 impl<
-	Wrappee: host::HasOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	Wrappee: HostData + host::HasOrientations, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
 	const RADIUS_DERIVS: bool, const SCALINGS: bool, const COLORS: bool
 > host::HasOrientations for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, false, SCALINGS, COLORS
@@ -468,8 +480,8 @@ impl<
 
 // Guarantee scaling vectors
 impl<
-	Wrappee: host::CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const COLORS: bool
 > host::CanHaveScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, true, COLORS
 >{
@@ -480,17 +492,17 @@ impl<
 	#[inline(always)]
 	fn scalings (&self) -> Self::ScaleIterator<'_> { self.0.scalings() }
 	#[inline(always)]
-	fn scaling (&self, index: u32) -> &glm::Vec3 { self.0.scaling(index) }
+	fn scaling (&self, index: u32) -> glm::Vec3 { self.0.scaling(index) }
 }
 impl<
-	Wrappee: host::CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const COLORS: bool
 > host::HasScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, true, COLORS
 >{}
 impl<
-	Wrappee: host::CanHaveScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const COLORS: bool
 > host::CanHaveScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, false, COLORS
 >{
@@ -501,19 +513,19 @@ impl<
 	#[inline(always)]
 	fn scalings (&self) -> Self::ScaleIterator<'_> { self.0.scalings() }
 	#[inline(always)]
-	fn scaling (&self, index: u32) -> &glm::Vec3 { self.0.scaling(index) }
+	fn scaling (&self, index: u32) -> glm::Vec3 { self.0.scaling(index) }
 }
 impl<
-	Wrappee: host::HasScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const COLORS: bool
+	Wrappee: HostData + host::HasScalings, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const COLORS: bool
 > host::HasScalings for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, false, COLORS
 >{}
 
 // Guarantee colors
 impl<
-	Wrappee: host::CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool
 > host::CanHaveColors for	GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, true
 >{
@@ -524,17 +536,17 @@ impl<
 	#[inline(always)]
 	fn colors (&self) -> Self::ColorIterator<'_> { self.0.colors() }
 	#[inline(always)]
-	fn color (&self, index: u32) -> &cgv::RGBA { self.0.color(index) }
+	fn color (&self, index: u32) -> cgv::RGBA { self.0.color(index) }
 }
 impl<
-	Wrappee: host::CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool
 > host::HasColors for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, true
 >{}
 impl<
-	Wrappee: host::CanHaveColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
-	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
+	Wrappee: HostData, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
+	const ORIENTATIONS: bool, const SCALINGS: bool
 > host::CanHaveColors for GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, false
 >{
@@ -545,11 +557,11 @@ impl<
 	#[inline(always)]
 	fn colors (&self) -> Self::ColorIterator<'_> { self.0.colors() }
 	#[inline(always)]
-	fn color (&self, index: u32) -> &cgv::RGBA { self.0.color(index) }
+	fn color (&self, index: u32) -> cgv::RGBA { self.0.color(index) }
 }
 impl<
-	Wrappee: host::HasColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool, const RADIUS_DERIVS: bool,
-	const ORIENTATIONS: bool, const SCALINGS: bool
+	Wrappee: HostData + host::HasColors, const NORMALS: bool, const TANGENTS: bool, const RADII: bool,
+	const RADIUS_DERIVS: bool, const ORIENTATIONS: bool, const SCALINGS: bool
 > host::HasColors for	GuaranteeAttributes<
 	Wrappee, NORMALS, TANGENTS, RADII, RADIUS_DERIVS, ORIENTATIONS, SCALINGS, false
 >{}

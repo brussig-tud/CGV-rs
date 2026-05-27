@@ -20,7 +20,7 @@ use crate::{*, compile::{BuildsContextWithFilesystemAccess, ContextBuilder, HasF
 /// Create a *Slang* compilation context.
 fn createContext<'outer> (globalSession: &'outer slang::GlobalSession) -> slang::Context<'outer> {
 	slang::ContextBuilder::withTargets(&[compile::Target::SPIRV, compile::Target::WGSL])
-		.addSearchPath(util::pathInsideCrate!("/shader/tests"))
+		.addSearchPaths(&[util::pathInsideCrate!("/../cgv/shader/lib"), util::pathInsideCrate!("/shader/tests")])
 		.buildWithGlobalSession(globalSession).expect("failed to create Slang compilation context")
 }
 

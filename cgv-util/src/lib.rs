@@ -42,6 +42,9 @@ pub use tagged_ptr::{Aligned, Pointer, SafePointer, Tagged};
 /// Submodule providing unique entity generators (IDs etc.)
 pub mod unique;
 
+/// Submodule providing assorted utilities for use by unit tests (rarely useful outside of that).
+pub mod test;
+
 /// Unit tests
 #[cfg(test)]
 mod tests;
@@ -234,97 +237,6 @@ impl<Object> AsMut<Object> for LaterInit<Object> {
 //
 // Functions
 //
-
-/// Converts any kind of data that can have its size known at compile or at runtime into a slice of u8.
-///
-/// # Arguments
-///
-/// * `data` – The data to slicify.
-///
-/// # Returns
-///
-/// A slice of `u8` over the bytes in memory of the provided data.
-pub fn slicify<T: ?Sized> (data: &T) -> &[u8] {
-	unsafe { std::slice::from_raw_parts(data as *const T as *const u8, size_of_val(data)) }
-}
-
-/// Converts any kind of data that can have its size known at compile or at runtime into a slice of elements of generic
-/// type `E`.
-///
-/// # Arguments
-///
-/// * `data` – The data to slicify.
-///
-/// # Returns
-///
-/// A slice of `E` over the bytes in memory of the provided data.
-pub fn slicifyInto<T: Sized, E> (data: &T) -> &[E] {
-	let remainder = const { size_of::<T>() }  %  const { size_of::<E>() };
-	assert_eq!(remainder,   0);
-	unsafe { std::slice::from_raw_parts(
-		data as *const T as *const E,    const { size_of::<T>() }  /  const { size_of::<E>() })
-	}
-}
-
-/// Decorates the given reference with a `'static` lifetime.
-///
-/// # Arguments
-///
-/// * `reference` – The reference to statify.
-///
-/// # Returns
-///
-/// A `'static` reference to the data that the input reference pointed to.
-#[inline(always)]
-#[deprecated(note="please use sane references in your code instead of this hack")]
-pub fn statify<T: ?Sized> (reference: &T) -> &'static T {
-	unsafe { &*(reference as *const T) }
-}
-
-/// Returns a mutable reference to the given object behind the given immutable reference.
-///
-/// # Arguments
-///
-/// * `reference` – The reference to mutify.
-///
-/// # Returns
-///
-/// A mutable `'static` reference to the data that the input reference pointed to.
-#[inline(always)]
-#[deprecated(note="please use proper techniques for interior mutability instead of this hack")]
-pub fn mutify<T: ?Sized> (reference: &T) -> &'static mut T {
-	#[allow(invalid_reference_casting)]
-	unsafe { &mut *((reference as *const T) as *mut T) }
-}
-
-/// Turns a [`Ref`](std::cell::Ref) into an actual (primitive) reference.
-///
-/// # Arguments
-///
-/// * `reference` – The wrapper to turn into a primitive reference.
-///
-/// # Returns
-///
-/// A `'static` reference to the same data the input [`RefMut`](std::cell::Ref) references.
-#[inline(always)]
-fn refify<T> (reference: std::cell::Ref<T>) -> &'static T {
-	unsafe { &*(reference.deref() as *const T) }
-}
-
-/// Turns a [`RefMut`](std::cell::RefMut) into an actual (primitive) mutable reference.
-///
-/// # Arguments
-///
-/// * `reference` – The wrapper to turn into a primitive mutable reference.
-///
-/// # Returns
-///
-/// A mutable `'static` reference to the same data the input [`RefMut`](std::cell::RefMut) references.
-#[inline(always)]
-fn refify_mut<T> (reference: std::cell::RefMut<T>) -> &'static mut T {
-	let mut refMut = reference;
-	unsafe { &mut *(refMut.deref_mut() as *mut T) }
-}
 
 /// If the given option contains a string or string slice, returns an option containing the concatenation of the two
 /// inputs.

@@ -11,11 +11,21 @@
 
 //////
 //
+// Module definitions
+//
+
+/// Submodule implementing various auxiliary functionality.
+mod helpers;
+
+
+
+//////
+//
 // Imports
 //
 
 // Standard library
-use std::default::Default;
+use std::{sync::Arc, default::Default};
 
 // CGV re-imports
 use cgv::{wgpu, glm, egui, tracing};
@@ -23,68 +33,8 @@ use cgv::{wgpu, glm, egui, tracing};
 // CGV-rs Framework
 use cgv::{self, renderer};
 
-
-
-//////
-//
-// Statics
-//
-
-const DATA_POINTS: &[DataPoint; 8] = &[
-	// Front side:
-	DataPoint {
-		pos: glm::Vec3::new(-1., -1., -1.), radius: 1.,
-		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: -0.125,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
-		normal: glm::Vec3::new(0., 0., -1.),
-	},
-	DataPoint {
-		pos: glm::Vec3::new(1., -1., -1.), radius: 0.75,
-		tangent: glm::Vec3::new(-1., 1., 0.), radDeriv: -0.0416666666667,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
-		normal: glm::Vec3::new(0., 0., -1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(-1., 1., -1.), radius: 2./3.,
-		tangent: glm::Vec3::new(1., 0., 0.), radDeriv: 0.0416666666667,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 0.),
-		normal: glm::Vec3::new(0., 0., -1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(1., 1., -1.), radius: 0.75,
-		tangent: glm::Vec3::new(0., 0., 1.), radDeriv: 0.125,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
-		normal: glm::Vec3::new(1., 0., 0.,)
-	},
-
-	// Back side:
-	DataPoint {
-		pos: glm::Vec3::new(1., 1., 1.), radius: 1.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.125,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 1., 1., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(-1., 1., 1.), radius: 1.25,
-		tangent: glm::Vec3::new(1., -1., 0.), radDeriv: -0.0625,
-		color: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(1., -1., 1.), radius: 1.125,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: -0.0625,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	},
-	DataPoint {
-		pos: glm::Vec3::new(-1., -1., 1.), radius: 1.,
-		tangent: glm::Vec3::new(-1., 0., 0.), radDeriv: 0.,
-		color: cgv::RGBA::from_rgba_premultiplied(0., 0., 1., 1.),
-		normal: glm::Vec3::new(0., 0., 1.,)
-	}
-];
-
-const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
+// Local imports
+use helpers::*;
 
 
 
@@ -96,20 +46,17 @@ const _TOPOLOGY: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5,
 ////
 // Point
 
-/// **TODO: move into to-be-created `media` module.**
+/// A "data point" suitable for interleaved storage, providing all attributes we're testing out here. 
 #[repr(C)]
-#[derive(
-	Clone,cgv::renderer::data::InterleavedElem,cgv::renderer::data::ElemWithTangent,cgv::renderer::data::ElemWithRadius,
-	cgv::renderer::data::ElemWithRadiusDeriv,cgv::renderer::data::ElemWithColor
-)]
+#[derive(Clone, renderer::data::InterleavedElem)]
 pub struct DataPoint
 {
 	#[cgv_renderAttr(pos)]         pub pos: glm::Vec3,
 	#[cgv_renderAttr(radius)]      pub radius: f32,
 	#[cgv_renderAttr(tangent)]     pub tangent: glm::Vec3,
 	#[cgv_renderAttr(radiusDeriv)] pub radDeriv: f32,
-	#[cgv_renderAttr(color)]       pub color: cgv::RGBA,
 	#[cgv_renderAttr(normal)]      pub normal: glm::Vec3,
+	#[cgv_renderAttr(color)]       pub color: cgv::RGBA,
 }
 
 
@@ -128,49 +75,114 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 
 
 	////
+	// Defaults
+
+	let mut guiState = GuiState {
+		numDataPoints: 128, radiusScale: 1., defaultRadius: 7./64.,
+		defaultColor: Default::default(), // <- we'll set this to the renderer's default later
+		radiiFromData: true, colorsFromData: true
+	};
+
+
+	////
 	// Prepare data
 
-	/* generate test data */
-	let spheresData = cgv::renderer::spheres::GpuData::withRadiiAndColors(
-		context, DATA_POINTS.as_slice(), Some("RenderersDemo_spheresData")
-	);
+	// Generate initial test data
+	let mut testData = TestData::default();
+	let renderData = testData.regenerateData(context, guiState.numDataPoints);
 
 
 	////
 	// Initialize renderers
 
-	let mut sphereRenderer = renderer::Managed::new(
-		renderer::Spheres::new(context, renderSetup)
-	);
-	sphereRenderer.setData(renderer::spheres::DataReceiver::new(spheresData));
-
-
-	////
-	// Initialize GUI state
-
-	let guiState = GuiState {};
+	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, renderSetup));
+	sphereRenderer.setData(renderer::spheres::DataReceiver::new(renderData.clone()));
+	sphereRenderer.setStyleUniforms(context, |u| {
+		u.radiusScale = guiState.radiusScale;
+		u.defaultRadius = guiState.defaultRadius;
+		guiState.defaultColor = u.defaultColor.into();
+	});
 
 
 	////
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { sphereRenderer, _guiState: guiState }))
+	Ok(Box::new(RenderersDemo { testData, renderData, sphereRenderer, guiState }))
 }
 
+/// Test data holder. We make this its own struct so it can be used even before the `RenderersDemo` is fully
+/// constructed.
+#[derive(Default)]
+struct TestData {
+	samples: Vec<DataPoint>
+}
+impl TestData
+{
+	/// (Re-)generate the test data and upload to a new [`InterleavedBuffer`](renderer::data::InterleavedBuffer).
+	fn regenerateData (&mut self, context: &cgv::Context, num: usize) -> Arc<renderer::data::InterleavedBuffer> {
+		regenerateData(&mut self.samples, num);
+		renderer::data::InterleavedBuffer::fromHost(
+			context, &self.samples, /* options: */Default::default(), Some("RenderersDemo_spheresData")
+		)
+	}
+}
+impl std::ops::Deref for TestData {
+	type Target = Vec<DataPoint>;
+
+	fn deref (&self) -> &Self::Target {
+		&self.samples
+	}
+}
+
+/// Backing state for the GUI controls
 #[derive(Default,Debug)]
-struct GuiState {}
+struct GuiState
+{
+	numDataPoints: usize,
+	radiusScale: f32,
+	defaultRadius: f32,
+	defaultColor: egui::Color32,
+	radiiFromData: bool,
+	colorsFromData: bool
+}
 
 struct RenderersDemo
 {
-	// The renderable test data
-	//spheresData: Arc<cgv::renderer::spheres::GpuData>,
+	/// The renderable test data.
+	testData: TestData,
 
-	// Test sphere renderer
-	sphereRenderer: renderer::Managed<cgv::renderer::Spheres>,
+	/// GPU buffer containing the test data.
+	renderData: Arc<renderer::data::InterleavedBuffer>,
 
-	// GUI-controllable state
-	_guiState: GuiState
+	/// Test sphere renderer.
+	sphereRenderer: renderer::Managed<renderer::Spheres>,
+
+	/// GUI-controllable state.
+	guiState: GuiState
+}
+impl RenderersDemo
+{
+	/// Assign the current GPU-side [render data](Self::renderData) to the currently selected renderer.
+	fn reassignData (&mut self, player: &cgv::Player)
+	{
+		// Decide which attributes to use from the data
+		use renderer::data::GAF;
+		let mut dataAttribs = renderer::data::GeometryAttributeFlags::empty();
+		if self.guiState.radiiFromData { dataAttribs |= GAF::RADII; }
+		if self.guiState.colorsFromData { dataAttribs |= GAF::COLORS; }
+
+		// (Re-)assign with the selected attributes
+		self.sphereRenderer.setDataWithPlayer(&player.context, player, renderer::spheres::DataReceiver::withAttributes(
+			self.renderData.clone(), dataAttribs
+		));
+	}
+
+	/// Re-generate the test data and upload to the GPU.
+	fn regenerateData (&mut self, player: &cgv::Player) {
+		self.renderData = self.testData.regenerateData(&player.context, self.guiState.numDataPoints);
+		self.reassignData(player);
+	}
 }
 impl cgv::Application for RenderersDemo
 {
@@ -216,30 +228,93 @@ impl cgv::Application for RenderersDemo
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
+	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
 	}
 
 	fn render (
-		&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &mut wgpu::RenderPass,
-		_: &cgv::GlobalPass
+		&mut self, context: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		globalPass: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
-		None // we don't need the Player to submit any custom command buffers for us
+		// Render our test data
+		self.sphereRenderer.renderForGlobalPass(context, renderState, renderPass, globalPass.index);
+		None // <- we don't need the Player to submit any custom command buffers for us
 	}
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
-		// Keep track of whether we need to redraw our scene contents
-		#[expect(unused_mut)] let mut redraw = false;
+		// Test data configuration
+		egui::CollapsingHeader::new("Data").default_open(true).show(ui, |ui|
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+				.layout(ui, "Cgv.Ex.Renderers-Data", |controlTable|
+				{
+					if controlTable.add("Count", |ui, _| {
+						ui.spacing_mut().slider_width *= 0.9;
+						ui.add(
+							egui::Slider::new(&mut self.guiState.numDataPoints, 8..=2482176).logarithmic(true),
+						).changed()
+					}){
+						self.regenerateData(player);
+						player.requireSceneRedraw();
+					}
+				}
+			)
+		);
 
 		// Renderer configuration
 		egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui|
-		{
-			ui.label("Nothing here yet.");
-		});
+			cgv::gui::layout::ControlTableLayouter::new(ui)
+				.layout(ui, "Cgv.Ex.Renderers-Settings", |controlTable|
+				{
+					if controlTable.add("Defaults", |ui, _| {
+						ui.label(" color ");
+						ui.color_edit_button_srgba(&mut self.guiState.defaultColor).changed()
+					}){
+						self.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.defaultColor = self.guiState.defaultColor.into()
+						);
+						player.requireSceneRedraw();
+					};
+					if controlTable.add("", |ui, _| {
+						ui.label("radius");
+						ui.spacing_mut().slider_width *= 0.65;
+						ui.add(
+							egui::Slider::new(&mut self.guiState.defaultRadius, 0.0625f32..=8.)
+								.logarithmic(true).max_decimals(3),
+						).changed()
+					}){
+						self.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.defaultRadius = self.guiState.defaultRadius
+						);
+						player.requireSceneRedraw();
+					}
+					controlTable.add("Use attribs", |ui, _| {
+						if ui.checkbox(&mut self.guiState.radiiFromData, "radii").changed() {
+							self.reassignData(player);
+							player.requireSceneRedraw();
+						}
+						ui.add_space(0.5*ui.style().spacing.item_spacing.x);
+						if ui.checkbox(&mut self.guiState.colorsFromData, "colors").changed() {
+							self.reassignData(player);
+							player.requireSceneRedraw();
+						}
+					});
+					if controlTable.add("Radius scale", |ui, _|
+						ui.add(
+							egui::Slider::new(&mut self.guiState.radiusScale, 0.0625f32..=8.).logarithmic(true),
+						).changed()
+					){
+						self.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.radiusScale = self.guiState.radiusScale
+						);
+						player.requireSceneRedraw();
+					}
+				}
+			)
+		);
 
 		// Links section
 		ui.add_space(ui.style().spacing.item_spacing.y * 3.);
@@ -252,11 +327,6 @@ impl cgv::Application for RenderersDemo
 				)
 			})
 		);
-
-		// Make sure the scene will get re-rendered in the current draw pass
-		if redraw {
-			player.requireSceneRedraw();
-		}
 	}
 }
 

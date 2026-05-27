@@ -5,8 +5,7 @@
 //
 
 // Local imports
-use super::*;
-use crate::{self as cgv, renderer::data::gpu, renderer::data::host};
+use crate::{self as cgv, renderer::{data::{gpu, host}, spheres::*}};
 
 
 
@@ -22,6 +21,12 @@ enum LayoutVariant {
 	PosOnly, PosRadius, PosColor, PosRadiusColor
 }
 impl LayoutVariant {
+	const RADIUS_SLOT: u16 = 0;  // <- always in the 0-th slot with the position
+	const RADIUS_OFFSET: u8 = 3; // <- radius starts after the 3 position components
+
+	const COLOR_SLOT: u16 = 1;   // <- always in the 1st slot, after position
+	const COLOR_OFFSET: u8 = 0;  // <- no offset, color uses the whole slot exclusively
+
 	const POS_ONLY: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0=>Float32x4]; // 4-th component is unused
 	const POS_ONLY_STRIDE: wgpu::BufferAddress = size_of::<glm::Vec4>() as wgpu::BufferAddress;
 
@@ -34,30 +39,47 @@ impl LayoutVariant {
 	const POS_RADIUS_COLOR: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4];
 	const POS_RADIUS_COLOR_STRIDE: wgpu::BufferAddress = (size_of::<glm::Vec4>()*2) as wgpu::BufferAddress;
 
-	/// Construct a vertex buffer layout that fits the variant represented by `self`.
-	pub fn layout (&self) -> wgpu::VertexBufferLayout<'static>
+	/// Construct a buffer layout that fits the variant represented by `self`.
+	pub fn layout (&self) -> gpu::BufferLayout
 	{
+		let positions = gpu::BufferAttributeSlot::new(0, 0, 0);
 		match self
 		{
-			Self::PosOnly => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_ONLY_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_ONLY,
+			Self::PosOnly => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_ONLY_STRIDE,
+					attributes: Vec::from(Self::POS_ONLY)
+				}], positions,
+				attribs: Default::default(),
 			},
-			Self::PosRadius => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_RADIUS_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_RADIUS,
+			Self::PosRadius => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_RADIUS_STRIDE,
+					attributes: Vec::from(Self::POS_RADIUS),
+				}], positions,
+				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
+					GA::Radii, gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)
+				)
 			},
-			Self::PosColor => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_COLOR_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_COLOR,
+			Self::PosColor => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_COLOR_STRIDE,
+					attributes: Vec::from(Self::POS_COLOR),
+				}], positions,
+				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
+					GA::Colors, gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)
+				)
 			},
-			Self::PosRadiusColor => wgpu::VertexBufferLayout {
-				array_stride: Self::POS_RADIUS_COLOR_STRIDE,
-				step_mode: wgpu::VertexStepMode::Vertex,
-				attributes: &Self::POS_RADIUS_COLOR,
+			Self::PosRadiusColor => gpu::BufferLayout {
+				buffers: vec![gpu::VertexBufferLayoutDesc {
+					array_stride: Self::POS_RADIUS_COLOR_STRIDE,
+					attributes: Vec::from(Self::POS_RADIUS_COLOR),
+				}], positions,
+				attribs: gpu::GeometryAttributeOccupancy::default().withAttribute(
+					GA::Radii, gpu::BufferAttributeSlot::new(0, Self::RADIUS_SLOT, Self::RADIUS_OFFSET)
+				).withAttribute(
+					GA::Colors, gpu::BufferAttributeSlot::new(0, Self::COLOR_SLOT, Self::COLOR_OFFSET)
+				)
 			}
 		}
 	}
@@ -91,124 +113,162 @@ impl LayoutVariant {
 
 /// Stores the default attributes that the [`Spheres`](renderer::Spheres) will use when rendering spheres when the
 /// corresponding attributes are not sourced from user data.
-#[derive(Default)]
-pub struct ConstantAttributes {
-	///
-	pub _radius: f32,
+#[repr(C,align(16))]
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+pub struct Style
+{
+	/// The default color of the rendered spheres, used when the color attribute is not sourced from user data.
+	pub defaultColor: Rgba,
 
-	///
-	pub _color: Rgba,
+	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
+	pub defaultRadius: f32,
+
+	/// The default radius of the rendered spheres, used when the radius attribute is not sourced from user data.
+	pub radiusScale: f32,
+
+	/// Explicit padding for *bytemuck*.
+	pub pad: [u32; 2]
 }
-pub type ConstantAttribsUniformGroup = hal::UniformGroup<ConstantAttributes>;
+impl Default for Style {
+	fn default () -> Self { Self {
+		radiusScale: 1., defaultRadius: 1., defaultColor: Rgba::from_rgb(2./5., 2./5., 2./5.), pad: [0; 2]
+	}}
+}
+pub type StyleUniformGroup = hal::UniformGroup<Style>;
 
-/// A [`renderer::GpuData`]-compliant storage for sphere attributes.
+/// A [`renderer::GpuData`]-compliant interleaved storage optimized for use with the [spheres renderer](Spheres).
 pub struct GpuData {
 	num: u32,
-	variant: LayoutVariant,
-	layout: wgpu::VertexBufferLayout<'static>,
+	layout: gpu::BufferLayout,
 	attributes: wgpu::Buffer
 }
 impl GpuData
 {
 	/// Helper function for common initialization.
-	fn commonInit<D: HostData, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
-		-> (LayoutVariant, wgpu::Buffer, std::ptr::NonNull<T>)
+	fn commonInit<D: HostData+?Sized, T> (context: &Context, variant: LayoutVariant, data: &D, label: Option<&str>)
+		-> (gpu::BufferLayout, wgpu::Buffer, std::ptr::NonNull<T>, Option<Vec<u8>>)
 	{
+		// Under WASM, we have a super weird buffer mapping problem that seems related to the one we encountered for
+		// `InterleavedBuffer`, although it manifests in randomly corrupted heap memory. To work around this, we compile
+		// the attributes in a staging area first and let WGPU handle the upload.
+		#[cfg(target_arch="wasm32")]
+			let mut stagingMem = Some(vec![0; data.num() as usize * size_of::<T>()]);
+		#[cfg(not(target_arch="wasm32"))]
+			let stagingMem: Option<Vec<u8>> = None;
+
 		// Prepare the buffer
 		let attributes = variant.createBuffer(context, data.num(), label);
 
 		// Gain mapped pointer for uploading
-		let ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr()
-			.cast::<T>();
+		let ptr;
+		#[cfg(target_arch="wasm32")] {
+			ptr = std::ptr::NonNull::new(stagingMem.as_mut().unwrap().as_mut_ptr()).unwrap().cast::<T>();
+		}
+		#[cfg(not(target_arch="wasm32"))] {
+			ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr().cast::<T>();
+		}
 
 		// Done!
-		(variant, attributes, ptr)
+		(variant.layout(), attributes, ptr, stagingMem)
 	}
 
 
 	///
-	pub fn new<D: HostData> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
+	pub fn new<D: HostData+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (variant, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosOnly, &data, label);
+		let (layout, attributes, mut ptr, _stagingMem)
+			= Self::commonInit(context, LayoutVariant::PosOnly, data, label);
 
 		// Upload the data
-		for pos in data.positions() {
+		for ref pos in data.positions() {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
 				ptr.write(/* pos_rad: */glm::vec3_to_vec4(pos));
 				ptr = ptr.add(1);
 			}
 		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
+		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 
 	///
-	pub fn withRadii<D: HostData+host::HasRadii> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
+	pub fn withRadii<D: HostData+host::HasRadii+?Sized> (context: &Context, data: &D, label: Option<&str>) -> Arc<Self>
 	{
 		// Common initialization
-		let (variant, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosRadius, &data, label);
+		let (layout, attributes, mut ptr, _stagingMem)
+			= Self::commonInit(context, LayoutVariant::PosRadius, data, label);
 
 		// Upload the data
 		for (pos, radius) in data.positions().zip(data.radii()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
-				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius));
+				ptr.write(/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, radius));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 
 	///
-	pub fn withColors<D: HostData+host::HasColors> (context: &Context, data: D, label: Option<&str>) -> Arc<Self>
+	pub fn withColors<D: HostData+host::HasColors+?Sized> (context: &Context, data: &D, label: Option<&str>)
+		-> Arc<Self>
 	{
 		// Common initialization
-		let (variant, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosColor, &data, label);
+		let (layout, attributes, mut ptr, _stagingMem)
+			= Self::commonInit(context, LayoutVariant::PosColor, data, label);
 
 		// Upload the data
-		for (pos, color) in data.positions().zip(data.colors()) {
+		for (ref pos, color) in data.positions().zip(data.colors()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
-				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */*color));
+				ptr.write((/* pos_rad: */glm::vec3_to_vec4(pos), /* color: */color));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 
 	///
-	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors> (
-		context: &Context, data: D, label: Option<&str>
+	pub fn withRadiiAndColors<D: HostData+host::HasRadii+host::HasColors+?Sized> (
+		context: &Context, data: &D, label: Option<&str>
 	) -> Arc<Self> {
 		// Common initialization
-		let (variant, attributes, mut ptr)
-			= Self::commonInit(context, LayoutVariant::PosRadiusColor, &data, label);
+		let (layout, attributes, mut ptr, _stagingMem)
+			= Self::commonInit(context, LayoutVariant::PosRadiusColor, data, label);
 
 		// Upload the data
 		for ((pos, radius), color) in data.positions().zip(data.radii()).zip(data.colors()) {
 			unsafe {
 				// SAFETY: What could possibly go wrong? It'll be fine.
-				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, *radius), /* color: */*color));
+				ptr.write((/* pos_rad: */glm::vec4(pos.x, pos.y, pos.z, radius), /* color: */color));
 				ptr = ptr.add(1);
 			}
+		}
+		#[cfg(target_arch="wasm32")] {
+			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
 		// Done!
-		Arc::new(Self { num: data.num(), layout: variant.layout(), variant, attributes })
+		Arc::new(Self { num: data.num(), layout, attributes })
 	}
 }
 impl renderer::GpuData for GpuData
@@ -217,8 +277,8 @@ impl renderer::GpuData for GpuData
 		self.num
 	}
 
-	fn layout (&self) -> gpu::BufferLayout<'_> {
-		std::slice::from_ref(&self.layout).into()
+	fn layout (&self) -> &gpu::BufferLayout {
+		&self.layout
 	}
 
 	fn geometry (&self) -> Vec<wgpu::BufferSlice<'_>> {
@@ -230,15 +290,3 @@ impl renderer::GpuData for GpuData
 	}
 }
 impl gpu::Interleaved for GpuData {}
-impl gpu::CanHaveRadii for GpuData
-{
-	fn hasRadii (&self) -> bool {
-		matches!(self.variant, LayoutVariant::PosRadius | LayoutVariant::PosRadiusColor)
-	}
-}
-impl gpu::CanHaveColors for GpuData
-{
-	fn hasColors (&self) -> bool {
-		matches!(self.variant, LayoutVariant::PosColor | LayoutVariant::PosRadiusColor)
-	}
-}

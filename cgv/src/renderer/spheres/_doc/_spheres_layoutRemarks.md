@@ -1,0 +1,1 @@
+**NOTE**: [`renderer::Spheres`] prefers having positions and radii packed into the same `Float32x4` shader location when radii are present, but will work with separate locations as well, at a (very) small performance penalty.

@@ -32,11 +32,6 @@ macro_rules! ref_body {
 	($field:ident) => { quote! { &self.#$field } };
 }
 
-/// Given a field ident, generate `self.<field>` (value copy, for `f32` etc.).
-macro_rules! copy_body {
-	($field:ident) => { quote! { self.#$field } };
-}
-
 
 
 //////
@@ -90,24 +85,28 @@ fn getNamedFields (input: &DeriveInput) -> Result<&syn::FieldsNamed, TokenStream
 // Procedural macros
 //
 
-/// Derive [`cgv::renderer::InterleavedElem`] for a struct.
+/// Derive [`cgv::renderer::data::InterleavedElem`] for a struct, making certain kinds of collections of them eligible
+/// for a blanket imlementation of [`cgv::renderer::HostData`].
 ///
-/// Mark exactly one field with `#[cgv_renderAttr(pos)]`; that field will be returned by the generated `pos()` method
-/// (as a `&glm::Vec3`).
+/// Mark exactly one field with `#[cgv_renderAttr(pos)]` (required). For each optional attribute (`normal`, `tangent`,
+/// `radius`, `radiusDeriv`, `orientation`, `scaling`, `color`), mark the corresponding field with
+/// `#[cgv_renderAttr(<attr>)]` if you have an appropriate field. Missing attributes automatically get a panicking
+/// implementation; present attributes also cause the corresponding marker trait (`ElemWithNormal`, `ElemWithTangent`,
+/// etc.) to be implemented.
 #[proc_macro_derive(InterleavedElem, attributes(cgv_renderAttr))]
 pub fn deriveInterleavedElem (input: TokenStream) -> TokenStream
 {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = &input.ident;
-	let (
-		implGenerics, tyGenerics, whereClause
-	) = input.generics.split_for_impl();
+	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
 
 	let fields = match getNamedFields(&input) {
 		Ok(f) => f,
 		Err(e) => return e.into(),
 	};
-	let fieldIdent = match findField_renderAttr(fields, "pos") {
+
+	// pos (required)
+	let posIdent = match findField_renderAttr(fields, "pos") {
 		Some((_, ident)) => ident,
 		None => {
 			return quote! {
@@ -119,283 +118,247 @@ pub fn deriveInterleavedElem (input: TokenStream) -> TokenStream
 			.into()
 		}
 	};
+	let posBody = ref_body!(posIdent);
 
-	let body = ref_body!(fieldIdent);
+	// normal
+	let normalImpl = if let Some((_, ident)) = findField_renderAttr(fields, "normal") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemNormalBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, ::cgv::glm::Vec3> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn normal(&self) -> &::cgv::glm::Vec3 { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithNormal
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemNormalBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<::cgv::glm::Vec3>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no normals available")
+				}
+				#[inline(always)] fn normal(&self) -> &::cgv::glm::Vec3 { panic!("no normal available") }
+			}
+		}
+	};
+
+	// tangent
+	let tangentImpl = if let Some((_, ident)) = findField_renderAttr(fields, "tangent") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemTangentBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, ::cgv::glm::Vec3> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn tangent(&self) -> &::cgv::glm::Vec3 { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithTangent
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemTangentBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<::cgv::glm::Vec3>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no tangents available")
+				}
+				#[inline(always)] fn tangent(&self) -> &::cgv::glm::Vec3 { panic!("no tangent available") }
+			}
+		}
+	};
+
+	// radius
+	let radiusImpl = if let Some((_, ident)) = findField_renderAttr(fields, "radius") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemRadiusBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, f32> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn radius(&self) -> &f32 { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithRadius
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemRadiusBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<f32>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no radii available")
+				}
+				#[inline(always)] fn radius(&self) -> &f32 { panic!("no radius available") }
+			}
+		}
+	};
+
+	// radiusDeriv
+	let radiusDerivImpl = if let Some((_, ident)) = findField_renderAttr(fields, "radiusDeriv") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemRadiusDerivBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, f32> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn radiusDeriv(&self) -> &f32 { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemRadiusDerivBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<f32>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no radius derivatives available")
+				}
+				#[inline(always)] fn radiusDeriv(&self) -> &f32 { panic!("no radius derivative available") }
+			}
+		}
+	};
+
+	// orientation
+	let orientationImpl = if let Some((_, ident)) = findField_renderAttr(fields, "orientation") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemOrientationBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, ::cgv::glm::Quat> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn orientation(&self) -> &::cgv::glm::Quat { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemOrientationBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<::cgv::glm::Quat>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no orientations available")
+				}
+				#[inline(always)] fn orientation(&self) -> &::cgv::glm::Quat { panic!("no orientation available") }
+			}
+		}
+	};
+
+	// scaling
+	let scalingImpl = if let Some((_, ident)) = findField_renderAttr(fields, "scaling") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemScalingBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, ::cgv::glm::Vec3> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn scaling(&self) -> &::cgv::glm::Vec3 { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithScaling
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemScalingBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<::cgv::glm::Vec3>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no scalings available")
+				}
+				#[inline(always)] fn scaling(&self) -> &::cgv::glm::Vec3 { panic!("no scaling available") }
+			}
+		}
+	};
+
+	// color
+	let colorImpl = if let Some((_, ident)) = findField_renderAttr(fields, "color") {
+		let body = ref_body!(ident);
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemColorBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = ::cgv::renderer::data::StridedCopyIter<'data, ::cgv::RGBA> where Self: 'data;
+				#[inline(always)] fn _available() -> bool { true }
+				#[inline(always)] fn _iter(&self, len: usize) -> Self::_Iterator<'_> { unsafe {
+					::cgv::renderer::data::StridedCopyIter::new(#body, size_of::<Self>(), len)
+				}}
+				#[inline(always)] fn color(&self) -> &::cgv::RGBA { #body }
+			}
+			impl #implGenerics ::cgv::renderer::data::ElemWithColor
+				for #name #tyGenerics #whereClause {}
+		}
+	} else {
+		quote! {
+			impl #implGenerics ::cgv::renderer::data::_ElemColorBase
+				for #name #tyGenerics #whereClause
+			{
+				type _Iterator<'data> = std::iter::Empty<::cgv::RGBA>;
+				#[inline(always)] fn _available() -> bool { false }
+				#[inline(always)] fn _iter(&self, _len: usize) -> Self::_Iterator<'_> {
+					panic!("no color available")
+				}
+				#[inline(always)] fn color(&self) -> &::cgv::RGBA { panic!("no color available") }
+			}
+		}
+	};
+
 	quote! {
 		impl #implGenerics ::cgv::renderer::data::InterleavedElem
 			for #name #tyGenerics #whereClause
 		{
-			fn pos(&self) -> &::cgv::glm::Vec3 { #body }
+			fn pos(&self) -> &::cgv::glm::Vec3 { #posBody }
 		}
+		#normalImpl
+		#tangentImpl
+		#radiusImpl
+		#radiusDerivImpl
+		#orientationImpl
+		#scalingImpl
+		#colorImpl
 	}
 	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithNormal`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(normal)]`.
-#[proc_macro_derive(ElemWithNormal, attributes(cgv_renderAttr))]
-pub fn deriveElemWithNormal(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "normal") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithNormal)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(normal)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = ref_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithNormal
-			for #name #tyGenerics #whereClause
-		{
-			fn normal(&self) -> &::cgv::glm::Vec3 { #body }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithTangent`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(tangent)]`.
-#[proc_macro_derive(ElemWithTangent, attributes(cgv_renderAttr))]
-pub fn deriveElemWithTangent(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "tangent") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithTangent)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(tangent)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = ref_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithTangent
-			for #name #tyGenerics #whereClause
-		{
-			fn tangent(&self) -> &::cgv::glm::Vec3 { #body }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithRadius`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(radius)]`.  The field must be `f32` (or any `Copy` type that satisfies
-/// the trait's return type – the compiler will check this).
-#[proc_macro_derive(ElemWithRadius, attributes(cgv_renderAttr))]
-pub fn deriveElemWithRadius(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "radius") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithRadius)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(radius)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = copy_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithRadius
-			for #name #tyGenerics #whereClause
-		{
-			fn radius(&self) -> &f32 { &#body }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithRadiusDeriv`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(radiusDeriv)]`.
-#[proc_macro_derive(ElemWithRadiusDeriv, attributes(cgv_renderAttr))]
-pub fn deriveElemWithRadiusDeriv(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "radiusDeriv") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithRadiusDeriv)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(radiusDeriv)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = copy_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithRadiusDeriv
-			for #name #tyGenerics #whereClause
-		{
-			fn radiusDeriv(&self) -> &f32 { &#body }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithOrientation`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(orientation)]`.
-#[proc_macro_derive(ElemWithOrientation, attributes(cgv_renderAttr))]
-pub fn deriveElemWithOrientation(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "orientation") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithOrientation)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(orientation)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = ref_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithOrientation
-			for #name #tyGenerics #whereClause
-		{
-			fn orientation(&self) -> &::cgv::glm::Quat { #body }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithScaling`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(scaling)]`.
-#[proc_macro_derive(ElemWithScaling, attributes(cgv_renderAttr))]
-pub fn deriveElemWithScaling(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "scaling") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithScaling)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(scaling)]`"
-				);
-			}
-			.into()
-		}
-	};
-
-	let body = ref_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithScaling
-			for #name #tyGenerics #whereClause
-		{
-			fn scaling(&self) -> &::cgv::glm::Vec3 { #body }
-		}
-	}
-	.into()
-}
-
-/// Derive [`cgv::renderer::ElemWithColor`] for a struct.
-///
-/// Mark exactly one field with `#[cgv_renderAttr(color)]`.
-#[proc_macro_derive(ElemWithColor, attributes(cgv_renderAttr))]
-pub fn deriveElemWithColor(input: TokenStream) -> TokenStream
-{
-	let input = parse_macro_input!(input as DeriveInput);
-	let name = &input.ident;
-	let (implGenerics, tyGenerics, whereClause) = input.generics.split_for_impl();
-
-	let fields = match getNamedFields(&input) {
-		Ok(f) => f,
-		Err(e) => return e.into(),
-	};
-	let fieldIdent = match findField_renderAttr(fields, "color") {
-		Some((_, ident)) => ident,
-		None => {
-			return quote! {
-				compile_error!(
-					"`#[derive(ElemWithColor)]` requires exactly one field annotated \
-					with `#[cgv_renderAttr(color)]`"
-				);
-			}
-				.into()
-		}
-	};
-
-	let body = ref_body!(fieldIdent);
-	quote! {
-		impl #implGenerics ::cgv::renderer::data::ElemWithColor
-			for #name #tyGenerics #whereClause
-		{
-			fn color(&self) -> &::cgv::RGBA { #body }
-		}
-	}
-		.into()
 }
 
 /// Derive a "no normals" impl of [`cgv::renderer::data::host::CanHaveNormals`].

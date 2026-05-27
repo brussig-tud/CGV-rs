@@ -956,7 +956,7 @@ impl Player
 		{
 			// Get actual pass information
 			let passInfo = &globalPasses.info[passNr];
-			let renderState = &globalPasses.renderStates[passInfo.renderState as usize];
+			let renderState = &globalPasses.renderStates[passInfo.index];
 			tracing::debug!("Camera[{cameraName:?}]: Preparing global pass #{passNr} ({:?})", passInfo.pass);
 
 			// Update managed render state
@@ -967,7 +967,7 @@ impl Player
 			// Prepare the main application (if any)
 			if let Some(application) = self.applications.main_mut() {
 				if let Some(newCommands) = application.prepareFrame(
-					&self.state.context, renderState, &passInfo.pass
+					&self.state.context, renderState, &passInfo
 				){
 					cmdBuffers.extend(newCommands);
 				}
@@ -977,7 +977,7 @@ impl Player
 			self.applications.slots.iter_mut().filter_map(|slot| slot.as_mut().take_if(|ptr| ptr.tag() == 0)).fold(
 				&mut cmdBuffers, |commands, app| {
 					if let Some(newCommands) = app.prepareFrame(
-						&self.state.context, renderState, &passInfo.pass
+						&self.state.context, renderState, &passInfo
 					){
 						commands.extend(newCommands);
 					}
@@ -1004,7 +1004,7 @@ impl Player
 		{
 			// Get actual pass information
 			let passInfo = &globalPasses.info[passNr];
-			let renderState = &globalPasses.renderStates[passInfo.renderState as usize];
+			let renderState = &globalPasses.renderStates[passInfo.index];
 
 			// Update managed render state
 			// Uniforms
@@ -1026,14 +1026,14 @@ impl Player
 
 			// Render the main application (if any)
 			if let Some(application) = self.applications.main_mut() {
-				application.render(&self.state.context, renderState, &mut renderPass, &passInfo.pass);
+				application.render(&self.state.context, renderState, &mut renderPass, &passInfo);
 			}
 
 			// Render other active applications
 			for idx in 0..self.applications.slots.len() {
 				if idx == self.applications.main {continue};
 				let Some(mut app) = self.applications.slots[idx].take_if(|ptr| ptr.tag() == 0) else {continue};
-				app.render(&self.context, renderState, &mut renderPass, &passInfo.pass);
+				app.render(&self.context, renderState, &mut renderPass, &passInfo);
 				self.applications.slots[idx] = Some(app);
 			}
 

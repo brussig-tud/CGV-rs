@@ -36,7 +36,7 @@ impl MonoCamera
 	{
 		vec![GlobalPassInfo {
 			pass: GlobalPass::Simple,
-			renderState: 0,
+			index: 0,
 			clearColor: *renderSetup.defaultClearColor(),
 			depthClearValue: renderSetup.defaultDepthClearValue(),
 			completionCallback: None.into(),
@@ -116,9 +116,7 @@ impl Camera for MonoCamera
 			if passes.len() == 0 {return};
 			let reqPtr = passes[0] as *const GlobalPassInfo;
 			let ourPtr = &self.globalPasses[0] as *const GlobalPassInfo;
-			if reqPtr != ourPtr {
-				panic!("FATAL: overrideClearColor received a reference to a pass we don't own!");
-			}
+			assert_eq!(reqPtr, ourPtr, "overrideClearColor received a reference to a pass we don't own!");
 		}
 		if let Some(clearColor) = clearColor {
 			self.globalPasses[0].clearColor = clearColor;
@@ -155,6 +153,18 @@ impl Camera for MonoCamera
 				&(self.parameters.extrinsics.eye + self.parameters.extrinsics.dir*self.parameters.intrinsics.f),
 				&self.parameters.extrinsics.up
 			);
+
+			// TODO: all this matrix juggling to fill the viewing uniforms struct should really happen completely
+			// outside the cameras. This would also require enabling the player to mutate the render states, so some
+			// sort of re-design is in order. We could also use this opportunity to include a proper matrix stack.
+			mats.projView = mats.projection * mats.view;
+			mats.projection_inv = mats.projection.try_inverse().unwrap();
+			mats.view_inv = mats.view.try_inverse().unwrap();
+			mats.projView_inv = mats.view_inv * mats.projection_inv;
+			(mats.normal_inv, mats.normal) = {
+				let normal3x3 = glm::mat4_to_mat3(&mats.view).transpose();
+				(glm::mat3_to_mat4(&normal3x3), glm::mat3_to_mat4(&normal3x3.try_inverse().unwrap()))
+			};
 			self.dirty = false;
 			true
 		}

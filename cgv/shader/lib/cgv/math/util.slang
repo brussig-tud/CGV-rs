@@ -8,7 +8,7 @@
 module util;
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::math namespace

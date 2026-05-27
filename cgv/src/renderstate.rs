@@ -97,15 +97,33 @@ impl BlendingOperation
 // ViewingStruct
 
 /// The CPU-side representation of the UniformBuffer used for storing the viewing information.
-#[repr(C)]
-#[derive(Default, Debug, Copy, Clone)]
+#[repr(C,align(16))]
+#[derive(Default,Debug,Copy,Clone,bytemuck::NoUninit)]
 pub struct ViewingStruct
 {
-	/// The modelview transformation matrix.
+	/// The view transformation matrix.
 	pub view: glm::Mat4,
 
 	/// The projection matrix.
-	pub projection: glm::Mat4
+	pub projection: glm::Mat4,
+
+	/// The combined `projection`×`view` transformation matrix
+	pub projView: glm::Mat4,
+
+	/// The inverse view transformation matrix.
+	pub view_inv: glm::Mat4,
+
+	/// The inverse projection matrix.
+	pub projection_inv: glm::Mat4,
+
+	/// The inverse combined `projection`×`view` transformation matrix (i.e. `view_inv`×`projection_inv`).
+	pub projView_inv: glm::Mat4,
+
+	/// The normal matrix.
+	pub normal: glm::Mat4,
+
+	/// The inverse normal matrix.
+	pub normal_inv: glm::Mat4
 }
 pub type ViewingUniformGroup = hal::UniformGroup<ViewingStruct>;
 

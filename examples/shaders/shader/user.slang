@@ -1,6 +1,7 @@
 
 // CGV-rs core shader lib
-import "cgv/geom/common.slang";
+import "cgv/prelude.slang";     // enable GLSL-style linear algebra mathematical operators
+import "cgv/geom/common.slang"; // for the `Extents` struct
 
 // Local imports
 import "lib/sdf.slang";

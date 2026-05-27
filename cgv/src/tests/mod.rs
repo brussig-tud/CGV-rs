@@ -18,11 +18,14 @@ mod renderer;
 // Imports
 
 // Local imports
-#[expect(unused_imports)]
 use crate::*;
 
 
 ////
 // Tests
 
-/* nothing here yet */
+#[test]
+fn test_RGBAisPremultiplied () {
+	let rgba = cgv::RGBA::from_rgba_unmultiplied(0.5, 0.25, 1., 0.5);
+	assert!(rgba.r() == 0.25 && rgba.g() == 0.125 && rgba.b() == 0.5 && rgba.a() == 0.5);
+}

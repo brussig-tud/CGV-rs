@@ -1,10 +1,11 @@
+
 //////
 //
 // Imports
 //
 
 // Standard library
-use std::{marker::PhantomData, panic::catch_unwind};
+use std::marker::PhantomData;
 
 // Local imports
 use crate::{self as cgv, *, renderer::{*, data::{*, host::*}}};
@@ -71,54 +72,54 @@ impl MockData
 
 impl HostData for MockData
 {
-	type PosIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
+	type PosIterator<'data> = std::iter::Copied<std::slice::Iter<'data, glm::Vec3>>;
 
 	fn num (&self) -> u32 { self.positions.len() as u32 }
-	fn positions (&self) -> Self::PosIterator<'_> { self.positions.iter() }
-	fn pos (&self, index: u32) -> &glm::Vec3 { &self.positions[index as usize] }
+	fn positions (&self) -> Self::PosIterator<'_> { self.positions.iter().copied() }
+	fn pos (&self, index: u32) -> glm::Vec3 { self.positions[index as usize] }
 	fn topology(&self) -> wgpu::PrimitiveTopology { wgpu::PrimitiveTopology::PointList }
 }
 impl host::Indexed for MockData
 {
-	type IndexIterator<'data> = std::slice::Iter<'data, u32>;
+	type IndexIterator<'data> = std::iter::Copied<std::slice::Iter<'data, u32>>;
 
 	fn numIndices (&self) -> u32 { self.indices.len() as u32 }
-	fn indices (&self) -> Self::IndexIterator<'_> { self.indices.iter() }
+	fn indices (&self) -> Self::IndexIterator<'_> { self.indices.iter().copied() }
 	fn index (&self, index: u32) -> u32 { self.indices[index as usize] }
 }
 impl host::Interleaved for MockData {}
 
 impl host::CanHaveNormals for MockData
 {
-	type NormalIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
+	type NormalIterator<'data> = std::iter::Copied<std::slice::Iter<'data, glm::Vec3>>;
 
 	fn hasNormals (&self) -> bool { self.normals.is_some() }
 	fn normals (&self) -> Self::NormalIterator<'_> {
-		self.normals.as_ref().expect("should have normals").iter()
+		self.normals.as_ref().expect("should have normals").iter().copied()
 	}
-	fn normal (&self, index: u32) -> &glm::Vec3 {
-		&self.normals.as_ref().expect("should have normals")[index as usize]
+	fn normal (&self, index: u32) -> glm::Vec3 {
+		self.normals.as_ref().expect("should have normals")[index as usize]
 	}
 }
 impl host::CanHaveTangents for MockData
 {
-	type TangentIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
+	type TangentIterator<'data> = std::iter::Copied<std::slice::Iter<'data, glm::Vec3>>;
 
 	fn hasTangents (&self) -> bool { self.tangents.is_some() }
 	fn tangents (&self) -> Self::TangentIterator<'_> {
-		self.tangents.as_ref().expect("should have tangents").iter()
+		self.tangents.as_ref().expect("should have tangents").iter().copied()
 	}
-	fn tangent (&self, index: u32) -> &glm::Vec3 {
-		&self.tangents.as_ref().expect("should have tangents")[index as usize]
+	fn tangent (&self, index: u32) -> glm::Vec3 {
+		self.tangents.as_ref().expect("should have tangents")[index as usize]
 	}
 }
 impl host::CanHaveRadii for MockData
 {
-	type RadiusIterator<'data> = std::slice::Iter<'data, f32>;
+	type RadiusIterator<'data> = std::iter::Copied<std::slice::Iter<'data, f32>>;
 
 	fn hasRadii (&self) -> bool { self.radii.is_some() }
 	fn radii (&self) -> Self::RadiusIterator<'_> {
-		self.radii.as_ref().expect("should have radii").iter()
+		self.radii.as_ref().expect("should have radii").iter().copied()
 	}
 	fn radius (&self, index: u32) -> f32 {
 		self.radii.as_ref().expect("should have radii")[index as usize]
@@ -126,11 +127,11 @@ impl host::CanHaveRadii for MockData
 }
 impl host::CanHaveRadiusDerivs for MockData
 {
-	type RadiusDerivIterator<'data> = std::slice::Iter<'data, f32>;
+	type RadiusDerivIterator<'data> = std::iter::Copied<std::slice::Iter<'data, f32>>;
 
 	fn hasRadiusDerivs (&self) -> bool { self.radiusDerivs.is_some() }
 	fn radiusDerivs (&self) -> Self::RadiusDerivIterator<'_> {
-		self.radiusDerivs.as_ref().expect("should have radius derivatives").iter()
+		self.radiusDerivs.as_ref().expect("should have radius derivatives").iter().copied()
 	}
 	fn radiusDeriv (&self, index: u32) -> f32 {
 		self.radiusDerivs.as_ref().expect("should have radius derivatives")[index as usize]
@@ -138,38 +139,38 @@ impl host::CanHaveRadiusDerivs for MockData
 }
 impl host::CanHaveOrientations for MockData
 {
-	type OrientationIterator<'data> = std::slice::Iter<'data, glm::Quat>;
+	type OrientationIterator<'data> = std::iter::Copied<std::slice::Iter<'data, glm::Quat>>;
 
 	fn hasOrientations (&self) -> bool { self.orientations.is_some() }
 	fn orientations (&self) -> Self::OrientationIterator<'_> {
-		self.orientations.as_ref().expect("should have orientations").iter()
+		self.orientations.as_ref().expect("should have orientations").iter().copied()
 	}
-	fn orientation (&self, index: u32) -> &glm::Quat {
-		&self.orientations.as_ref().expect("should have orientations")[index as usize]
+	fn orientation (&self, index: u32) -> glm::Quat {
+		self.orientations.as_ref().expect("should have orientations")[index as usize]
 	}
 }
 impl host::CanHaveScalings for MockData
 {
-	type ScaleIterator<'data> = std::slice::Iter<'data, glm::Vec3>;
+	type ScaleIterator<'data> = std::iter::Copied<std::slice::Iter<'data, glm::Vec3>>;
 
 	fn hasScalings (&self) -> bool { self.scalings.is_some() }
 	fn scalings (&self) -> Self::ScaleIterator<'_> {
-		self.scalings.as_ref().expect("should have scaling vectors").iter()
+		self.scalings.as_ref().expect("should have scaling vectors").iter().copied()
 	}
-	fn scaling (&self, index: u32) -> &glm::Vec3 {
-		&self.scalings.as_ref().expect("should have scaling vectors")[index as usize]
+	fn scaling (&self, index: u32) -> glm::Vec3 {
+		self.scalings.as_ref().expect("should have scaling vectors")[index as usize]
 	}
 }
 impl host::CanHaveColors for MockData
 {
-	type ColorIterator<'data> = std::slice::Iter<'data, cgv::RGBA>;
+	type ColorIterator<'data> = std::iter::Copied<std::slice::Iter<'data, cgv::RGBA>>;
 
 	fn hasColors (&self) -> bool { self.colors.is_some() }
 	fn colors (&self) -> Self::ColorIterator<'_> {
-		self.colors.as_ref().expect("should have colors").iter()
+		self.colors.as_ref().expect("should have colors").iter().copied()
 	}
-	fn color (&self, index: u32) -> &cgv::RGBA {
-		&self.colors.as_ref().expect("should have colors")[index as usize]
+	fn color (&self, index: u32) -> cgv::RGBA {
+		self.colors.as_ref().expect("should have colors")[index as usize]
 	}
 }
 
@@ -186,11 +187,17 @@ fn staticAssertIndexed<T: host::Indexed> () {}
 /// For testing at compile time that the generic argument is a type that represents interleaved render data.
 fn staticAssertInterleaved<T: host::Interleaved> () {}
 
+/// For testing at compile time that the function argument has a type that guarantees normals.
+fn staticAssertArgIsInterleaved<T: host::Interleaved+?Sized> (_testee: &T) -> bool { true }
+
 /// For testing at compile time that the generic argument is a type that guarantees normals.
 fn staticAssertHasNormals<T: host::HasNormals> () {}
 
 /// For testing at compile time that the generic argument is a type that guarantees tangents.
 fn staticAssertHasTangents<T: host::HasTangents> () {}
+
+/// For testing at compile time that the function argument has a type that guarantees tangents.
+fn staticAssertArgHasTangents<T: host::HasTangents+?Sized> (_testee: &T) -> bool { true }
 
 /// For testing at compile time that the generic argument is a type that guarantees radii.
 fn staticAssertHasRadii<T: host::HasRadii> () {}
@@ -207,6 +214,9 @@ fn staticAssertHasScalings<T: host::HasScalings> () {}
 /// For testing at compile time that the generic argument is a type that guarantees colors.
 fn staticAssertHasColors<T: host::HasColors> () {}
 
+/// For testing at compile time that the function argument has a type that guarantees colors.
+fn staticAssertArgHasColors<T: host::HasColors+?Sized> (_testee: &T) -> bool { true }
+
 
 
 //////
@@ -215,7 +225,104 @@ fn staticAssertHasColors<T: host::HasColors> () {}
 //
 
 #[test]
-fn test_guaranteeWrappers_allTypeAliasesResolve ()
+fn test_HostData_blanketImpls ()
+{
+	// The test data
+	use super::data::PosTanColor;
+	let testData = [
+		PosTanColor {pos: glm::vec3(0., 0., 0.), tan: glm::vec3(1., 0., 0.),
+		             col: cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.)},
+		PosTanColor {pos: glm::vec3(1., 2., 3.), tan: glm::vec3(0., 1., 1.),
+		             col: cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.)}
+	];
+	let testDataVec = testData.to_vec();
+
+	// Check that we got the blanket implementations
+	staticAssertArgIsInterleaved(testData.as_slice());
+	staticAssertArgIsInterleaved(&testData);
+	staticAssertArgIsInterleaved(&testDataVec);
+	staticAssertArgHasTangents(testData.as_slice());
+	staticAssertArgHasTangents(&testData);
+	staticAssertArgHasTangents(&testDataVec);
+	staticAssertArgHasColors(testData.as_slice());
+	staticAssertArgHasColors(&testData);
+	staticAssertArgHasColors(&testDataVec);
+
+	// Check the blanket implementations work at runtime
+	assert!(testData.hasTangents());
+	assert!(testData.as_slice().hasTangents());
+	assert!(testDataVec.hasTangents());
+	assert!(testData.hasColors());
+	assert!(testData.as_slice().hasColors());
+	assert!(testDataVec.hasColors());
+	assert!(!testData.hasNormals());
+	assert!(!testData.as_slice().hasNormals());
+	assert!(!testDataVec.hasNormals());
+	assert!(!testData.hasRadii());
+	assert!(!testData.as_slice().hasRadii());
+	assert!(!testDataVec.hasRadii());
+	assert!(!testData.hasRadiusDerivs());
+	assert!(!testData.as_slice().hasRadiusDerivs());
+	assert!(!testDataVec.hasRadiusDerivs());
+	assert!(!testData.hasOrientations());
+	assert!(!testData.as_slice().hasOrientations());
+	assert!(!testDataVec.hasOrientations());
+	assert!(!testData.hasScalings());
+	assert!(!testData.as_slice().hasScalings());
+	assert!(!testDataVec.hasScalings());
+
+	// Check data access
+	assert_eq!(testData.len(), testData.num() as usize);
+	assert_eq!(testDataVec.len(), testDataVec.num() as usize);
+	// - positions
+	let mut iter = testData.positions();
+	assert_eq!(testData.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(0., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(1., 2., 3.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testData.pos(0), glm::vec3(0., 0., 0.));
+	assert_eq!(testData.pos(1), glm::vec3(1., 2., 3.));
+	iter = testDataVec.positions();
+	assert_eq!(testDataVec.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(0., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(1., 2., 3.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testDataVec.pos(0), glm::vec3(0., 0., 0.));
+	assert_eq!(testDataVec.pos(1), glm::vec3(1., 2., 3.));
+	// - tangents
+	iter = testData.tangents();
+	assert_eq!(testData.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(1., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(0., 1., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testData.tangent(0), glm::vec3(1., 0., 0.));
+	assert_eq!(testData.tangent(1), glm::vec3(0., 1., 1.));
+	iter = testDataVec.tangents();
+	assert_eq!(testDataVec.len(), iter.len());
+	assert_eq!(iter.next(), Some(glm::vec3(1., 0., 0.)));
+	assert_eq!(iter.next(), Some(glm::vec3(0., 1., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testDataVec.tangent(0), glm::vec3(1., 0., 0.));
+	assert_eq!(testDataVec.tangent(1), glm::vec3(0., 1., 1.));
+	// - colors
+	let mut iter = testData.colors();
+	assert_eq!(testData.len(), iter.len());
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.)));
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testData.color(0), cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.));
+	assert_eq!(testData.color(1), cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.));
+	iter = testDataVec.colors();
+	assert_eq!(testDataVec.len(), iter.len());
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.)));
+	assert_eq!(iter.next(), Some(cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.)));
+	assert_eq!(iter.next(), None);
+	assert_eq!(testDataVec.color(0), cgv::RGBA::from_rgba_premultiplied(1., 0., 0., 1.));
+	assert_eq!(testDataVec.color(1), cgv::RGBA::from_rgba_premultiplied(0., 1., 0., 1.));
+}
+
+#[test]
+fn test_GuaranteeAttributes_allTypeAliasesResolve ()
 {
 	// Assert helper
 	macro_rules! assertAliasesExist {
@@ -310,7 +417,7 @@ fn test_guaranteeWrappers_allTypeAliasesResolve ()
 }
 
 #[test]
-fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
+fn test_GuaranteeAttributes_forwardMarkerTraitsAndData ()
 {
 	// Compile-time check that the marker traits get propagated
 	staticAssertIndexed::<GuaranteeNormals<MockData>>();
@@ -323,8 +430,8 @@ fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
 	let guaranteed = GuaranteeNormals::new(MockData::fullyPopulated());
 	assert_eq!(guaranteed.num(), 2);
 	assert_eq!(guaranteed.numIndices(), 3);
-	assert_eq!(guaranteed.pos(0), &glm::vec3(0., 0., 0.));
-	assert_eq!(guaranteed.normal(1), &glm::vec3(0., 1., 0.));
+	assert_eq!(guaranteed.pos(0), glm::vec3(0., 0., 0.));
+	assert_eq!(guaranteed.normal(1), glm::vec3(0., 1., 0.));
 	assert_eq!(guaranteed.radius(0), 0.5);
 	assert_eq!(guaranteed.index(1), 1);
 	assert!(guaranteed.hasNormals());
@@ -333,22 +440,22 @@ fn test_guaranteeWrappers_forwardMarkerTraitsAndData ()
 
 	// Check iterators
 	let mut positions = guaranteed.positions();
-	assert_eq!(positions.next(), Some(&glm::vec3(0., 0., 0.)));
-	assert_eq!(positions.next(), Some(&glm::vec3(1., 2., 3.)));
+	assert_eq!(positions.next(), Some(glm::vec3(0., 0., 0.)));
+	assert_eq!(positions.next(), Some(glm::vec3(1., 2., 3.)));
 	assert_eq!(positions.next(), None);
 	let mut indices = guaranteed.indices();
-	assert_eq!(*indices.next().unwrap(), 0);
-	assert_eq!(*indices.next().unwrap(), 1);
-	assert_eq!(*indices.next().unwrap(), 0);
+	assert_eq!(indices.next().unwrap(), 0);
+	assert_eq!(indices.next().unwrap(), 1);
+	assert_eq!(indices.next().unwrap(), 0);
 	assert_eq!(indices.next(), None);
 	let mut normals = guaranteed.normals();
-	assert_eq!(normals.next(), Some(&glm::vec3(0., 0., 1.)));
-	assert_eq!(normals.next(), Some(&glm::vec3(0., 1., 0.)));
+	assert_eq!(normals.next(), Some(glm::vec3(0., 0., 1.)));
+	assert_eq!(normals.next(), Some(glm::vec3(0., 1., 0.)));
 	assert_eq!(normals.next(), None);
 }
 
 #[test]
-fn test_guaranteeWrappers_selectCombosGuaranteeAttributes ()
+fn test_GuaranteeAttributes_selectCombosGuaranteeAttributes ()
 {
 	// Compile-time check guarantees on test combo 1
 	type GuaranteedCombo1 = GuaranteeNormalsTangentsRadiusDerivsColors<MockData>;
@@ -382,7 +489,7 @@ fn test_guaranteeWrappers_selectCombosGuaranteeAttributes ()
 }
 
 #[test]
-fn test_guaranteeWrappers_selectCombosPreserveExistingGuarantees ()
+fn test_GuaranteeAttributes_selectCombosPreserveExistingGuarantees ()
 {
 	// Compile-time check existing guarantees get propagated on test combo 1
 	type GuaranteedBaseCombo1 = GuaranteeOrientationsScalings<MockData>;
@@ -434,41 +541,34 @@ fn test_guaranteeWrappers_selectCombosPreserveExistingGuarantees ()
 }
 
 #[test]
-fn test_guaranteeWrappers_constructorsRejectMissingAttributes ()
+fn test_GuaranteeAttributes_constructorsRejectMissingAttributes ()
 {
-	// Assert helper
-	macro_rules! assertPanics {
-		($expression:expr) => {
-			assert!(catch_unwind(|| $expression).is_err());
-		};
-	}
-
 	// Check that constructors correctly reject
-	assertPanics!(GuaranteeNormals::new(
+	util::assertPanics!(GuaranteeNormals::new(
 		MockData::withFlags(/* missing normals: */false, true, true, true, true, true, true)
 	));
-	assertPanics!(GuaranteeTangents::new(
+	util::assertPanics!(GuaranteeTangents::new(
 		MockData::withFlags(true, /* missing tangents: */false, true, true, true, true, true)
 	));
-	assertPanics!(GuaranteeRadii::new(
+	util::assertPanics!(GuaranteeRadii::new(
 		MockData::withFlags(true, true, /* missing radii: */false, false, true, true, true)
 	));
-	assertPanics!(GuaranteeRadiusDerivs::new(
+	util::assertPanics!(GuaranteeRadiusDerivs::new(
 		MockData::withFlags(true, true, true, /* missing radius derivatives: */false, true, true, true)
 	));
-	assertPanics!(GuaranteeOrientations::new(
+	util::assertPanics!(GuaranteeOrientations::new(
 		MockData::withFlags(true, true, true, true, /* missing orientations: */false, true, true)
 	));
-	assertPanics!(GuaranteeScalings::new(
+	util::assertPanics!(GuaranteeScalings::new(
 		MockData::withFlags(true, true, true, true, true, /* missing scaling vectors: */false, true)
 	));
-	assertPanics!(GuaranteeColors::new(
+	util::assertPanics!(GuaranteeColors::new(
 		MockData::withFlags(true, true, true, true, true, true, /* missing colors: */false)
 	));
-	assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
+	util::assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
 		MockData::withFlags(/* missing normals: */false, true, true, true, true, true, true))
 	);
-	assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
+	util::assertPanics!(GuaranteeNormalsTangentsRadiusDerivsColors::new(
 		MockData::withFlags(true, true, true, true, true, true, /* missing colors: */false))
 	);
 }

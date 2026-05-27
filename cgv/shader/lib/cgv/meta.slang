@@ -8,7 +8,7 @@
 module meta;
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::meta namespace

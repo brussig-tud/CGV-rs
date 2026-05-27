@@ -35,48 +35,48 @@ use cgv::{self, util};
 
 const QUAD_VERTS: &[QuadVertex; 8] = &[
 	// Front side:
-	QuadVertex {
-		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 0.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 0.)
-	},
+	QuadVertex::new(
+		glm::Vec4::new(-1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(-1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 0.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 0.)
+	),
 
 	// Back side (texture coordinates flipped horizontally):
-	QuadVertex {
-		pos: glm::Vec4::new(-1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., -1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 1.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(-1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(1., 0.)
-	},
-	QuadVertex {
-		pos: glm::Vec4::new(1., 1., 0., 1.),
-		color: glm::Vec4::new(1., 1., 1., 1.),
-		texcoord: glm::Vec2::new(0., 0.)
-	}
+	QuadVertex::new(
+		glm::Vec4::new(-1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., -1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 1.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(-1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(1., 0.)
+	),
+	QuadVertex::new(
+		glm::Vec4::new(1., 1., 0., 1.),
+		glm::Vec4::new(1., 1., 1., 1.),
+		glm::Vec2::new(0., 0.)
+	),
 ];
 
 const INDICES: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4, 7, 6];
@@ -92,16 +92,21 @@ const INDICES: &[u32; 10] = &[/*front*/0, 1, 2, 3,  /*degen*/3, 5,  /*back*/5, 4
 // QuadVertex
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, bytemuck::NoUninit)]
 struct QuadVertex {
 	pos: glm::Vec4,
 	color: glm::Vec4,
-	texcoord: glm::Vec2
+	texcoord: glm::Vec2,
+	pad: [u32; 2]
 }
 impl QuadVertex
 {
 	const GPU_ATTRIBS: [wgpu::VertexAttribute; 3] =
 		wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4, 2=>Float32x2];
+
+	const fn new (pos: glm::Vec4, color: glm::Vec4, texcoord: glm::Vec2) -> Self {
+		Self{pos, color, texcoord, pad: [0; 2]}
+	}
 
 	fn layoutDesc () -> wgpu::VertexBufferLayout<'static> {
 		wgpu::VertexBufferLayout {
@@ -118,7 +123,7 @@ impl QuadVertex
 
 ///
 #[repr(C,align(16))] // Slang currently imposes that everything in a buffer must be 16-byte aligned
-#[derive(Default, Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone, bytemuck::NoUninit)]
 pub struct Appearance
 {
 	/// The color of the CGV logo.
@@ -134,7 +139,9 @@ pub struct Appearance
 	pub evenCheckersColor: egui::Rgba,
 
 	/// How many checkers to draw on the canvas in each direction
-	pub checkerCounts: egui::Vec2
+	pub checkerCounts: egui::Vec2,
+
+	pub pad: [u32; 2]
 }
 pub type AppearanceUniformGroup = cgv::hal::UniformGroup<Appearance>;
 
@@ -160,7 +167,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	let vertexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
 			label: Some("ExBasic__QuadVertices"),
-			contents: util::slicify(QUAD_VERTS),
+			contents: bytemuck::cast_slice(QUAD_VERTS),
 			usage: wgpu::BufferUsages::VERTEX
 		}
 	);
@@ -169,7 +176,7 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	let indexBuffer = context.device().create_buffer_init(
 		&wgpu::util::BufferInitDescriptor {
 			label: Some("ExBasic__QuadIndices"),
-			contents: util::slicify(INDICES),
+			contents: bytemuck::bytes_of(INDICES),
 			usage: wgpu::BufferUsages::INDEX
 		}
 	);
@@ -349,7 +356,9 @@ impl ExampleApplication
 			fragment: Some(wgpu::FragmentState {
 				module: &self.shader,
 				entry_point: Some("fragmentMain"), // Slang (for now) requires explicitly stating entry points
-				targets: &[Some(renderState.colorTargetState().clone())],
+				targets: &[Some(cgv::renderstate::changeColorTargetState_blending(
+					renderState.colorTargetState(), cgv::renderstate::BlendingOperation::AlphaPreMultiplied
+				))],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			}),
 			primitive: wgpu::PrimitiveState {
@@ -398,7 +407,7 @@ impl cgv::Application for ExampleApplication
 		for pass in globalPasses.info {
 			self.pipelines.push(self.createPipeline(
 				context,
-				&globalPasses.renderStates[pass.renderState as usize],
+				&globalPasses.renderStates[pass.index as usize],
 				renderSetup
 			));
 		}
@@ -430,7 +439,7 @@ impl cgv::Application for ExampleApplication
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPass)
+	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
@@ -438,7 +447,7 @@ impl cgv::Application for ExampleApplication
 
 	fn render (
 		&mut self, _: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
-		_: &cgv::GlobalPass
+		_: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
 		renderPass.set_pipeline(&self.pipelines[0]);
@@ -455,15 +464,12 @@ impl cgv::Application for ExampleApplication
 
 	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
-		// Keep track of whether we need to redraw our scene contents
-		let mut redraw = false;
-
 		// Appearance section
 		egui::CollapsingHeader::new("Appearance").default_open(true).show(ui, |ui|
 		{
 			// Add the standard 2-column layout control grid
-			cgv::gui::layout::ControlTableLayouter::new(ui).layout(ui, "Cgv.Ex.Basic-color",
-				|controlTable|
+			cgv::gui::layout::ControlTableLayouter::new(ui).layout(
+				ui, "Cgv.Ex.Basic-color", |controlTable|
 				{
 					// Mutable access to our color uniforms in case something changes
 					let appearance = self.appearanceUniforms.borrowData_mut();
@@ -516,7 +522,7 @@ impl cgv::Application for ExampleApplication
 					// Upload new color values if something changed
 					if uploadFlag {
 						self.appearanceUniforms.upload(&player.context);
-						redraw = true;
+						player.requireSceneRedraw();
 					}
 				}
 			);
@@ -528,9 +534,11 @@ impl cgv::Application for ExampleApplication
 			// Add the standard 2-column layout control grid
 			cgv::gui::layout::ControlTableLayouter::new(ui)
 			.layout(ui, "Cgv.Ex.Basic-render", |controlTable| {
-				redraw |= controlTable.add("geometry", |ui, _| ui.add(
+				if controlTable.add("geometry", |ui, _| ui.add(
 					egui::Checkbox::new(&mut self.guiState.drawBackside, "draw backside")
-				)).changed();
+				)).changed() {
+					player.requireSceneRedraw();
+				}
 			});
 		});
 
@@ -545,11 +553,6 @@ impl cgv::Application for ExampleApplication
 				)
 			})
 		);
-
-		// Make sure the scene will get re-rendered in the current draw pass
-		if redraw {
-			player.requireSceneRedraw();
-		}
 	}
 }
 

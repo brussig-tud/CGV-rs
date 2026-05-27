@@ -8,7 +8,7 @@
 module sdf;
 
 
-//////
+////
 // Imports
 
 // CGV-rs core shader library
@@ -16,7 +16,7 @@ import "cgv/prelude.slang";
 import "cgv/geom/common.slang";
 
 
-/////
+////
 // Module namespace
 
 // The common example namespace.

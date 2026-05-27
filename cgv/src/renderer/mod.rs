@@ -10,7 +10,9 @@ pub use spheres::Spheres; // re-export
 
 /// Module defining the render data model.
 pub mod data;
-pub use data::{host::Data as HostData, gpu::Data as GpuData}; // re-export
+pub use data::{ // re-exports
+	host::Data as HostData, gpu::{Data as GpuData, PipelineBufferLayout as GpuPipelineBufferLayout}
+}; 
 
 /// The module prelude.
 pub mod prelude {
@@ -41,19 +43,12 @@ pub mod prelude {
 		GpuData, renderer::data::gpu::Interleaved as GpuDataInterleaved,
 		renderer::data::gpu::NonInterleaved as GpuDataNonInterleaved,
 		renderer::data::gpu::Indexed as GpuDataIndexed,
-		renderer::data::gpu::CanHaveNormals as GpuDataCanHaveNormals,
 		renderer::data::gpu::HasNormals as GpuDataHasNormals,
-		renderer::data::gpu::CanHaveTangents as GpuDataCanHaveTangents,
 		renderer::data::gpu::HasTangents as GpuDataHasTangents,
-		renderer::data::gpu::CanHaveRadii as GpuDataCanHaveRadii,
 		renderer::data::gpu::HasRadii as GpuDataHasRadii,
-		renderer::data::gpu::CanHaveRadiusDerivs as GpuDataCanHaveRadiusDerivs,
 		renderer::data::gpu::HasRadiusDerivs as GpuDataHasRadiusDerivs,
-		renderer::data::gpu::CanHaveOrientations as GpuDataCanHaveOrientations,
 		renderer::data::gpu::HasOrientations as GpuDataHasOrientations,
-		renderer::data::gpu::CanHaveScalings as GpuDataCanHaveScalings,
 		renderer::data::gpu::HasScalings as GpuDataHasScalings,
-		renderer::data::gpu::CanHaveColors as GpuDataCanHaveColors,
 		renderer::data::gpu::HasColors as GpuDataHasColors
 	};
 }
@@ -85,8 +80,15 @@ pub trait GpuDataReceiver {
 
 	/// Check if the wrapped GPU data is [compatible](data::gpu::BufferLayout::isCompatible) with another.
 	#[inline]
-	fn isCompatible (&self, otherData: &dyn GpuData) -> bool {
+	fn isDataCompatible (&self, otherData: &dyn GpuData) -> bool {
 		self.gpuData().layout().isCompatible(&otherData.layout())
+	}
+
+	/// Check if the data receiver is compatible with another. Will typically just involve checking
+	/// [data compatibility](Self::isDataCompatible), but implementations might want to take more things into account.
+	#[inline(always)]
+	fn isCompatible (&self, otherReceiver: &Self) -> bool {
+		self.isDataCompatible(otherReceiver.gpuData())
 	}
 }
 
@@ -105,21 +107,18 @@ pub trait Renderer
 
 	/// Returns `true` if this renderer's [`GpuState`] does not depend on the data being rendered. Most implementations
 	/// will not require `&self` to answer this query, but we want this to be dynamically dispatchable.
-	///
-	/// **NOTE:** Implementations that can statically answer this query with `true` are encouraged to implement the
-	/// [`renderer::DataIndependent`] trait.
-	fn gpuStateIsIndependentFromData(&self) -> bool;
+	fn gpuStateIsIndependentFromData (&self) -> bool;
 
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
 	fn createGpuState (&self, context: &Context, renderState: &RenderState, data: &Self::GpuDataReceiver)
 		-> Self::GpuState;
 
 	/// **TODO: this is a placeholder, subject to extensive change as things develop**
-	fn render (&self, context: &Context, gpuState: &Self::GpuState, data: &Self::GpuDataReceiver);
+	fn render (
+		&self, context: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass,
+		gpuState: &Self::GpuState, data: &Self::GpuDataReceiver
+	);
 }
-
-/// Marker trait to enable the [`Managed::setData`] method that statically omits re-creating [`GpuState`].
-pub trait DataIndependent {}
 
 
 
@@ -144,14 +143,16 @@ impl<R: Renderer> Managed<R>
 	/// Helper function to decide whether the `setData...` family of functions need to rebuild [`GpuState`].
 	#[inline]
 	fn needsRebuild (&self, newData: &R::GpuDataReceiver) -> bool
-	{!(
-		self.renderer.gpuStateIsIndependentFromData() ||
-		if let Some(data) = &self.data {
-			data.isCompatible(newData.gpuData())
-		} else {
-			false
-		}
-	)}
+	{
+		let dataIndependent = self.renderer.gpuStateIsIndependentFromData();
+		!(
+			dataIndependent || if let Some(data) = &self.data {
+				data.isCompatible(&newData)
+			} else {
+				false
+			}
+		)
+	}
 
 	/// Rebuild the wrapped renderer's [render state](crate::RenderState)-dependent [`GpuState`] for the given single
 	/// render state.
@@ -181,9 +182,18 @@ impl<R: Renderer> Managed<R>
 		}
 	}
 
-	/// Set new data to render. This requires the wrapped renderer to implement [`renderer::DataIndependent`].
-	pub fn setData (&mut self, newData: R::GpuDataReceiver) where R: DataIndependent {
-		debug_assert!(self.renderer.gpuStateIsIndependentFromData());
+	/// Set new data to render. For renderers that are not [data-independent](Renderer::gpuStateIsIndependentFromData),
+	/// this is only possible while no [`GpuState`] has been created yet, i.e. before the first call to any of the
+	/// `rebuild...` functions. For data-independent renderers, this can be called at any time, without a rebuild of the
+	/// wrapped renderer's `GpuState` being triggered.
+	///
+	/// # Panics
+	///
+	/// If the wrapped renderer is [data-dependent](Renderer::gpuStateIsIndependentFromData) and `GpuState` was already
+	/// [created](Self::rebuildForSingleRenderState).
+	#[inline]
+	pub fn setData (&mut self, newData: R::GpuDataReceiver) {
+		assert!(self.data.is_none() || self.renderer.gpuStateIsIndependentFromData());
 		self.data = Some(newData);
 	}
 
@@ -214,8 +224,7 @@ impl<R: Renderer> Managed<R>
 	/// `Player` reference will not be detected and constitutes a logic bug. Since there is just one (global) `Player`
 	/// instance that applications will typically use, this contract will virtually always be fulfilled in practice.
 	#[inline]
-	pub fn setDataWithPlayer (&mut self, context: &Context, player: &Player, newData: R::GpuDataReceiver)
-	{
+	pub fn setDataWithPlayer (&mut self, context: &Context, player: &Player, newData: R::GpuDataReceiver) {
 		let rebuild = self.needsRebuild(&newData);
 		self.data = Some(newData);
 		if rebuild {
@@ -244,19 +253,22 @@ impl<R: Renderer> Managed<R>
 	/// Dispatch rendering for the very first set of [`GpuState`], typically for use when the managed renderer was
 	/// [built for a single render state](Self::rebuildForSingleRenderState).
 	#[inline(always)]
-	pub fn render (&self, context: &Context) {
-		self.renderForGlobalPass(context, 0);
+	pub fn render (&self, context: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass) {
+		self.renderForGlobalPass(context, renderState, renderPass, 0);
 	}
 
 	/// Dispatch rendering for the set of [`GpuState`] associated with the specified [`GlobalPass`].
-	pub fn renderForGlobalPass (&self, context: &Context, globalPassIdx: usize)
-	{
+	pub fn renderForGlobalPass (
+		&self, context: &Context, renderState: &RenderState, renderPass: &mut wgpu::RenderPass, globalPassIdx: usize
+	){
 		assert!(
 			globalPassIdx < self.gpuStates.len(), "invalid GPU state index - was the renderer properly initialized?"
 		);
-		self.renderer.render(context, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
-			"render data should be set before rendering"
-		));
+		self.renderer.render(
+			context, renderState, renderPass, &self.gpuStates[globalPassIdx], self.data.as_ref().expect(
+				"render data should be set before rendering"
+			)
+		);
 	}
 }
 impl<R: Renderer> Deref for Managed<R> {

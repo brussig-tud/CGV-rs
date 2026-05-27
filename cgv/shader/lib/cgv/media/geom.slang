@@ -8,7 +8,7 @@
 module geom;
 
 
-//////
+////
 // Imports
 
 // Shaderlib prelude
@@ -18,7 +18,7 @@ import "cgv/prelude.slang";
 import "cgv/math/lin/common.slang";
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::media namespace

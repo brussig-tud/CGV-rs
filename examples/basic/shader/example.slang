@@ -5,8 +5,8 @@
 //
 
 // CGV-rs core shader library
+import "cgv/prelude.slang";            // enable GLSL-style linear algebra mathematical operators
 import "cgv/api/uniforms.slang";       // interface with managed uniforms handled by CGV-rs
-import "cgv/math/lin/operators.slang"; // enable GLSL-style linear algebra mathematical operators
 import "cgv/color/blending.slang";     // alpha blending operators
 import "cgv/math/field.slang";         // contains the checkerboard pattern
 

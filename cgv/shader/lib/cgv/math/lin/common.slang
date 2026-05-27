@@ -8,14 +8,14 @@
 module common;
 
 
-//////
+////
 // Imports
 
 // Local imports
 /* nothing here yet */
 
 
-/////
+////
 // Module namespace
 
 // Insert into cgv::math::lin namespace
