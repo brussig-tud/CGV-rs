@@ -191,6 +191,7 @@ use super::Player;
 
 /// Stores the global [`Player`] instance and tracks its state in a threadsafe manner, accounting for both
 /// initialization and synchronization.
+///
 /// Similar to a `Mutex<Option<Player>>` without poisoning or waiting.
 struct Lock
 {
@@ -217,7 +218,8 @@ static INSTANCE: Lock = Lock{
 };
 
 /// Store a new [`Player`] in the global instance, dropping any previous value.
-/// Panics if the player is currently locked.
+///
+/// **Panics** if the player is currently locked.
 #[inline]
 pub fn set (player: Player) -> LockGuard
 {
@@ -232,7 +234,8 @@ pub fn set (player: Player) -> LockGuard
 }
 
 /// Acquire the global [`Player`] instance for exclusive access.
-/// Panics if the player is uninitialized or locked already.
+///
+/// **Panics** if the player is uninitialized or locked already.
 #[inline]
 pub fn lock () -> LockGuard
 {
@@ -250,14 +253,16 @@ pub fn lock () -> LockGuard
 }
 
 /// Mark the global [`Player`] instance as available for referencing.
-/// Implies that the player is initialized.
-fn unlock ()
+///
+/// **Safety**: The instance data must be initialized and unreferenced.
+unsafe fn unlock ()
 {
 	INSTANCE.state.store(state::AVAILABLE, Ordering::Release);
 }
 
 /// Drop the global [`Player`] instance if it exists.
-/// Panics if the players is currently locked.
+///
+/// **Panics** if the players is currently locked.
 pub fn reset ()
 {
 	match INSTANCE.state.swap(state::LOCKED, Ordering::Acquire) {
@@ -273,11 +278,12 @@ pub fn reset ()
 
 
 /// Threadsafe exclusive access to the global [`Player`] instance.
+///
 /// Obtained by [locking](lock) the player, unlocks it when dropped.
 pub struct LockGuard (std::marker::PhantomData<Player>);
 impl std::ops::Drop for LockGuard
 {
-	fn drop(&mut self) {unlock()}
+	fn drop(&mut self) {unsafe{unlock()}}
 }
 impl std::ops::Deref for LockGuard
 {
@@ -302,18 +308,21 @@ pub use instance::{lock, LockGuard};
 
 
 /// Identifies a [`Component`] stored by the [`Player`], providing access to that component outside of callbacks.
+///
 /// Handles remain valid for the entire lifetime of the component they refer to.
 #[derive(Clone, Copy)]
 pub struct Handle (usize);
 
 
-/// Smart pointer with unique ownership used to store [`Component`] trait objects owned by the player. The tag indicates
-/// whether the component is active (0) or not (1).
+/// Smart pointer with unique ownership used to store [`Component`] trait objects owned by the player.
+///
+/// The tag indicates whether the component is active (0) or not (1).
 type CompPtr<T> = cgv_util::Tagged<Box<T>, 1>;
 
-/// Defines containers storing a specific kind of [`Component`] as boxed trait objects. Entries can be individually
-/// marked as inactive, and independently one may be selected as "main". The meaning of these designations, if any,
-/// depends on the kind of component.
+/// Container storing a specific kind of [`Component`] as boxed trait objects.
+///
+/// Entries can be individually marked as inactive, and independently one may be selected as "main". The meaning of
+/// these designations, if any, depends on the kind of component.
 pub struct Components<Comp: DynComponent + ?Sized>
 {
 	slots: Vec<Option<CompPtr<Comp>>>,
@@ -330,7 +339,8 @@ impl<Comp: DynComponent + ?Sized> Components<Comp>
 	const MSG_WRONG_TYPE: &'static str = "Invalid handle: The requested object is not of the expected type.";
 
 	/// Borrow the [`Component`] identified by the given handle and downcast to `T`.
-	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
+	///
+	/// **Panics** if the requested object no longer exists, is borrowed already, or not of type `T`.
 	pub fn get<T: Component> (&self, handle: Handle) -> &T
 	{
 		<dyn Any>::downcast_ref::<T>(
@@ -341,7 +351,8 @@ impl<Comp: DynComponent + ?Sized> Components<Comp>
 	}
 
 	/// Mutably borrow the [`Component`] identified by the given handle and downcast to `T`.
-	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
+	///
+	/// **Panics** if the requested object no longer exists, is borrowed already, or not of type `T`.
 	pub fn get_mut<T: Component> (&mut self, handle: Handle) -> &mut T
 	{
 		<dyn Any>::downcast_mut::<T>(
@@ -363,16 +374,19 @@ impl<Comp: DynComponent + ?Sized> Components<Comp>
 		self.slots.get_mut(self.main)?.as_deref_mut()
 	}
 
-	/// If there is a main component, move it out of the container. This allows calling a method of the component with
-	/// a reference to the player, since they no longer alias. Make sure to reinsert the component afterwards using
-	/// [`Self::putMain`].
+	/// If there is a main component, move it out of the container.
+	///
+	/// This allows calling a method of the component with a reference to the player, since they no longer alias.
+	/// Make sure to reinsert the component afterwards using [`Self::putMain`].
 	pub(self) fn takeMain (&mut self) -> Option<CompPtr<Comp>>
 	{
 		self.slots.get_mut(self.main)?.take()
 	}
 
-	/// Store the given component in the slot selected as main, dropping any previous value. Should generally be used
-	/// only to undo [`Self::takeMain`]. For seleting a different main component, set [`Self::main`] instead.
+	/// Store the given component in the slot selected as main, dropping any previous value.
+	///
+	/// Should generally be used only to undo [`Self::takeMain`]. For seleting a different main component, set
+	/// [`Self::main`] instead.
 	pub(self) fn putMain (&mut self, new_actor: CompPtr<Comp>)
 	{
 		self.slots[self.main] = Some(new_actor);
@@ -422,6 +436,7 @@ pub struct State
 }
 
 /// Implicitly access the [`state`](Self::state) subobject for convenience.
+///
 /// Note that this borrows the entire player, in case of aliasing issues you must instead use the field explicitly.
 impl std::ops::Deref for Player
 {
@@ -429,6 +444,7 @@ impl std::ops::Deref for Player
 	fn deref (&self) -> &State {&self.state}
 }
 /// Implicitly access the [`state`](Self::state) subobject for convenience.
+///
 /// Note that this borrows the entire player, in case of aliasing issues you must instead use the field explicitly.
 impl std::ops::DerefMut for Player
 {
