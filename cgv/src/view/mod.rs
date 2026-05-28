@@ -343,6 +343,7 @@ pub trait Camera: Component
 	/// `Some` dispatcher if the camera can provide depth for the given pixel coordinates, `None` otherwise.
 	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>;
 }
+crate::implDynComponent!(Camera);
 
 /// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly.
 pub trait CameraInteractor: Component
@@ -379,6 +380,7 @@ pub trait CameraInteractor: Component
 
 	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
 }
+crate::implDynComponent!(CameraInteractor);
 
 
 //////

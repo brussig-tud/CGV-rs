@@ -311,27 +311,17 @@ pub struct Handle (usize);
 /// whether the component is active (0) or not (1).
 type CompPtr<T> = cgv_util::Tagged<Box<T>, 1>;
 
-/// Defines containers storing a specific kind of [`Component`] as boxed trait objects. Components can be individually
-/// marked as inactive, and independently one of them is selected as the main component of the container's kind.
-/// The meaning of these designations depends on the component.
-/// Implemented as a macro because traits cannot be used as generic parameters.
-macro_rules! Components {( $($Container:ident<$Component:ident>),+ $(,)? ) =>
-{$(
-
-/// Stores multiple [`
-#[doc = stringify!($Component)]
-/// `] trait objects. Each can be either active (tag 0) or not (tag 1); independently, one may be selected as "main".
-pub struct $Container
+/// Defines containers storing a specific kind of [`Component`] as boxed trait objects. Entries can be individually
+/// marked as inactive, and independently one may be selected as "main". The meaning of these designations, if any,
+/// depends on the kind of component.
+pub struct Components<Comp: DynComponent + ?Sized>
 {
-
-	slots: Vec<Option<CompPtr<dyn $Component>>>,
+	slots: Vec<Option<CompPtr<Comp>>>,
 	pub(self) main: usize,
 }
 
-impl $Container
+impl<Comp: DynComponent + ?Sized> Components<Comp>
 {
-	#![allow(unused)]
-
 	const EMPTY: Self = Self{slots: Vec::new(), main: 0};
 
 	const MSG_BAD_HANDLE: &'static str = "Invalid handle: The requested object no longer exists.";
@@ -339,38 +329,36 @@ impl $Container
 		= "Invalid handle: The requested object no longer exists or is already borrowed.";
 	const MSG_WRONG_TYPE: &'static str = "Invalid handle: The requested object is not of the expected type.";
 
-	/// Borrow the [`
-	#[doc = stringify!($Component)]
-	/// `] identified by the given handle and downcast to `T`.
+	/// Borrow the [`Component`] identified by the given handle and downcast to `T`.
 	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get<T: $Component> (&self, handle: Handle) -> &T
+	pub fn get<T: Component> (&self, handle: Handle) -> &T
 	{
 		<dyn Any>::downcast_ref::<T>(
 			self.slots.get(handle.0).expect(Self::MSG_BAD_HANDLE)
 			.as_deref().expect(Self::MSG_MISSING_OBJ)
+			.as_ref()
 		).expect(Self::MSG_WRONG_TYPE)
 	}
 
-	/// Mutably borrow the [`
-	#[doc = stringify!($Component)]
-	/// `] identified by the given handle and downcast to `T`.
+	/// Mutably borrow the [`Component`] identified by the given handle and downcast to `T`.
 	/// Panics if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get_mut<T: $Component> (&mut self, handle: Handle) -> &mut T
+	pub fn get_mut<T: Component> (&mut self, handle: Handle) -> &mut T
 	{
 		<dyn Any>::downcast_mut::<T>(
 			self.slots.get_mut(handle.0).expect(Self::MSG_BAD_HANDLE)
 			.as_deref_mut().expect(Self::MSG_MISSING_OBJ)
+			.as_mut()
 		).expect(Self::MSG_WRONG_TYPE)
 	}
 
 	/// Borrow the current main component if there is one.
-	fn main (&self) -> Option<&dyn $Component>
+	fn main (&self) -> Option<&Comp>
 	{
 		self.slots.get(self.main)?.as_deref()
 	}
 
 	/// Mutably borrow the current main component if there is one.
-	fn main_mut (&mut self) -> Option<&mut dyn $Component>
+	fn main_mut (&mut self) -> Option<&mut Comp>
 	{
 		self.slots.get_mut(self.main)?.as_deref_mut()
 	}
@@ -378,22 +366,18 @@ impl $Container
 	/// If there is a main component, move it out of the container. This allows calling a method of the component with
 	/// a reference to the player, since they no longer alias. Make sure to reinsert the component afterwards using
 	/// [`Self::putMain`].
-	pub(self) fn takeMain (&mut self) -> Option<CompPtr<dyn $Component>>
+	pub(self) fn takeMain (&mut self) -> Option<CompPtr<Comp>>
 	{
 		self.slots.get_mut(self.main)?.take()
 	}
 
 	/// Store the given component in the slot selected as main, dropping any previous value. Should generally be used
 	/// only to undo [`Self::takeMain`]. For seleting a different main component, set [`Self::main`] instead.
-	pub(self) fn putMain (&mut self, new_actor: CompPtr<dyn $Component>)
+	pub(self) fn putMain (&mut self, new_actor: CompPtr<Comp>)
 	{
 		self.slots[self.main] = Some(new_actor);
 	}
 }
-
-)+}} // macro_rules! Components
-
-Components!{Cameras<Camera>, CameraInteractors<CameraInteractor>, Applications<Application>}
 
 
 //////
@@ -408,8 +392,8 @@ Components!{Cameras<Camera>, CameraInteractors<CameraInteractor>, Applications<A
 pub struct Player
 {
 	pub camera: Box<dyn Camera>,
-	pub applications: Applications,
-	pub cameraInteractors: CameraInteractors,
+	pub applications: Components<dyn Application>,
+	pub cameraInteractors: Components<dyn CameraInteractor>,
 	pub state: State,
 }
 
@@ -513,14 +497,14 @@ impl Player
 		// Now construct
 		let mut player = Self {
 			camera,
-			cameraInteractors: CameraInteractors {
+			cameraInteractors: Components {
 				slots: vec![
 					Some(CompPtr::fromSafe(Box::new(view::OrbitInteractor::new()), 1)),
 					Some(CompPtr::fromSafe(Box::new(view::WASDInteractor::new()), 1)),
 				],
 				main: 0,
 			},
-			applications: Applications::EMPTY,
+			applications: Components::EMPTY,
 			state: State {
 				quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
 				egui: cc.egui_ctx.clone(),

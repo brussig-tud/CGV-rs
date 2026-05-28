@@ -249,6 +249,24 @@ impl AsVec4 for cgv::RGBA {
 pub trait Component: Any + Send {}
 impl<T> Component for T where T: Any + Send + ?Sized {}
 
+/// Helper for upcasting trait objects of a [`Component`] subtrait to `dyn Component`.
+pub trait DynComponent: AsRef<dyn Component> + AsMut<dyn Component> {}
+impl<T> DynComponent for T where T: AsRef<dyn Component> + AsMut<dyn Component> + ?Sized {}
+
+/// Implement [`DynComponent`] for `dyn $Component` trait objects. `$Component` must be a subtrait of [`Component`].
+macro_rules! implDynComponent {($Component:ident) =>
+{
+	impl ::std::convert::AsRef<dyn $crate::Component> for dyn $Component
+	{
+		fn as_ref (&self) -> &dyn $crate::Component {self}
+	}
+	impl ::std::convert::AsMut<dyn $crate::Component> for dyn $Component
+	{
+		fn as_mut (&mut self) -> &mut dyn $crate::Component {self}
+	}
+}}
+use implDynComponent;
+
 ////
 // Application
 
@@ -381,6 +399,7 @@ pub trait Application: Component
 	#[expect(unused_variables)]
 	fn freeUi (&mut self, ui: &mut egui::Ui, ps: &mut Player) {}
 }
+implDynComponent!(Application);
 
 
 ////
