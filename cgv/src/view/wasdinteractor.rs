@@ -98,7 +98,7 @@ impl CameraInteractor for WASDInteractor
 		"WASD"
 	}
 
-	fn update (&mut self, player: &mut Player, _: player::Handle)
+	fn update (&mut self, player: &mut Player, _: player::CamIntHandle)
 	{
 		/// Local helper to calculate the actual movement speed
 		#[inline(always)] fn moveFactor (this: &WASDInteractor) -> f32 {
@@ -139,7 +139,7 @@ impl CameraInteractor for WASDInteractor
 		}
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::Handle) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::CamIntHandle) -> EventOutcome
 	{
 		// Helper function for setting the movement key flags
 		fn updateKeyFlag (this: &mut WASDInteractor, directionId: usize, pressed: bool, player: &mut Player) -> bool

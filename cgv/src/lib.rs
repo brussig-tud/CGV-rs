@@ -327,7 +327,7 @@ pub trait Application: Component
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::Handle) -> EventOutcome;
+	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::AppHandle) -> EventOutcome;
 
 	/// Called when the main framebuffer was resized.
 	///
@@ -348,7 +348,7 @@ pub trait Application: Component
 	/// # Returns
 	///
 	/// `true` when the application deems a scene redraw is required, `false` otherwise.
-	fn update (&mut self, player: &mut Player, this: player::Handle) -> bool;
+	fn update (&mut self, player: &mut Player, this: player::AppHandle) -> bool;
 
 	/// Called when the [player](Player) is about to ask the application to render its contribution to the scene within
 	/// a [global render pass](GlobalPassInfo).

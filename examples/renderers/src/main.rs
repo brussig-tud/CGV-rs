@@ -214,7 +214,7 @@ impl cgv::Application for RenderersDemo
 		Ok(())
 	}
 
-	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::Handle) -> cgv::EventOutcome {
+	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::AppHandle) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
@@ -223,7 +223,7 @@ impl cgv::Application for RenderersDemo
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::Handle) -> bool {
+	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::AppHandle) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}

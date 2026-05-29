@@ -307,12 +307,10 @@ impl std::ops::DerefMut for LockGuard
 pub use instance::{lock, LockGuard};
 
 
-/// Identifies a [`Component`] stored by the [`Player`], providing access to that component outside of callbacks.
-///
-/// Handles remain valid for the entire lifetime of the component they refer to.
-#[derive(Clone, Copy)]
-pub struct Handle (usize);
-
+//////
+//
+// Classes
+//
 
 /// Smart pointer with unique ownership used to store [`Component`] trait objects owned by the player.
 ///
@@ -328,7 +326,6 @@ pub struct Components<Comp: DynComponent + ?Sized>
 	slots: Vec<Option<CompPtr<Comp>>>,
 	pub(self) main: usize,
 }
-
 impl<Comp: DynComponent + ?Sized> Components<Comp>
 {
 	const EMPTY: Self = Self{slots: Vec::new(), main: 0};
@@ -341,10 +338,10 @@ impl<Comp: DynComponent + ?Sized> Components<Comp>
 	/// Borrow the [`Component`] identified by the given handle and downcast to `T`.
 	///
 	/// **Panics** if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get<T: Component> (&self, handle: Handle) -> &T
+	pub fn get<T: Component> (&self, handle: Handle<Comp>) -> &T
 	{
 		<dyn Any>::downcast_ref::<T>(
-			self.slots.get(handle.0).expect(Self::MSG_BAD_HANDLE)
+			self.slots.get(handle.index()).expect(Self::MSG_BAD_HANDLE)
 			.as_deref().expect(Self::MSG_MISSING_OBJ)
 			.as_ref()
 		).expect(Self::MSG_WRONG_TYPE)
@@ -353,10 +350,10 @@ impl<Comp: DynComponent + ?Sized> Components<Comp>
 	/// Mutably borrow the [`Component`] identified by the given handle and downcast to `T`.
 	///
 	/// **Panics** if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get_mut<T: Component> (&mut self, handle: Handle) -> &mut T
+	pub fn get_mut<T: Component> (&mut self, handle: Handle<Comp>) -> &mut T
 	{
 		<dyn Any>::downcast_mut::<T>(
-			self.slots.get_mut(handle.0).expect(Self::MSG_BAD_HANDLE)
+			self.slots.get_mut(handle.index()).expect(Self::MSG_BAD_HANDLE)
 			.as_deref_mut().expect(Self::MSG_MISSING_OBJ)
 			.as_mut()
 		).expect(Self::MSG_WRONG_TYPE)
@@ -393,11 +390,29 @@ impl<Comp: DynComponent + ?Sized> Components<Comp>
 	}
 }
 
+/// Identifies a [`Component`] of type `Comp` stored by the [`Player`].
+///
+/// Provides access to that component via [`Components::get`] and [`Components::get_mut`]. Handles remain valid as long
+/// as the player owns the referenced component; in particular, they can be used in asynchronous callbacks.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Handle<Comp: ?Sized>
+{
+	idx: u16,
+	marker: std::marker::PhantomData<fn() -> Comp>,
+}
+impl<Comp: ?Sized> Handle<Comp>
+{
+	fn new (index: usize) -> Self
+	{
+		debug_assert!(index <= u16::MAX as usize);
+		Self{idx: index as u16, marker: std::marker::PhantomData}
+	}
 
-//////
-//
-// Classes
-//
+	pub(crate) fn index(self) -> usize {self.idx as usize}
+}
+pub type AppHandle = Handle<dyn Application>;
+pub type CameraHandle = Handle<dyn Camera>;
+pub type CamIntHandle = Handle<dyn CameraInteractor>;
 
 ////
 // Player
@@ -868,7 +883,7 @@ impl Player
 		// Applications get first dibs
 		// - the main (foreground) application
 		if let Some(mut app) = self.applications.takeMain() {
-			let outcome = app.input(&event, self, Handle(self.applications.main));
+			let outcome = app.input(&event, self, AppHandle::new(self.applications.main));
 			self.applications.putMain(app);
 
 			match outcome {
@@ -887,7 +902,7 @@ impl Player
 		for idx in 0..self.applications.slots.len() {
 			if idx == self.applications.main {continue};
 			let Some(mut app) = self.applications.slots[idx].take_if(|ptr| ptr.tag() == 0) else {continue};
-			let outcome = app.input(&event, self, Handle(idx));
+			let outcome = app.input(&event, self, AppHandle::new(idx));
 			self.applications.slots[idx] = Some(app);
 
 			match outcome {
@@ -904,7 +919,7 @@ impl Player
 
 		// Finally, the main camera interactor
 		if let Some(mut ci) = self.cameraInteractors.takeMain() {
-			let outcome = ci.input(&event, self, Handle(self.cameraInteractors.main));
+			let outcome = ci.input(&event, self, CamIntHandle::new(self.cameraInteractors.main));
 			self.cameraInteractors.putMain(ci);
 
 			match outcome {
@@ -1267,7 +1282,7 @@ impl eframe::App for StaticImpls
 
 			// Update camera interactor
 			if let Some(mut ci) = player.cameraInteractors.takeMain() {
-				ci.update(player, Handle(player.cameraInteractors.main));
+				ci.update(player, CamIntHandle::new(player.cameraInteractors.main));
 				player.cameraInteractors.putMain(ci);
 			}
 			if player.camera.update() {

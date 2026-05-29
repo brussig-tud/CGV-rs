@@ -46,7 +46,7 @@ impl CameraInteractor for OrbitInteractor
 		"Orbit"
 	}
 
-	fn update (&mut self, player: &mut Player, _: player::Handle)
+	fn update (&mut self, player: &mut Player, _: player::CamIntHandle)
 	{
 		if let Some(focusChange) = &mut self.focusChange
 			&& focusChange.update(player.lastFrameTime(), player.camera.parameters_mut())
@@ -56,7 +56,7 @@ impl CameraInteractor for OrbitInteractor
 		}
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::Handle) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::CamIntHandle) -> EventOutcome
 	{
 		// Match on relevant events
 		match event
