@@ -16,6 +16,8 @@ description = "A high performance, web-enabled rapid prototyping framework for c
 license = "MIT"
 license-file = "LICENSE"
 
+[profile.dev]
+opt-level = 1
 [profile.dev.build-override]
 debug = true
 
