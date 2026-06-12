@@ -1,3 +1,9 @@
 # Make sure the getrandom WASM backend is available
 [target.wasm32-unknown-unknown]
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
+
+[build]
+rustflags = ["-Ctarget-cpu=native"]
+
+[profile.dev]
+opt-level = 1
