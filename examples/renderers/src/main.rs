@@ -67,7 +67,7 @@ pub struct DataPoint
 /// [`cgv::ApplicationFactory`] trait. If more flexibility is required to control how exactly your app is created, you
 /// can also write a factory class, i.e. a custom struct that implements `cgv::ApplicationFactory`.
 fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, environment: cgv::run::Environment)
-	-> cgv::Result<Box<dyn cgv::Application>>
+	-> cgv::Result<RenderersDemo>
 {
 	// Tracing
 	tracing::info!("Creating \"Renderers\" example application");
@@ -108,7 +108,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(RenderersDemo { testData, renderData, sphereRenderer, guiState }))
+	Ok(RenderersDemo { testData, renderData, sphereRenderer, guiState })
 }
 
 /// Test data holder. We make this its own struct so it can be used even before the `RenderersDemo` is fully
@@ -184,25 +184,25 @@ impl RenderersDemo
 		self.reassignData(player);
 	}
 }
-impl cgv::Application for RenderersDemo
+impl cgv::Application<RenderersDemo> for cgv::AppObject<RenderersDemo>
 {
-	fn title (&self) -> &str {
+	fn title (self: &Self) -> &str {
 		"Renderers Demo"
 	}
 
-	fn preInit (&mut self, _: &mut cgv::Player) -> cgv::Result<()> {
+	fn preInit (self: &mut Self, _: &mut cgv::Player) -> cgv::Result<()> {
 		// We don't need to perform any pre-initialization
 		Ok(())
 	}
 
 	fn recreatePipelines (
-		&mut self, context: &cgv::Context, _: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
+		self: &mut Self, context: &cgv::Context, _: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
 	){
 		// Let our renderers know of the new render states
 		self.sphereRenderer.rebuildForGlobalPasses(context, *globalPasses);
 	}
 
-	fn postInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>
+	fn postInit (self: &mut Self, player: &mut cgv::Player) -> cgv::Result<()>
 	{
 		// Tracing
 		tracing::info!("Positioning initial camera");
@@ -214,28 +214,28 @@ impl cgv::Application for RenderersDemo
 		Ok(())
 	}
 
-	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::AppHandle) -> cgv::EventOutcome {
+	fn input (self: &mut Self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::AppHandle) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2) {
+	fn resize (self: &mut Self, _: &cgv::Context, _: glm::UVec2) {
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::AppHandle) -> bool {
+	fn update (self: &mut Self, _: &mut cgv::Player, _: cgv::player::AppHandle) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
+	fn prepareFrame (self: &mut Self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
 	}
 
 	fn render (
-		&mut self, context: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		self: &mut Self, context: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
 		globalPass: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
@@ -244,7 +244,7 @@ impl cgv::Application for RenderersDemo
 		None // <- we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
+	fn ui (self: &mut Self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Test data configuration
 		egui::CollapsingHeader::new("Data").default_open(true).show(ui, |ui|
@@ -273,8 +273,8 @@ impl cgv::Application for RenderersDemo
 						ui.label(" color ");
 						ui.color_edit_button_srgba(&mut self.guiState.defaultColor).changed()
 					}){
-						self.sphereRenderer.setStyleUniforms(&player.context, |u|
-							u.defaultColor = self.guiState.defaultColor.into()
+						self.user.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.defaultColor = self.user.guiState.defaultColor.into()
 						);
 						player.requireSceneRedraw();
 					};
@@ -286,8 +286,8 @@ impl cgv::Application for RenderersDemo
 								.logarithmic(true).max_decimals(3),
 						).changed()
 					}){
-						self.sphereRenderer.setStyleUniforms(&player.context, |u|
-							u.defaultRadius = self.guiState.defaultRadius
+						self.user.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.defaultRadius = self.user.guiState.defaultRadius
 						);
 						player.requireSceneRedraw();
 					}
@@ -307,8 +307,8 @@ impl cgv::Application for RenderersDemo
 							egui::Slider::new(&mut self.guiState.radiusScale, 0.0625f32..=8.).logarithmic(true),
 						).changed()
 					){
-						self.sphereRenderer.setStyleUniforms(&player.context, |u|
-							u.radiusScale = self.guiState.radiusScale
+						self.user.sphereRenderer.setStyleUniforms(&player.context, |u|
+							u.radiusScale = self.user.guiState.radiusScale
 						);
 						player.requireSceneRedraw();
 					}

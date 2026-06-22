@@ -92,7 +92,7 @@ impl WASDInteractor
 	}
 }
 
-impl CameraInteractor for WASDInteractor
+impl CameraInteractor<WASDInteractor> for CamIntObject<WASDInteractor>
 {
 	fn title (&self) -> &str {
 		"WASD"
@@ -100,6 +100,8 @@ impl CameraInteractor for WASDInteractor
 
 	fn update (&mut self, player: &mut Player, _: player::CamIntHandle)
 	{
+		type This = WASDInteractor;
+
 		/// Local helper to calculate the actual movement speed
 		#[inline(always)] fn moveFactor (this: &WASDInteractor) -> f32 {
 			if this.slow { this.slowFactor * this.movementSpeedFactor } else { this.movementSpeedFactor }
@@ -110,24 +112,24 @@ impl CameraInteractor for WASDInteractor
 		if self.anyMovementKeyPressed() {
 			let params = player.camera.parameters_mut();
 			let moveDist = player.state.lastFrameTime()*moveFactor(self)*params.intrinsics.f;
-			if self.moving[Self::FORE] {
+			if self.moving[This::FORE] {
 				params.extrinsics.eye += params.extrinsics.dir * moveDist;
 			}
-			if self.moving[Self::LEFT] {
+			if self.moving[This::LEFT] {
 				let right = params.extrinsics.dir.cross(&params.extrinsics.up);
 				params.extrinsics.eye -= right * moveDist;
 			}
-			if self.moving[Self::BACK] {
+			if self.moving[This::BACK] {
 				params.extrinsics.eye -= params.extrinsics.dir * moveDist;
 			}
-			if self.moving[Self::RIGHT] {
+			if self.moving[This::RIGHT] {
 				let right = params.extrinsics.dir.cross(&params.extrinsics.up);
 				params.extrinsics.eye += right * moveDist;
 			}
-			if self.moving[Self::DOWN] {
+			if self.moving[This::DOWN] {
 				params.extrinsics.eye -= params.extrinsics.up * moveDist;
 			}
-			if self.moving[Self::UP] {
+			if self.moving[This::UP] {
 				params.extrinsics.eye += params.extrinsics.up * moveDist;
 			}
 		}
@@ -141,6 +143,8 @@ impl CameraInteractor for WASDInteractor
 
 	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::CamIntHandle) -> EventOutcome
 	{
+		type This = WASDInteractor;
+
 		// Helper function for setting the movement key flags
 		fn updateKeyFlag (this: &mut WASDInteractor, directionId: usize, pressed: bool, player: &mut Player) -> bool
 		{
@@ -179,22 +183,22 @@ impl CameraInteractor for WASDInteractor
 				if !info.repeat { match info.key
 				{
 					egui::Key::W
-					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::FORE, info.pressed, player)),
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, This::FORE, info.pressed, player)),
 
 					egui::Key::A
-					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::LEFT, info.pressed, player)),
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, This::LEFT, info.pressed, player)),
 
 					egui::Key::S
-					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::BACK, info.pressed, player)),
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, This::BACK, info.pressed, player)),
 
 					egui::Key::D
-					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::RIGHT, info.pressed, player)),
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, This::RIGHT, info.pressed, player)),
 
 					egui::Key::Q
-					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::DOWN, info.pressed, player)),
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, This::DOWN, info.pressed, player)),
 
 					egui::Key::E
-					=> EventOutcome::HandledExclusively(updateKeyFlag(self, Self::UP, info.pressed, player)),
+					=> EventOutcome::HandledExclusively(updateKeyFlag(self, This::UP, info.pressed, player)),
 
 					_ => noMoveOutcome
 				}}

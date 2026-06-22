@@ -48,7 +48,7 @@ use cgv::{self, util, shader::compile::prelude::*};
 
 /// Factory function.
 fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
-	-> cgv::Result<Box<dyn cgv::Application>>
+	-> cgv::Result<OnlineShadersDemo>
 {
 	// Tracing
 	tracing::info!("Creating \"Shaders\" example application");
@@ -132,10 +132,10 @@ fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment:
 	// Done!
 
 	// Construct the instance and put it in a box
-	Ok(Box::new(OnlineShadersDemo {
+	Ok(OnlineShadersDemo {
 		statusText: "<STATUS UNKNOWN>".into(), mainModule, slangCtx, userShaderCode, pipelines: Vec::new(),
 		shader: cgv::util::LaterInit::uninit(), highlighterSettings, syntaxCompleter, guiState: Default::default()
-	}))
+	})
 }
 
 #[derive(Default)]
@@ -238,19 +238,19 @@ impl OnlineShadersDemo
 		Ok("Code OK.")
 	}
 }
-impl cgv::Application for OnlineShadersDemo
+impl cgv::Application<OnlineShadersDemo> for cgv::AppObject<OnlineShadersDemo>
 {
-	fn title (&self) -> &str {
+	fn title (self: &Self) -> &str {
 		"Online Shader Compilation"
 	}
 
-	fn preInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()> {
+	fn preInit (self: &mut Self, player: &mut cgv::Player) -> cgv::Result<()> {
 		self.statusText = self.rebuildShader(&player.context).map_err(|err| cgv::Error::from(err))?.into();
 		Ok(())
 	}
 
 	fn recreatePipelines (
-		&mut self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
+		self: &mut Self, context: &cgv::Context, renderSetup: &cgv::RenderSetup, globalPasses: &cgv::GlobalPasses,
 	){
 		// Make space
 		self.pipelines.clear();
@@ -258,13 +258,12 @@ impl cgv::Application for OnlineShadersDemo
 
 		// Recreate pipelines
 		for pass in globalPasses.info {
-			self.pipelines.push(self.createPipeline(
-				context, &globalPasses.renderStates[pass.index as usize], renderSetup
-			));
+			let pl = self.createPipeline(context, &globalPasses.renderStates[pass.index as usize], renderSetup);
+			self.pipelines.push(pl);
 		}
 	}
 
-	fn postInit (&mut self, player: &mut cgv::Player) -> cgv::Result<()>
+	fn postInit (self: &mut Self, player: &mut cgv::Player) -> cgv::Result<()>
 	{
 		// Tracing
 		tracing::info!("Positioning initial camera");
@@ -276,28 +275,28 @@ impl cgv::Application for OnlineShadersDemo
 		Ok(())
 	}
 
-	fn input (&mut self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::AppHandle) -> cgv::EventOutcome {
+	fn input (self: &mut Self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::AppHandle) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
 
-	fn resize (&mut self, _: &cgv::Context, _: glm::UVec2) {
+	fn resize (self: &mut Self, _: &cgv::Context, _: glm::UVec2) {
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (&mut self, _: &mut cgv::Player, _: cgv::player::AppHandle) -> bool {
+	fn update (self: &mut Self, _: &mut cgv::Player, _: cgv::player::AppHandle) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}
 
-	fn prepareFrame (&mut self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
+	fn prepareFrame (self: &mut Self, _: &cgv::Context, _: &cgv::RenderState, _: &cgv::GlobalPassInfo)
 	-> Option<Vec<wgpu::CommandBuffer>> {
 		// We don't need any additional preparation.
 		None
 	}
 
 	fn render (
-		&mut self, _: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
+		self: &mut Self, _: &cgv::Context, renderState: &cgv::RenderState, renderPass: &mut wgpu::RenderPass,
 		_: &cgv::GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>
 	{
@@ -307,7 +306,7 @@ impl cgv::Application for OnlineShadersDemo
 		None // we don't need the Player to submit any custom command buffers for us
 	}
 
-	fn ui (&mut self, ui: &mut egui::Ui, _: &mut cgv::Player)
+	fn ui (self: &mut Self, ui: &mut egui::Ui, _: &mut cgv::Player)
 	{
 		// Editor toggle
 		ui.toggle_value(&mut self.guiState.showEditor, "Show Editor");
@@ -332,7 +331,7 @@ impl cgv::Application for OnlineShadersDemo
 		);
 	}
 
-	fn freeUi (&mut self, ui: &mut egui::Ui, player: &mut cgv::Player)
+	fn freeUi (self: &mut Self, ui: &mut egui::Ui, player: &mut cgv::Player)
 	{
 		// Code editor
 		let mut showEditor = self.guiState.showEditor;
@@ -383,7 +382,7 @@ impl cgv::Application for OnlineShadersDemo
 								let mut layoutJob = egui_extras::syntax_highlighting::highlight_with(
 									ui.ctx(), ui.style(), &theme, text.as_str(),
 									"hlsl", // <- wait until there is a sublime-text theme for Slang
-									&self.highlighterSettings
+									&self.user.highlighterSettings
 								);
 								layoutJob.wrap.max_width = wrapWidth;
 								ui.fonts_mut(|f| f.layout_job(layoutJob))
@@ -391,9 +390,9 @@ impl cgv::Application for OnlineShadersDemo
 
 							// Add editor pane
 							// - completer gets first dips on input
-							self.syntaxCompleter.handle_input(ui.ctx());
+							self.user.syntaxCompleter.handle_input(ui.ctx());
 							// - define editor
-							let mut editorOutput = egui::TextEdit::multiline(&mut self.userShaderCode)
+							let mut editorOutput = egui::TextEdit::multiline(&mut self.user.userShaderCode)
 								.code_editor().desired_rows(CODE_EDITOR_LINES).lock_focus(true)
 								.desired_width(f32::INFINITY).frame(egui::Frame::new()).layouter(&mut layouter)
 								.show(ui);

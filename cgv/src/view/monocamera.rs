@@ -72,7 +72,7 @@ impl MonoCamera
 	}
 }
 
-impl Camera for MonoCamera
+impl Camera<MonoCamera> for CameraObject<MonoCamera>
 {
 	fn projection (&self, _: &GlobalPass) -> &glm::Mat4 {
 		&self.renderState.viewingUniforms.borrowData().projection
@@ -100,7 +100,7 @@ impl Camera for MonoCamera
 	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup)
 	{
 		self.globalPasses[0].clearColor = *renderSetup.defaultClearColor();
-		self.globalPasses = Self::declareRenderPasses(renderSetup);
+		self.globalPasses = MonoCamera::declareRenderPasses(renderSetup);
 	}
 
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
@@ -128,30 +128,31 @@ impl Camera for MonoCamera
 
 	fn update (&mut self) -> bool
 	{
-		if self.dirty
+		let this = &mut self.user;
+		if this.dirty
 		{
-			let mats = self.renderState.viewingUniforms.borrowData_mut();
-			mats.projection = match self.parameters.intrinsics.fovY
+			let mats = this.renderState.viewingUniforms.borrowData_mut();
+			mats.projection = match this.parameters.intrinsics.fovY
 			{
 				FoV::Perspective(fovY) => transformClipspaceOGL2WGPU(&glm::perspective(
-					self.parameters.intrinsics.aspect, fovY, self.parameters.intrinsics.zNear,
-					self.parameters.intrinsics.zFar
+					this.parameters.intrinsics.aspect, fovY, this.parameters.intrinsics.zNear,
+					this.parameters.intrinsics.zFar
 				)),
 
 				FoV::Orthographic(height)
 				=> {
 					let halfHeight = height * 0.5;
-					let halfWidth = halfHeight * self.parameters.intrinsics.aspect;
+					let halfWidth = halfHeight * this.parameters.intrinsics.aspect;
 					transformClipspaceOGL2WGPU(&glm::ortho(
-						-halfWidth, halfWidth, -halfHeight, halfHeight, self.parameters.intrinsics.zNear,
-						self.parameters.intrinsics.zFar
+						-halfWidth, halfWidth, -halfHeight, halfHeight, this.parameters.intrinsics.zNear,
+						this.parameters.intrinsics.zFar
 					))
 				}
 			};
 			mats.view = glm::look_at(
-				&self.parameters.extrinsics.eye,
-				&(self.parameters.extrinsics.eye + self.parameters.extrinsics.dir*self.parameters.intrinsics.f),
-				&self.parameters.extrinsics.up
+				&this.parameters.extrinsics.eye,
+				&(this.parameters.extrinsics.eye + this.parameters.extrinsics.dir*this.parameters.intrinsics.f),
+				&this.parameters.extrinsics.up
 			);
 
 			// TODO: all this matrix juggling to fill the viewing uniforms struct should really happen completely
@@ -165,7 +166,7 @@ impl Camera for MonoCamera
 				let normal3x3 = glm::mat4_to_mat3(&mats.view).transpose();
 				(glm::mat3_to_mat4(&normal3x3), glm::mat3_to_mat4(&normal3x3.try_inverse().unwrap()))
 			};
-			self.dirty = false;
+			this.dirty = false;
 			true
 		}
 		else {

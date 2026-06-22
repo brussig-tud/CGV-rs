@@ -242,43 +242,200 @@ impl AsVec4 for cgv::RGBA {
 	}
 }
 
-/// Base trait for different kinds of objects stored in the [`Player`], such as [applications](Application) and
-/// [camera interactors](view::CameraInteractor). To allow runtime downcasts, implementors must be `'static`, i.e. not
-/// have any lifetime parameters. Additionally, all component types must have an alignment of at least two bytes.
-/// This requirement cannot be reliably enforced at compile time, but is checked when adding a component to the player.
-pub trait Component: Any + Send {}
-impl<T> Component for T where T: Any + Send + ?Sized {}
+
+/// Traits that cannot be used or implemented outside this crate ([sealed trait idiom](https://rust-lang.github.io/api-guidelines/future-proofing.html#sealed-traits-protect-against-downstream-implementations-c-sealed)).
+mod private
+{
+	/// Restricts implementation of [`Component`](crate::Component) to this crate.
+	pub trait ComponentSeal {}
+}
+
+/// Base trait for different kinds of objects owned by the [`Player`].
+///
+/// Implemented only for instantiations of [`ComponentObject`] to emulate field inheritance like in C++, with the
+/// inherited fields defined by [`ComponentBase`]. The private supertrait ensures that other crates cannot add further
+/// implementations.
+pub trait Component: std::any::Any + Send + private::ComponentSeal {}
+impl dyn Component
+{
+	/// Access the base class subobject present in every implementor.
+	#[inline]
+	pub fn base (&self) -> &crate::ComponentBase
+	{
+		// SAFETY: Component can only be implemented in this crate and is only implemented for ComponentObject, which is
+		// layed out such that all instantiations are pointer-convertible to ComponentBase.
+		unsafe{&*(self as *const Self).cast()}
+	}
+	/// Mutably access the base class subobject present in every implementor.
+	#[inline]
+	pub fn base_mut (&mut self) -> &crate::ComponentBase
+	{
+		// SAFETY: See above.
+		unsafe{&mut *(self as *mut Self).cast()}
+	}
+}
 
 /// Helper for upcasting trait objects of a [`Component`] subtrait to `dyn Component`.
 pub trait DynComponent: AsRef<dyn Component> + AsMut<dyn Component> {}
-impl<T> DynComponent for T where T: AsRef<dyn Component> + AsMut<dyn Component> + ?Sized {}
 
-/// Implement [`DynComponent`] for `dyn $Component` trait objects. `$Component` must be a subtrait of [`Component`].
-macro_rules! implDynComponent {($Component:ident) =>
+/// Prefix of every type that implements [`Component`], like a base class subobject.
+#[derive(Default)]
+pub struct ComponentBase {}
+
+
+/// Common layout for all [`Component`] types.
+///
+/// Emulates field inheritance like in C++ through "base class subobjects" in form of the fields `component` and `base`.
+#[repr(C, align(2))]
+pub struct ComponentObject<Base, User>
 {
+	/// "Base class subobject" for [`Component`].
+	pub component: ComponentBase,
+	/// "Base class subobject" for a given kind of component.
+	///
+	/// Every component trait has a corresponding `Base` type, e.g. [`ApplicationBase`] for [`Application`].
+	pub base: Base,
+	/// Data specific to each type that implements a component trait.
+	pub user: User,
+}
+impl<Base, User> private::ComponentSeal for ComponentObject<Base, User> {}
+/// [`Component`] marks all instantiations of this type.
+impl<Base, User> Component for ComponentObject<Base, User>
+	where Self: ::std::any::Any + ::std::marker::Send
+{}
+impl<Base, User> From<User> for ComponentObject<Base, User> where Base: Default
+{
+	/// Create a component object with defaulted base fields.
+	fn from (user: User) -> Self
+	{
+		Self{component: Default::default(), base: Default::default(), user}
+	}
+}
+/// Provide convenient access to the user data. In some situations, however, `Self::user` must be written explicitely to
+/// appease the borrow checker.
+impl<Base, User> std::ops::Deref for ComponentObject<Base, User>
+{
+	type Target = User;
+	fn deref (&self) -> &User {&self.user}
+}
+impl<Base, User> std::ops::DerefMut for ComponentObject<Base, User>
+{
+	fn deref_mut (&mut self) -> &mut User {&mut self.user}
+}
+
+/// Expands to `$then` when `$if` is non-empty and `$else` otherwise.
+macro_rules! ifElse {
+	( ($($if:tt)+) { $($then:tt)* } $({ $($else:tt)* })? ) => { $($then)* };
+	( (          ) { $($then:tt)* } $({ $($else:tt)* })? ) => { $($($else)*)? };
+}
+use ifElse;
+
+/// Defines the trait for a specific kind of [`Component`].
+macro_rules! componentKind {(
+	$(#[$attr:meta])*
+	$vis:vis trait $Component:ident
+	{
+		/// Type of the "base class subobject" for this component kind.
+		base: $Base:ty;
+		/// The interface for this component kind. Must be dyn compatible.
+		$(
+		$(#[$fnAttr:meta])*
+		fn $fn:ident ( $($arg:ident: $argT:ty),* ) $(-> $returnT:ty)? $($body:block)? $(;)?
+		)+
+	}
+) =>
+{
+	$(#[$attr])*
+	///
+	/// The sealed [`Component`] supertrait ensures that this trait can only be implemented for instantiations of
+	/// [`ComponentObject`], although it does not enforce use of the correct base type. The generic parameter exists
+	/// only so other crates can implement this trait with their own `User` types and is abstracted over by its default.
+	$vis trait $Component<User = ()>: $crate::Component
+	{
+		$($crate::ifElse!{($($body)?)
+			{$(#[$fnAttr])* fn $fn ( $($arg: $argT),* ) $(-> $returnT)? $($body)?}
+			{$(#[$fnAttr])* fn $fn ( $($arg: $argT),* ) $(-> $returnT)?;}
+		})+
+	}
+	/// Abstract over the trait's generic parameter by implementing the default instantiation as a forward to any
+	/// concrete implementation. Note that, while the trait can be implemented for any [`ComponentObject`], this
+	/// abstraction is only provided for instantiations with the correct base type.
+	impl<User> $Component for ComponentObject<$Base, User> where Self: $Component<User>
+	{
+		$(
+		#[inline(always)]
+		fn $fn ( $($arg: $argT),* ) $(-> $returnT)?
+		{
+			$Component::<User>::$fn( $($arg),* )
+		}
+		)+
+	}
+	/// Implementing both the concrete and default instantiation of the trait makes it ambiguous to use, even though
+	/// both implementations are identical. To avoid the need for verbose disambiguation, all trait methods are also
+	/// aliased as associated methods, which take precedence.
+	impl<User> ComponentObject<$Base, User> where Self: $Component<User>
+	{
+		$(
+		#[inline(always)]
+		pub fn $fn ( $($arg: $argT),* ) $(-> $returnT)?
+		{
+			$Component::<User>::$fn( $($arg),* )
+		}
+		)+
+	}
+
+	/// Upcast trait objects.
 	impl ::std::convert::AsRef<dyn $crate::Component> for dyn $Component
 	{
+		#[inline(always)]
 		fn as_ref (&self) -> &dyn $crate::Component {self}
 	}
 	impl ::std::convert::AsMut<dyn $crate::Component> for dyn $Component
 	{
+		#[inline(always)]
 		fn as_mut (&mut self) -> &mut dyn $crate::Component {self}
 	}
+	impl $crate::DynComponent for dyn $Component {}
+
+	impl dyn $Component
+	{
+		/// Access the base class subobject for this component kind.
+		#[inline]
+		pub fn base (&self) -> &$Base
+		{
+			// SAFETY: While the generic $Component<T> can be implemented for any ComponentObject, the default signature
+			// is only implemented for ComponentObjects with the correct Base. All such instantiations have the base
+			// class subobjects as a prefix.
+			unsafe{&(*(self as *const Self).cast::<ComponentObject<$Base, ()>>()).base}
+		}
+
+		/// Mutably access the base class subobject for this component kind.
+		#[inline]
+		pub fn base_mut (&mut self) -> &mut $Base
+		{
+			// SAFETY: See above.
+			unsafe{&mut (*(self as *mut Self).cast::<ComponentObject<$Base, ()>>()).base}
+		}
+	}
 }}
-use implDynComponent;
+use componentKind;
+
 
 ////
 // Application
 
+componentKind!{
 /// An application that can be [run](Player::run) by a [`Player`].
-pub trait Application: Component
+pub trait Application
 {
+	base: ApplicationBase;
+
 	/// Report a short title for the application that can be displayed in the application tab bar of the [`Player`].
 	///
 	/// # Returns
 	///
 	/// A string slice containing a short descriptive title for the application.
-	fn title (&self) -> &str;
+	fn title (self: &Self) -> &str;
 
 	/// Called once on creation of the application, before it's asked to create its pipelines.
 	///
@@ -289,7 +446,7 @@ pub trait Application: Component
 	/// # Returns
 	///
 	/// `Ok` if successful, or some descriptive error detailing the failure if not.
-	fn preInit (&mut self, player: &mut Player) -> Result<()>;
+	fn preInit (self: &mut Self, player: &mut Player) -> Result<()>;
 
 	/// Called when the [`Player`] changed global render state, e.g. because a new [`view::Camera`] became active. Since
 	/// this could mean framebuffers with a different format and depth testing strategy, applications should (re-)create
@@ -303,7 +460,7 @@ pub trait Application: Component
 	/// * `context` – The graphics context.
 	/// * `renderSetup` – The global render setup of the *CGV-rs* [`Player`].
 	/// * `globalPasses` – The list of global passes the application will need to render to.
-	fn recreatePipelines (&mut self, context: &Context, renderSetup: &RenderSetup, globalPasses: &GlobalPasses);
+	fn recreatePipelines (self: &mut Self, context: &Context, renderSetup: &RenderSetup, globalPasses: &GlobalPasses);
 
 	/// Called once on creation of the application, after it was asked to create its pipelines.
 	///
@@ -314,7 +471,7 @@ pub trait Application: Component
 	/// # Returns
 	///
 	/// `Ok` if successful, or some descriptive error detailing the failure if not.
-	fn postInit (&mut self, player: &mut Player) -> Result<()>;
+	fn postInit (self: &mut Self, player: &mut Player) -> Result<()>;
 
 	/// Called when there is user input that can be processed.
 	///
@@ -327,7 +484,7 @@ pub trait Application: Component
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::AppHandle) -> EventOutcome;
+	fn input (self: &mut Self, event: &InputEvent, player: &mut Player, this: player::AppHandle) -> EventOutcome;
 
 	/// Called when the main framebuffer was resized.
 	///
@@ -335,7 +492,7 @@ pub trait Application: Component
 	///
 	/// * `context` – The graphics context, useful e.g. to re-create resources when they're affected by the resize.
 	/// * `newSize` – The new main framebuffer size, in pixels.
-	fn resize (&mut self, context: &Context, newSize: glm::UVec2);
+	fn resize (self: &mut Self, context: &Context, newSize: glm::UVec2);
 
 	/// Called when the [player](Player) wants to prepare a new frame for rendering.
 	///
@@ -348,7 +505,7 @@ pub trait Application: Component
 	/// # Returns
 	///
 	/// `true` when the application deems a scene redraw is required, `false` otherwise.
-	fn update (&mut self, player: &mut Player, this: player::AppHandle) -> bool;
+	fn update (self: &mut Self, player: &mut Player, this: player::AppHandle) -> bool;
 
 	/// Called when the [player](Player) is about to ask the application to render its contribution to the scene within
 	/// a [global render pass](GlobalPassInfo).
@@ -363,7 +520,7 @@ pub trait Application: Component
 	///
 	/// `Some` array of command buffers containing any commands the application might need to perform before being able
 	/// to render, or `None` if no preparation is required.
-	fn prepareFrame (&mut self, context: &Context, renderState: &RenderState, globalPass: &GlobalPassInfo)
+	fn prepareFrame (self: &mut Self, context: &Context, renderState: &RenderState, globalPass: &GlobalPassInfo)
 		-> Option<Vec<wgpu::CommandBuffer>>;
 
 	/// Called when the [player](Player) needs the application to render its contents.
@@ -376,7 +533,7 @@ pub trait Application: Component
 	///                  draw calls to.
 	/// * `globalPass` – Identifies the global pass over the scene that the render pass is for.
 	fn render (
-		&mut self, context: &Context, renderState: &RenderState, managedRenderPass: &mut wgpu::RenderPass,
+		self: &mut Self, context: &Context, renderState: &RenderState, managedRenderPass: &mut wgpu::RenderPass,
 		globalPass: &GlobalPassInfo
 	) -> Option<Vec<wgpu::CommandBuffer>>;
 
@@ -387,7 +544,7 @@ pub trait Application: Component
 	///
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
 	/// * `player` – The global *CGV-rs* [`Player`] instance.
-	fn ui (&mut self, ui: &mut egui::Ui, ps: &mut Player);
+	fn ui (self: &mut Self, ui: &mut egui::Ui, ps: &mut Player);
 
 	/// Called when the [player](Player) asks the application to define its free/independent UI (e.g. floating windows
 	/// that should stay open even if the app loses player focus). Can be left unimplemented when not needed.
@@ -397,9 +554,15 @@ pub trait Application: Component
 	/// * `ui` – The *egui* UI object on which to define the application graphical UI.
 	/// * `player` – The global *CGV-rs* [`Player`] instance.
 	#[expect(unused_variables)]
-	fn freeUi (&mut self, ui: &mut egui::Ui, ps: &mut Player) {}
-}
-implDynComponent!(Application);
+	fn freeUi (self: &mut Self, ui: &mut egui::Ui, ps: &mut Player) {}
+}}
+
+/// Fields present in every [`Application`].
+#[derive(Default)]
+pub struct ApplicationBase {}
+
+pub type AppObject<User> = ComponentObject<ApplicationBase, User>;
+
 
 
 ////
@@ -424,13 +587,14 @@ pub trait ApplicationFactory
 		&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment
 	) -> Result<Box<dyn Application>>;
 }
-impl<F> ApplicationFactory for F
+impl<F, User> ApplicationFactory for F
 where
-	F: for<'a, 'b> Fn(&'a Context, &'b RenderSetup, run::Environment)->Result<Box<dyn Application>>
+	F: for<'a, 'b> Fn(&'a Context, &'b RenderSetup, run::Environment)->Result<User>,
+	AppObject<User>: Application
 {
 	fn create (&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment)
 	-> Result<Box<dyn Application>> {
-		self(context, renderSetup, environment)
+		Ok(Box::new(AppObject::from(self(context, renderSetup, environment)?)))
 	}
 }
 

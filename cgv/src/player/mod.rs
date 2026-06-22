@@ -517,10 +517,10 @@ impl Player
 		let defaultClearColor = defaultClearColor.into();
 
 		// Create stateful rendering components
-		let camera = Box::new(view::MonoCamera::new(
+		let camera = Box::new(view::CameraObject::from(view::MonoCamera::new(
 			&context, &renderSetup, glm::vec2(2, 2), renderSetup.defaultColorFormat(),
 			renderSetup.defaultDepthStencilFormat().into(), Some("MonoCamera0")
-		));
+		)));
 		let viewportCompositor = ViewportCompositor::new(
 			&context, &renderSetup, camera.framebuffer().color0(), Some("CGV__MainViewportCompositor")
 		)?;
@@ -530,8 +530,8 @@ impl Player
 			camera,
 			cameraInteractors: Components {
 				slots: vec![
-					Some(CompPtr::fromSafe(Box::new(view::OrbitInteractor::new()), 1)),
-					Some(CompPtr::fromSafe(Box::new(view::WASDInteractor::new()), 1)),
+					Some(CompPtr::fromSafe(Box::new(view::CamIntObject::from(view::OrbitInteractor::new())), 1)),
+					Some(CompPtr::fromSafe(Box::new(view::CamIntObject::from(view::WASDInteractor::new())), 1)),
 				],
 				main: 0,
 			},

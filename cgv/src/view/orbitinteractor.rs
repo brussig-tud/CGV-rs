@@ -40,7 +40,7 @@ impl OrbitInteractor {
 	}}
 }
 
-impl CameraInteractor for OrbitInteractor
+impl CameraInteractor<OrbitInteractor> for CamIntObject<OrbitInteractor>
 {
 	fn title (&self) -> &str {
 		"Orbit"

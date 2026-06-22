@@ -243,19 +243,22 @@ impl<'a> DepthReadbackDispatcher<'a>
 // Traits
 //
 
+componentKind!{
 /// A camera that can produce images of the scene.
-pub trait Camera: Component
+pub trait Camera
 {
+	base: CameraBase;
+
 	/// Borrow the projection matrix for the given global pass.
 	///
 	/// # Arguments
 	///
 	/// * `pass` – The global pass the [`Player`] requires the projection matrix for. The player will only ever query
 	///            matrices for passes the camera [declared itself](Self::globalPasses).
-	fn projection (&self, pass: &GlobalPass) -> &glm::Mat4;
+	fn projection (self: &Self, pass: &GlobalPass) -> &glm::Mat4;
 
 	/// Get the projection matrix that is effective at the given pixel coordinates.
-	fn projectionAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
+	fn projectionAt (self: &Self, pixelCoords: glm::UVec2) -> &glm::Mat4;
 
 	/// Borrow the view matrix for the given global pass.
 	///
@@ -263,21 +266,21 @@ pub trait Camera: Component
 	///
 	/// * `pass` – The global pass the [`Player`] requires the view matrix for. The player will only ever query matrices
 	///            for passes the camera [declared itself](Self::globalPasses).
-	fn view (&self, pass: &GlobalPass) -> &glm::Mat4;
+	fn view (self: &Self, pass: &GlobalPass) -> &glm::Mat4;
 
 	/// Get the view matrix that is effective at the given pixel coordinates.
-	fn viewAt (&self, pixelCoords: glm::UVec2) -> &glm::Mat4;
+	fn viewAt (self: &Self, pixelCoords: glm::UVec2) -> &glm::Mat4;
 
 	/// Borrow the current camera parameters.
-	fn parameters (&self) -> &CameraParameters;
+	fn parameters (self: &Self) -> &CameraParameters;
 
 	/// Mutably borrow the current camera parameters. Implementations should assume that their camera parameters will
 	/// have changed when the borrow expires and take appropriate measures to mark their internal state as dirty.
-	fn parameters_mut (&mut self) -> &mut CameraParameters;
+	fn parameters_mut (self: &mut Self) -> &mut CameraParameters;
 
 	/// Notify the camera that the render setup has changed (e.g. because the user changed a default value in the player
 	/// settings).
-	fn onRenderSetupChange (&mut self, renderSetup: &RenderSetup);
+	fn onRenderSetupChange (self: &mut Self, renderSetup: &RenderSetup);
 
 	/// Report a viewport change to the camera. The framework guarantees that any *active* camera will have this method
 	/// called at least once before it gets asked to declare any render passes for the first time. For manually managed
@@ -288,7 +291,7 @@ pub trait Camera: Component
 	///
 	/// * `context` – The graphics context.
 	/// * `viewportDims` – The dimensions of the viewport the camera should produce images for.
-	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2);
+	fn resize (self: &mut Self, context: &Context, viewportDims: glm::UVec2);
 
 	/// Indicate that the camera should use a specific clear color overriding the current
 	/// [render setup](Self::onRenderSetupChange) until further notice.
@@ -305,27 +308,27 @@ pub trait Camera: Component
 	/// # Panics
 	///
 	/// Implementations may panic if `passes` references a pass the camera does not know about.
-	fn overrideClearColor (&mut self, passes: Option<&[&GlobalPassInfo]>, clearColor: Option<wgpu::Color>);
+	fn overrideClearColor (self: &mut Self, passes: Option<&[&GlobalPassInfo]>, clearColor: Option<wgpu::Color>);
 
 	/// Indicates that the camera should perform any calculations needed to synchronize its internal state, e.g. update
 	/// transformation matrices or anything else it might need to provide [render state](RenderState) to the
 	/// [global passes over the scene](Camera::globalPasses) it declared. The framework guarantees that the
 	/// *active* camera will get this method called at least once before any rendering. For manually managed cameras
 	/// which are *inactive* as far as the [`Player`] is concerned, the [`Application`] is responsible for updating.
-	fn update (&mut self) -> bool;
+	fn update (self: &mut Self) -> bool;
 
 	/// Reference the global passes that the camera needs to perform to produce its output image(s).
-	fn globalPasses(&self) -> GlobalPasses<'_>;
+	fn globalPasses(self: &Self) -> GlobalPasses<'_>;
 
 	/// Reference the framebuffer containing the rendering of the scene acquired by the camera.
-	fn framebuffer (&self) -> &hal::Framebuffer;
+	fn framebuffer (self: &Self) -> &hal::Framebuffer;
 
 	/// Report the individual name of the camera instance.
 	///
 	/// # Returns
 	///
 	/// The name given to the camera instance (usually upon creation).
-	fn name (&self) -> &str;
+	fn name (self: &Self) -> &str;
 
 	/// Obtain a dispatcher for asynchronously reading back the depth value at the given pixel coordinates.
 	///
@@ -341,19 +344,28 @@ pub trait Camera: Component
 	/// # Returns
 	///
 	/// `Some` dispatcher if the camera can provide depth for the given pixel coordinates, `None` otherwise.
-	fn getDepthReadbackDispatcher (&self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>;
-}
-crate::implDynComponent!(Camera);
+	fn getDepthReadbackDispatcher (self: &Self, pixelCoords: glm::UVec2) -> Option<DepthReadbackDispatcher<'_>>;
+}}
 
+/// Fields present in every [`Camera`].
+#[derive(Default)]
+pub struct CameraBase {}
+
+pub type CameraObject<User> = ComponentObject<CameraBase, User>;
+
+
+componentKind!{
 /// An object that can take user input and manipulate a [`Camera`]'s parameters accordingly.
-pub trait CameraInteractor: Component
+pub trait CameraInteractor
 {
+	base: CameraInteractorBase;
+
 	/// Report a short title for the interactor that it will be selectable by.
 	///
 	/// # Returns
 	///
 	/// A string slice containing a short descriptive title for the interactor.
-	fn title (&self) -> &str;
+	fn title (self: &Self) -> &str;
 
 	/// Indicates that the camera interactor should perform any calculations needed to prepare the player's main
 	/// camera for rendering the next frame.
@@ -363,7 +375,7 @@ pub trait CameraInteractor: Component
 	/// * `player` – The global *CGV-rs* [`Player`] instance.
 	///              Contains the camera being updated and mangages redraw requests.
 	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
-	fn update (&mut self, player: &mut Player, this: player::CamIntHandle);
+	fn update (self: &mut Self, player: &mut Player, this: player::CamIntHandle);
 
 	/// Report a window event to the player's main camera.
 	///
@@ -376,11 +388,16 @@ pub trait CameraInteractor: Component
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::CamIntHandle) -> EventOutcome;
+	fn input (self: &mut Self, event: &InputEvent, player: &mut Player, this: player::CamIntHandle) -> EventOutcome;
 
-	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
-}
-crate::implDynComponent!(CameraInteractor);
+	fn ui (self: &mut Self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
+}}
+
+/// Fields present in every [`CameraInteractor`].
+#[derive(Default)]
+pub struct CameraInteractorBase {}
+
+pub type CamIntObject<User> = ComponentObject<CameraInteractorBase, User>;
 
 
 //////
