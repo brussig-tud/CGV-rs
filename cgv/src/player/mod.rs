@@ -590,11 +590,9 @@ impl Player
 				.with_icon(egui::viewport::IconData {
 					rgba: icon.as_bytes().to_owned(), width: icon.width(), height: icon.height()
 				}),
-			vsync: false,
 			multisampling: 0,
 			//depth_buffer: 0,
 			//stencil_buffer: 0,
-			hardware_acceleration: eframe::HardwareAcceleration::Required,
 			renderer: eframe::Renderer::Wgpu,
 			//run_and_return: false,
 			#[allow(unused_variables)] // in Windows builds, we're not using `elBuilder` in the next line
@@ -1210,7 +1208,7 @@ impl eframe::App for StaticImpls
 		frame.inner_margin = egui::Margin::ZERO;
 
 		// Draw actual viewport panel
-		egui::CentralPanel::default().frame(frame).show_inside(ui, |ui|
+		egui::CentralPanel::default().frame(frame).show(ui, |ui|
 		{
 			// Keep track of reasons to do a scene redraw
 			let mut redrawScene = player.continuousRedrawRequests > 0;
