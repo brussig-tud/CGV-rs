@@ -68,7 +68,7 @@ constexpr static let qVerts: Vertex[] = {
 [shader("vertex")]
 func vertexMain (int vertexID: SV_VertexID) -> Vertex {
 	return Vertex(
-		/*      pos: */ viewing.projection*viewing.modelview * qVerts[vertexID].pos,
+		/*      pos: */ viewing.projModelview * qVerts[vertexID].pos,
 		/* texcoord: */ qVerts[vertexID].texcoord
 	);
 }

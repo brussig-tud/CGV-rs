@@ -74,7 +74,7 @@ ParameterBlock<cgv::api::Viewing> viewing;
 [shader("vertex")]
 func vertexMain (vert: VSInput) -> VSOutput {
 	return VSOutput(
-		/* pos_clip: */ viewing.projection*viewing.modelview * vert.pos,
+		/* pos_clip: */ viewing.projModelview * vert.pos,
 		/* color:    */ vert.color,
 		/* texcoord: */ vert.texcoord
 	);
