@@ -35,7 +35,7 @@ pub const SIDEPANEL_SAFETY_MARGINS: egui::Vec2 = egui::vec2(0.5, 0.5);
 /// Draw (and act upon) the [`crate::Player`] menu bar at the top of the main window.
 pub(crate) fn menuBar (player: &mut Player, ui: &mut egui::Ui) -> egui::Response
 {
-	egui::Panel::top("menu_bar").show_inside(ui, |ui|
+	egui::Panel::top("menu_bar").show(ui, |ui|
 		egui::ScrollArea::horizontal().show(ui, |ui|
 		{
 			egui::MenuBar::new().ui(ui, |ui|
@@ -106,7 +106,7 @@ pub(crate) fn sidepanel (player: &mut Player, ui: &mut egui::Ui) -> egui::Respon
 {
 	// Scale panel slightly wider than the 320pt default to prevent premature horizontal scrollbars when DPI scaling
 	egui::Panel::right("CGV__sidePanel").resizable(true).default_size(320.)
-	.show_inside(ui, |ui| egui::ScrollArea::both().show(ui, |ui|
+	.show(ui, |ui| egui::ScrollArea::both().show(ui, |ui|
 	{
 		ui.horizontal(|ui| ui.vertical(|ui|
 		{

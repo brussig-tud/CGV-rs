@@ -84,7 +84,9 @@ public matrix<T, M, M> operator*<T: __BuiltinIntegerType, int N, int M> (matrix<
 	let _M = M;
 	return mul(m1, m0);
 }*/
-[ForceInline]
+
+// DEACTIVATED due to Slang bug in operator overloading
+/*[ForceInline]
 public float2x2 operator* (float2x2 m0, float2x2 m1) {
 	return mul(m1, m0);
 }
@@ -95,7 +97,7 @@ public float3x3 operator* (float3x3 m0, float3x3 m1) {
 [ForceInline]
 public float4x4 operator* (float4x4 m0, float4x4 m1) {
 	return mul(m1, m0);
-}
+}*/
 
 /// Enable GLSL-style multiplication for floating-point matrix-vector operands.
 [ForceInline]
