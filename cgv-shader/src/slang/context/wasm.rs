@@ -346,13 +346,13 @@ impl compile::LinkedComposite for LinkedComposite<'_>
 /// as [`compile::Environment`] compatibility checking.
 #[derive(Clone)]
 struct SessionConfig {
-	targets: util::ds::BTreeUniqueVec<compile::Target>
+	targets: util::ds::HashUniqueVec<compile::Target>
 }
 
 
 ///
 pub struct ContextBuilder<'ctx> {
-	targets: util::ds::BTreeUniqueVec<compile::Target>,
+	targets: util::ds::HashUniqueVec<compile::Target>,
 	lifetimePhantom: PhantomData<&'ctx ()>
 }
 impl ContextBuilder<'_>
