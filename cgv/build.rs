@@ -73,6 +73,8 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/math/lin/transform.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/util.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/field.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/polynomial.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/curves.slang")?;
 			env.addModule(recommendedStorage, "cgv/media/texture.slang")?;
 			env.addModule(recommendedStorage, "cgv/media/geom.slang")?;
 			env.addModule(recommendedStorage, "cgv/color/blending.slang")?;

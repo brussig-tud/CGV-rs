@@ -4,8 +4,8 @@
 // Module setup
 //
 
-/// A module (re-)defining mathematical operators for linear algebra.
-module operators;
+/// A module provide in-shader matrix inversion.
+module inverse;
 
 
 
