@@ -170,7 +170,9 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType>
 
 /// A polynomial of degree `D` that is represented by a vector of coefficients for the monomial basis.
 /// The coefficients are stored in descending order of degree, that is, coeffs[0] is the coefficient of the highest degree term, and `coeffs[D]` is the constant term.
-public struct Monomial<uint D, Real: __BuiltinFloatingPointType> : IPolynomial<Real, D>
+///
+/// This coefficient ordering is chosen for performance reasons as it directly mirrors the evaluation order of terms in Horner's method.
+public struct Monomial<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
 {
 	public var coeffs: vector<Real, D+1>;
 
@@ -187,17 +189,12 @@ public struct Monomial<uint D, Real: __BuiltinFloatingPointType> : IPolynomial<R
 
 /// A polynomial of degree `D` that is represented by a vector of coefficients for the Bézier basis.
 /// The coefficients are stored in descending order of degree, that is, coeffs[0] is the coefficient of the highest degree term, and `coeffs[D]` is the constant term.
-public struct Bezier<uint D, Real: __BuiltinFloatingPointType> : IPolynomial<Real, D>
+public struct Bezier<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
 {
 	public var coeffs: vector<Real, D+1>;
 
-	override func eval (in const x: Real) -> Real
-	{
-		Real y = coeffs[0];
-		[ForceUnroll]
-		for (int i=1; i<=D; ++i)
-			y = fma(y, x, coeffs[i]);
-		return y;
+	override func eval (in const x: Real) -> Real {
+		return evalBezier(x, coeffs);
 	}
 
 	[ForceInline]
@@ -228,14 +225,14 @@ namespace poly {
 /// * `coeffs` – The monomial basis coefficients of the polynomial.
 /// # Returns
 /// The value of the polynomial at the given point.
-func evalMonomial<Elem: math::lin::IElement, Coeffs: math::lin::IElementSeq<Elem>> (
+public func evalMonomial<Elem: math::lin::IElement, int Dplus1, Coeffs: math::lin::IElementSeq<Elem, Dplus1>> (
 	in const x: Elem::Repr, in const coeffs: Coeffs
 ) -> Elem
 {
 	let x = Elem::splat(x);
 	var y = coeffs[0];
 	[ForceUnroll]
-	for (int i=1; i<Coeffs::len; ++i)
+	for (int i=1; i<Dplus1; ++i)
 		y = y.fma(x, coeffs[i]); // y = y*x + coeffs[i];
 	return y;
 }
@@ -246,22 +243,62 @@ func evalMonomial<Elem: math::lin::IElement, Coeffs: math::lin::IElementSeq<Elem
 /// * `coeffs` – The Bézier basis coefficients of the polynomial.
 /// # Returns
 /// The value of the polynomial at the given point.
-func evalBezier<Elem: math::lin::IElement, Coeffs: math::lin::IElementSeq<Elem>> (
+public func evalBezier<Elem: math::lin::IElement, int Dplus1, Coeffs: math::lin::IElementSeq<Elem, Dplus1>> (
 	in const Elem::Repr x, in Coeffs coeffs
 ) -> Elem
 {
 	// Outer loop: successively reduce the degree of the polynomial by one
 	[ForceUnroll]
-	for (int l=1; l<Coeffs::len; ++l)
+	for (int l=1; l<Dplus1; ++l)
 	{
 		// Inner loop: evaluate the interpolated control points of the next lower degree.
 		[ForceUnroll]
-		for (int i=0; i<Coeffs::len-l; ++i) {
+		for (int i=0; i<Dplus1-l; ++i) {
 			coeffs.set(i, coeffs[i].lerp(coeffs[i+1], x));
 		}
 	}
 	// Final function value will sit in the very first coefficient after reduction to constant (degree 0) is complete.
 	return coeffs[0];
+}
+
+/// Derive the polynomial given by the provided monomial basis coefficients.
+/// # Arguments
+/// * `coeffs` – The coefficients of the polynomial to derive.
+/// # Returns
+/// The coefficients of the 1st derivative of the input polynomial.
+public func deriveMonomial<
+	Elem: math::lin::IElement, int Dplus1, Coeffs: math::lin::IElementSeq<Elem, Dplus1>,
+	CoeffsDer: math::lin::IElementSeq<Elem, Dplus1-1>
+>(
+	in const Elem::Repr x, in const coeffs: Coeffs
+) -> CoeffsDer
+{
+	constexpr static const int D = Dplus1-1;
+	var result: CoeffsDer;
+	[ForceUnroll]
+	for (int l=0; l<D; ++l)
+		result.set(l, coeffs[l].scale(D-l));
+	return result;
+}
+
+/// Derive the polynomial given by the provided Bézier basis coefficients.
+/// # Arguments
+/// * `coeffs` – The Bézier basis coefficients of the polynomial to derive.
+/// # Returns
+/// The Bézier basis coefficients of the 1st derivative of the input polynomial.
+public func deriveBezier<
+	Elem: math::lin::IElement, int Dplus1, Coeffs: math::lin::IElementSeq<Elem, Dplus1>,
+	CoeffsDer: math::lin::IElementSeq<Elem, Dplus1-1>
+>(
+	in const Elem::Repr x, in const coeffs: Coeffs
+) -> CoeffsDer
+{
+	constexpr static const int D = Dplus1-1;
+	var result: CoeffsDer;
+	[ForceUnroll]
+	for (int l=0; l<D; ++l)
+		result.set(l, (coeffs[l+1] - coeffs[l]).scale(D));
+	return result;
 }
 
 /// Solve the linear equation `p(x) = a*x + b = 0`.
@@ -310,7 +347,7 @@ public func evalQuadraticRoots<Real: __BuiltinFloatingPointType> (
 /// # Returns
 /// Up to two real roots of the quadratic polynomial, if they exist. The returned vector contains the number of real roots in its first component, followed by the roots themselves.
 [ForceInline]
-public func solveQuadratic<Real: __BuiltinFloatingPointType> (in const Monomial<2, Real> linear)
+public func solveQuadratic<Real: __BuiltinFloatingPointType> (in const Monomial<Real, 2> linear)
 -> vector<Real, 3> {
 	let _2a = linear.coeffs[0]+linear.coeffs[0];
 	let _2c = linear.coeffs[2]+linear.coeffs[2];

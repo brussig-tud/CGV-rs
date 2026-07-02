@@ -162,8 +162,6 @@ struct FSOutput
 
 
 
-
-
 //////
 //
 // Common uniforms

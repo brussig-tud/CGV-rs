@@ -116,11 +116,8 @@ public extension<T: __BuiltinFloatingPointType, int R, int C> matrix<T, C, R>: I
 }
 
 /// Interface of series of generic elements of algebraic structures, e.g. lists or vectors of numbers, lists or matrices of column vectors, etc.
-public interface IElementSeq<Elem: IElement>
+public interface IElementSeq<Elem: IElement, int N>
 {
-	/// Report number of elements in the sequence.
-	public constexpr static const uint len;
-
 	/// Access an element in the sequence.
 	__subscript (uint i) -> Elem;
 
@@ -128,25 +125,22 @@ public interface IElementSeq<Elem: IElement>
 	[mutating]
 	public func set (int i, in const newValue: Elem);
 }
-public extension<T: __BuiltinFloatingPointType, int N> vector<T, N>: IElementSeq<T> {
-	public constexpr static const uint len = N;
-
+public extension<T: __BuiltinFloatingPointType, int Dplus1> vector<T, Dplus1>: IElementSeq<T, Dplus1> {
 	[ForceInline][mutating]
 	public func set (int i, in const newValue: T) {
 		this[i] = newValue;
 	}
 }
-public extension<T: __BuiltinFloatingPointType, int R, int C> matrix<T, C, R>: IElementSeq<vector<T, R>>
-// Note reversal of R and C since we treat Slang matrices as column-major even through they're technically row-major.
+public extension<T: __BuiltinFloatingPointType, int N, int Dplus1> matrix<T, Dplus1, N>: IElementSeq<vector<T, N>, Dplus1>
+// Note reversal of N and Dplus1 since we treat Slang matrices as column-major even through they're technically row-major.
 {
-	public constexpr static const uint len = C;
-	__subscript (int i) -> vector<T, R> {
+	__subscript (int i) -> vector<T, N> {
 		[ForceInline]           get { return this[i]; }
 		[ForceInline][mutating] set { this[i] = newValue; }
 	}
 
 	[ForceInline][mutating]
-	public func set (int i, in const newValue: vector<T, R>) {
+	public func set (int i, in const newValue: vector<T, N>) {
 		this[i] = newValue;
 	}
 }
