@@ -80,6 +80,7 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/color/blending.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/api/uniforms.slang")?;
+			env.addModule(recommendedStorage, "cgv/geom/aabox.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/billboard.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/intersect/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/geom/splat/sphere.slang")?;
