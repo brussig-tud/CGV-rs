@@ -284,25 +284,24 @@ public func solveLinear<Real: __BuiltinFloatingPointType, Poly: IPolynomial<Real
 /// The real solution(s) to the quadratic equation. The returned vector contains the number of real solutions in its first component, followed by the solutions themselves.
 public func evalQuadraticRoots<Real: __BuiltinFloatingPointType> (
 	const Real negb, const Real _2a, const Real D, const Real _2c
-) -> vector<Real, 3>
+) -> Vec3<Real>
 {
-	typealias QSol = vector<Real, 3>;
 	if (_2a != Real(0))
 	{
 		// Quadratic
 		if (D > Real(0)) {
 			Real sqrtD = sqrt(D);
-			return QSol(Real(2), (negb-sqrtD)/_2a, (negb+sqrtD)/_2a);
+			return Vec3<Real>(Real(2), (negb-sqrtD)/_2a, (negb+sqrtD)/_2a);
 		}
 		else if (D == Real(0))
-			return QSol(Real(1), negb/_2a, Real(0));
+			return Vec3<Real>(Real(1), negb/_2a, Real(0));
 	}
 	else if (negb != Real(0))
 		// Linear
-		return QSol(Real(1), _2c/(negb+negb), Real(0));
+		return Vec3<Real>(Real(1), _2c/(negb+negb), Real(0));
 
 	// No solution
-	return QSol(Real(0));
+	return Vec3<Real>(Real(0));
 }
 
 /// Solve the quadratic equation `p(x) = a*x² + b*x + c = 0`.

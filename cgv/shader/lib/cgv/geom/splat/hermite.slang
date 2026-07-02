@@ -39,30 +39,44 @@ using cgv;
 // Interfaces
 //
 
-/// The interface to the geometric sphere attributes.
-public interface ISphere<Scalar: __BuiltinFloatingPointType> {
-	/// The position and radius of the sphere, packed into a single 4D vector.
-	public property pos_rad: cgv::Vec4<Scalar> {get; set;}
+/// The interface to the geometric Hermite curve attributes.
+public interface IHermiteCurve<Scalar: __BuiltinFloatingPointType, Node: hermite::INode<Scalar>> {
+	/// The position and radius of the Hermite node, packed into a single 4D vector.
+	public property n0: Node {get; set;}
+	/// The tangent and radius derivative of the Hermite node, packed into a single 4D vector.
+	public property n1: Node {get; set;}
 };
-public extension<Scalar: __BuiltinFloatingPointType> vector<Scalar, 4>: ISphere<Scalar>
-{
-	/// Access `this`.
-	property pos_rad : This {
-		get { return this; }
-		set { this = newValue; }
-	}
-}
 
 
 ////
 // Sub-namespaces
 
-/// Namespace exposing facilities of the sphere splatting implementation.
-public namespace sphere {
+/// Namespace exposing facilities of the Hermite splatting implementation.
+public namespace hermite {
 
-/// **S**phere **S**plat **I**nfo or *SSI* for short. **TODO: investigate.**
-///
-/// Stupidly 1-to-1 ported from [https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glvs](https://github.com/sgumhold/cgv/blob/master/libs/cgv_gl/glsl/sphere_lib.glgs), pending an informed and educated *Slang* re-implementation properly suited for *CGV-rs*.
+/// The interface to the geometric Hermite curve attributes.
+public interface INode<Scalar: __BuiltinFloatingPointType> {
+	/// The position and radius of the Hermite node, packed into a single 4D vector.
+	public property pos_rad: cgv::Vec4<Scalar> {get; set;}
+	/// The tangent and radius derivative of the Hermite node, packed into a single 4D vector.
+	public property tan_drad: cgv::Vec4<Scalar> {get; set;}
+};
+public extension<Scalar: __BuiltinFloatingPointType> Mat4x2<Scalar>: INode<Scalar>
+{
+	/// Access 1st column as position/radius.
+	property pos_rad: cgv::Vec4<Scalar> {
+		[ForceInline]           get { return this[0]; }
+		[ForceInline][mutating] set { this[0] = newValue; }
+	}
+
+	/// Access 2nd column as position/radius.
+	property tan_drad: cgv::Vec4<Scalar> {
+		[ForceInline]           get { return this[1]; }
+		[ForceInline][mutating] set { this[1] = newValue; }
+	}
+}
+
+/// **H**ermite **S**plat **I**nfo or *HSI* for short.
 public interface ISplatInfo<Scalar: __BuiltinFloatingPointType>
 {
 	public property q_tilde: cgv::Vec2<Scalar> {get; set;}

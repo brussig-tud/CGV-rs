@@ -8,7 +8,7 @@
 import "cgv/prelude.slang";               // enable GLSL-style linear algebra mathematical operators
 import "cgv/api/uniforms.slang";          // interface with managed uniforms handled by CGV-rs
 import "cgv/math/lin/common.slang";       // enables the cgv::math::lin::IElement interface for all float-based builtins
-import "cgv/geom/splat/sphere.slang";     // sphere splatting library
+import "cgv/geom/splat/hermite.slang";    // Hermite spline splatting library
 import "cgv/geom/intersect/common.slang"; // test common intersection facilities
 
 // Use CGV namespace by default
@@ -21,21 +21,38 @@ using namespace cgv;
 // Structs
 //
 
-/// Representation of a sphere.
-struct Sphere: geom::splat::ISphere<float>
+/// Representation of a Hermite node.
+struct HermiteNode: geom::splat::hermite::INode<float>
 {
 	/// The position of the sphere center in camera space.
 	var pos_rad: float4;
 
 	/// The color of the sphere.
-	var color: float4;
+	var tan_drad: float4;
 
 	/// Slang initializer for constructing a new instances of this struct.
 	[ForceInline]
-	__init (in const float4 pos_rad, in const float4 color) {
-		this.pos_rad = pos_rad; this.color = color;
+	__init (in const float4 pos_rad, in const float4 tan_drad) {
+		this.pos_rad = pos_rad; this.tan_drad = tan_drad;
 	}
 };
+
+/// Representation of a Hermite curve.
+struct HermiteCurve: geom::splat::IHermiteCurve<float, HermiteNode>
+{
+	/// The start node of the curve.
+	var n0: HermiteNode;
+
+	/// The color of the sphere.
+	var n1: HermiteNode;
+
+	/// Slang initializer for constructing a new instances of this struct.
+	[ForceInline]
+	__init (in const HermiteNode n0, in const HermiteNode n1) {
+		this.n0 = n0; this.n1 = n1;
+	}
+};
+/*
 
 
 
@@ -180,6 +197,11 @@ ParameterBlock<Style> style;
 ////
 // Entry points
 
+*/
+[shader("vertex")]
+func vertexMain (uint vertexID: SV_VertexID) -> float4 {
+	return float4(0,0,0,1);
+}/*
 /// Vertex shader entry point for the positions-only case.
 [shader("vertex")]
 func vertexMain_pos (in pos: float4, uint vertexID: SV_VertexID) -> SphereSplat_posRad {
@@ -340,3 +362,4 @@ func evaluateHit (in const hit: geom::intersect::IHit<float3>, in const material
 	// Done!
 	return litColor;
 }
+*/
