@@ -117,7 +117,7 @@ public extension<T: __BuiltinFloatingPointType, int C, int R> matrix<T, C, R>: I
 }
 
 /// Interface of series of generic elements of algebraic structures, e.g. lists or vectors of numbers, lists or matrices of column vectors, etc.
-public interface IElementSeq<Elem: IElement, int N>
+public interface IElementSeq<Elem: IElement, int N>: IRWArray<Elem>
 {
 	/// Access an element in the sequence.
 	__subscript (uint i) -> Elem;

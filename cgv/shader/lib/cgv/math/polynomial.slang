@@ -254,7 +254,7 @@ public func evalBezier<Elem: math::lin::IElement, int Dplus1, Coeffs: math::lin:
 		// Inner loop: evaluate the interpolated control points of the next lower degree.
 		[ForceUnroll]
 		for (int i=0; i<Dplus1-l; ++i) {
-			coeffs.set(i, coeffs[i].lerp(coeffs[i+1], x));
+			coeffs[i] = coeffs[i].lerp(coeffs[i+1], x);
 		}
 	}
 	// Final function value will sit in the very first coefficient after reduction to constant (degree 0) is complete.
@@ -277,7 +277,7 @@ public func deriveMonomial<
 	var result: CoeffsDer;
 	[ForceUnroll]
 	for (int l=0; l<D; ++l)
-		result.set(l, coeffs[l].scale(D-l));
+		result[l] = coeffs[l].scale(D-l);
 	return result;
 }
 
@@ -297,7 +297,7 @@ public func deriveBezier<
 	var result: CoeffsDer;
 	[ForceUnroll]
 	for (int l=0; l<D; ++l)
-		result.set(l, (coeffs[l+1] - coeffs[l]).scale(D));
+		result[l] = (coeffs[l+1] - coeffs[l]).scale(D);
 	return result;
 }
 
