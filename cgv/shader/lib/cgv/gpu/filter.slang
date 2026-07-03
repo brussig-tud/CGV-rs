@@ -41,7 +41,7 @@ func filter<DataType, int Dims, Kernel>(
 	const res: vector<int, Dims>, kernel: Kernel,
 	writer: IFunc<void, vector<int, Dims>, DataType>, reader: IFunc<DataType, vector<int, Dims>>
 )
-where DataType: IFloat, math::lin::IElement
+where DataType: math::lin::IElement
 where Kernel: filter::IKernel<DataType, Dims>
 {
 }

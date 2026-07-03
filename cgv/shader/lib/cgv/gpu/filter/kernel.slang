@@ -39,8 +39,7 @@ namespace cgv::gpu::filter {
 
 /// The generic interface of all filter kernels. The data the kernel is applied to is provided via a generic accessor
 /// to facilitate arbitrary data sources.
-public interface IKernel<DataType, int Dims>
-	where DataType: IFloat, math::lin::IElement
+public interface IKernel<DataType: math::lin::IElement, int Dims>
 {
 	/// Filter the value at the query point `q` through the given data accessor.
 	/// # Arguments
@@ -65,8 +64,7 @@ public interface IKernel<DataType, int Dims>
 public namespace kernel {
 
 /// A simple 2^*N* box filter kernel, suitable e.g. for calculating power-of-2 mip maps.
-public struct Box2<DataType, int N> : IKernel<DataType, N>
-	where DataType: IFloat, math::lin::IElement
+public struct Box2<DataType: math::lin::IElement, int N> : IKernel<DataType, N>
 {
 	/// The underlying number/scalar type.
 	public typealias Scalar = DataType::Repr;
@@ -156,8 +154,7 @@ func tensorProduct2<T: __BuiltinFloatingPointType, int Extent> (in const vectors
 /// A 3^*N* polyphase box filter kernel, suitable e.g. for calculating non-power-of-2 mip maps. The hardcoded per-dimension phase shifts assume a reduction from *n* to *n*' = *floor*(*n*/2).
 ///
 /// **TODO: Generalize to arbitrary reduction from first principles by convolving appropriately scaled box filter with a box kernel of uniform extent 1.**
-public struct PolyphaseBox3<DataType, int N> : IKernel<DataType, N>
-	where DataType: IFloat, math::lin::IElement
+public struct PolyphaseBox3<DataType: math::lin::IElement, int N> : IKernel<DataType, N>
 {
 	/// Enum indicating whether a resolution along a dimension is divisible by 2.
 	public enum DimensionMode {
@@ -256,8 +253,9 @@ public struct PolyphaseBox3<DataType, int N> : IKernel<DataType, N>
 
 /// Function-style access to the `Box2` filter kernel.
 [ForceInline]
-public func box2<DataType, int Dims> (q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>) -> DataType
-	where DataType: IFloat, math::lin::IElement
+public func box2<DataType: math::lin::IElement, int Dims> (
+	q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>
+) -> DataType
 {
 	static constexpr Box2<DataType, Dims> kernel;
 	return kernel.apply(q, data);
@@ -265,10 +263,9 @@ public func box2<DataType, int Dims> (q: vector<int, Dims>, data: IFunc<DataType
 
 /// Function-style access to the `PolyphaseBox3` filter kernel.
 [ForceInline]
-public func polyphaseBox3<DataType, int Dims> (
+public func polyphaseBox3<DataType: math::lin::IElement, int Dims> (
 	origSize: vector<int, Dims>, q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>
 ) -> DataType
-	where DataType: IFloat, math::lin::IElement
 {
 	let kernel = PolyphaseBox3<DataType, Dims>(origSize);
 	return kernel.apply(q, data);
