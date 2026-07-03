@@ -33,10 +33,10 @@ public typealias Vec4<Number: IArithmetic> = vector<Number, 4>;
 /// A convenience type alias for generic 2x2 matrices.
 public typealias Mat2<Number: IArithmetic> = matrix<Number, 2, 2>;
 
-/// A convenience type alias for generic 3x2 matrices.
+/// A convenience type alias for generic 2x3 matrices.
 public typealias Mat2x3<Number: IArithmetic> = matrix<Number, 2, 3>;
 
-/// A convenience type alias for generic 3x4 matrices.
+/// A convenience type alias for generic 2x4 matrices.
 public typealias Mat2x4<Number: IArithmetic> = matrix<Number, 2, 4>;
 
 /// A convenience type alias for generic 3x3 matrices.

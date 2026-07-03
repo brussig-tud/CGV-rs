@@ -169,7 +169,7 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType>
 }
 
 /// A polynomial of degree `D` that is represented by a vector of coefficients for the monomial basis.
-/// The coefficients are stored in descending order of degree, that is, coeffs[0] is the coefficient of the highest degree term, and `coeffs[D]` is the constant term.
+/// The coefficients are stored in descending order of degree, that is, `coeffs[0]` is the coefficient of the highest degree term, and `coeffs[D]` is the constant term.
 ///
 /// This coefficient ordering is chosen for performance reasons as it directly mirrors the evaluation order of terms in Horner's method.
 public struct Monomial<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
@@ -188,7 +188,6 @@ public struct Monomial<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<R
 }
 
 /// A polynomial of degree `D` that is represented by a vector of coefficients for the Bézier basis.
-/// The coefficients are stored in descending order of degree, that is, coeffs[0] is the coefficient of the highest degree term, and `coeffs[D]` is the constant term.
 public struct Bezier<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
 {
 	public var coeffs: vector<Real, D+1>;
@@ -301,17 +300,17 @@ public func deriveBezier<
 	return result;
 }
 
-/// Solve the linear equation `p(x) = a*x + b = 0`.
+/// Solve the linear equation *p*(*x*) = *ax* + *b* = 0.
 /// # Arguments
 /// * `linear` – The linear polynomial to solve.
 /// # Returns
-/// The root of the linear polynomial `x = -b/a`, if it exists. If the polynomial is constant (i.e., `a = 0`), the function will return `NaN`.
+/// The root of the linear polynomial *x* = -*b*/*a*, if it exists. If the polynomial is constant (i.e., *a*=0), the function will return `NaN`.
 public func solveLinear<Real: __BuiltinFloatingPointType, Poly: IPolynomial<Real, 1>> (in const Poly linear)
 -> Real {
 	return -linear.coeffs[1] / linear.coeffs[0];
 }
 
-/// Evaluate the solution `x = (-b ± √D) / (2a)` (where `D = b² - 4ac`) to the quadratic equation with precomputed terms.
+/// Evaluate the real solution(s) *x* = (-*b* ± √*D*) / (2*a*) (where *D* = *b*² - 4*ac*) to the quadratic equation with precomputed terms.
 /// # Arguments
 /// * `negb` – The value of `-b`.
 /// * `_2a` – The value of `2a`.
@@ -341,7 +340,7 @@ public func evalQuadraticRoots<Real: __BuiltinFloatingPointType> (
 	return Vec3<Real>(Real(0));
 }
 
-/// Solve the quadratic equation `p(x) = a*x² + b*x + c = 0`.
+/// Solve the quadratic equation *p*(*x*) = *ax*² + *bx* + *c* = 0.
 /// # Arguments
 /// `quadratic` – The quadratic polynomial to solve.
 /// # Returns
