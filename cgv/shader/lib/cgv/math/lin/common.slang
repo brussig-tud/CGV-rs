@@ -93,9 +93,10 @@ public extension<T: __BuiltinFloatingPointType, int N> vector<T, N>: IElement
 		return fma(this, mult, add);
 	}
 }
-public extension<T: __BuiltinFloatingPointType, int R, int C> matrix<T, C, R>: IElement
+public extension<T: __BuiltinFloatingPointType, int C, int R> matrix<T, C, R>: IElement
+// Note switched usage of C and R wrt. Slang `matrix` generic definition since we treat Slang matrices as column-major
+// even through they're technically row-major.
 {
-	// Note reversal of R and C since we treat Slang matrices as column-major even through they're technically row-major.
 	public typealias Repr = T;
 	public constexpr static const uint dims = C*R;
 
@@ -131,8 +132,7 @@ public extension<T: __BuiltinFloatingPointType, int Dplus1> vector<T, Dplus1>: I
 		this[i] = newValue;
 	}
 }
-public extension<T: __BuiltinFloatingPointType, int N, int Dplus1> matrix<T, Dplus1, N>: IElementSeq<vector<T, N>, Dplus1>
-// Note reversal of N and Dplus1 since we treat Slang matrices as column-major even through they're technically row-major.
+public extension<T: __BuiltinFloatingPointType, int N, int Num> matrix<T, Num, N>: IElementSeq<vector<T, N>, Num>
 {
 	__subscript (int i) -> vector<T, N> {
 		[ForceInline]           get { return this[i]; }

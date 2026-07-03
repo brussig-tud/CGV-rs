@@ -61,7 +61,7 @@ public interface INode<Scalar: __BuiltinFloatingPointType> {
 	/// The tangent and radius derivative of the Hermite node, packed into a single 4D vector.
 	public property tan_drad: cgv::Vec4<Scalar> {get; set;}
 };
-public extension<Scalar: __BuiltinFloatingPointType> Mat4x2<Scalar>: INode<Scalar>
+public extension<Scalar: __BuiltinFloatingPointType> Mat2x4<Scalar>: INode<Scalar>
 {
 	/// Access 1st column as position/radius.
 	property pos_rad: cgv::Vec4<Scalar> {
