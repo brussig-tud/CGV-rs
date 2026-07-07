@@ -268,7 +268,7 @@ impl dyn Component
 	}
 	/// Mutably access the base class subobject present in every implementor.
 	#[inline]
-	pub fn base_mut (&mut self) -> &crate::ComponentBase
+	pub fn base_mut (&mut self) -> &mut crate::ComponentBase
 	{
 		// SAFETY: See above.
 		unsafe{&mut *(self as *mut Self).cast()}
@@ -279,8 +279,18 @@ impl dyn Component
 pub trait DynComponent: AsRef<dyn Component> + AsMut<dyn Component> {}
 
 /// Prefix of every type that implements [`Component`], like a base class subobject.
-#[derive(Default)]
-pub struct ComponentBase {}
+pub struct ComponentBase
+{
+	/// Identifies this component within the [`Player`].
+	handle: player::Handle,
+}
+impl Default for ComponentBase
+{
+	fn default () -> Self
+	{
+		Self{handle: player::Handle::INVALID}
+	}
+}
 
 
 /// Common layout for all [`Component`] types.
@@ -479,12 +489,11 @@ pub trait Application
 	///
 	/// * `event` – The input event that the application should inspect and possibly act upon.
 	/// * `player` – The global *CGV-rs* [`Player`] instance.
-	/// * `this` - Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (self: &mut Self, event: &InputEvent, player: &mut Player, this: player::AppHandle) -> EventOutcome;
+	fn input (self: &mut Self, event: &InputEvent, player: &mut Player) -> EventOutcome;
 
 	/// Called when the main framebuffer was resized.
 	///
@@ -500,12 +509,11 @@ pub trait Application
 	///
 	/// * `context` – The graphics context for rendering.
 	/// * `player` – The global *CGV-rs* [`Player`] instance.
-	/// * `this` - Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns
 	///
 	/// `true` when the application deems a scene redraw is required, `false` otherwise.
-	fn update (self: &mut Self, player: &mut Player, this: player::AppHandle) -> bool;
+	fn update (self: &mut Self, player: &mut Player) -> bool;
 
 	/// Called when the [player](Player) is about to ask the application to render its contribution to the scene within
 	/// a [global render pass](GlobalPassInfo).

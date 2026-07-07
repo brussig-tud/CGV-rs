@@ -275,7 +275,7 @@ impl cgv::Application<OnlineShadersDemo> for cgv::AppObject<OnlineShadersDemo>
 		Ok(())
 	}
 
-	fn input (self: &mut Self, _: &cgv::InputEvent, _: &mut cgv::Player, _: cgv::player::AppHandle) -> cgv::EventOutcome {
+	fn input (self: &mut Self, _: &cgv::InputEvent, _: &mut cgv::Player) -> cgv::EventOutcome {
 		// We're not reacting to any input
 		cgv::EventOutcome::NotHandled
 	}
@@ -284,7 +284,7 @@ impl cgv::Application<OnlineShadersDemo> for cgv::AppObject<OnlineShadersDemo>
 		/* We don't have anything to adapt to a new main framebuffer size */
 	}
 
-	fn update (self: &mut Self, _: &mut cgv::Player, _: cgv::player::AppHandle) -> bool {
+	fn update (self: &mut Self, _: &mut cgv::Player) -> bool {
 		// We're not updating anything, so no need to redraw from us
 		false
 	}

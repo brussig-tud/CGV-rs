@@ -46,7 +46,7 @@ impl CameraInteractor<OrbitInteractor> for CamIntObject<OrbitInteractor>
 		"Orbit"
 	}
 
-	fn update (&mut self, player: &mut Player, _: player::CamIntHandle)
+	fn update (&mut self, player: &mut Player)
 	{
 		if let Some(focusChange) = &mut self.focusChange
 			&& focusChange.update(player.lastFrameTime(), player.camera.parameters_mut())
@@ -56,7 +56,7 @@ impl CameraInteractor<OrbitInteractor> for CamIntObject<OrbitInteractor>
 		}
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::CamIntHandle) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &mut Player) -> EventOutcome
 	{
 		// Match on relevant events
 		match event
@@ -157,13 +157,16 @@ impl CameraInteractor<OrbitInteractor> for CamIntObject<OrbitInteractor>
 			InputEvent::DoubleClick(info)
 			=> {
 				let mut focusChange = FocusChange::new(player.camera.parameters(), 0.5);
+				let handle = self.component.handle;
 				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
 					let Some(point) = point else {return};
 
+					let mut player = player::lock();
+					let Some(this) = player.cameraInteractors.get_mut::<Self>(handle) else {return};
+
 					tracing::debug!("Double-click to new focus: {:?}", point);
 					focusChange.setNewFocus(point);
-					let mut player = player::lock();
-					player.cameraInteractors.get_mut::<Self>(handle).focusChange = Some(focusChange);
+					this.focusChange = Some(focusChange);
 					player.pushContinuousRedrawRequest();
 				});
 				EventOutcome::HandledExclusively(/* redraw */true)

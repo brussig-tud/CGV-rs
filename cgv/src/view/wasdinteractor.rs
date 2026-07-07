@@ -98,7 +98,7 @@ impl CameraInteractor<WASDInteractor> for CamIntObject<WASDInteractor>
 		"WASD"
 	}
 
-	fn update (&mut self, player: &mut Player, _: player::CamIntHandle)
+	fn update (&mut self, player: &mut Player)
 	{
 		type This = WASDInteractor;
 
@@ -141,7 +141,7 @@ impl CameraInteractor<WASDInteractor> for CamIntObject<WASDInteractor>
 		}
 	}
 
-	fn input (&mut self, event: &InputEvent, player: &mut Player, handle: player::CamIntHandle) -> EventOutcome
+	fn input (&mut self, event: &InputEvent, player: &mut Player) -> EventOutcome
 	{
 		type This = WASDInteractor;
 
@@ -268,14 +268,15 @@ impl CameraInteractor<WASDInteractor> for CamIntObject<WASDInteractor>
 			=> {
 				if let ContinuousRedrawing::WASD = self.continuousRedrawing {break 'event EventOutcome::NotHandled}
 				let mut focusChange = FocusChange::new(player.camera.parameters(), 0.5);
+				let handle = self.component.handle;
 				player.unprojectPointAtSurfacePixel_async(info.position, move |point| {
 					let Some(point) = point else {return};
 
-					tracing::debug!("Double-click to new focus: {:?}", point);
 					let mut lock = player::lock();
 					let player = &mut*lock;
-					let this = player.cameraInteractors.get_mut::<Self>(handle);
+					let Some(this) = player.cameraInteractors.get_mut::<Self>(handle) else {return};
 
+					tracing::debug!("Double-click to new focus: {:?}", point);
 					if this.continuousRedrawing.notChangingFocus() {
 						// Re-use the ongoing continuous redraw request if a focus change was in progress before
 						player.state.pushContinuousRedrawRequest();

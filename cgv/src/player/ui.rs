@@ -261,8 +261,9 @@ pub(crate) fn view (player: &mut Player, ui: &mut egui::Ui)
 				.width(idealSize)
 				.show_ui(ui, |ui|
 					for (i, ci) in player.cameraInteractors.slots.iter().enumerate() {
-						let Some(ci) = ci else {continue};
-						ui.selectable_value(&mut player.cameraInteractors.main, i, ci.title());
+						let player::component::Slot::Component(ci) = ci else {continue};
+						ui.selectable_value(
+							&mut player.cameraInteractors.main, i as player::component::Index, ci.title());
 					}
 				)
 		);

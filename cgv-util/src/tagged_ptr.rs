@@ -106,7 +106,7 @@ impl<P: Pointer, const NBITS: u8> Tagged<P, NBITS>
 		(unsafe{P::fromRaw(ManuallyDrop::new(self).raw())}, tag)
 	}
 }
-impl<P: Pointer, const NBITS: u8> std::ops::Drop for Tagged<P, NBITS>
+impl<P: Pointer, const NBITS: u8> Drop for Tagged<P, NBITS>
 {
 	/// Drop the wrapped pointer using `P::drop`.
 	fn drop (&mut self)

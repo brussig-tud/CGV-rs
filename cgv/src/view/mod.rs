@@ -374,8 +374,7 @@ pub trait CameraInteractor
 	///
 	/// * `player` – The global *CGV-rs* [`Player`] instance.
 	///              Contains the camera being updated and mangages redraw requests.
-	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
-	fn update (self: &mut Self, player: &mut Player, this: player::CamIntHandle);
+	fn update (self: &mut Self, player: &mut Player);
 
 	/// Report a window event to the player's main camera.
 	///
@@ -383,12 +382,11 @@ pub trait CameraInteractor
 	///
 	/// * `event` – The event that the camera should inspect and potentially act upon.
 	/// * `player` – The global *CGV-rs* [`Player`] instance containing the camera.
-	/// * `this` – Provides access to `self` from outside this function, e.g. in an asynchronous callback.
 	///
 	/// # Returns
 	///
 	/// The [outcome](EventOutcome) of the event processing.
-	fn input (self: &mut Self, event: &InputEvent, player: &mut Player, this: player::CamIntHandle) -> EventOutcome;
+	fn input (self: &mut Self, event: &InputEvent, player: &mut Player) -> EventOutcome;
 
 	fn ui (self: &mut Self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
 }}

@@ -27,7 +27,7 @@ use viewportcompositor::*;
 //
 
 // Standard library
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 #[cfg(not(target_arch="wasm32"))]
 use std::fs;
 
@@ -281,7 +281,7 @@ pub fn reset ()
 ///
 /// Obtained by [locking](lock) the player, unlocks it when dropped.
 pub struct LockGuard (std::marker::PhantomData<Player>);
-impl std::ops::Drop for LockGuard
+impl Drop for LockGuard
 {
 	fn drop(&mut self) {unsafe{unlock()}}
 }
@@ -307,112 +307,231 @@ impl std::ops::DerefMut for LockGuard
 pub use instance::{lock, LockGuard};
 
 
-//////
-//
-// Classes
-//
+/// Types for managing [components](Component) owned by the [`Player`].
+mod component {
 
-/// Smart pointer with unique ownership used to store [`Component`] trait objects owned by the player.
-///
-/// The tag indicates whether the component is active (0) or not (1).
-type CompPtr<T> = cgv_util::Tagged<Box<T>, 1>;
+use crate::{Component, DynComponent};
 
-/// Container storing a specific kind of [`Component`] as boxed trait objects.
+
+/// Smart pointer with unique ownership used to store [components](Component) owned by the player.
 ///
-/// Entries can be individually marked as inactive, and independently one may be selected as "main". The meaning of
-/// these designations, if any, depends on the kind of component.
-pub struct Components<Comp: DynComponent + ?Sized>
+/// Marked as active or inactive.
+pub struct Ptr<Comp: ?Sized> (cgv_util::Tagged<Box<Comp>, 1>);
+impl<Comp: ?Sized> Ptr<Comp>
 {
-	slots: Vec<Option<CompPtr<Comp>>>,
-	pub(self) main: usize,
+	pub fn new (comp: Box<Comp>, active: bool) -> Self
+	{
+		Self(cgv_util::Tagged::fromSafe(comp, (!active).into()))
+	}
+	pub fn isActive (&self) -> bool
+	{
+		self.0.tag() == 0
+	}
 }
-impl<Comp: DynComponent + ?Sized> Components<Comp>
+impl<Comp: ?Sized> std::ops::Deref for Ptr<Comp>
 {
-	const EMPTY: Self = Self{slots: Vec::new(), main: 0};
+	type Target = Comp;
 
-	const MSG_BAD_HANDLE: &'static str = "Invalid handle: The requested object no longer exists.";
-	const MSG_MISSING_OBJ: &'static str
-		= "Invalid handle: The requested object no longer exists or is already borrowed.";
-	const MSG_WRONG_TYPE: &'static str = "Invalid handle: The requested object is not of the expected type.";
+	fn deref (&self) -> &Comp {&self.0}
+}
+impl<Comp: ?Sized> std::ops::DerefMut for Ptr<Comp>
+{
+	fn deref_mut (&mut self) -> &mut Comp {&mut self.0}
+}
+
+
+/// Identifies a [`Component`] within its [`Store`].
+pub(super) type Index = u16;
+
+/// Disambiguates [component handles](Handle) when [indices](Index) are reused.
+type Epoch = u16;
+
+
+/// Holds a single [`Component`] within a [`Store`], allowing efficient reuse of indices.
+pub(super) enum Slot<Comp: DynComponent + ?Sized>
+{
+	Component (Ptr<Comp>),
+	/// Left after a component is removed from the store.
+	///
+	/// The handle's index points to the next free slot, its epoch is the one that will be assigned to the next
+	/// component placed in this slot. If a component is only temporarily moved from the store ([`Self::takeIf`]), the
+	/// handle is arbitrary.
+	Free (Handle),
+}
+impl<Comp: DynComponent + ?Sized> Slot<Comp>
+{
+	/// Access the component stored in this slot, if any.
+	pub fn get (&self) -> Option<&Ptr<Comp>>
+	{
+		match self {
+			Self::Component(ptr) => Some(ptr),
+			Self::Free{..} => None,
+		}
+	}
+	/// Mutably access the component stored in this slot, if any.
+	pub fn get_mut (&mut self) -> Option<&mut Ptr<Comp>>
+	{
+		match self {
+			Self::Component(ptr) => Some(ptr),
+			Self::Free{..} => None,
+		}
+	}
+
+	/// Move the stored component out of the slot if it meets a given condition.
+	///
+	/// Should only be used to temporarily remove components from the player to avoid aliasing, with the original
+	/// component restored afterwards using [`Self::putBack`]. The slot is left empty, but will not be reused for a
+	/// different component
+	pub fn takeIf (&mut self, condition: impl FnOnce(&Ptr<Comp>) -> bool) -> Option<Ptr<Comp>>
+	{
+		match self {
+			Self::Component(comp) => {
+				if !condition(comp) {return None}
+				// With debug assertions enabled, store the component's handle, so we can check whether putBack is used
+				// correctly.
+				let emptyHandle =
+					if cfg!(debug_assertions) {comp.as_ref().base().handle}
+					else {Handle::new(0, 0)};
+				match std::mem::replace(self, Self::Free(emptyHandle)) {
+					Self::Component(ptr) => Some(ptr),
+					_ => unreachable!()
+				}
+			}
+			Self::Free{..} => None,
+		}
+	}
+	/// Restore this slot's component after it was moved out using [`Self::takeIf`].
+	///
+	/// Calling this function on an occupied slot or with a different component than the one it contained is an error
+	/// and causes well defined but unspecified behavior.
+	pub fn putBack (&mut self, comp: Ptr<Comp>)
+	{
+		debug_assert!(matches!(self, Self::Free(handle) if *handle == comp.as_ref().base().handle));
+		*self = Self::Component(comp);
+	}
+}
+
+
+/// Container storing a specific kind of [`Component`].
+///
+/// Entries can be individually marked as inactive, and independently one may be selected as "main". The store itself
+/// does not assign any meaning to these designations.
+pub struct Store<Comp: DynComponent + ?Sized>
+{
+	pub(super) slots: Vec<Slot<Comp>>,
+	pub(super) main: Index,
+	/// First entry in the free list of slots to be reused.
+	nextFree: Index,
+}
+impl<Comp: DynComponent + ?Sized> Store<Comp>
+{
+	pub(super) const EMPTY: Self = Self{slots: Vec::new(), main: 0, nextFree: !0};
+
+	pub fn add (&mut self, comp: Box<Comp>, is_active: bool)
+	{
+		let mut comp = Ptr::new(comp, is_active);
+		match self.slots.get_mut(self.nextFree as usize) {
+			// Reuse free slots if available.
+			Some(slot @ &mut Slot::Free(next)) => {
+				comp.as_mut().base_mut().handle = Handle{index: self.nextFree, epoch: next.epoch};
+				*slot = Slot::Component(comp);
+				self.nextFree = next.index;
+			}
+			// Otherwise append a new slot.
+			_ => {
+				// The maximum index is used for the null handle.
+				assert!(self.slots.len() < Index::MAX as usize);
+				comp.as_mut().base_mut().handle = Handle::new(self.slots.len(), 0);
+				self.slots.push(Slot::Component(comp))
+			}
+		}
+	}
 
 	/// Borrow the [`Component`] identified by the given handle and downcast to `T`.
 	///
-	/// **Panics** if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get<T: Component> (&self, handle: Handle<Comp>) -> &T
+	/// Returns `None` if the requested object no longer exists in this store, is not of type `T`, or currently borrowed
+	/// by the player. In particular, you cannot borrow a component from its own callback.
+	pub fn get<T: Component> (&self, handle: Handle) -> Option<&T>
 	{
-		<dyn Any>::downcast_ref::<T>(
-			self.slots.get(handle.index()).expect(Self::MSG_BAD_HANDLE)
-			.as_deref().expect(Self::MSG_MISSING_OBJ)
-			.as_ref()
-		).expect(Self::MSG_WRONG_TYPE)
+		<dyn std::any::Any>::downcast_ref::<T>(self.slots.get(handle.index())?.get()?.as_ref())
+			// Detect stale handles by comparing epochs.
+			.filter(|&comp| (comp as &dyn Component).base().handle.epoch == handle.epoch)
 	}
 
 	/// Mutably borrow the [`Component`] identified by the given handle and downcast to `T`.
 	///
-	/// **Panics** if the requested object no longer exists, is borrowed already, or not of type `T`.
-	pub fn get_mut<T: Component> (&mut self, handle: Handle<Comp>) -> &mut T
+	/// Returns `None` if the requested object no longer exists in this store, is not of type `T`, or currently borrowed
+	/// by the player. In particular, you cannot borrow a component from its own callback.
+	pub fn get_mut<T: Component> (&mut self, handle: Handle) -> Option<&mut T>
 	{
-		<dyn Any>::downcast_mut::<T>(
-			self.slots.get_mut(handle.index()).expect(Self::MSG_BAD_HANDLE)
-			.as_deref_mut().expect(Self::MSG_MISSING_OBJ)
-			.as_mut()
-		).expect(Self::MSG_WRONG_TYPE)
+		<dyn std::any::Any>::downcast_mut::<T>(self.slots.get_mut(handle.index())?.get_mut()?.as_mut())
+			// Detect stale handles by comparing epochs.
+			.filter(|comp| (*comp as &dyn Component).base().handle.epoch == handle.epoch)
 	}
 
 	/// Borrow the current main component if there is one.
-	fn main (&self) -> Option<&Comp>
+	pub(super) fn main (&self) -> Option<&Comp>
 	{
-		self.slots.get(self.main)?.as_deref()
+		Some(&*self.slots.get(self.main as usize)?.get()?)
 	}
-
 	/// Mutably borrow the current main component if there is one.
-	fn main_mut (&mut self) -> Option<&mut Comp>
+	pub(super) fn main_mut (&mut self) -> Option<&mut Comp>
 	{
-		self.slots.get_mut(self.main)?.as_deref_mut()
+		Some(&mut *self.slots.get_mut(self.main as usize)?.get_mut()?)
 	}
 
 	/// If there is a main component, move it out of the container.
 	///
 	/// This allows calling a method of the component with a reference to the player, since they no longer alias.
 	/// Make sure to reinsert the component afterwards using [`Self::putMain`].
-	pub(self) fn takeMain (&mut self) -> Option<CompPtr<Comp>>
+	pub(super) fn takeMain (&mut self) -> Option<Ptr<Comp>>
 	{
-		self.slots.get_mut(self.main)?.take()
+		self.slots.get_mut(self.main as usize)?.takeIf(|_| true)
 	}
-
 	/// Store the given component in the slot selected as main, dropping any previous value.
 	///
-	/// Should generally be used only to undo [`Self::takeMain`]. For seleting a different main component, set
+	/// Should generally be used only to undo [`Self::takeMain`]. For selecting a different main component, set
 	/// [`Self::main`] instead.
-	pub(self) fn putMain (&mut self, new_actor: CompPtr<Comp>)
+	pub(super) fn putMain (&mut self, new_actor: Ptr<Comp>)
 	{
-		self.slots[self.main] = Some(new_actor);
+		self.slots[self.main as usize].putBack(new_actor);
 	}
 }
 
-/// Identifies a [`Component`] of type `Comp` stored by the [`Player`].
+
+/// Identifies a [`Component`] stored by the [`Player`] in a [`Store`].
 ///
-/// Provides access to that component via [`Components::get`] and [`Components::get_mut`]. Handles remain valid as long
-/// as the player owns the referenced component; in particular, they can be used in asynchronous callbacks.
+/// The component can be accessed via [`Store::get`] and [`Store::get_mut`]. Handles remain valid as long as the player
+/// owns the component; in particular, they can be used in asynchronous callbacks.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Handle<Comp: ?Sized>
+pub struct Handle
 {
-	idx: u16,
-	marker: std::marker::PhantomData<fn() -> Comp>,
+	/// Index into [`Store::slots`] where the component is stored.
+	index: Index,
+	/// Disambiguates components when slots are reused.
+	epoch: Epoch,
 }
-impl<Comp: ?Sized> Handle<Comp>
+impl Handle
 {
-	fn new (index: usize) -> Self
+	pub(crate) const INVALID: Self = Self{index: Index::MAX, epoch: Epoch::MAX};
+
+	fn new (index: usize, epoch: Epoch) -> Self
 	{
-		debug_assert!(index <= u16::MAX as usize);
-		Self{idx: index as u16, marker: std::marker::PhantomData}
+		debug_assert!(index <= Index::MAX as usize);
+		Self{index: index as Index, epoch}
 	}
 
-	pub(crate) fn index(self) -> usize {self.idx as usize}
+	pub(crate) fn index (self) -> usize {self.index as usize}
 }
-pub type AppHandle = Handle<dyn Application>;
-pub type CameraHandle = Handle<dyn Camera>;
-pub type CamIntHandle = Handle<dyn CameraInteractor>;
+
+} // mod component
+pub use component::Handle;
+
+
+//////
+//
+// Classes
+//
 
 ////
 // Player
@@ -421,8 +540,8 @@ pub type CamIntHandle = Handle<dyn CameraInteractor>;
 pub struct Player
 {
 	pub camera: Box<dyn Camera>,
-	pub applications: Components<dyn Application>,
-	pub cameraInteractors: Components<dyn CameraInteractor>,
+	pub applications: component::Store<dyn Application>,
+	pub cameraInteractors: component::Store<dyn CameraInteractor>,
 	pub state: State,
 }
 
@@ -528,14 +647,8 @@ impl Player
 		// Now construct
 		let mut player = Self {
 			camera,
-			cameraInteractors: Components {
-				slots: vec![
-					Some(CompPtr::fromSafe(Box::new(view::CamIntObject::from(view::OrbitInteractor::new())), 1)),
-					Some(CompPtr::fromSafe(Box::new(view::CamIntObject::from(view::WASDInteractor::new())), 1)),
-				],
-				main: 0,
-			},
-			applications: Components::EMPTY,
+			cameraInteractors: component::Store::EMPTY,
+			applications: component::Store::EMPTY,
 			state: State {
 				quitShortcut: egui::KeyboardShortcut::new(egui::Modifiers::NONE, egui::Key::Escape),
 				egui: cc.egui_ctx.clone(),
@@ -559,6 +672,10 @@ impl Player
 			}
 		};
 
+		// Add camera interactors
+		player.cameraInteractors.add(Box::new(view::CamIntObject::from(view::OrbitInteractor::new())), true);
+		player.cameraInteractors.add(Box::new(view::CamIntObject::from(view::WASDInteractor::new())), true);
+
 		// Init application(s)
 		let mut mainApplication = applicationFactory.create(
 			&player.state.context, &player.state.renderSetup, environment
@@ -568,7 +685,7 @@ impl Player
 			&player.context, &player.renderSetup, &Player::globalPassesFromCameras(player.activeCameras())
 		);
 		mainApplication.postInit(&mut player)?;
-		player.applications.slots.push(Some(CompPtr::fromSafe(mainApplication, 0)));
+		player.applications.add(mainApplication, true);
 		player.activeSidePanel = 2;
 
 		// Done!
@@ -883,7 +1000,7 @@ impl Player
 		// Applications get first dibs
 		// - the main (foreground) application
 		if let Some(mut app) = self.applications.takeMain() {
-			let outcome = app.input(&event, self, AppHandle::new(self.applications.main));
+			let outcome = app.input(&event, self);
 			self.applications.putMain(app);
 
 			match outcome {
@@ -900,10 +1017,10 @@ impl Player
 
 		// - now all active background applications in some undefined order.
 		for idx in 0..self.applications.slots.len() {
-			if idx == self.applications.main {continue};
-			let Some(mut app) = self.applications.slots[idx].take_if(|ptr| ptr.tag() == 0) else {continue};
-			let outcome = app.input(&event, self, AppHandle::new(idx));
-			self.applications.slots[idx] = Some(app);
+			if idx == self.applications.main as usize {continue};
+			let Some(mut app) = self.applications.slots[idx].takeIf(|comp| comp.isActive()) else {continue};
+			let outcome = app.input(&event, self);
+			self.applications.slots[idx].putBack(app);
 
 			match outcome {
 				// Event was closed by the receiver
@@ -919,7 +1036,7 @@ impl Player
 
 		// Finally, the main camera interactor
 		if let Some(mut ci) = self.cameraInteractors.takeMain() {
-			let outcome = ci.input(&event, self, CamIntHandle::new(self.cameraInteractors.main));
+			let outcome = ci.input(&event, self);
 			self.cameraInteractors.putMain(ci);
 
 			match outcome {
@@ -989,7 +1106,7 @@ impl Player
 			}
 
 			// Prepare other active applications
-			self.applications.slots.iter_mut().filter_map(|slot| slot.as_mut().take_if(|ptr| ptr.tag() == 0)).fold(
+			self.applications.slots.iter_mut().filter_map(|slot| slot.get_mut().filter(|ptr| ptr.isActive())).fold(
 				&mut cmdBuffers, |commands, app| {
 					if let Some(newCommands) = app.prepareFrame(
 						&self.state.context, renderState, &passInfo
@@ -1046,10 +1163,10 @@ impl Player
 
 			// Render other active applications
 			for idx in 0..self.applications.slots.len() {
-				if idx == self.applications.main {continue};
-				let Some(mut app) = self.applications.slots[idx].take_if(|ptr| ptr.tag() == 0) else {continue};
-				app.render(&self.context, renderState, &mut renderPass, &passInfo);
-				self.applications.slots[idx] = Some(app);
+				if idx == self.applications.main as usize {continue};
+				let Some(app) = self.applications.slots[idx].get_mut() else {continue};
+				if !app.isActive() {continue};
+				app.render(&self.state.context, renderState, &mut renderPass, &passInfo);
 			}
 
 			if let Some(mut callback) = passInfo.completionCallback.take() {
@@ -1083,11 +1200,11 @@ impl Player
 	}
 
 	pub fn postRecreatePipelines (&mut self) {
+		let globalPasses = self.camera.globalPasses();
 		for i in 0..self.applications.slots.len() {
-			let Some(mut app) = self.applications.slots[i].take_if(|ptr| ptr.tag() == 0 || i == self.applications.main)
-				else {continue};
-			app.recreatePipelines(&self.context, &self.renderSetup, &self.activeGlobalPasses());
-			self.applications.slots[i] = Some(app);
+			let Some(app) = self.applications.slots[i].get_mut() else {continue};
+			if !app.isActive() && i != self.applications.main as usize {continue};
+			app.recreatePipelines(&self.state.context, &self.state.renderSetup, &globalPasses);
 		}
 	}
 
@@ -1282,7 +1399,7 @@ impl eframe::App for StaticImpls
 
 			// Update camera interactor
 			if let Some(mut ci) = player.cameraInteractors.takeMain() {
-				ci.update(player, CamIntHandle::new(player.cameraInteractors.main));
+				ci.update(player);
 				player.cameraInteractors.putMain(ci);
 			}
 			if player.camera.update() {
