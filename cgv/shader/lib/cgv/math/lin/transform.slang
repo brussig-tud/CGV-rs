@@ -33,25 +33,39 @@ using cgv;
 // Functions
 //
 
-// Transform a position with a homogenous matrix, dropping the .w component from the result.
+// Transform a position with a homogenous matrix, dropping the *w* component from the result.
 [ForceInline]
 public func transformPos<Scalar: __BuiltinFloatingPointType> (m: Mat4<Scalar>, pos: Vec3<Scalar>) -> Vec3<Scalar> {
 	return mul(m, Vec4<Scalar>(pos, Scalar(1))).xyz;
 }
 
-// Transform a position with a homogenous matrix, keeping the resulting .w component.
+// Transform a position with a homogenous matrix, de-homogenizing the result by performing a *w* clip.
+[ForceInline]
+public func transformPos_clip<Scalar: __BuiltinFloatingPointType> (m: Mat4<Scalar>, pos: Vec3<Scalar>) -> Vec3<Scalar> {
+	let p = mul(m, Vec4<Scalar>(pos, Scalar(1)));
+	return p.xyz / p.w;
+}
+
+// Transform a position with a homogenous matrix, keeping the resulting *w* component.
 [ForceInline]
 public func transformPos_w<Scalar: __BuiltinFloatingPointType> (m: Mat4<Scalar>, pos: Vec3<Scalar>) -> Vec4<Scalar> {
 	return mul(m, Vec4<Scalar>(pos, Scalar(1)));
 }
 
-// Transform a direction with a homogenous matrix, dropping the .w component from the result.
+// Transform a direction with a homogenous matrix, dropping the *w* component from the result.
 [ForceInline]
 public func transformDir<Scalar: __BuiltinFloatingPointType> (m: Mat4<Scalar>, dir: Vec3<Scalar>) -> Vec3<Scalar> {
 	return mul(m, Vec4<Scalar>(dir, Scalar(0))).xyz;
 }
 
-// Transform a direction with a homogenous matrix, keeping the resulting .w component.
+// Transform a position with a homogenous matrix, de-homogenizing the result by performing a *w* clip.
+[ForceInline]
+public func transformDir_clip<Scalar: __BuiltinFloatingPointType> (m: Mat4<Scalar>, dir: Vec3<Scalar>) -> Vec3<Scalar> {
+	let d = mul(m, Vec4<Scalar>(dir, Scalar(0)));
+	return d.xyz / d.w;
+}
+
+// Transform a direction with a homogenous matrix, keeping the resulting *w* component.
 [ForceInline]
 public func transformDir_w<Scalar: __BuiltinFloatingPointType> (m: Mat4<Scalar>, dir: Vec3<Scalar>) -> Vec4<Scalar> {
 	return mul(m, Vec4<Scalar>(dir, Scalar(0)));
