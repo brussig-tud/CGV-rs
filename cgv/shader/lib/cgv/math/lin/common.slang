@@ -69,10 +69,6 @@ public extension<T: __BuiltinFloatingPointType> T: IElement
 		return fma(this, mult, add);
 	}
 }
-public struct Foo {
-	public int f;
-	public double o;
-}
 public extension<T: __BuiltinFloatingPointType, int N> vector<T, N>: IElement
 {
 	public typealias Repr = T;
@@ -126,7 +122,7 @@ public interface IElementSeq<Elem: IElement, int N>: IRWArray<Elem>
 	[mutating]
 	public func set (int i, in const newValue: Elem);
 }
-public extension<T: __BuiltinFloatingPointType, int Dplus1> vector<T, Dplus1>: IElementSeq<T, Dplus1> {
+public extension<T: __BuiltinFloatingPointType, int N> vector<T, N>: IElementSeq<T, N> {
 	[ForceInline][mutating]
 	public func set (int i, in const newValue: T) {
 		this[i] = newValue;
