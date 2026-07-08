@@ -13,6 +13,7 @@ module polynomial;
 
 // Local imports
 import "cgv/prelude.slang";
+import "cgv/math/functions.slang";
 import "cgv/math/lin/common.slang";
 import "cgv/meta.slang";
 
@@ -107,22 +108,31 @@ public namespace poly {
 /// Collection of basis transformation matrices between common polynomial bases of a given degree (excluding the Hermite basis as that is defined for degree 3 only).
 public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
 {
+	////
+	// Exported constants
+
 	/// The number of rows/columns in the (always square) transformation matrices.
 	public constexpr static const int N = D+1;
 
 	/// The transformation matrix from monomial to Bézier basis for degree `D` polynomials.
 	public constexpr static const matrix<Real, D+1, D+1> M2B = m2b();
 
+
+	////
+	// Private helpers
+
+	/// Loop through the given row vector of a to-be-filled M2B matrix via compile-time recursion
 	[ForceInline]
-	constexpr static const func m2b_forRow<int col, int curRow> (out M: matrix<Real,N,N>) {
+	private constexpr static const void m2b_forRow<int col, int curRow> (inout matrix<Real,N,N> M) {
 		if (curRow < N) {
-			M[0][curRow] = m2b_entry<D, col, curRow>();
+			M[col][curRow] = m2b_entry<col, curRow>();
 			m2b_forRow<col, curRow+1>(M);
 		}
 	}
 
+    /// Loop through the column vectors of a to-be-filled M2B matrix via compile-time recursion
 	[ForceInline]
-	constexpr static const func m2b_forCol<int curCol> (out M: matrix<Real,N,N>) {
+	private constexpr static const void m2b_forCol<int curCol> (inout matrix<Real,N,N> M) {
 		if (curCol < N) {
 			m2b_forRow<curCol, 0>(M);
 			m2b_forCol<curCol+1>(M);
@@ -131,19 +141,30 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
 
 	/// Returns the (*row*, *col*)-th entry of the monomial-to-Bézier basis transformation matrix for degree `D` polynomials.
 	[ForceInline]
-	public constexpr static const func m2b_entry<int D, int col, int row>() -> Real {
-		// Note reversal of column order ("D-...") compared typical versions of the formula in the literature since we
-		// store monomial coefficients in descending order of degree.
+	private constexpr static const func m2b_entry<int col, int row>() -> Real {
+		// Note reversal of column order ("D-...") compared to typical variants of the formula in the literature, since
+		// we store monomial coefficients in descending order of degree.
 		return row < D-col ? Real(0) : Real(meta::binomial<row, D-col>()) / Real(meta::binomial<D, D-col>());
 	}
 
 	/// Return the monomial to Bézier basis transformation matrix for the given polynomial degree.
 	[ForceInline]
-	public constexpr static const func m2b() -> matrix<Real, D+1, D+1>
-	{
+	private constexpr static const func m2b() -> matrix<Real, D+1, D+1> {
 		var M: matrix<Real, N, N>;
 		m2b_forCol<0>(M);
 		return M;
+	}
+
+
+	////
+	// Methods
+
+	/// Returns the (*row*, *col*)-th entry of the monomial-to-Bézier basis transformation matrix for degree `D` polynomials.
+	[ForceInline]
+	public constexpr static const func m2b_entry(in const col: int, in const row: int) -> Real {
+		// Note reversal of column order ("D-...") compared to typical variants of the formula in the literature, since
+		// we store monomial coefficients in descending order of degree.
+		return row < D-col ? Real(0) : Real(binomial(row, D-col)) / Real(binomial(D, D-col));
 	}
 };
 /// Collection of basis transformation matrices between common polynomial bases.

@@ -33,7 +33,7 @@ constexpr public func pow2<uint Exp> () -> int {
 	return pow<2, Exp>();
 }
 
-/// Evaluate the binomial coefficient of *N*-choose-*K* as a compile-time constant.
+/// Evaluate the binomial coefficient *N*-choose-*K* as a compile-time constant.
 [ForceInline]
 constexpr public func binomial<int N, int K>() -> int {
 	return K==0 || K==N ? 1 : binomial<N-1, K-1>() + binomial<N-1, K>();
