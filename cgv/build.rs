@@ -69,6 +69,7 @@ fn main() -> cgv_build::Result<()>
 			env.addModule(recommendedStorage, "cgv/math/lin/inverse.slang")?;
 			env.addModule(recommendedStorage, "cgv/prelude.slang")?;
 			env.addModule(recommendedStorage, "cgv/meta.slang")?;
+			env.addModule(recommendedStorage, "cgv/math/functions.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/lin/common.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/lin/transform.slang")?;
 			env.addModule(recommendedStorage, "cgv/math/util.slang")?;
