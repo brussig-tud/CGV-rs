@@ -14,6 +14,7 @@ module polynomial;
 // Local imports
 import "cgv/prelude.slang";
 import "cgv/math/lin/common.slang";
+import "cgv/meta.slang";
 
 
 ////
@@ -51,7 +52,43 @@ public interface IPolynomial<Real: __BuiltinFloatingPointType, uint D>
 	[ForceInline]
 	Real operator() (in const Real x) {
 		return eval(x);
-	}
+    }
+}
+
+/// Common interface for all polynomials that can be transformed to the monomial basis.
+public interface IToMonomial<Real : __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
+{
+	/// The type of the polynomial after transforming to the monomial basis.
+	associatedtype MonomialType: IPolynomial<Real, D>;
+
+	/// Transform the polynomial to the monomial basis.
+	/// # Returns
+	/// The polynomial in the monomial basis.
+	//func toMonomial () -> MonomialType;
+}
+
+/// Common interface for all polynomials that can be transformed to the Bézier basis.
+public interface IToBezier<Real : __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
+{
+	/// The type of the polynomial after transforming to the Bézier basis.
+	associatedtype BezierType: IPolynomial<Real, D>;
+
+	/// Transform the polynomial to the Bézier basis.
+	/// # Returns
+	/// The polynomial in the Bézier basis.
+	//func toBezier () -> BezierType;
+}
+
+/// Common interface for all polynomials that can be transformed to the Hermite basis.
+public interface IToHermite<Real : __BuiltinFloatingPointType> : IPolynomial<Real, 3>
+{
+	/// The type of the polynomial after transforming to the Hermite basis.
+	associatedtype HermiteType : IPolynomial<Real, 3>;
+
+	/// Transform the polynomial to the Hermite basis.
+	/// # Returns
+	/// The polynomial in the Hermite basis.
+	//func toHermite  () -> HermiteType;
 }
 
 
@@ -67,8 +104,50 @@ public interface IPolynomial<Real: __BuiltinFloatingPointType, uint D>
 /// Namespace providing some pre-defined polynomial representations as well as utility functions.
 public namespace poly {
 
+/// Collection of basis transformation matrices between common polynomial bases of a given degree (excluding the Hermite basis as that is defined for degree 3 only).
+public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
+{
+	/// The number of rows/columns in the (always square) transformation matrices.
+	public constexpr static const int N = D+1;
+
+	/// The transformation matrix from monomial to Bézier basis for degree `D` polynomials.
+	public constexpr static const matrix<Real, D+1, D+1> M2B = m2b();
+
+	[ForceInline]
+	constexpr static const func m2b_forRow<int col, int curRow> (out M: matrix<Real,N,N>) {
+		if (curRow < N) {
+			M[0][curRow] = m2b_entry<D, col, curRow>();
+			m2b_forRow<col, curRow+1>(M);
+		}
+	}
+
+	[ForceInline]
+	constexpr static const func m2b_forCol<int curCol> (out M: matrix<Real,N,N>) {
+		if (curCol < N) {
+			m2b_forRow<curCol, 0>(M);
+			m2b_forCol<curCol+1>(M);
+		}
+	}
+
+	/// Returns the (*row*, *col*)-th entry of the monomial-to-Bézier basis transformation matrix for degree `D` polynomials.
+	[ForceInline]
+	public constexpr static const func m2b_entry<int D, int col, int row>() -> Real {
+		// Note reversal of column order ("D-...") compared typical versions of the formula in the literature since we
+		// store monomial coefficients in descending order of degree.
+		return row < D-col ? Real(0) : Real(meta::binomial<row, D-col>()) / Real(meta::binomial<D, D-col>());
+	}
+
+	/// Return the monomial to Bézier basis transformation matrix for the given polynomial degree.
+	[ForceInline]
+	public constexpr static const func m2b() -> matrix<Real, D+1, D+1>
+	{
+		var M: matrix<Real, N, N>;
+		m2b_forCol<0>(M);
+		return M;
+	}
+};
 /// Collection of basis transformation matrices between common polynomial bases.
-public struct BasisTrans<Real: __BuiltinFloatingPointType>
+public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
 {
 	////
 	// Scalar constants
@@ -172,14 +251,27 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType>
 /// The coefficients are stored in descending order of degree, that is, `coeffs[0]` is the coefficient of the highest degree term, and `coeffs[D]` is the constant term.
 ///
 /// This coefficient ordering is chosen for performance reasons as it directly mirrors the evaluation order of terms in Horner's method.
-public struct Monomial<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>
+public struct Monomial<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>, IToMonomial<Real, D>, IToBezier<Real, D>
 {
+    public typealias MonomialType = This;
+    public typealias BezierType = Bezier<Real, D>;
+
 	public var coeffs: vector<Real, D+1>;
 
 	[ForceInline]
 	override func eval (in const x: Real) -> Real {
 		return evalMonomial(x, coeffs);
 	}
+
+	/*[ForceInline]
+	override func toMonomial () -> MonomialType {
+		return this;
+	}
+
+	[ForceInline]
+	override func toBezier () -> BezierType {
+		return BezierType(BasisTrans<Real>.M2B_D(coeffs));
+	}*/
 
 	[ForceInline]
 	__init (vector<Real, D+1> coeffs) {
@@ -236,7 +328,7 @@ public func evalMonomial<Elem: math::lin::IElement, int Dplus1, Coeffs: math::li
 	return y;
 }
 
-/// Evaluate the polynomial given by the provided Bézier basis coefficients at a given `x`. Uses De-Casteljau's algorithm internally.
+/// Evaluate the polynomial given by the provided Bézier basis coefficients at a given `x`. Uses De-Casteljau's algorithm internally. Consider transforming the Bézier coefficients to monomial basis for more efficient evaluation (if the same polynomial needs to be evaluated repeatedly).
 /// # Arguments
 /// * `x` – The point at which to evaluate the polynomial.
 /// * `coeffs` – The Bézier basis coefficients of the polynomial.
