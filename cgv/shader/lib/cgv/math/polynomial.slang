@@ -53,7 +53,7 @@ public interface IPolynomial<Real: __BuiltinFloatingPointType, uint D>
 	[ForceInline]
 	Real operator() (in const Real x) {
 		return eval(x);
-    }
+	}
 }
 
 /// Common interface for all polynomials that can be transformed to the monomial basis.
@@ -114,9 +114,6 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
 	/// The number of rows/columns in the (always square) transformation matrices.
 	public constexpr static const int N = D+1;
 
-	/// The transformation matrix from monomial to Bézier basis for degree `D` polynomials.
-	public constexpr static const matrix<Real, D+1, D+1> M2B = m2b();
-
 
 	////
 	// Private helpers
@@ -130,7 +127,7 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
 		}
 	}
 
-    /// Loop through the column vectors of a to-be-filled M2B matrix via compile-time recursion
+	/// Loop through the column vectors of a to-be-filled M2B matrix via compile-time recursion
 	[ForceInline]
 	private constexpr static const void m2b_forCol<int curCol> (inout matrix<Real,N,N> M) {
 		if (curCol < N) {
@@ -139,20 +136,40 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
 		}
 	}
 
+	/// Loop through the given row vector of a to-be-filled B2M matrix via compile-time recursion
+	[ForceInline]
+	private constexpr static const void b2m_forRow<int col, int curRow>(inout matrix<Real, N, N> M) {
+		if (curRow < N) {
+			M[col][curRow] = b2m_entry<col, curRow>();
+			b2m_forRow<col, curRow+1>(M);
+		}
+	}
+
+	/// Loop through the column vectors of a to-be-filled B2M matrix via compile-time recursion
+	[ForceInline]
+	private constexpr static const void b2m_forCol<int curCol>(inout matrix<Real, N, N> M) {
+		if (curCol < N) {
+			b2m_forRow<curCol, 0>(M);
+			b2m_forCol<curCol+1>(M);
+		}
+	}
+
 	/// Returns the (*row*, *col*)-th entry of the monomial-to-Bézier basis transformation matrix for degree `D` polynomials.
 	[ForceInline]
 	private constexpr static const func m2b_entry<int col, int row>() -> Real {
-		// Note reversal of column order ("D-...") compared to typical variants of the formula in the literature, since
-		// we store monomial coefficients in descending order of degree.
-		return row < D-col ? Real(0) : Real(meta::binomial<row, D-col>()) / Real(meta::binomial<D, D-col>());
+		// Note reversal of column order `D-col` compared to typical variants of the formula in the literature, since we
+		// are given monomial coefficients in descending order of degree.
+		static constexpr const int coeff = D-col;
+		return row < coeff ? Real(0) : Real(meta::binomial<row, coeff>()) / Real(meta::binomial<D, coeff>());
 	}
 
-	/// Return the monomial to Bézier basis transformation matrix for the given polynomial degree.
+	/// Returns the (*row*, *col*)-th entry of the Bézier-to-monomial basis transformation matrix for degree `D` polynomials.
 	[ForceInline]
-	private constexpr static const func m2b() -> matrix<Real, D+1, D+1> {
-		var M: matrix<Real, N, N>;
-		m2b_forCol<0>(M);
-		return M;
+	private constexpr static const func b2m_entry<int col, int row>() -> Real {
+		// Note reversal of row order `D-row` compared to typical variants of the formula in the literature, since we
+		// will store the resulting monomial coefficients in descending order of degree.
+		static constexpr const int coeff = D-row;
+		return coeff < col ? Real(0) : Real((((coeff-col) & 1) ? -1 : 1) * meta::binomial<D, coeff>()*meta::binomial<coeff, col>());
 	}
 
 
@@ -161,14 +178,41 @@ public struct BasisTrans<Real: __BuiltinFloatingPointType, uint D>
 
 	/// Returns the (*row*, *col*)-th entry of the monomial-to-Bézier basis transformation matrix for degree `D` polynomials.
 	[ForceInline]
-	public constexpr static const func m2b_entry(in const col: int, in const row: int) -> Real {
-		// Note reversal of column order ("D-...") compared to typical variants of the formula in the literature, since
-		// we store monomial coefficients in descending order of degree.
-		return row < D-col ? Real(0) : Real(binomial(row, D-col)) / Real(binomial(D, D-col));
+	public constexpr static const func m2b_entry (in const col: int, in const row: int) -> Real {
+		// Note reversal of column order `D-col` compared to typical variants of the formula in the literature, since we
+		// are given monomial coefficients in descending order of degree.
+		let coeff = D-col;
+		return row < coeff ? Real(0) : Real(binomial(row, coeff)) / Real(binomial(D, coeff));
+	}
+
+	/// Returns the (*row*, *col*)-th entry of the Bézier-to-monomial basis transformation matrix for degree `D` polynomials.
+	[ForceInline]
+	public constexpr static const func b2m_entry (in const col: int, in const row: int) -> Real {
+		// Note reversal of row order `D-row` compared to typical variants of the formula in the literature, since we
+		// will store the resulting monomial coefficients in descending order of degree.
+		let coeff = D-row;
+		return coeff < col ? Real(0) : Real((((coeff-col) & 1) ? -1 : 1) * binomial(D, coeff)*binomial(coeff, col));
+	}
+
+	/// Return the monomial to Bézier basis transformation matrix for the given polynomial degree.
+	[ForceInline]
+	public constexpr static const func m2b() -> matrix<Real, D+1, D+1> {
+		var M: matrix<Real, N, N>;
+		m2b_forCol<0>(M);
+		return M;
+	}
+
+	/// Return the Bézier to monomial basis transformation matrix for the given polynomial degree.
+	[ForceInline]
+	public constexpr static const func b2m() -> matrix<Real, D+1, D+1> {
+		var M: matrix<Real, N, N>;
+		b2m_forCol<0>(M);
+		return M;
 	}
 };
+
 /// Collection of basis transformation matrices between common polynomial bases.
-public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
+public struct BasisTransFixed<Real: __BuiltinFloatingPointType>
 {
 	////
 	// Scalar constants
@@ -202,12 +246,16 @@ public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
 	// Monomial -> Bézier
 
 	/// The transformation matrix from monomial to Bézier basis for linear polynomials.
+	///
+	/// **DEPRECATED**: Use `BasisTrans<Real, /*degree:*/1>::m2b()` instead.
 	public constexpr static const Mat2<Real> M2B_1 = Mat2<Real>(
 		Vec2<Real>( _0,  _1),
 		Vec2<Real>( _1,  _1)
 	);
 
 	/// The transformation matrix from monomial to Bézier basis for quadratic polynomials.
+	///
+	/// **DEPRECATED**: Use `BasisTrans<Real, /*degree:*/2>::m2b()` instead.
 	public constexpr static const Mat3<Real> M2B_2 = Mat3<Real>(
 		Vec3<Real>( _0,  _0,   _1),
 		Vec3<Real>( _0,  _1o2, _1),
@@ -215,6 +263,8 @@ public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
 	);
 
 	/// The transformation matrix from monomial to Bézier basis for cubic polynomials.
+	///
+	/// **DEPRECATED**: Use `BasisTrans<Real, /*degree:*/3>::m2b()` instead.
 	public constexpr static const Mat4<Real> M2B_3 = Mat4<Real>(
 		Vec4<Real>( _0,   _0,   _0,   _1),
 		Vec4<Real>( _0,   _0,   _1o3, _1),
@@ -227,12 +277,16 @@ public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
 	// Bézier -> Monomial
 
 	/// The transformation matrix from Bézier to monomial basis for linear polynomials.
+	///
+	/// **DEPRECATED**: Use `BasisTrans<Real, /*degree:*/1>::b2m()` instead.
 	public constexpr static const Mat2<Real> B2M_1 = Mat2<Real>(
 		Vec2<Real>(-_1,  _1),
 		Vec2<Real>( _1,  _0)
 	);
 
 	/// The transformation matrix from Bézier to monomial basis for quadratic polynomials.
+	///
+	/// **DEPRECATED**: Use `BasisTrans<Real, /*degree:*/2>::b2m()` instead.
 	public constexpr static const Mat3<Real> B2M_2 = Mat3<Real>(
 		Vec3<Real>( _1,  -_2,   _1),
 		Vec3<Real>(-_2,   _2,   _0),
@@ -240,6 +294,8 @@ public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
 	);
 
 	/// The transformation matrix from Bézier to monomial basis for cubic polynomials.
+	///
+	/// **DEPRECATED**: Use `BasisTrans<Real, /*degree:*/3>::b2m()` instead.
 	public constexpr static const Mat4<Real> B2M_3 = Mat4<Real>(
 		Vec4<Real>(-_1,   _3,  -_3,   _1),
 		Vec4<Real>( _3,  -_6,   _3,   _0),
@@ -274,8 +330,8 @@ public struct BasisTransLegacy<Real: __BuiltinFloatingPointType>
 /// This coefficient ordering is chosen for performance reasons as it directly mirrors the evaluation order of terms in Horner's method.
 public struct Monomial<Real: __BuiltinFloatingPointType, uint D> : IPolynomial<Real, D>, IToMonomial<Real, D>, IToBezier<Real, D>
 {
-    public typealias MonomialType = This;
-    public typealias BezierType = Bezier<Real, D>;
+	public typealias MonomialType = This;
+	public typealias BezierType = Bezier<Real, D>;
 
 	public var coeffs: vector<Real, D+1>;
 
