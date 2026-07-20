@@ -11,6 +11,9 @@ import "cgv/color/blending.slang";     // alpha blending operators
 import "cgv/math/field.slang";         // contains the checkerboard pattern
 
 
+import "cgv/math/polynomial.slang";         // contains the checkerboard pattern
+
+
 
 //////
 //
@@ -72,9 +75,13 @@ ParameterBlock<cgv::api::Viewing> viewing;
 
 /// Our sole vertex shader entry point.
 [shader("vertex")]
-func vertexMain (vert: VSInput) -> VSOutput {
+func vertexMain (vert: VSInput) -> VSOutput
+{
+	/*static constexpr let T1 = cgv::math::poly::BasisTrans<float, 1>::b2m();
+	static constexpr let T2 = cgv::math::poly::BasisTrans<float, 2>::b2m();
+	static constexpr let T3 = cgv::math::poly::BasisTrans<float, 3>::b2m();*/
 	return VSOutput(
-		/* pos_clip: */ viewing.projModelview * vert.pos,
+		/* pos_clip: */ viewing.projModelview * vert.pos,//*/float4(T1*(T2*(T3 * vert.pos).xyz).xy, 0, 1),
 		/* color:    */ vert.color,
 		/* texcoord: */ vert.texcoord
 	);

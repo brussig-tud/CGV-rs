@@ -193,7 +193,7 @@ public func splatVertexWithSPS<Scalar: __BuiltinFloatingPointType, SplatInfo: IS
 	typealias Vec4 = cgv::Vec4<Scalar>;
 
 	// compute the corner point in homogeneous object coordinates
-	ssi.q_tilde = geom::Billboards<Scalar>::quad[corner].xy;
+	ssi.q_tilde = geom::Billboards<Scalar>::quadCorner(corner).xy;
 	let V_tilde: Vec3 = sps.m_tilde + ssi.q_tilde.x*sps.x_tilde + ssi.q_tilde.y*sps.y_tilde;
 	let v_tilde: Vec3 = V_tilde - sps.e_tilde;
 

@@ -28,7 +28,7 @@ public namespace cgv::color {
 public namespace blend {
 
 /// The *Over* blending operator.
-public static constexpr Over over;
+public static constexpr Over over = Over();
 
 
 // Sub-namespace close

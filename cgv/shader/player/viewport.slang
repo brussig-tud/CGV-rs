@@ -5,7 +5,7 @@
 //
 
 // CGV-rs core shader library
-import "cgv/geom/billboard.slang";        // access the pre-defined billboards
+import "cgv/geom/billboard.slang";        // access the pre-defined billboards, currently broken in Slang 2026.13+
 
 // Use CGV namespace by default
 using namespace cgv;
@@ -22,8 +22,8 @@ using namespace cgv;
 
 /// Our sole vertex shader entry point.
 [shader("vertex")]
-func vertexMain (uint vertexID: SV_VertexID) -> media::VertexU<float> {
-	return geom::Billboards<float>::quadU[vertexID];
+func vertexMain (uint vertexID: SV_VertexID) -> media::VertexU<float>::GpuVertex {
+	return geom::Billboards<float>::quadUCorner(vertexID).emit();
 }
 
 
@@ -58,7 +58,7 @@ ParameterBlock<float3> gamma;
 
 /// Our sole fragment shader entry point.
 [shader("fragment")]
-func fragmentMain (vpIn: media::VertexU<float>) -> float4 {
+func fragmentMain (vpIn: media::VertexU<float>::GpuVertex) -> float4 {
 	let unpremultiplied: float4 = vpTex.color.Sample(vpTex.sampler, vpIn.uv);
 	return float4(pow(unpremultiplied.rgb * unpremultiplied.a, gamma), unpremultiplied.a);
 }

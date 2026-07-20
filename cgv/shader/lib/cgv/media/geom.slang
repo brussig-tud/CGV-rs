@@ -34,6 +34,16 @@ using cgv;
 // Interfaces
 //
 
+/// An interface for vertices that can be consumed by the GPU rasterization pipeline.
+public interface IVertex {
+	/// The vertex type with at least one field with `SV_Position` semantics.
+	associatedtype VertexType: IPosition<float>;
+
+	/// Emit a GPU-consumable vertex.
+	[ForceInline]
+	public func emit () -> VertexType;
+}
+
 /// An interface for data records containing a position (e.g. in a vertex).
 public interface IPosition<Scalar: __BuiltinFloatingPointType> {
 	/// The position.
@@ -104,13 +114,32 @@ public extension float4: IColor {
 //
 
 /// A simple vertex with normal.
-public struct VertexN<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, INormal<float>
+public struct VertexN<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, INormal<float>, IVertex
 {
+	/// Our GPU-consumable vertex type.
+	public struct GpuVertex: IPosition<float>, INormal<float>
+	{
+		public float4 pos : SV_Position;
+		public var normal: float4;
+
+		[ForceInline]
+		public __init (Vec4<PosScalar> pos, float4 normal) {
+			this.pos = float4(pos); this.normal = normal;
+		}
+	}
+	public typealias VertexType = GpuVertex;
+
 	/// The vertex position.
-	public Vec4<PosScalar> pos : SV_Position;
+	public Vec4<PosScalar> pos;
 
 	/// The vertex normal.
 	public float4 normal;
+
+	///	Emit a GPU-consumable version.
+	[ForceInline]
+	public func emit () -> VertexType {
+		return VertexType(pos, normal);
+	}
 
 	/// Construct with the given position and normal.
 	[ForceInline]
@@ -120,15 +149,34 @@ public struct VertexN<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScala
 }
 
 /// A simple vertex with 2D texture coordinates (the *U* refers to the coordinate tuple *uv*).
-public struct VertexU<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, ITexCoords<float, 2>
+public struct VertexU<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, ITexCoords<float, 2>, IVertex
 {
-	/// The vertex position.
-	public Vec4<PosScalar> pos : SV_Position;
+	/// Our GPU-consumable vertex type.
+	public struct GpuVertex: IPosition<float>, ITexCoords<float, 2>
+	{
+		public float4 pos : SV_Position;
+		public var uv: float2;
 
-	/// The vertex color.
+		[ForceInline]
+		public __init (Vec4<PosScalar> pos, float2 uv) {
+			this.pos = float4(pos); this.uv = uv;
+		}
+	}
+	public typealias VertexType = GpuVertex;
+
+	/// The vertex position.
+	public Vec4<PosScalar> pos;
+
+	/// The vertex texture coordinates.
 	public float2 uv;
 
-	/// Construct with the given position and normal.
+	///	Emit a GPU-consumable version.
+	[ForceInline]
+	public func emit () -> VertexType {
+		return VertexType(pos, uv);
+	}
+
+	/// Construct with the given position and texture coordinates.
 	[ForceInline]
 	public __init (Vec4<PosScalar> pos, float2 uv) {
 		this.pos = pos; this.uv = uv;
@@ -136,13 +184,32 @@ public struct VertexU<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScala
 }
 
 /// A simple vertex with color.
-public struct VertexC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, IColor
+public struct VertexC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, IColor, IVertex
 {
+	/// Our GPU-consumable vertex type.
+	public struct GpuVertex: IPosition<float>, IColor
+	{
+		public float4 pos : SV_Position;
+		public var color: float4;
+
+		[ForceInline]
+		public __init (Vec4<PosScalar> pos, float4 color) {
+			this.pos = float4(pos); this.color = color;
+		}
+	}
+	public typealias VertexType = GpuVertex;
+
 	/// The vertex position.
-	public Vec4<PosScalar> pos : SV_Position;
+	public Vec4<PosScalar> pos;
 
 	/// The vertex color.
 	public float4 color;
+
+	///	Emit a GPU-consumable version.
+	[ForceInline]
+	public func emit () -> VertexType {
+		return VertexType(pos, color);
+	}
 
 	/// Construct with the given position and normal.
 	[ForceInline]
@@ -152,16 +219,36 @@ public struct VertexC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScala
 }
 
 /// A simple vertex with normal and color.
-public struct VertexNC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, INormal<float>, IColor
+public struct VertexNC<PosScalar: __BuiltinFloatingPointType>: IPosition<PosScalar>, INormal<float>, IColor, IVertex
 {
+	/// Our GPU-consumable vertex type.
+	public struct GpuVertex: IPosition<float>, INormal<float>, IColor
+	{
+		public float4 pos : SV_Position;
+		public var normal: float4;
+		public var color: float4;
+
+		[ForceInline]
+		public __init (Vec4<PosScalar> pos, float4 normal, float4 color) {
+			this.pos = float4(pos); this.normal = normal; this.color = color;
+		}
+	}
+	public typealias VertexType = GpuVertex;
+
 	/// The vertex position.
-	public Vec4<PosScalar> pos : SV_Position;
+	public Vec4<PosScalar> pos;
 
 	/// The vertex normal.
 	public float4 normal;
 
 	/// The vertex color.
 	public float4 color;
+
+	///	Emit a GPU-consumable version.
+	[ForceInline]
+	public func emit () -> VertexType {
+		return VertexType(pos, normal, color);
+	}
 
 	/// Construct with the given position and normal.
 	[ForceInline]

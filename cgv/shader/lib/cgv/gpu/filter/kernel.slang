@@ -257,7 +257,7 @@ public func box2<DataType: math::lin::IElement, int Dims> (
 	q: vector<int, Dims>, data: IFunc<DataType, vector<int, Dims>>
 ) -> DataType
 {
-	static constexpr Box2<DataType, Dims> kernel;
+	static constexpr Box2<DataType, Dims> kernel = Box2<DataType, Dims>();
 	return kernel.apply(q, data);
 }
 
