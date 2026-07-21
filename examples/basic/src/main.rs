@@ -149,16 +149,16 @@ pub type AppearanceUniformGroup = cgv::hal::UniformGroup<Appearance>;
 ////
 // ExampleApplication
 
-/// Factory function for our `ExampleApplication` defined right after. Regular functions with this signature implement
-/// the [`cgv::ApplicationFactory`] trait. If more flexibility is required to control how exactly your app is created,
-/// you can also write a factory class, i.e. a custom struct that implements `cgv::ApplicationFactory`.
-fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
-	-> cgv::Result<ExampleApplication>
+/// Create an [`ExampleApplication`] and add it to the player.
+///
+/// Called on launch after the player has been initialized.
+fn init (player: &mut cgv::Player)
 {
 	// Tracing
 	tracing::info!("Creating \"Basic\" example application");
-	tracing::info!("{:?}", environment);
+	tracing::info!("{:?}", player.runenv());
 
+	let context = &mut player.state.context;
 
 	////
 	// Prepare buffers
@@ -193,19 +193,19 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 		// Bake – when using `sourceGeneratedBytes`, the path is rooted at our crate's *Cargo* build script output
 		// directory. `cgv_build::prepareShaders` in our build script will have mirrored our source folder structure.
 		util::sourceGeneratedBytes!("/shader/example.spk")
-	)?;
+	).unwrap();
 	// - obtain the *WGPU* shader module
 	let shader = shaderPackage.createShaderModuleFromBestInstance(
 		context.device(), None, Some("ExBasic__ShaderModule")
 	).ok_or(
 		cgv::anyhow!("Could not create example shader module")
-	)?;
+	).unwrap();
 
 	// The example texture
 	let tex = cgv::hal::Texture::fromBlob(
 		context, util::sourceBytes!("/res/tex/cgvCube.png"), cgv::hal::AlphaUsage::DontCare, None,
 		cgv::hal::defaultMipmapping(), Some("ExBasic__TestTexture")
-	)?;
+	).unwrap();
 
 
 	////
@@ -284,11 +284,11 @@ fn createBasicExampleApp (context: &cgv::Context, _: &cgv::RenderSetup, environm
 	////
 	// Done!
 
-	// Construct the instance and put it in a box
-	Ok(ExampleApplication {
+	// Create an application instance and give it to the player.
+	player.addApp(Box::new(cgv::AppObject::from(ExampleApplication {
 		shader, appearanceUniforms, texBindGroupLayout, texBindGroup, vertexBuffer, indexBuffer, guiState,
 		pipelines: Vec::new(), // <- delayed, *CGV-rs* has a dedicated cycle for this as typically we don't have all
-	})                        //    required information at this point, like viewport dimensions
+	})), true).unwrap();  //    required information at this point, like viewport dimensions
 }
 
 #[derive(Default,Debug)]
@@ -569,6 +569,6 @@ impl cgv::Application<ExampleApplication> for cgv::AppObject<ExampleApplication>
 
 /// The application entry point.
 pub fn main () -> cgv::Result<()> {
-	// Immediately hand off control flow, passing in a factory for our ExampleApplication
-	cgv::Player::run(Box::new(createBasicExampleApp))
+	// Immediately hand off control flow, passing in a callback to create our ExampleApplication
+	cgv::Player::run(Box::new(init))
 }

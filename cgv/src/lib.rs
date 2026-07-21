@@ -572,42 +572,6 @@ pub struct ApplicationBase {}
 pub type AppObject<User> = ComponentObject<ApplicationBase, User>;
 
 
-
-////
-// ApplicationFactory
-
-/// An object that can create instances of an applications that can be run by the [`Player`].
-pub trait ApplicationFactory
-{
-	/// Create an instance of the target application.
-	///
-	/// # Arguments
-	///
-	/// * `context` – The graphics context.
-	/// * `renderSetup` – The global render setup of the *CGV-rs* [`Player`].
-	/// * `environment` – Runtime environment information (like the shader path) for the to-be-created application.
-	///
-	/// # Returns
-	///
-	/// A boxed instance of the application if successful, or some descriptive error detailing the failure if no
-	/// instance could be created.
-	fn create (
-		&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment
-	) -> Result<Box<dyn Application>>;
-}
-impl<F, User> ApplicationFactory for F
-where
-	F: for<'a, 'b> Fn(&'a Context, &'b RenderSetup, run::Environment)->Result<User>,
-	AppObject<User>: Application
-{
-	fn create (&self, context: &Context, renderSetup: &RenderSetup, environment: run::Environment)
-	-> Result<Box<dyn Application>> {
-		Ok(Box::new(AppObject::from(self(context, renderSetup, environment)?)))
-	}
-}
-
-
-
 ///////
 //
 // Functions

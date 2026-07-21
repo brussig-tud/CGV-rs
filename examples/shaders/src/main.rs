@@ -46,14 +46,12 @@ use cgv::{self, util, shader::compile::prelude::*};
 ////
 // OnlineShadersDemo
 
-/// Factory function.
-fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment: cgv::run::Environment)
-	-> cgv::Result<OnlineShadersDemo>
+/// Startup function.
+fn init (player: &mut cgv::Player)
 {
 	// Tracing
 	tracing::info!("Creating \"Shaders\" example application");
-	tracing::info!("{:?}", environment);
-
+	tracing::info!("{:?}", player.runenv());
 
 	////
 	// Setup code editing
@@ -64,7 +62,7 @@ fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment:
 		let mut builder = syntect::parsing::SyntaxSet::load_defaults_newlines().into_builder();
 		builder.add(syntect::parsing::SyntaxDefinition::load_from_str(
 			util::sourceFile!("/res/syntax/HLSL.sublime-syntax"), true, Some("HLSL")
-		)?);
+		).unwrap());
 		builder.build()
 	};
 	// - egui interfacing
@@ -85,17 +83,17 @@ fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment:
 	tracing::info!("Preparing shader: context creation");
 	#[cfg(not(target_arch="wasm32"))] let mut slangCtx = {
 		// On native, it's a good idea to always consider the shader path we get from the runtime environment
-		cgv::shader::slang::ContextBuilder::withSearchPaths(&environment.shaderPath).build()?
+		cgv::shader::slang::ContextBuilder::withSearchPaths(&player.runenv().shaderPath).build().unwrap()
 	};
 	#[cfg(target_arch="wasm32")] let mut slangCtx = {
 		// On WASM, we can't (yet) use a shader path to find modules residing on a filesystem
-		cgv::shader::slang::ContextBuilder::default().build()?
+		cgv::shader::slang::ContextBuilder::default().build().unwrap()
 	};
 
 	// Load the *CGV-rs* environment containing the core shader lib
 	tracing::info!("Preparing shader: loading compilation environment");
 	let env = cgv::obtainShaderCompileEnvironment();
-	slangCtx.replaceEnvironment(Some(env))?;
+	slangCtx.replaceEnvironment(Some(env)).unwrap();
 
 	// The user-editable shader code
 	let userShaderCode = util::sourceFile!("/shader/user.slang").into();
@@ -104,7 +102,7 @@ fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment:
 	tracing::info!("Preparing shader: compiling static main module '/shader/sdf_demo.slang'");
 	#[cfg(not(target_arch="wasm32"))] let mainModule = {
 		// On native, we can load the shader source from the filesystem
-		slangCtx.compile(util::pathInsideCrate!("/shader/sdf_demo.slang"))?
+		slangCtx.compile(util::pathInsideCrate!("/shader/sdf_demo.slang")).unwrap()
 	};
 	#[cfg(target_arch="wasm32")] let mainModule = {
 		// On WASM, we currently have to resort to baking shader source files into the crate. For the same reason (the
@@ -115,27 +113,26 @@ fn createOnlineShadersDemo (_: &cgv::Context, _: &cgv::RenderSetup, environment:
 		slangCtx.loadModuleFromSource(
 			EnvironmentStorage::SourceCode, "lib/sdf.slang",
 			util::sourceFile!("/shader/lib/sdf.slang")
-		)?;
+		).unwrap();
 		slangCtx.loadModuleFromSource(
 			EnvironmentStorage::SourceCode, "lib/glyph.slang",
 			util::sourceFile!("/shader/lib/glyph.slang")
-		)?;
+		).unwrap();
 
 		// Now load our actual main module
 		slangCtx.compileFromNamedSource(
 			"sdf_demo.slang", util::sourceFile!("/shader/sdf_demo.slang")
-		)?
+		).unwrap()
 	};
 
 
 	////
 	// Done!
 
-	// Construct the instance and put it in a box
-	Ok(OnlineShadersDemo {
+	player.addApp(Box::new(cgv::AppObject::from(OnlineShadersDemo {
 		statusText: "<STATUS UNKNOWN>".into(), mainModule, slangCtx, userShaderCode, pipelines: Vec::new(),
 		shader: cgv::util::LaterInit::uninit(), highlighterSettings, syntaxCompleter, guiState: Default::default()
-	})
+	})), true).unwrap();
 }
 
 #[derive(Default)]
@@ -465,6 +462,6 @@ unsafe impl Send for OnlineShadersDemo {}
 
 /// The application entry point.
 pub fn main () -> cgv::Result<()> {
-	// Immediately hand off control flow, passing in a factory for our online shader compilation demo app
-	cgv::Player::run(Box::new(createOnlineShadersDemo))
+	// Immediately hand off control flow, passing in a callback to create our online shader compilation demo app
+	cgv::Player::run(Box::new(init))
 }

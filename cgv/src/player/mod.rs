@@ -384,21 +384,24 @@ impl<Comp: DynComponent + ?Sized> Slot<Comp>
 	/// different component
 	pub fn takeIf (&mut self, condition: impl FnOnce(&Ptr<Comp>) -> bool) -> Option<Ptr<Comp>>
 	{
-		match self {
-			Self::Component(comp) => {
-				if !condition(comp) {return None}
-				// With debug assertions enabled, store the component's handle, so we can check whether putBack is used
-				// correctly.
-				let emptyHandle =
-					if cfg!(debug_assertions) {comp.as_ref().base().handle}
-					else {Handle::new(0, 0)};
-				match std::mem::replace(self, Self::Free(emptyHandle)) {
-					Self::Component(ptr) => Some(ptr),
-					_ => unreachable!()
-				}
-			}
-			Self::Free{..} => None,
+		let Self::Component(comp) = self else {return None};
+		if !condition(comp) {return None}
+		// With debug assertions enabled, store the component's handle, so we can check whether putBack is used
+		// correctly.
+		let emptyHandle =
+			if cfg!(debug_assertions) {comp.as_ref().base().handle}
+			else {Handle::new(0, 0)};
+		match std::mem::replace(self, Self::Free(emptyHandle)) {
+			Self::Component(ptr) => Some(ptr),
+			_ => unreachable!()
 		}
+	}
+	/// Unconditional version of [`Self::takeIf`].
+	///
+	/// Returns [`None`] if the slot is empty.
+	pub fn take (&mut self) -> Option<Ptr<Comp>>
+	{
+		self.takeIf(|_| true)
 	}
 	/// Restore this slot's component after it was moved out using [`Self::takeIf`].
 	///
@@ -427,7 +430,7 @@ impl<Comp: DynComponent + ?Sized> Store<Comp>
 {
 	pub(super) const EMPTY: Self = Self{slots: Vec::new(), main: 0, nextFree: !0};
 
-	pub fn add (&mut self, comp: Box<Comp>, is_active: bool)
+	pub(super) fn add (&mut self, comp: Box<Comp>, is_active: bool) -> Index
 	{
 		let mut comp = Ptr::new(comp, is_active);
 		match self.slots.get_mut(self.nextFree as usize) {
@@ -435,16 +438,46 @@ impl<Comp: DynComponent + ?Sized> Store<Comp>
 			Some(slot @ &mut Slot::Free(next)) => {
 				comp.as_mut().base_mut().handle = Handle{index: self.nextFree, epoch: next.epoch};
 				*slot = Slot::Component(comp);
+				let idx = self.nextFree;
 				self.nextFree = next.index;
+				idx
 			}
 			// Otherwise append a new slot.
 			_ => {
 				// The maximum index is used for the null handle.
 				assert!(self.slots.len() < Index::MAX as usize);
 				comp.as_mut().base_mut().handle = Handle::new(self.slots.len(), 0);
-				self.slots.push(Slot::Component(comp))
+				self.slots.push(Slot::Component(comp));
+				self.slots.len() as Index - 1
 			}
 		}
+	}
+	/// Permanently take the component with the given index from the player.
+	///
+	/// The component's slot is freed and will be reused when a new component is added. If you only need temporary
+	/// ownership of the component without freeing the slot, use [`Slot::take`].
+	pub(super) fn remove (&mut self, idx: usize) -> anyhow::Result<Ptr<Comp>>
+	{
+		// Reset the component's handle.
+		let Some(Slot::Component(comp)) = self.slots.get_mut(idx) else {
+			return Err(anyhow::anyhow!("Attempted to remove a non-existant component from the player."));
+		};
+		let handle = &mut comp.as_mut().base_mut().handle;
+		let epoch = handle.epoch;
+		*handle = Handle::INVALID;
+
+		// Replace the slot with a link to the next entry in the free list and increase its epoch.
+		let comp = match std::mem::replace(&mut self.slots[idx], Slot::Free(Handle{
+			index: self.nextFree,
+			epoch: epoch.wrapping_add(1),
+		})) {
+			Slot::Component(comp) => Ok(comp),
+			_ => unreachable!()
+		};
+
+		// Place the newly freed slot at the head of the free list.
+		self.nextFree = idx as Index;
+		return comp;
 	}
 
 	/// Borrow the [`Component`] identified by the given handle and downcast to `T`.
@@ -499,7 +532,7 @@ impl<Comp: DynComponent + ?Sized> Store<Comp>
 }
 
 
-/// Identifies a [`Component`] stored by the [`Player`] in a [`Store`].
+/// Identifies a [`Component`] stored by the [`Player`](super::Player) in a [`Store`].
 ///
 /// The component can be accessed via [`Store::get`] and [`Store::get_mut`]. Handles remain valid as long as the player
 /// owns the component; in particular, they can be used in asynchronous callbacks.
@@ -525,7 +558,7 @@ impl Handle
 }
 
 } // mod component
-pub use component::Handle;
+pub use component::{Handle, Store};
 
 
 //////
@@ -550,6 +583,7 @@ pub struct State
 {
 	pub egui: egui::Context,
 	pub context: Context,
+	runenv: run::Environment,
 
 	pub renderSetup: RenderSetup,
 	pub(crate) defaultClearColor: egui::Color32,
@@ -567,6 +601,13 @@ pub struct State
 	startInstant: time::Instant,
 	prevFrameElapsed: time::Duration,
 	prevFrameDuration: time::Duration
+}
+impl State
+{
+	pub fn runenv(&self) -> &run::Environment
+	{
+		&self.runenv
+	}
 }
 
 /// Implicitly access the [`state`](Self::state) subobject for convenience.
@@ -588,9 +629,8 @@ impl std::ops::DerefMut for Player
 impl Player
 {
 	pub fn new (
-		applicationFactory: Box<dyn ApplicationFactory>,
 		cc: &eframe::CreationContext,
-		environment: run::Environment
+		runenv: run::Environment
 	) -> Result<Self>
 	{
 		// Log player initialization start
@@ -654,6 +694,7 @@ impl Player
 				egui: cc.egui_ctx.clone(),
 				activeSidePanel: 0,
 
+				runenv,
 				context,
 				renderSetup,
 				defaultClearColor,
@@ -676,25 +717,37 @@ impl Player
 		player.cameraInteractors.add(Box::new(view::CamIntObject::from(view::OrbitInteractor::new())), true);
 		player.cameraInteractors.add(Box::new(view::CamIntObject::from(view::WASDInteractor::new())), true);
 
-		// Init application(s)
-		let mut mainApplication = applicationFactory.create(
-			&player.state.context, &player.state.renderSetup, environment
-		)?;
-		mainApplication.preInit(&mut player)?;
-		mainApplication.recreatePipelines(
-			&player.context, &player.renderSetup, &Player::globalPassesFromCameras(player.activeCameras())
-		);
-		mainApplication.postInit(&mut player)?;
-		player.applications.add(mainApplication, true);
 		player.activeSidePanel = 2;
 
 		// Done!
-		tracing::info!("Startup complete.");
+		tracing::info!("Player initialized.");
 		Ok(player)
 	}
 
+	/// Register a new [`Application`] with the player.
+	///
+	/// Sets the component's [`Handle`], then invokes the callbacks [`preInit`](Application::preInit),
+	/// [`recreatePipelines`](Application::recreatePipelines) and [`postInit`](Application::postInit).
+	/// If any of these returns an error, the application is removed from the player and destroyed.
+	pub fn addApp (&mut self, app: Box<dyn Application>, active: bool) -> Result<()>
+	{
+		let mut index = 0;
+		// Initialization is wrapped in a closure to emulate a try block.
+		(|| {
+			index = self.applications.add(app, active) as usize;
+			let mut app = self.applications.slots[index].take().unwrap();
+			app.preInit(self)?;
+			app.recreatePipelines(
+				&self.context, &self.renderSetup, &Player::globalPassesFromCameras(self.activeCameras())
+			);
+			app.postInit(self)?;
+			self.applications.slots[index].putBack(app);
+			Ok(())
+		})().inspect_err(|_| {self.applications.remove(index).unwrap();})
+	}
+
 	#[cfg(not(target_arch="wasm32"))]
-	pub fn run (applicationFactory: Box<dyn ApplicationFactory>) -> Result<()>
+	pub fn run (init: Box<dyn FnOnce(&mut Player)>) -> Result<()>
 	{
 		// Log that we have begun the startup process
 		tracing::info!("Starting up...");
@@ -798,7 +851,9 @@ impl Player
 		// Run and report result
 		match eframe::run_native(
 			"CGV-rs Player", options, Box::new(move |cc| {
-				instance::set(Player::new(applicationFactory, cc, environment)?);
+				let mut player = instance::set(Player::new(cc, environment)?);
+				init(&mut player);
+				tracing::info!("Startup complete.");
 				Ok(Box::new(StaticImpls))
 			})
 		){
@@ -811,7 +866,7 @@ impl Player
 	}
 
 	#[cfg(target_arch="wasm32")]
-	pub fn run (applicationFactory: Box<dyn ApplicationFactory>) -> Result<()>
+	pub fn run (init: Box<dyn FnOnce(&mut Player)>) -> Result<()>
 	{
 		// In case of WASM, make sure the JavaScript console is set up for receiving log messages first thing (for non-
 		// WASM targets, tracing/logging is already being set up at module loading time)
@@ -875,7 +930,9 @@ impl Player
 					canvas,
 					webOptions,
 					Box::new(|cc| {
-						instance::set(Player::new(applicationFactory, cc, run::Environment::default())?);
+						let mut player = instance::set(Player::new(cc, run::Environment::default())?);
+						init(&mut player);
+						tracing::info!("Startup complete.");
 						Ok(Box::new(StaticImpls))
 					})
 				)

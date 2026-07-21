@@ -63,16 +63,13 @@ pub struct DataPoint
 ////
 // RenderersDemo
 
-/// Factory function for our `RenderersDemo` defined right after. Regular functions with this signature implement the
-/// [`cgv::ApplicationFactory`] trait. If more flexibility is required to control how exactly your app is created, you
-/// can also write a factory class, i.e. a custom struct that implements `cgv::ApplicationFactory`.
-fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, environment: cgv::run::Environment)
-	-> cgv::Result<RenderersDemo>
+fn init (player: &mut cgv::Player)
 {
 	// Tracing
 	tracing::info!("Creating \"Renderers\" example application");
-	tracing::info!("{:?}", environment);
+	tracing::info!("{:?}", player.runenv());
 
+	let context = &player.state.context;
 
 	////
 	// Defaults
@@ -95,7 +92,7 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	////
 	// Initialize renderers
 
-	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, renderSetup));
+	let mut sphereRenderer = renderer::Managed::new(renderer::Spheres::new(context, &player.renderSetup));
 	sphereRenderer.setData(renderer::spheres::DataReceiver::new(renderData.clone()));
 	sphereRenderer.setStyleUniforms(context, |u| {
 		u.radiusScale = guiState.radiusScale;
@@ -107,8 +104,9 @@ fn createRenderersDemo (context: &cgv::Context, renderSetup: &cgv::RenderSetup, 
 	////
 	// Done!
 
-	// Construct the instance and put it in a box
-	Ok(RenderersDemo { testData, renderData, sphereRenderer, guiState })
+	player.addApp(Box::new(cgv::AppObject::from(RenderersDemo {
+		testData, renderData, sphereRenderer, guiState
+	})), true).unwrap();
 }
 
 /// Test data holder. We make this its own struct so it can be used even before the `RenderersDemo` is fully
@@ -339,6 +337,6 @@ impl cgv::Application<RenderersDemo> for cgv::AppObject<RenderersDemo>
 
 /// The application entry point.
 pub fn main () -> cgv::Result<()> {
-	// Immediately hand off control flow, passing in a factory for our ExampleApplication
-	cgv::Player::run(Box::new(createRenderersDemo))
+	// Immediately hand off control flow, passing in a callback to create our ExampleApplication
+	cgv::Player::run(Box::new(init))
 }
