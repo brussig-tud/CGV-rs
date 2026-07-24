@@ -190,7 +190,7 @@ impl Camera<MonoCamera> for CameraObject<MonoCamera>
 	{
 		self.renderState.framebuffer.depthStencil().map(|depthStencil| { DepthReadbackDispatcher::new(
 			&pixelCoords, &Viewport {
-				min: glm::vec2(0u32, 0u32), extend: depthStencil.dimsWH()
+				min: glm::vec2(0u32, 0u32), extent: depthStencil.dimsWH()
 			},
 			self.projectionAt(pixelCoords), self.viewAt(pixelCoords), &depthStencil
 		)})

@@ -44,7 +44,7 @@ use crate::*;
 //
 
 /// Enum representing either a perspective or orthographic field-of-view in the vertical direction.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FoV {
 	/// The FoV represents a perspective opening angle, in radians
 	Perspective(f32),
@@ -64,21 +64,6 @@ impl FoV
 		if let FoV::Orthographic(_) = self { true } else { false }
 	}
 }
-impl PartialEq for FoV {
-	fn eq (&self, other: &Self) -> bool
-	{
-		if let FoV::Perspective(fov_self) = self && let FoV::Perspective(fov_other) = other {
-			fov_self == fov_other
-		}
-		else if let FoV::Orthographic(h_self) = self && let FoV::Orthographic(h_other) = other {
-			h_self == h_other
-		}
-		else {
-			false
-		}
-	}
-}
-
 
 
 //////
@@ -148,7 +133,7 @@ impl FocusChange
 #[derive(Clone, Copy)]
 pub struct Viewport {
 	pub min: glm::UVec2,
-	pub extend: glm::UVec2
+	pub extent: glm::UVec2
 }
 impl Viewport
 {
@@ -156,7 +141,7 @@ impl Viewport
 	{
 		let scaled =
 			((glm::vec2(clipSpaceXY.x, -clipSpaceXY.y) + glm::vec2(1f32, 1f32)) * 0.5).component_mul(
-				&glm::vec2(self.extend.x as f32, self.extend.y as f32)
+				&glm::vec2(self.extent.x as f32, self.extent.y as f32)
 			);
 		glm::vec2(scaled.x as u32, scaled.y as u32)
 	}
@@ -165,7 +150,7 @@ impl Viewport
 		let pixelCoords_vpRel = *screenSpaceXY - self.min;
 		let pixelCoords_clip =
 			  glm::vec2(pixelCoords_vpRel.x as f32, pixelCoords_vpRel.y as f32).component_div(
-			  	&glm::vec2(self.extend.x as f32, self.extend.y as f32)
+			  	&glm::vec2(self.extent.x as f32, self.extent.y as f32)
 			  )
 			* 2f32  -  glm::vec2(1f32, 1f32);
 		glm::vec2(pixelCoords_clip.x, -pixelCoords_clip.y)

@@ -34,7 +34,7 @@ const FOV_ORTHO_THRESHOLD: f32 = 5.;
 // Classes
 //
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Intrinsics
 {
 	pub fovY: FoV,
@@ -148,18 +148,6 @@ impl Intrinsics
 					.clamping(egui::SliderClamping::Always)
 			));
 		});
-	}
-}
-impl PartialEq for Intrinsics
-{
-	fn eq (&self, other: &Self) -> bool {
-		   self.fovY == other.fovY && self.aspect == other.aspect && self.f == other.f && self.zNear == other.zNear
-		&& self.zFar == other.zFar
-	}
-
-	fn ne (&self, other: &Self) -> bool {
-		   self.fovY != other.fovY || self.aspect != other.aspect || self.f != other.f || self.zNear != other.zNear
-		|| self.zFar != other.zFar
 	}
 }
 
