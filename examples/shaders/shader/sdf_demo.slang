@@ -5,8 +5,10 @@
 //
 
 // CGV-rs core shader library
-import "cgv/prelude.slang";      // enable GLSL-style linear algebra mathematical operators
-import "cgv/api/uniforms.slang"; // interface with managed uniforms handled by CGV-rs
+import "cgv/prelude.slang";        // enable GLSL-style linear algebra mathematical operators
+import "cgv/api/uniforms.slang";   // interface with managed uniforms handled by CGV-rs
+import "cgv/media/geom.slang";     // access the pre-defined vertex structs
+import "cgv/geom/billboard.slang"; // access the pre-defined billboards
 
 // Local imports
 import "lib/sdf.slang";
@@ -27,37 +29,6 @@ ParameterBlock<cgv::api::Viewing> viewing;
 
 //////
 //
-// Streams
-//
-
-// The vertex attributes of our target quad.
-struct Vertex
-{
-	float4 pos : SV_Position;
-	float2 texcoord;
-
-	__init (float4 pos, float2 texcoord) {
-		this.pos = pos; this.texcoord = texcoord;
-	}
-}
-
-
-
-//////
-//
-// Constants
-//
-
-/// Our quad vertices in model space.
-constexpr static let qVerts: Vertex[] = {
-	Vertex(float4(-1.,-1., 0., 1.), float2(-1., 1.)),  Vertex(float4(1.,-1., 0., 1.), float2(1., 1.)),
-	Vertex(float4(-1., 1., 0., 1.), float2(-1.,-1.)),  Vertex(float4(1., 1., 0., 1.), float2(1.,-1.))
-};
-
-
-
-//////
-//
 // Vertex shader
 //
 
@@ -66,11 +37,11 @@ constexpr static let qVerts: Vertex[] = {
 
 /// Our sole vertex shader entry point.
 [shader("vertex")]
-func vertexMain (int vertexID: SV_VertexID) -> Vertex {
-	return Vertex(
-		/*      pos: */ viewing.projModelview * qVerts[vertexID].pos,
-		/* texcoord: */ qVerts[vertexID].texcoord
-	);
+func vertexMain (int vertexID: SV_VertexID) -> cgv::media::VertexU<float>::GpuVertex {
+	var vertex = cgv::geom::Billboards<float>::quadUCorner(vertexID).emit();
+	vertex.pos = viewing.projModelview * vertex.pos;
+	vertex.uv = vertex.uv*2-1;
+	return vertex;
 }
 
 
@@ -92,7 +63,7 @@ extern struct Glyph: ex::IGlyph;
 
 /// Our sole fragment shader entry point.
 [shader("fragment")]
-func fragmentMain (fsInput: Vertex) -> float4 {
+func fragmentMain (fsInput: cgv::media::VertexU<float>::GpuVertex) -> float4 {
 	let glyph = Glyph::default(); // construct user glyph
-	return glyph.colorAt(fsInput.texcoord); // shade according to user glyph
+	return glyph.colorAt(fsInput.uv); // shade according to user glyph
 }
