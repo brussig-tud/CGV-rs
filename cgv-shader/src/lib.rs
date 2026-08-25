@@ -106,7 +106,7 @@ pub const fn feasibleSourceTypes() -> &'static [WgpuSourceType]
 
 	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
 	#[cfg(not(target_arch="wasm32"))]
-	const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::SPIRV, WgpuSourceType::WGSL];
+	const SOURCE_TYPES: [WgpuSourceType; /*2*/1] = [/*WgpuSourceType::SPIRV, */WgpuSourceType::WGSL];
 
 	&SOURCE_TYPES
 }
@@ -124,7 +124,7 @@ pub fn feasibleSourceTypesForPlatform(platform: &util::meta::SupportedPlatform) 
 	// All native backends
 	else {
 		// Currently always considers SPIR-V preferable even on non-Vulkan backends
-		const SOURCE_TYPES: [WgpuSourceType; 2] = [WgpuSourceType::SPIRV, WgpuSourceType::WGSL];
+		const SOURCE_TYPES: [WgpuSourceType; /*2*/1] = [/*WgpuSourceType::SPIRV, */WgpuSourceType::WGSL];
 		&SOURCE_TYPES
 	}
 }
