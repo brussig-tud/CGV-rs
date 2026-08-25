@@ -1,16 +1,6 @@
 
 //////
 //
-// Imports
-//
-
-// Enable GLSL-style linear algebra mathematical operators
-import "cgv/prelude.slang";
-
-
-
-//////
-//
 // Uniforms
 //
 
@@ -92,7 +82,7 @@ func uvwFromIndex (int2 index) -> float2 {
 [shader("vertex")]
 func vertexMain (vert: VSInput) -> VSOutput {
 	return VSOutput(
-		/* pos_clip: */ viewing.projection*viewing.modelview * vert.pos,
+		/* pos_clip: */ mul(vert.pos, mul(viewing.modelview, viewing.projection)),
 		/* color:    */ vert.color,
 		/* texcoord: */ vert.texcoord
 	);

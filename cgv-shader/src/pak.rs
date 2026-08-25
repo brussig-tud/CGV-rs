@@ -200,8 +200,16 @@ impl Package
 			Ok(progInstance)
 		}
 		else {
-			// Only include the generic program that includes all code paths from all entry points
-			Ok(ProgramInstance::generic(prog.allEntryPointsProg().toVec()))
+			// Include the generic program that includes all code paths from all entry points
+			let mut progInstance = ProgramInstance::generic(prog.allEntryPointsProg().toVec());
+
+			// Include any available entry point specializations
+			for epProg in prog.entryPointProgs() {
+				progInstance.addEntryPoint(Some(epProg.0), epProg.1.toVec());
+			}
+
+			// Done!
+			Ok(progInstance)
 		}
 	}
 
@@ -226,7 +234,13 @@ impl Package
 		}
 	}
 
+	/// # Arguments
 	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	pub fn fromLinkedCompositeMultipleTypes<'outer, CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &'outer CompileContext,
@@ -261,7 +275,13 @@ impl Package
 		})
 	}
 
+	/// # Arguments
 	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	pub fn fromModuleMultipleTypes<'outer, CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &'outer CompileContext, module: &CompileContext::ModuleType<'outer>,
@@ -290,8 +310,16 @@ impl Package
 		)
 	}
 
-	/// Create the package from the given *Slang* shader source file, compiling it under several contexts to produce
-	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
+	/// Create the package from the given *Slang* shader source file, compiling it to several instances according to the
+	/// specified set of *WGPU* [source types](WgpuSourceType).
+	///
+	/// # Arguments
+	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	pub fn fromSourceFileMultipleTypes<CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &CompileContext, filename: impl AsRef<Path>,
@@ -309,8 +337,16 @@ impl Package
 		Self::fromModuleMultipleTypes(sourceTypes, context, &module, entryPoints)
 	}
 
-	/// Create the package from the given *Slang* shader source code, compiling it under several contexts to produce
-	/// different instances for the [source types](SourceType) each [`slang::Context`] is set up for.
+	/// Create the package from the given *Slang* shader source, compiling it to several instances according to the
+	/// specified set of *WGPU* [source types](WgpuSourceType).
+	///
+	/// # Arguments
+	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	pub fn fromSourceMultipleTypes<CompileContext> (
 		sourceTypes: &[WgpuSourceType], context: &CompileContext, programName: impl AsRef<Path>,
@@ -345,6 +381,14 @@ impl Package
 	}
 
 	/// Create the package from the given [`compile::LinkedComposite`].
+	///
+	/// # Arguments
+	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	#[inline(always)]
 	pub fn fromLinkedComposite<'outer, CompileContext> (
@@ -360,6 +404,14 @@ impl Package
 
 
 	/// Create the package from the given [`compile::Module`].
+	///
+	/// # Arguments
+	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	#[inline(always)]
 	pub fn fromModule<'outer, CompileContext> (
@@ -386,6 +438,14 @@ impl Package
 	}
 
 	/// Create the package from the given *Slang* shader source code string.
+	///
+	/// # Arguments
+	///
+	/// `entryPoints` – If `None`, the generic program containing all code paths for all entry points **as well as**
+	///                 specializations for every single entry point will be included in the package. If `Some`, only
+	///                 the program specializations for the entry points of the given names will be included. To also
+	///                 include the generic program with all entry points when filtering this way, include the `None`
+	///                 value in the set along with `Some` entry points.
 	#[cfg(feature="compilation")]
 	#[inline(always)]
 	pub fn fromSource<CompileContext> (
@@ -400,6 +460,27 @@ impl Package
 	/// the given source type, it will be replaced.
 	pub fn setInstance (&mut self, sourceType: WgpuSourceType, instance: ProgramInstance) {
 		self.instances.insert(sourceType, instance);
+	}
+
+	/// Retrieve the instance of the program for the given source type from the package, if it exists.
+	///
+	/// # Returns
+	///
+	/// `Some` program instance, or `None` if the requested instance does not exist.
+	#[inline(always)]
+	pub fn instance (&self, sourceType: WgpuSourceType) -> Option<&ProgramInstance> {
+		self.instances.get(&sourceType)
+	}
+
+	/// Retrieve the the most suitable program instance for the running platform contained in the package, if there is
+	/// any suitable instance at all.
+	///
+	/// # Returns
+	///
+	/// `Some` program instance that can be used on the running platform, or `None` if none exists in the package.
+	#[inline(always)]
+	pub fn bestInstance (&self) -> Option<&ProgramInstance> {
+		feasibleSourceTypes().iter().find_map(|sourceType| self.instances.get(&sourceType))
 	}
 
 	/// Create a *WGPU* shader module ready for binding to a pipeline from the contained program instance of the given
