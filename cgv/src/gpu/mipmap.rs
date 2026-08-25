@@ -152,13 +152,13 @@ pub trait Generator
 
 		// Create pipeline
 		// - shader
-		let (shader, specificEntryPoint) = self.ensureShaderModule(
+		let (shader, _entryPointName) = self.ensureShaderModule(
 			context, textureShape
 		).unwrap();
 		// - pipeline
 		let pipeline = context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
 			module: &shader,
-			entry_point: specificEntryPoint,
+			entry_point: None,
 			layout: Some(&context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				bind_group_layouts: &[Some(&bindGroupLayout)],
 				label: Some("CGV__gpu_mipmapGenComputePipelineLayout"),
@@ -220,6 +220,21 @@ pub trait ShaderFilter {
 //
 
 pub struct PolyphaseBoxFilter;
+impl PolyphaseBoxFilter
+{
+	pub fn entryPointForShape (textureShape: MipmappableTextureShape) -> &'static str
+	{
+		use MipmappableTextureShape::*;
+		match textureShape {
+			D2 => "boxPolyphase2D",
+			D3 => "boxPolyphase3D",
+			D2Array | Cube | CubeArray => unimplemented!(
+				"Polyphase box filter is not yet implemented for cube and/or array textures!"
+			)
+		}
+	}
+}
+
 impl ShaderFilter for PolyphaseBoxFilter {
 	fn uniqueId () -> u32 {
 		static ID: LazyLock<u32> = LazyLock::new(|| util::unique::uint32());
@@ -234,17 +249,11 @@ impl ShaderFilter for PolyphaseBoxFilter {
 				util::sourceGeneratedBytes!("/shader/gpu/mipmapgen/box_polyphase.spk")
 			).expect("baked 'box_polyphase.spk' shader package should be available and valid")
 		);
-		use MipmappableTextureShape::*;
+		let entryPointName = Some(Self::entryPointForShape(textureShape));
 		SHADER_PACKAGE.createShaderModuleFromBestInstance(
-			context.device(), None, Some("CGV__gpu_mipmapGenComputeShaderModule")
+			context.device(), entryPointName, Some("CGV__gpu_mipmapGenComputeShaderModule")
 		).map(
-			|sm| (sm, /* entryPointName: */Some(match textureShape {
-				D2 => "boxPolyphase2D",
-				D3 => "boxPolyphase3D",
-				D2Array | Cube | CubeArray => unimplemented!(
-					"Polyphase box filter is not yet implemented for cube and/or array textures!"
-				)
-			}))
+			|sm| (sm, entryPointName)
 		)
 	}
 }
