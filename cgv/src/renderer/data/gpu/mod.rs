@@ -607,7 +607,9 @@ impl BufferLayout
 		// Actual upload on WASM
 		#[cfg(target_arch="wasm32")]
 		for (buffer, &source) in buffers.iter().zip(stagingMemSlices.iter()) {
-			buffer.slice(..).get_mapped_range_mut().copy_from_slice(source);
+			buffer.slice(..).get_mapped_range_mut().expect(
+				"range of attributes should be write-mappable"
+			).copy_from_slice(source);
 		}
 	}
 

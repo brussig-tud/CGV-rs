@@ -191,7 +191,9 @@ impl GpuData
 			}
 		}
 		#[cfg(target_arch="wasm32")] {
-			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
+			attributes.get_mapped_range_mut(..).expect(
+				"range of attributes should be write-mappable"
+			).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
@@ -215,7 +217,9 @@ impl GpuData
 			}
 		}
 		#[cfg(target_arch="wasm32")] {
-			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
+			attributes.get_mapped_range_mut(..).expect(
+				"range of attributes should be write-mappable"
+			).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
@@ -240,7 +244,9 @@ impl GpuData
 			}
 		}
 		#[cfg(target_arch="wasm32")] {
-			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
+			attributes.get_mapped_range_mut(..).expect(
+				"range of attributes should be write-mappable"
+			).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
@@ -265,7 +271,9 @@ impl GpuData
 			}
 		}
 		#[cfg(target_arch="wasm32")] {
-			attributes.get_mapped_range_mut(..).copy_from_slice(&_stagingMem.unwrap());
+			attributes.get_mapped_range_mut(..).expect(
+				"range of attributes should be write-mappable"
+			).copy_from_slice(&_stagingMem.unwrap());
 		}
 		attributes.unmap(); // <- make uploaded data visible to GPU
 
