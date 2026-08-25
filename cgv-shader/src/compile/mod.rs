@@ -709,16 +709,10 @@ pub fn mostSuitableTargetForPlatform(platform: &util::meta::SupportedPlatform) -
 /// Return a list of feasible shader compilation target for the platform the module was built for, from most to least
 /// suitable.
 #[inline(always)]
-pub fn feasibleTargets() -> &'static [compile::Target]
-{
-	// WebGPU/WASM
-	#[cfg(target_arch="wasm32")]
-	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::WGSL, compile::Target::SPIRV];
-
-	// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
-	#[cfg(not(target_arch="wasm32"))]
-	const COMPILATION_TARGETS: [compile::Target; 2] = [compile::Target::SPIRV, compile::Target::WGSL];
-
+pub fn feasibleTargets () -> &'static [compile::Target] {
+	static COMPILATION_TARGETS: LazyLock<Vec<compile::Target>> = LazyLock::new(
+		|| feasibleSourceTypes().into_iter().map(|&srcType| srcType.into()).collect()
+	);
 	&COMPILATION_TARGETS
 }
 

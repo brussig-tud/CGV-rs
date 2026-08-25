@@ -76,31 +76,13 @@ impl WgpuSourceType
 {
 	/// Get the most suitable *WGPU* source type for the platform the caller is running on.
 	#[inline(always)]
-	pub const fn mostSuitable() -> WgpuSourceType
-	{
-		// WebGPU/WASM
-		#[cfg(target_arch="wasm32")] {
-			WgpuSourceType::WGSL
-		}
-		// All native backends (currently always considers SPIR-V preferable even on non-Vulkan backends)
-		#[cfg(not(target_arch="wasm32"))] {
-			WgpuSourceType::SPIRV
-		}
+	pub const fn mostSuitable() -> WgpuSourceType {
+		feasibleSourceTypes()[0]
 	}
 
 	/// Get the most suitable *WGPU* source type for the given platform.
-	pub fn mostSuitableForPlatform (platform: &util::meta::SupportedPlatform) ->WgpuSourceType
-	{
-		// WebGPU/WASM
-		if platform.isWasm() {
-			WgpuSourceType::WGSL
-		}
-		// All native backends
-		else {
-			// Currently always considers SPIR-V preferable even on non-Vulkan backends
-			// TODO: somehow incorporate notion of WGPU backend into this decision
-			WgpuSourceType::SPIRV
-		}
+	pub fn mostSuitableForPlatform (platform: &util::meta::SupportedPlatform) -> WgpuSourceType {
+		feasibleSourceTypesForPlatform(platform)[0]
 	}
 }
 impl std::fmt::Display for WgpuSourceType {
@@ -116,7 +98,7 @@ impl std::fmt::Display for WgpuSourceType {
 /// Return a list of feasible *WGPU* source types for the platform the caller is running on, from most to least
 /// suitable.
 #[inline(always)]
-pub fn feasibleSourceTypes() -> &'static [WgpuSourceType]
+pub const fn feasibleSourceTypes() -> &'static [WgpuSourceType]
 {
 	// WebGPU/WASM
 	#[cfg(target_arch="wasm32")]
