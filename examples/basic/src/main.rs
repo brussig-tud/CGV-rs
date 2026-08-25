@@ -350,7 +350,7 @@ impl ExampleApplication
 			vertex: wgpu::VertexState {
 				module: &self.shader,
 				entry_point: Some("vertexMain"), // Slang (for now) requires explicitly stating entry points
-				buffers: &[QuadVertex::layoutDesc()],
+				buffers: &[Some(QuadVertex::layoutDesc())],
 				compilation_options: wgpu::PipelineCompilationOptions::default(),
 			},
 			fragment: Some(wgpu::FragmentState {

@@ -488,7 +488,9 @@ impl Texture
 			wgpu::MapMode::Read, move |result| {
 				if result.is_ok()
 				{
-					let bufView = buf_cb.slice(..).get_mapped_range();
+					let bufView = buf_cb.slice(..).get_mapped_range().expect(
+						"texture readback buffer could not be mapped"
+					);
 					let bytes = bufView.iter().as_slice();
 					let rowStride;
 					let readbackInfo = match format {

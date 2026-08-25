@@ -165,7 +165,9 @@ impl GpuData
 			ptr = std::ptr::NonNull::new(stagingMem.as_mut().unwrap().as_mut_ptr()).unwrap().cast::<T>();
 		}
 		#[cfg(not(target_arch="wasm32"))] {
-			ptr = attributes.get_mapped_range_mut(..).slice(..).as_raw_ptr().cast::<T>();
+			ptr = attributes.get_mapped_range_mut(..).expect(
+				"GPU data buffer memory could not be mapped for uploading"
+			).slice(..).as_raw_ptr().cast::<T>();
 		}
 
 		// Done!

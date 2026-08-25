@@ -514,7 +514,9 @@ impl BufferLayout
 			dests = self.buffers.iter().zip(buffers.iter()).map(
 				|(layout, buffer)| {
 					let range = 0..(data.num() as wgpu::BufferAddress*layout.array_stride);
-					buffer.get_mapped_range_mut(range).slice(..).as_raw_ptr().cast::<u8>()
+					buffer.get_mapped_range_mut(range).expect(
+						"GPU data buffer memory could not be mapped for uploading"
+					).slice(..).as_raw_ptr().cast::<u8>()
 				}
 			).collect();
 		}
@@ -703,7 +705,7 @@ impl Eq for BufferLayout {}
 #[derive(PartialEq,Eq)]
 pub struct PipelineBufferLayout {
 	attribDecls: Vec<Vec<wgpu::VertexAttribute>>,
-	wgpuLayouts: Vec<wgpu::VertexBufferLayout<'static>>,
+	wgpuLayouts: Vec<Option<wgpu::VertexBufferLayout<'static>>>,
 	bufferIndices: Vec<usize>
 }
 impl PipelineBufferLayout
@@ -789,7 +791,7 @@ impl PipelineBufferLayout
 
 		// Pre-create the vertex buffer layouts for WGPU consumption
 		let wgpuLayouts: Vec<_> = dataLayout.buffers.iter().enumerate().map(
-			|(bufIdx, vbl)| wgpu::VertexBufferLayout {
+			|(bufIdx, vbl)| Some(wgpu::VertexBufferLayout {
 				array_stride: vbl.array_stride, step_mode, attributes: unsafe {
 					// SAFETY:
 					// The `filteredAttribDecls` vec will not be extended after this point, so the addresses of its
@@ -802,7 +804,7 @@ impl PipelineBufferLayout
 					// that modify it, so Rust's aliasing rules are not violated.
 					util::notsafe::extendLifetime(filteredAttribDecls[bufIdx].as_slice())
 				}
-			}
+			})
 		).collect();
 
 		// Final sanity checks
@@ -815,7 +817,7 @@ impl PipelineBufferLayout
 
 	/// Reference the *WGPU* `VertexBufferLayout`s for use in [`wgpu::VertexState`].
 	#[inline(always)]
-	pub fn bufferLayouts<'this, 'outer> (&'this self) -> &'outer [wgpu::VertexBufferLayout<'this>] {
+	pub fn bufferLayouts<'this, 'outer> (&'this self) -> &'outer [Option<wgpu::VertexBufferLayout<'this>>] {
 		self.wgpuLayouts.as_slice()
 	}
 

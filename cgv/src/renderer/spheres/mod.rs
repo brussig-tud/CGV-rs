@@ -200,7 +200,7 @@ impl Renderer for Spheres
 		let vertexState = wgpu::VertexState {
 			module: &self.shader,
 			entry_point: Some(&data.vsEntryPoint),
-			buffers: &data.layout.bufferLayouts(),
+			buffers: data.layout.bufferLayouts(),
 			compilation_options: wgpu::PipelineCompilationOptions::default(),
 		};
 
