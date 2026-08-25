@@ -5,7 +5,7 @@
 //
 
 // CGV-rs core shader library
-import "cgv/geom/billboard.slang";        // access the pre-defined billboards, currently broken in Slang 2026.13+
+import "cgv/geom/billboard.slang";        // access the pre-defined billboards
 
 // Use CGV namespace by default
 using namespace cgv;
