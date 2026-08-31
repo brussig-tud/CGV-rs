@@ -238,6 +238,55 @@ impl<'a> DepthReadbackDispatcher<'a>
 }
 
 
+/// A perspective or orthographic projection of 3D space in homogenous coordinates along the z axis.
+/// Created by [`Intrinsics::projection`].
+///
+/// Maps eye space to clip space. The projection is centered on the z axis, which may point either
+/// into the screen (left-handed coordinates) or out of the screen (right-handed coordinates).
+/// Should be faster to apply than a projection matrix iff you already have the eye space vector,
+/// otherwise use a combined VP or MVP matrix.
+#[derive(Clone, Copy, bytemuck::NoUninit)]
+#[repr(C)]
+pub struct Projection
+{
+	scale: glm::Vec4,
+	zOffset: f32,
+}
+impl Projection
+{
+	/// The identity transform.
+	pub const ID: Self = Self{scale: glm::Vec4::new(1., 1., 1., 1.), zOffset: 0.};
+
+	/// Convert to a homogenous projection matrix.
+	#[inline]
+	pub const fn toMatrix (&self) -> glm::Mat4
+	{
+		let ([[x, y, z, w]], zo) = (self.scale.data.0, self.zOffset);
+		let zw = if w == 0. {w.signum()} else {0.};
+		glm::Mat4::new(
+			 x, 0., 0., 0.,
+			0.,  y, 0., 0.,
+			0., 0.,  z, zo,
+			0., 0., zw,  w,
+		)
+	}
+
+	/// Project a homegenous vector. Should be faster than matrix-vector multiplication.
+	#[inline]
+	pub fn apply (&self, v: glm::Vec4) -> glm::Vec4
+	{
+		let mut v_ = v.component_mul(&self.scale);
+		if self.scale.w == 0. {v_.w = v.z.abs()};
+		v_.z += self.zOffset;
+		v_
+	}
+}
+impl Default for Projection
+{
+	fn default () -> Self {Self::ID}
+}
+
+
 //////
 //
 // Traits
@@ -378,34 +427,4 @@ pub trait CameraInteractor: Component
 	fn input (&mut self, event: &InputEvent, player: &mut Player, this: player::Handle) -> EventOutcome;
 
 	fn ui (&mut self, assignedCamera: &mut dyn Camera, ui: &mut egui::Ui);
-}
-
-
-//////
-//
-// Functions
-//
-
-/// Efficiently add a transformation to the passed in (right-handed) projection matrix that transforms *OpenGL* clip
-/// space ($z=-1..1$) into *WebGPU* clip space ($z=0..1$).
-///
-/// # Arguments
-///
-/// * `oglProjection` – Mutable reference to the projection matrix that should receive the added transformation.
-///
-/// # Returns
-///
-/// A mutable reference to the same matrix that was referenced via `oglProjection`, with the transformation from
-/// *OpenGL* clip space to *WebGPU* clip space applied.
-pub fn transformClipspaceOGL2WGPU (oglProjection: &glm::Mat4) -> glm::Mat4
-{
-	const CLIPSPACE_TRANSFORM_OGL2WGPU: glm::Mat4 = glm::Mat4::new(
-		1.0, 0.0, 0.0, 0.0,
-		0.0, 1.0, 0.0, 0.0,
-		0.0, 0.0, 0.5, 0.5,
-		0.0, 0.0, 0.0, 1.0,
-	);
-
-	// ToDo: investigate why any attempt to boil this down to individual component updates failed so far
-	CLIPSPACE_TRANSFORM_OGL2WGPU  *  *oglProjection
 }

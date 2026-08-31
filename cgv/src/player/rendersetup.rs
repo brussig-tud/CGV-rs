@@ -37,9 +37,15 @@ impl RenderSetup
 	pub(crate) fn new (
 		context: &Context, surfaceFormat: wgpu::TextureFormat, defaultColorFormat: wgpu::TextureFormat,
 		defaultDepthStencilFormat: hal::DepthStencilFormat, defaultClearColor: wgpu::Color,
-		defaultDepthClearValue: f32, defaultDepthCompare: wgpu::CompareFunction
 	) -> Self
 	{
+		let defaultDepthCompare = crate::renderstate::defaultDepthStencilState(
+			defaultDepthStencilFormat.into()
+		).depth_compare.unwrap_or(wgpu::CompareFunction::Always);
+		let defaultDepthClearValue = match defaultDepthCompare {
+			wgpu::CompareFunction::Greater | wgpu::CompareFunction::GreaterEqual => 0.,
+			_ => 1.
+		};
 		Self {
 			surfaceFormat, defaultColorFormat, defaultClearColor, defaultDepthCompare, defaultDepthClearValue,
 			defaultDepthStencilFormat: defaultDepthStencilFormat.into(),

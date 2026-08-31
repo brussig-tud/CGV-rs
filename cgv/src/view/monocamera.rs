@@ -66,7 +66,7 @@ impl MonoCamera
 			name, defaultClearColor: *renderSetup.defaultClearColor(),
 			globalPasses: Self::declareRenderPasses(renderSetup),
 			renderState,
-			parameters: CameraParameters::defaultWithAspect(resolution.x as f32 / resolution.y as f32),
+			parameters: CameraParameters::defaultWithExtent(resolution.x as f32, resolution.y as f32),
 			dirty: true
 		}
 	}
@@ -105,7 +105,7 @@ impl Camera for MonoCamera
 
 	fn resize (&mut self, context: &Context, viewportDims: glm::UVec2) {
 		self.renderState.framebuffer.resize(context, viewportDims);
-		self.parameters.intrinsics.aspect = viewportDims.x as f32 / viewportDims.y as f32;
+		self.parameters.intrinsics.setExtent(viewportDims.x as f32, viewportDims.y as f32);
 		self.dirty = true;
 	}
 
@@ -130,24 +130,12 @@ impl Camera for MonoCamera
 	{
 		if self.dirty
 		{
+			let reverseDepth = matches!(
+				self.renderState.depthStencilState().depth_compare,
+				Some(wgpu::CompareFunction::Greater | wgpu::CompareFunction::GreaterEqual)
+			);
 			let mats = self.renderState.viewingUniforms.borrowData_mut();
-			mats.projection = match self.parameters.intrinsics.fovY
-			{
-				FoV::Perspective(fovY) => transformClipspaceOGL2WGPU(&glm::perspective(
-					self.parameters.intrinsics.aspect, fovY, self.parameters.intrinsics.zNear,
-					self.parameters.intrinsics.zFar
-				)),
-
-				FoV::Orthographic(height)
-				=> {
-					let halfHeight = height * 0.5;
-					let halfWidth = halfHeight * self.parameters.intrinsics.aspect;
-					transformClipspaceOGL2WGPU(&glm::ortho(
-						-halfWidth, halfWidth, -halfHeight, halfHeight, self.parameters.intrinsics.zNear,
-						self.parameters.intrinsics.zFar
-					))
-				}
-			};
+			mats.projection = self.parameters.intrinsics.projection(reverseDepth).toMatrix();
 			mats.view = glm::look_at(
 				&self.parameters.extrinsics.eye,
 				&(self.parameters.extrinsics.eye + self.parameters.extrinsics.dir*self.parameters.intrinsics.f),

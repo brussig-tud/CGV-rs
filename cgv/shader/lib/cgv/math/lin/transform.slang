@@ -25,7 +25,23 @@ public namespace cgv::math::lin {
 using cgv;
 
 
+// A perspective or orthographic projection from eye space to clip space. Should be faster to apply
+// than a projection matrix iff you already have the eye space vector, otherwise use a combined VP
+// or MVP matrix. See also src/view/mod.rs.
+public struct Projection
+{
+	private float4 scale;
+	private float zOffset;
 
+	// Project a homogeneous vector.
+	public func apply (float4 v) -> float4
+	{
+		var v_ = v * scale;
+		if (scale.w == 0) v_.w = abs(v.z);
+		v_.z += zOffset;
+		return v_;
+	}
+}
 
 
 //////

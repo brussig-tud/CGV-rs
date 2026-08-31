@@ -34,21 +34,27 @@ const FOV_ORTHO_THRESHOLD: f32 = 5.;
 // Classes
 //
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Intrinsics
 {
 	pub fovY: FoV,
-	pub aspect: f32,
+	/// height / width
+	pub invAspect: f32,
 	pub f: f32,
 	pub zNear: f32,
 	pub zFar: f32
 }
 impl Intrinsics
 {
-	fn defaultWithAspect (aspect: f32) -> Self { Self {
-		aspect, f: 1., zNear: 0.01, zFar: 100.,
+	fn defaultWithExtent (width: f32, height: f32) -> Self { Self {
+		invAspect: height / width, f: 1., zNear: 0.01, zFar: 100.,
 		fovY: FoV::Perspective(math::deg2rad!(60.)),
 	}}
+
+	pub fn setExtent (&mut self, width: f32, height: f32)
+	{
+		self.invAspect = height / width;
+	}
 
 	pub fn frustumDiameterAtFocus (fov: f32, f: f32) -> f32 {
 		let h05 = f * f32::tan(0.5*fov);
@@ -62,6 +68,43 @@ impl Intrinsics
 
 	pub fn focusDistForFrustumDiameterAndFov (diameter: f32, fov: f32) -> f32 {
 		(0.5*diameter)/f32::tan(0.5*fov)
+	}
+
+	/// Build the camera's eye to clip space projection.
+	///
+	/// If `reverseDepth` is true, depth is mapped [zNear, zFar] → [1, 0], otherwise
+	/// [zNear, zFar] → [0, 1].
+	pub fn projection (&self, reverseDepth: bool) -> Projection {
+		match self.fovY {
+			FoV::Perspective(fov) => self.perspectiveProjection(fov, reverseDepth),
+			FoV::Orthographic(height) => self.orthoProjection(height, reverseDepth),
+		}
+	}
+	fn perspectiveProjection (&self, fovY: f32, reverseDepth: bool) -> Projection {
+		let (zn, zf) = (-self.zNear, -self.zFar); // right-handed eye space
+		assert!(zn != 0.0 && zn.signum() == zf.signum());
+
+		let y = (0.5*fovY).tan().recip();
+		let x = y * self.invAspect;
+
+		let mut z = if zf.is_infinite() {zf.signum()} else {zf.abs() / (zf - zn)};
+		if reverseDepth {z = -z};
+		let zOffset = -z * zn;
+		if reverseDepth {z += zf.signum()};
+
+		Projection{scale: glm::vec4(x, y, z, -0.), zOffset}
+	}
+	fn orthoProjection (&self, height: f32, reverseDepth: bool) -> Projection {
+		let (zn, zf) = (-self.zNear, -self.zFar); // right-handed eye space
+		let y = 2. * height.recip();
+		let x = y * self.invAspect;
+
+		let mut z = (zf - zn).recip();
+		if reverseDepth {z = -z};
+		let mut zOffset = if zf.is_infinite() {-1.} else {-zf * z};
+		if !reverseDepth {zOffset += 1.};
+
+		Projection{scale: glm::vec4(x, y, z, 1.), zOffset}
 	}
 
 	pub fn ui (&mut self, ui: &mut egui::Ui) {
@@ -124,6 +167,7 @@ impl Intrinsics
 			let tmp = self.f;
 			if intrinsicsUi.add("focus distance", |ui, _| ui.add(
 				egui::Slider::new(&mut self.f, self.zNear..=self.zFar)
+					.logarithmic(self.zFar.is_infinite())
 					.drag_value_speed(0.03125*tmp as f64)
 					.clamping(egui::SliderClamping::Never)
 			)).changed() {
@@ -133,7 +177,7 @@ impl Intrinsics
 			// zNear
 			let tmp = self.zNear;
 			intrinsicsUi.add("zNear", |ui, _| ui.add(
-				egui::Slider::new(&mut self.zNear, 0.0001..=self.zFar-0.0001)
+				egui::Slider::new(&mut self.zNear, 0.0001..=(self.zFar - 1e-3).min(1024.))
 					.logarithmic(true)
 					.drag_value_speed(0.03125*tmp as f64)
 					.clamping(egui::SliderClamping::Always)
@@ -145,21 +189,9 @@ impl Intrinsics
 				egui::Slider::new(&mut self.zFar, self.zNear+0.0001..=1024.)
 					.logarithmic(true)
 					.drag_value_speed(0.03125*tmp as f64)
-					.clamping(egui::SliderClamping::Always)
+					.clamping(egui::SliderClamping::Never) // allow infinite far plane
 			));
 		});
-	}
-}
-impl PartialEq for Intrinsics
-{
-	fn eq (&self, other: &Self) -> bool {
-		   self.fovY == other.fovY && self.aspect == other.aspect && self.f == other.f && self.zNear == other.zNear
-		&& self.zFar == other.zFar
-	}
-
-	fn ne (&self, other: &Self) -> bool {
-		   self.fovY != other.fovY || self.aspect != other.aspect || self.f != other.f || self.zNear != other.zNear
-		|| self.zFar != other.zFar
 	}
 }
 
@@ -241,8 +273,8 @@ pub struct CameraParameters {
 }
 impl CameraParameters
 {
-	pub fn defaultWithAspect (aspect: f32) -> Self { Self {
-		intrinsics: Intrinsics::defaultWithAspect(aspect),
+	pub fn defaultWithExtent (width: f32, height: f32) -> Self { Self {
+		intrinsics: Intrinsics::defaultWithExtent(width, height),
 		extrinsics: Default::default()
 	}}
 
@@ -321,6 +353,7 @@ impl CameraParameters
 						egui::Slider::new(
 							&mut params.intrinsics.f, params_orig.intrinsics.zNear..=params_orig.intrinsics.zFar
 						)
+						.logarithmic(params_orig.intrinsics.zFar.is_infinite())
 						.drag_value_speed(0.03125 * params_orig.intrinsics.f as f64)
 						.clamping(egui::SliderClamping::Never)
 					).changed() {

@@ -490,7 +490,6 @@ impl Player
 				r: defaultClearColor.r() as f64, g: defaultClearColor.g() as f64,
 				b: defaultClearColor.b() as f64, a: defaultClearColor.a() as f64
 			},
-			1., wgpu::CompareFunction::Less
 		);
 		let defaultClearColor = defaultClearColor.into();
 

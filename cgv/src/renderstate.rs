@@ -154,7 +154,8 @@ impl RenderState
 		// Done!
 		Self {
 			colorTargetState: defaultColorTargetState(&framebuffer.color0()),
-			depthStencilState: defaultDepthStencilState(&framebuffer.depthStencil().unwrap()),
+			depthStencilState: defaultDepthStencilState(
+				framebuffer.depthStencil().unwrap().descriptor.format),
 			viewingUniforms, framebuffer
 		}
 	}
@@ -190,7 +191,8 @@ impl RenderState
 	}
 
 	pub fn setFramebuffer (&mut self, newFramebuffer: hal::Framebuffer) {
-		self.depthStencilState = defaultDepthStencilState(newFramebuffer.depthStencil().unwrap());
+		self.depthStencilState = defaultDepthStencilState(
+			newFramebuffer.depthStencil().unwrap().descriptor.format);
 		self.framebuffer = newFramebuffer;
 	}
 
@@ -262,20 +264,13 @@ pub fn defaultColorTargetState (colorTarget: &hal::Texture) -> wgpu::ColorTarget
 	}
 }
 
-/// Convenience function for creating an opinionated default depth/stencil state for a given depth/stencil texture.
-///
-/// # Arguments
-///
-/// * `depthStencilTex` – The depth/stencil texture to base the state on.
-///
-/// # Returns
-///
-/// A depth/stencil state with opinionated defaults for the given reference texture.
-pub fn defaultDepthStencilState (depthStencilTex: &hal::Texture) -> wgpu::DepthStencilState {
+/// Convenience function for creating an opinionated default depth/stencil state for a given texture format.
+pub fn defaultDepthStencilState (format: wgpu::TextureFormat) -> wgpu::DepthStencilState
+{
 	wgpu::DepthStencilState {
-		format: depthStencilTex.descriptor.format,
+		format,
 		depth_write_enabled: Some(true),
-		depth_compare: Some(wgpu::CompareFunction::Less),
+		depth_compare: Some(wgpu::CompareFunction::Greater),
 		stencil: Default::default(),
 		bias: Default::default(),
 	}
