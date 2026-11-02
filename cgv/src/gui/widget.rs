@@ -31,7 +31,7 @@ pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 
 	// Attach some meta-data to the response which can be used by screen readers:
 	response.widget_info(|| {
-		egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, "")
+		egui::WidgetInfo::selected(egui::Role::CheckBox, ui.is_enabled(), *on, "")
 	});
 
 	// 4. Paint!
@@ -77,7 +77,7 @@ fn toggle_ui_compact(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 		response.mark_changed();
 	}
 	response.widget_info(|| {
-		egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *on, "")
+		egui::WidgetInfo::selected(egui::Role::CheckBox, ui.is_enabled(), *on, "")
 	});
 
 	if ui.is_rect_visible(rect) {
